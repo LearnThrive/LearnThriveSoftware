@@ -18,6 +18,8 @@ export interface ServerToClientEvents {
   'room:joined': (payload: JoinedRoom) => void;
   'room:participant-joined': (payload: PeerJoined) => void;
   'room:participant-left': () => void;
+  'room:participant-reconnecting': () => void;
+  'room:participant-reconnected': (payload: Participant) => void;
   'room:full': (payload: MeetingError) => void;
   'room:error': (payload: MeetingError) => void;
   'participant:media': (payload: { id: string; media: MediaState }) => void;

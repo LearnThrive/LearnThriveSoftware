@@ -18,6 +18,8 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
     stdout: 'pipe',
+    // Shorter than production's default so the network-drop regression test isn't slow.
+    env: { DISCONNECT_GRACE_MS: '3000' },
   },
   projects: [
     {

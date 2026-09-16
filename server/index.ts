@@ -1,6 +1,7 @@
 import { createSignallingServer } from './signalling';
 
-const { httpServer, io } = createSignallingServer();
+const disconnectGraceMs = process.env.DISCONNECT_GRACE_MS ? Number(process.env.DISCONNECT_GRACE_MS) : undefined;
+const { httpServer, io } = createSignallingServer({ disconnectGraceMs });
 
 httpServer.listen(3001, '127.0.0.1', () => {
   console.info('LearnThrive signalling listening on http://127.0.0.1:3001');

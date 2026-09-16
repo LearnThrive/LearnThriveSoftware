@@ -3,6 +3,10 @@ import type { ClientToServerEvents, ServerToClientEvents, SignalCandidate, Signa
 import { getIceConfiguration } from './ice';
 import type { LocalMedia } from './media';
 
+const NEGOTIATION_RETRY_MS = 3000;
+const MAX_NEGOTIATION_ATTEMPTS = 3;
+const MAX_ICE_RESTARTS = 2;
+
 type SignallingSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 interface PeerCallbacks {
   stream: (stream: MediaStream) => void;
@@ -17,6 +21,9 @@ export class PeerSession {
   private pendingIce: RTCIceCandidateInit[] = [];
   private queue: Promise<void> = Promise.resolve();
   private closed = false;
+  private negotiationTimer: ReturnType<typeof setTimeout> | undefined;
+  private negotiationAttempts = 0;
+  private iceRestarts = 0;
 
   constructor(
     readonly sessionId: string,
@@ -43,15 +50,46 @@ export class PeerSession {
     const reportState = () => {
       if (!this.closed) callbacks.state(this.pc.connectionState, this.pc.iceConnectionState, this.pc.signalingState);
     };
-    this.pc.onconnectionstatechange = reportState;
+    this.pc.onconnectionstatechange = () => {
+      reportState();
+      // Only the deterministic initiator ever restarts ICE, so the two sides can never
+      // both start a fresh offer at once.
+      if (this.pc.connectionState === 'failed' && this.initiator && !this.closed && this.iceRestarts < MAX_ICE_RESTARTS) {
+        this.iceRestarts += 1;
+        this.negotiate(true);
+      }
+    };
     this.pc.oniceconnectionstatechange = reportState;
     this.pc.onsignalingstatechange = reportState;
-    if (initiator) this.enqueue(async () => {
-      await this.pc.setLocalDescription(await this.pc.createOffer());
-      if (!this.closed && this.pc.localDescription) {
-        socket.emit('webrtc:offer', { sessionId, description: this.pc.localDescription.toJSON() });
+    if (initiator) this.negotiate(false);
+  }
+
+  /** (Re)starts an offer/answer exchange. Only ever called for the deterministic initiator. */
+  private negotiate(iceRestart: boolean) {
+    if (!this.initiator || this.closed) return;
+    this.negotiationAttempts = 0;
+    this.enqueue(() => this.sendOffer(iceRestart));
+  }
+
+  private async sendOffer(iceRestart: boolean) {
+    if (this.closed) return;
+    this.negotiationAttempts += 1;
+    const offer = await this.pc.createOffer(iceRestart ? { iceRestart: true } : undefined);
+    if (this.closed) return;
+    await this.pc.setLocalDescription(offer);
+    if (this.closed || !this.pc.localDescription) return;
+    this.socket.emit('webrtc:offer', { sessionId: this.sessionId, description: this.pc.localDescription.toJSON() });
+    // The offer can arrive before the peer has finished constructing its own session and
+    // be silently dropped, so resend a few times if nothing answers it.
+    clearTimeout(this.negotiationTimer);
+    this.negotiationTimer = setTimeout(() => {
+      if (this.closed || this.pc.signalingState !== 'have-local-offer') return;
+      if (this.negotiationAttempts >= MAX_NEGOTIATION_ATTEMPTS) {
+        this.callbacks.error(new Error('The other participant is not responding.'));
+        return;
       }
-    });
+      this.enqueue(() => this.sendOffer(iceRestart));
+    }, NEGOTIATION_RETRY_MS);
   }
 
   private enqueue(operation: () => Promise<void>) {
@@ -67,6 +105,7 @@ export class PeerSession {
       if (description.type === 'offer' && this.initiator) return;
       if (description.type === 'answer' && (!this.initiator || this.pc.signalingState !== 'have-local-offer')) return;
       await this.pc.setRemoteDescription(description);
+      clearTimeout(this.negotiationTimer);
       for (const candidate of this.pendingIce) await this.pc.addIceCandidate(candidate);
       this.pendingIce = [];
       if (description.type === 'offer') {
@@ -98,6 +137,7 @@ export class PeerSession {
 
   close() {
     this.closed = true;
+    clearTimeout(this.negotiationTimer);
     this.pendingIce = [];
     this.pc.ontrack = null;
     this.pc.onicecandidate = null;

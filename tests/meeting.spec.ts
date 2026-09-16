@@ -74,3 +74,35 @@ test('two participants connect over WebRTC, exchange media state, and a third is
   await contextA.close();
   await contextB.close();
 });
+
+test('a brief network drop recovers without a false departure notice', async ({ browser }) => {
+  const { context: contextA, page: pageA } = await openParticipant(browser, 'Tutor');
+  await pageA.getByRole('button', { name: 'Create meeting' }).click();
+  await enableDevices(pageA);
+  const roomId = await pageA.getByLabel('Room code').inputValue();
+  await joinMeeting(pageA);
+
+  const { context: contextB, page: pageB } = await openParticipant(browser, 'Student', roomId);
+  await enableDevices(pageB);
+  await joinMeeting(pageB);
+
+  await expect(pageA.locator('.connection-pill')).toHaveClass(/connected/, { timeout: 20_000 });
+  await expect(pageB.locator('.connection-pill')).toHaveClass(/connected/, { timeout: 20_000 });
+
+  await test.step('the peer is marked reconnecting, never a false departure, while offline', async () => {
+    await contextB.setOffline(true);
+    await expect(pageA.locator('.peer-reconnecting')).toBeVisible({ timeout: 10_000 });
+    await expect(pageA.getByRole('region', { name: "Student's video" })).toBeVisible();
+  });
+
+  await test.step('coming back online clears the notice and the pairing survives', async () => {
+    await contextB.setOffline(false);
+    await expect(pageA.locator('.peer-reconnecting')).toBeHidden({ timeout: 15_000 });
+    await expect(pageA.getByRole('region', { name: "Student's video" })).toBeVisible();
+    await expect(pageB.getByRole('region', { name: "Tutor's video" })).toBeVisible();
+    await expect(pageA.locator('.connection-pill')).not.toContainText('Participant left');
+  });
+
+  await contextA.close();
+  await contextB.close();
+});
