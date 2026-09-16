@@ -1,13 +1,13 @@
 # LearnThrive Meeting Prototype
 
-A separate, experimental one-to-one browser classroom for LearnThrive Tuition. React and native WebRTC provide camera, microphone and peer media; a small Express/Socket.IO server coordinates the two participants. This is a technical proof of concept, not a production tuition platform.
+A separate, experimental one-to-one browser classroom for LearnThrive Tuition. React and native WebRTC provide camera, microphone, screen sharing and peer media; a small Express/Socket.IO server coordinates the two participants and relays an ephemeral text chat. This is a technical proof of concept, not a production tuition platform — see [PRODUCTION_GAPS.md](PRODUCTION_GAPS.md) for what real classroom use would still need.
 
 Everything lives in `D:\LearnThriveSoftware`. The marketing project at `D:\LearnThrive` is a read-only brand reference. Public logo assets were copied from its `public\brand` directory and its favicon into this project's `public\brand`; there are no runtime imports from the marketing project.
 
 ## Requirements
 
 - Node.js **22.12 or later**, with npm. **Node 24 LTS** is recommended; see the [official Node release schedule](https://nodejs.org/en/about/previous-releases).
-- A modern browser with WebRTC support, such as current Chrome, Edge, Firefox or Safari. Browser and hardware combinations still need manual verification.
+- A modern browser with WebRTC support: current Chrome, Edge, or Firefox are actively tested (see [Browser support](#browser-support)). Safari/iOS work is expected but has not been verified on this Windows development machine.
 - Camera/microphone permissions for participants who want to send media. Joining with both disabled is supported.
 - Headphones for local testing.
 - Optional `cloudflared` for a temporary HTTPS test on two physical devices. It is not needed for local testing and is not installed or started by this project.
@@ -28,6 +28,8 @@ One `npm run dev` command starts Vite on loopback port **5173** and the signalli
 
 Create a meeting, enter a display name, prepare your camera/microphone in the pre-join screen and join. Copy the invite link for the second participant, who can also enter the same room code. Opening an invite does not automatically enter the meeting.
 
+For a real laptop ↔ phone test, see **[LAPTOP_PHONE_TEST.md](LAPTOP_PHONE_TEST.md)**.
+
 ## Commands
 
 | Command | Purpose |
@@ -35,19 +37,31 @@ Create a meeting, enter a display name, prepare your camera/microphone in the pr
 | `npm run dev` | Start the frontend and signalling server together |
 | `npm run lint` | Check TypeScript/React source with ESLint |
 | `npm run typecheck` | Type-check without emitting files |
-| `npm test` | Run focused automated tests |
-| `npm run test:browser` | Run browser checks with synthetic media |
+| `npm test` | Run focused automated tests (Vitest) |
+| `npm run test:browser` | Run real-browser checks with synthetic media (Playwright, Chromium + Firefox) |
 | `npm run build` | Type-check and build the production frontend into `dist` |
 
-The frontend build does not start or package a production signalling service. Use `npm run dev` for the documented local experiments. See [TESTING.md](TESTING.md) for browser-test prerequisites, repeatable manual checks and the verification record.
+The frontend build does not start or package a production signalling service. Use `npm run dev` for the documented local experiments. See [TESTING.md](TESTING.md) for browser-test prerequisites, the full manual test matrix, and the verification record.
 
 ## Architecture
 
-```text
-Browser A ---- offers / answers / ICE ---- Socket.IO ---- Browser B
-    |                                  (signalling)          |
-    +=============== WebRTC media ==========================+
+```mermaid
+flowchart LR
+    subgraph BA["Browser A"]
+        UIA["React UI"] --> MCA["MeetingController"]
+        MCA --> PSA["PeerSession"]
+    end
+    subgraph BB["Browser B"]
+        UIB["React UI"] --> MCB["MeetingController"]
+        MCB --> PSB["PeerSession"]
+    end
+    MCA -- "Socket.IO" --> Vite["Vite dev server\n(/socket.io proxy)"]
+    MCB -- "Socket.IO" --> Vite
+    Vite --> Sig["Express + Socket.IO\nsignalling server"]
+    PSA <-. "WebRTC media\n(direct, or via TURN)" .-> PSB
+```
 
+```text
 Local HTTP / optional temporary HTTPS entry point
     -> Vite :5173
        -> /socket.io HTTP + WebSocket proxy -> Express/Socket.IO :3001
@@ -55,15 +69,45 @@ Local HTTP / optional temporary HTTPS entry point
 
 The browser Socket.IO client uses the current origin (`io()`), so the same room works locally and through one HTTPS tunnel. Browser-facing signalling configuration contains no hard-coded localhost URL.
 
-The first participant waits. When the second joins, the first creates the offer and the second answers. ICE candidates received before a remote description are queued. A pair/session identifier prevents late messages from an old pairing being applied to a replacement participant. Audio and video transceivers allow a participant to join without devices and enable media later.
+**Negotiation.** The first participant to join waits; when the second joins, the first (the deterministic initiator) creates the offer and the second answers. ICE candidates received before a remote description is set are queued. A server-issued pair/session identifier prevents late messages from an old pairing being applied to a replacement participant. Audio and video transceivers allow a participant to join without devices and enable media later. The initiator also owns ICE restart on a persistent connection failure — only ever the initiator, so the two sides can never both start a fresh offer at once (no negotiation storms).
 
-The server holds room membership in memory, limits each room to two sockets, validates input and forwards signalling only between participants in the same room. It cleans membership on leave/disconnect. It does **not** proxy, process or store audio/video. Media travels between the WebRTC peers, or through an optional TURN relay when a direct route cannot be established. WebRTC connection state and Socket.IO signalling state are separate; a connected socket alone does not mean a call is connected.
+**Signalling server.** Holds room membership in memory, limits each room to two sockets, validates all input, and forwards signalling, chat and screen-share state only between participants confirmed to be in the same room. It cleans membership on leave/disconnect. It does **not** proxy, process or store audio/video, and it does not persist chat. Media travels directly between the WebRTC peers, or through an optional TURN relay when a direct route cannot be established.
 
-Normal mute/camera controls toggle the existing track's `enabled` state. Leaving stops local tracks, closes the peer connection and leaves the room. When only the other participant leaves, the local preview remains active and the room can accept a replacement.
+**Client controllers.** `MeetingController` (`src/meeting.ts`) owns Socket.IO, room/chat/device/screen-share state and orchestrates a single `PeerSession` (`src/peer.ts`), which owns the one `RTCPeerConnection` for the call. `LocalMedia` (`src/media.ts`) owns camera/microphone tracks independently of room membership, so mute/camera-off/device-switch never tears down or reacquires more than the one track being changed. Normal mute/camera controls toggle the existing track's `enabled` state; device switches and screen sharing use `RTCRtpSender.replaceTrack()` on the existing connection — none of these renegotiate. WebRTC connection state and Socket.IO signalling state are tracked and reported separately; a connected socket alone never claims the call is connected.
+
+## Reconnection architecture
+
+A signalling blip does not necessarily mean the call is broken — the underlying `RTCPeerConnection` keeps flowing independently of the Socket.IO channel, so a brief Wi-Fi hiccup on either side shouldn't tear down a still-healthy call. The client no longer closes its peer connection just because its own socket disconnected; it only reflects the real WebRTC state, which is reported separately.
+
+On the server, `disconnect` doesn't immediately declare a departure. It starts a short grace period (`DISCONNECT_GRACE_MS`, default 10s) during which the peer is told "X is reconnecting..." rather than "X left". If the same browser tab reconnects within that window, Socket.IO's native `connectionStateRecovery` typically resumes the *same* socket id and server-side session data, so the peer is told "reconnected" and nothing else changes. If the grace period expires with no recovery, the departure is announced as normal, and a genuinely new participant can immediately take the freed slot without waiting out anyone else's grace period. A full page refresh has no recovery session (browser state is gone), so it correctly behaves like a fresh join, not a resume — this is intentional, matching the "Handle Refreshes" requirement.
+
+Explicit "Leave" is always immediate — no grace period — and is now acknowledged by the server (`room:leave` waits for the server to confirm it processed the departure, with a bounded fallback) before the client disconnects its transport. This closes a real race found while building this: emitting `room:leave` and immediately disconnecting could lose the message on the wire, and a fast rejoin to the same room would then pair with the departing socket's own stale ghost and later see a false "Participant left" about itself.
+
+The client also exposes explicit states beyond connected/disconnected: **Reconnecting...**, **Unable to reconnect** (after Socket.IO's own bounded reconnection attempts are exhausted, with a manual **Reconnect** button), and a subtle **"X is reconnecting..."** note for the peer — none of which freeze the meeting UI.
+
+## Screen sharing
+
+Uses `navigator.mediaDevices.getDisplayMedia()` and replaces the existing outgoing video sender's track via `RTCRtpSender.replaceTrack()` — no second `RTCPeerConnection`, no renegotiation. The camera track keeps running underneath (never torn down), so stopping a share restores exactly the state it was in before: still on if it was on, still off if it was off. The browser's native "Stop sharing" bar is handled via the display track's `ended` event, the same as the in-app Stop button. On the receiving side, the remote tile switches to `object-fit: contain` (so a screen isn't cropped the way a face is) with a "presenting" badge; this is driven by an explicit `participant:screen-share` signal, not inferred from the video track itself, so a peer sharing with their camera off still displays correctly.
+
+Feature-detected: the control is hidden entirely where `getDisplayMedia` doesn't exist (this includes essentially all mobile browsers, which is expected — receiving another participant's share works fine on mobile, only *initiating* one requires desktop display capture). Picker cancellation and permission denial both show a calm "Screen sharing was cancelled or blocked by your browser." message rather than a raw exception. A reentrancy guard prevents a double-click (or the `S` keyboard shortcut landing alongside a click) from starting two captures at once and leaking one.
+
+## Chat
+
+Ephemeral, relayed only through the existing Socket.IO connection — nothing is stored server-side or persisted anywhere, and messages disappear when the meeting ends. Validated server-side (trimmed, length-capped, rejected if empty/oversized/malformed, rejected if the sender isn't confirmed to be in that room) and rate-limited per connection. Rendered as plain text only: React's default text-node escaping means there is no markdown parsing and no `dangerouslySetInnerHTML` anywhere in the chat UI, so a message like `<img src=x onerror=alert(1)>` displays as literal visible text — verified in a real browser, not just asserted. Desktop shows a collapsible side panel; mobile shows a full-height sheet. An unread count appears on the Chat control while the panel is closed.
+
+## Device selection and switching
+
+Pre-join and in-call menus list cameras/microphones via `navigator.mediaDevices.enumerateDevices()` (labels only populate once permission has been granted once). Changing a device obtains a new track and replaces the sender's track with `RTCRtpSender.replaceTrack()` — the call is never torn down. A device preference is only applied to live hardware if that kind is currently enabled, so choosing a different camera while the camera is off doesn't unexpectedly wake it. `navigator.mediaDevices.devicechange` is handled: device lists refresh automatically, and if the currently-selected device disappears (e.g. a USB webcam unplugged), the app falls back to the default device with a message instead of crashing. On mobile, a front/rear camera flip (via `facingMode`) appears only when more than one camera is actually available.
+
+## Connection quality and diagnostics
+
+`RTCPeerConnection.getStats()` is polled every 2.5 seconds and parsed into RTT, jitter, packet loss, inbound/outbound bitrate, frame rate, resolution, and ICE candidate types — every field is feature-detected, since Chromium/Firefox/Safari report different subsets. A conservative, deliberately coarse classifier turns that into **Excellent / Good / Fair / Poor**, shown as a small "Connection: Good"-style pill; this is not a precise measurement.
+
+Appending `?debug=1` to the URL reveals a development diagnostics panel with the full detail: socket id, room id, participant count, WebRTC/ICE/signalling state, exact candidate type and whether the active path is host/srflx/relay, RTT/jitter/loss/bitrate, active camera/microphone, local/remote track state, screen-share state, and reconnect state. This panel is never shown without the query flag, and doesn't expose raw local IP addresses beyond the ICE candidate type itself.
 
 ## ICE and optional TURN
 
-ICE configuration is centralised in the browser source. The default is Google's public STUN endpoint, `stun:stun.l.google.com:19302`.
+ICE configuration is centralised in `src/ice.ts`. The default is Google's public STUN endpoint, `stun:stun.l.google.com:19302`.
 
 **STUN-only calling works on many networks, but not all.** Some NAT/firewall combinations require a TURN relay. A working HTTPS tunnel provides application/signalling access; it does not solve WebRTC media traversal. Production LearnThrive calling needs a reliable TURN service. See the [WebRTC project's TURN guide](https://webrtc.org/getting-started/turn-server).
 
@@ -81,40 +125,53 @@ VITE_TURN_USERNAME=temporary-test-username
 VITE_TURN_CREDENTIAL=temporary-test-credential
 ```
 
-These are placeholders, not an operational relay. Leave all three blank for STUN-only operation. `VITE_` values are exposed to browsers and included in frontend builds: they are **not server secrets**. Use short-lived, limited TURN credentials, keep actual credentials out of source control and do not place them in public assets. A production service should issue temporary credentials to authorised participants. This project does not provision, purchase or deploy TURN infrastructure.
+Multiple TURN URLs (comma-separated) are supported as alternative addresses for the same relay/credential pair. These are placeholders, not an operational relay. Leave all three blank for STUN-only operation. `VITE_` values are exposed to browsers and included in frontend builds: they are **not server secrets**. Use short-lived, limited TURN credentials, keep actual credentials out of source control and do not place them in public assets. A production service should issue temporary credentials to authorised participants. This project does not provision, purchase or deploy TURN infrastructure. In `?debug=1` mode, the candidate-type readout lets you confirm whether an active call actually used TURN (relay) or connected directly (host/srflx).
 
-## Two-person testing
+## Environment variables
 
-**Same computer:** open the local URL in a normal Chrome window and Incognito, or a second browser. Join the same room with two different display names. Some camera drivers cannot share one physical webcam between sessions; one participant can join with camera disabled. Use headphones to avoid speaker/microphone feedback. This checks a local call, not a call across two networks.
+All optional; all read from `.env` (never committed — see `.env.example`), or set directly in the shell/tunnel command for the ones that make sense there.
 
-**Two physical devices:** follow [Test B in TESTING.md](TESTING.md#test-b--two-physical-devices-with-temporary-https). It documents one optional Cloudflare Quick Tunnel forwarding to Vite, with its exact generated hostname in `.env` as `TUNNEL_HOST`. Open the HTTPS page on both devices and copy the invite from that page so it contains the public HTTPS origin. No production deployment is required.
+| Variable | Used by | Purpose |
+| --- | --- | --- |
+| `TUNNEL_HOST` | server | Adds `https://<value>` to the signalling server's allowed CORS origins, for one temporary Cloudflare Quick Tunnel hostname. See [LAPTOP_PHONE_TEST.md](LAPTOP_PHONE_TEST.md). |
+| `VITE_TURN_URL` | browser | Comma-separated TURN/TURNS URL(s). STUN-only if unset. |
+| `VITE_TURN_USERNAME` | browser | TURN username. Required alongside the two above for TURN to activate. |
+| `VITE_TURN_CREDENTIAL` | browser | TURN credential. Same as above — browser-exposed, not a server secret. |
+| `DISCONNECT_GRACE_MS` | server | Overrides the default 10-second disconnect grace period. Mainly useful for tests (Playwright's config sets it to 3000ms so the network-drop test isn't slow); production behaviour is the default. |
 
-Camera/microphone access requires a secure context. Localhost is accepted for local development; an ordinary `http://192.168...` LAN URL is not the supported mobile test path. See [MDN's getUserMedia requirements](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia#privacy_and_security).
+## Debug mode
 
-The project binds to loopback and allows only the explicitly configured tunnel hostname in addition to Vite's local defaults. Do not replace this with `allowedHosts: true` or a blanket `.trycloudflare.com` entry. Vite recommends an explicit host list; see [Vite server options](https://vite.dev/config/server-options#server-allowedhosts).
+Append `?debug=1` to the landing URL, or `&debug=1` to a URL that already contains `?room=...`, and open the browser developer console. See [Connection quality and diagnostics](#connection-quality-and-diagnostics) above for what it shows. Keep diagnostics off in the ordinary meeting flow, and avoid sharing logs containing participant or network details publicly. Development console logging is categorised (`[LearnThrive][signalling]`, `[peer]`, `[ice]`, `[media]`, `[devices]`, `[chat]`, `[stats]`) rather than scattered uncategorised output.
 
-## Access and current limitations
+## Browser support
 
-- Exactly two participants; no group conferencing.
+Actively tested with real (fake-device) automated WebRTC calls in this project's own Playwright suite: **Chrome/Chromium** and **Firefox**. **Edge** is Chromium-based and shares its rendering/WebRTC engine, so the Chrome results should transfer, but Edge itself has not been separately launched or verified. **Safari/iOS** has not been tested at all on this Windows development machine — treat it as a real, unverified test target (see [TESTING.md](TESTING.md)'s test matrix). Legacy browsers are not supported. Screen sharing, `setSinkId()` audio-output selection, and Picture-in-Picture are all feature-detected and hidden when unsupported rather than shown as broken controls; the last two are not implemented at all in this prototype (see [Current limitations](#current-limitations)).
+
+## Current limitations
+
+- Exactly two participants; no group conferencing, no SFU.
 - No authentication, identity verification, authorised invitations or meeting expiry. Possession of a room link/code is effectively bearer access to a free seat; display names are self-declared.
 - A public development tunnel exposes this prototype to anyone who has its URL. Share only for a deliberate test and stop the tunnel afterwards. The random URL is not authentication.
-- In-memory rooms only. Restarting the signalling process loses membership; there is no database or saved attendance.
+- In-memory rooms only. Restarting the signalling process loses membership; there is no database, and chat is intentionally ephemeral (never stored).
 - STUN-only by default; restrictive networks may require TURN.
+- Chat's per-connection rate limit is a lightweight anti-spam measure, not abuse-resistant: a client that disconnects and opens a genuinely new connection gets a fresh limit. This is a known, accepted characteristic of identity-less rate limiting for this prototype, not a production control — see [PRODUCTION_GAPS.md](PRODUCTION_GAPS.md).
 - No scheduling, dashboards, payments, homework or platform integration.
-- No screen sharing, chat, file sharing or whiteboard.
+- No whiteboard.
 - No recording, screenshots, automatic transcription or AI notes. Sessions are not recorded by this application.
-- Camera/microphone device selectors are deferred. The browser/operating system default devices are used; dedicated selectors and sender `replaceTrack()` switching can be added next.
-- Hardware, permission prompts, mobile autoplay and network traversal require manual testing; synthetic browser media cannot establish those facts.
+- No Picture-in-Picture or audio-output-device selection (`setSinkId`) — both are optional per this project's brief and were intentionally left out to keep the media/device-switching logic focused; PiP in particular adds real cross-browser complexity for a 2-person call where both windows are typically already visible side by side.
+- Hardware, permission prompts, mobile autoplay and network traversal require manual testing; synthetic browser media cannot establish those facts. See [TESTING.md](TESTING.md) for exactly what has and hasn't been verified.
 - Prototype only; not production-ready. Validation and room isolation do not replace authentication or access control.
 
-Production work would require authenticated LearnThrive accounts, authorised room access, server-issued meeting credentials, meeting expiry and stronger access controls, alongside reliable TURN infrastructure and operational monitoring.
+Production work would require authenticated LearnThrive accounts, authorised room access, server-issued meeting credentials, meeting expiry and stronger access controls, alongside reliable TURN infrastructure and operational monitoring — see **[PRODUCTION_GAPS.md](PRODUCTION_GAPS.md)** for the full list.
 
 ## Future roadmap
 
-Possible later iterations include temporary TURN credentials; authenticated parent/student/tutor access; scheduled lesson rooms; device selection; screen sharing; whiteboard; chat; attendance; and connection-quality monitoring. These features are intentionally outside this prototype. Any future recording capability would need an explicit product/policy decision; recording is not enabled here.
+Possible later iterations include temporary TURN credentials; authenticated parent/student/tutor access; scheduled lesson rooms; screen-share annotation; whiteboard; persistent chat with moderation; attendance; and richer connection-quality history. These features are intentionally outside this prototype. Any future recording capability would need an explicit product/policy decision; recording is not enabled here.
 
-## Diagnostics and verification
+## Two-person testing
 
-Append `?debug=1` to the landing URL, or `&debug=1` to a URL that already contains `?room=...`, and open the browser developer console. Development diagnostics distinguish signalling, peer connection, ICE and track state. Keep diagnostics off in the ordinary meeting flow, and avoid sharing logs containing participant or network details publicly.
+**Same computer:** open the local URL in a normal Chrome window and Incognito, or a second browser. Join the same room with two different display names. Some computers/drivers may not allow two browser sessions to use the same physical webcam simultaneously. Audio feedback may occur if both sessions use speakers on the same device; headphones are recommended.
 
-Follow the checklists and record actual outcomes in [TESTING.md](TESTING.md). Automated same-machine synthetic-media results, physical camera/microphone checks and two-device calls must be reported separately.
+**Two physical devices:** see **[LAPTOP_PHONE_TEST.md](LAPTOP_PHONE_TEST.md)** for the exact procedure, using a temporary Cloudflare Quick Tunnel. No production deployment is required.
+
+Full checklists and the verification record live in [TESTING.md](TESTING.md).
