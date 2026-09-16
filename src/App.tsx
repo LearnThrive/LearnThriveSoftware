@@ -33,6 +33,8 @@ function App() {
   const [deviceMenuOpen, setDeviceMenuOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const stageRef = useRef<HTMLDivElement>(null);
+  const deviceMenuTriggerRef = useRef<HTMLButtonElement>(null);
+  const chatTriggerRef = useRef<HTMLButtonElement>(null);
   const inCall = snapshot.phase === 'meeting';
   const ended = snapshot.phase === 'ended';
   const joining = snapshot.phase === 'joining';
@@ -143,7 +145,7 @@ function App() {
             <span className="stage-caption"><span /> Learn together. Thrive together.</span>
             {fullscreenSupported && <button type="button" className="stage-fullscreen" onClick={toggleFullscreen} aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}><Icon name={isFullscreen ? 'collapse' : 'expand'} size={17} /></button>}
           </div>
-          <ChatPanel messages={snapshot.messages} open={snapshot.chatOpen} onClose={toggleChat} onSend={sendChatMessage} />
+          <ChatPanel messages={snapshot.messages} open={snapshot.chatOpen} onClose={toggleChat} onSend={sendChatMessage} triggerRef={chatTriggerRef} />
         </div>
         {(snapshot.error || snapshot.mediaError) && <div className="notice notice-error" role="alert"><Icon name="info" /><span>{snapshot.error || snapshot.mediaError}</span>{(snapshot.connection === 'failed' || snapshot.reconnectFailed) && <button className="inline-action" type="button" onClick={retryConnection}>Reconnect</button>}</div>}
         <div className="call-bottom">
@@ -151,18 +153,18 @@ function App() {
           <div className="call-controls" aria-label="Meeting controls">
             <MediaControls audio={snapshot.audio} video={snapshot.video} onAudio={() => void toggleAudio()} onVideo={() => void toggleVideo()} disabled={snapshot.preparing} inCall />
             <div className="control-item device-menu-anchor">
-              <button type="button" className="media-button" onClick={() => setDeviceMenuOpen(open => !open)} aria-label="Camera and microphone options" aria-haspopup="menu" aria-expanded={deviceMenuOpen}><Icon name="settings" size={20} /></button>
+              <button ref={deviceMenuTriggerRef} type="button" className="media-button" onClick={() => setDeviceMenuOpen(open => !open)} aria-label="Camera and microphone options" aria-haspopup="menu" aria-expanded={deviceMenuOpen}><Icon name="settings" size={20} /></button>
               <span>Devices</span>
               <DeviceMenu
                 open={deviceMenuOpen} onClose={() => setDeviceMenuOpen(false)} cameras={snapshot.cameras} microphones={snapshot.microphones}
                 selectedCamera={snapshot.selectedCamera} selectedMicrophone={snapshot.selectedMicrophone}
                 onSelectCamera={(id) => void switchCamera(id)} onSelectMicrophone={(id) => void switchMicrophone(id)}
-                canFlip={snapshot.cameras.length > 1} onFlip={() => void flipCamera()}
+                canFlip={snapshot.cameras.length > 1} onFlip={() => void flipCamera()} triggerRef={deviceMenuTriggerRef}
               />
             </div>
             <span className="controls-divider" />
             {screenShareSupported && <div className="control-item"><button type="button" className={`media-button ${snapshot.screenSharing ? 'is-on' : ''}`} onClick={() => void toggleScreenShare()} aria-pressed={snapshot.screenSharing} aria-label={snapshot.screenSharing ? 'Stop sharing your screen' : 'Share your screen'}><Icon name={snapshot.screenSharing ? 'screen-off' : 'screen'} size={21} /></button><span>{snapshot.screenSharing ? 'Stop sharing' : 'Share screen'}</span></div>}
-            <div className="control-item"><button type="button" className={`media-button ${snapshot.chatOpen ? 'is-on' : ''}`} onClick={toggleChat} aria-pressed={snapshot.chatOpen} aria-label="Toggle chat">
+            <div className="control-item"><button ref={chatTriggerRef} type="button" className={`media-button ${snapshot.chatOpen ? 'is-on' : ''}`} onClick={toggleChat} aria-pressed={snapshot.chatOpen} aria-label="Toggle chat">
               <Icon name="chat" size={21} />{snapshot.unreadCount > 0 && !snapshot.chatOpen && <span className="unread-badge">{snapshot.unreadCount > 9 ? '9+' : snapshot.unreadCount}</span>}
             </button><span>Chat</span></div>
             <span className="controls-divider" />
@@ -184,13 +186,13 @@ function App() {
               <div className="preview-buttons">
                 <MediaControls audio={snapshot.audio} video={snapshot.video} disabled={snapshot.preparing || joining} onAudio={() => void toggleAudio()} onVideo={() => void toggleVideo()} />
                 <div className="control-item device-menu-anchor">
-                  <button type="button" className="media-button" onClick={() => setDeviceMenuOpen(open => !open)} aria-label="Camera and microphone options" aria-haspopup="menu" aria-expanded={deviceMenuOpen}><Icon name="settings" size={20} /></button>
+                  <button ref={deviceMenuTriggerRef} type="button" className="media-button" onClick={() => setDeviceMenuOpen(open => !open)} aria-label="Camera and microphone options" aria-haspopup="menu" aria-expanded={deviceMenuOpen}><Icon name="settings" size={20} /></button>
                   <span>Devices</span>
                   <DeviceMenu
                     open={deviceMenuOpen} onClose={() => setDeviceMenuOpen(false)} cameras={snapshot.cameras} microphones={snapshot.microphones}
                     selectedCamera={snapshot.selectedCamera} selectedMicrophone={snapshot.selectedMicrophone}
                     onSelectCamera={(id) => void switchCamera(id)} onSelectMicrophone={(id) => void switchMicrophone(id)}
-                    canFlip={snapshot.cameras.length > 1} onFlip={() => void flipCamera()}
+                    canFlip={snapshot.cameras.length > 1} onFlip={() => void flipCamera()} triggerRef={deviceMenuTriggerRef}
                   />
                 </div>
               </div>

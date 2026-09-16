@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type RefObject } from 'react';
 import { MAX_CHAT_LENGTH } from '../../shared/protocol';
 import type { DisplayChatMessage } from '../meeting';
 import { Icon } from './Icon';
@@ -8,13 +8,14 @@ interface ChatPanelProps {
   open: boolean;
   onClose: () => void;
   onSend: (text: string) => void;
+  triggerRef: RefObject<HTMLButtonElement | null>;
 }
 
 function formatTime(timestamp: number) {
   return new Date(timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-export function ChatPanel({ messages, open, onClose, onSend }: ChatPanelProps) {
+export function ChatPanel({ messages, open, onClose, onSend, triggerRef }: ChatPanelProps) {
   const [draft, setDraft] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -23,12 +24,18 @@ export function ChatPanel({ messages, open, onClose, onSend }: ChatPanelProps) {
   useEffect(() => {
     if (open && listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [messages, open]);
+
+  // Closing via Escape or the in-panel button should return focus to what opened it, rather
+  // than dropping it to <body>; the parent's own toggle button already has focus when it's
+  // what triggered the close, so this only needs to cover the panel's own close paths.
+  const closeAndReturnFocus = useCallback(() => { onClose(); triggerRef.current?.focus(); }, [onClose, triggerRef]);
+
   useEffect(() => {
     if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') closeAndReturnFocus(); };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [open, onClose]);
+  }, [open, closeAndReturnFocus]);
 
   if (!open) return null;
 
@@ -43,7 +50,7 @@ export function ChatPanel({ messages, open, onClose, onSend }: ChatPanelProps) {
     <aside className="chat-panel" aria-label="Meeting chat">
       <div className="chat-panel-header">
         <h2>Chat</h2>
-        <button type="button" className="chat-close" onClick={onClose} aria-label="Close chat"><Icon name="close" size={18} /></button>
+        <button type="button" className="chat-close" onClick={closeAndReturnFocus} aria-label="Close chat"><Icon name="close" size={18} /></button>
       </div>
       <div className="chat-messages" ref={listRef} role="log" aria-live="polite">
         {messages.length === 0 && <p className="chat-empty">Messages are only visible during this meeting.</p>}

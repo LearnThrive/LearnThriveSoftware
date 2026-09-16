@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 import type { DeviceOption } from '../media';
 import { Icon } from './Icon';
 
@@ -13,23 +13,31 @@ interface DeviceMenuProps {
   onSelectMicrophone: (deviceId: string) => void;
   canFlip: boolean;
   onFlip: () => void;
+  triggerRef: RefObject<HTMLButtonElement | null>;
 }
 
 export function DeviceMenu({
-  open, onClose, cameras, microphones, selectedCamera, selectedMicrophone, onSelectCamera, onSelectMicrophone, canFlip, onFlip,
+  open, onClose, cameras, microphones, selectedCamera, selectedMicrophone, onSelectCamera, onSelectMicrophone, canFlip, onFlip, triggerRef,
 }: DeviceMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+    // Escape is a pure keyboard dismissal, so focus returns to the trigger. A click outside
+    // already tells us where the user wants focus (wherever they clicked), so that path leaves
+    // focus alone rather than yanking it back.
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      onClose();
+      triggerRef.current?.focus();
+    };
     const onClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) onClose();
     };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('mousedown', onClickOutside);
     return () => { window.removeEventListener('keydown', onKeyDown); window.removeEventListener('mousedown', onClickOutside); };
-  }, [open, onClose]);
+  }, [open, onClose, triggerRef]);
 
   if (!open) return null;
 
