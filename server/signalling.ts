@@ -2,11 +2,14 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import express from 'express';
 import { Server, type Socket } from 'socket.io';
-import { MAX_NAME_LENGTH, ROOM_PATTERN } from '../shared/protocol';
+import { MAX_CHAT_LENGTH, MAX_NAME_LENGTH, ROOM_PATTERN } from '../shared/protocol';
 import type {
-  ClientToServerEvents, JoinedRoom, MediaState, Participant,
+  ChatMessage, ClientToServerEvents, JoinedRoom, MediaState, Participant,
   ServerToClientEvents, SignalCandidate, SignalDescription,
 } from '../shared/protocol';
+
+const CHAT_RATE_WINDOW_MS = 4000;
+const CHAT_RATE_MAX_MESSAGES = 6;
 
 interface Room {
   participants: Map<string, Participant>;
@@ -67,9 +70,19 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
   });
   const rooms = new Map<string, Room>();
   const pendingDisconnects = new Map<string, { roomId: string; timer: ReturnType<typeof setTimeout> }>();
+  const chatRateLimits = new Map<string, number[]>();
 
   function fail(socket: MeetingSocket, message: string) {
     socket.emit('room:error', { message });
+  }
+
+  function allowChatMessage(socketId: string): boolean {
+    const now = Date.now();
+    const recent = (chatRateLimits.get(socketId) ?? []).filter((sentAt) => now - sentAt < CHAT_RATE_WINDOW_MS);
+    if (recent.length >= CHAT_RATE_MAX_MESSAGES) { chatRateLimits.set(socketId, recent); return false; }
+    recent.push(now);
+    chatRateLimits.set(socketId, recent);
+    return true;
   }
 
   function clearPending(socketId: string) {
@@ -96,6 +109,7 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
     delete socket.data.roomId;
     void socket.leave(`meeting:${roomId}`);
     clearPending(socket.id);
+    chatRateLimits.delete(socket.id);
     const room = rooms.get(roomId);
     if (!room || !room.participants.delete(socket.id)) return;
     room.sessionId = null;
@@ -176,7 +190,7 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
           return;
         }
       }
-      const self: Participant = { id: socket.id, name: payload.name.trim(), media };
+      const self: Participant = { id: socket.id, name: payload.name.trim(), media, screenSharing: false };
       room.participants.set(socket.id, self);
       rooms.set(roomId, room);
       socket.data.roomId = roomId;
@@ -202,6 +216,31 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
       for (const id of room.participants.keys()) {
         if (id !== socket.id) io.to(id).emit('participant:media', { id: socket.id, media });
       }
+    });
+    socket.on('participant:screen-share', (payload: unknown) => {
+      const room = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
+      const self = room?.participants.get(socket.id);
+      if (!room || !self || !isRecord(payload) || typeof payload.sharing !== 'boolean') {
+        return fail(socket, 'Invalid screen-share update.');
+      }
+      self.screenSharing = payload.sharing;
+      for (const id of room.participants.keys()) {
+        if (id !== socket.id) io.to(id).emit('participant:screen-share', { id: socket.id, sharing: payload.sharing });
+      }
+    });
+    socket.on('chat:message', (payload: unknown) => {
+      const room = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
+      const self = room?.participants.get(socket.id);
+      if (!room || !self) return fail(socket, 'You are not currently in a meeting.');
+      if (!isRecord(payload) || typeof payload.text !== 'string' || payload.text.length > MAX_CHAT_LENGTH * 4) {
+        return fail(socket, 'Invalid chat message.');
+      }
+      const text = payload.text.trim();
+      if (!text || text.length > MAX_CHAT_LENGTH) return fail(socket, `Messages must be 1–${MAX_CHAT_LENGTH} characters.`);
+      if (!allowChatMessage(socket.id)) return fail(socket, 'You are sending messages too quickly. Please slow down.');
+      // Plain text only: no markdown/HTML is ever interpreted server-side or client-side.
+      const message: ChatMessage = { id: randomUUID(), senderId: socket.id, name: self.name, text, timestamp: Date.now() };
+      for (const id of room.participants.keys()) io.to(id).emit('chat:message', message);
     });
     socket.on('webrtc:offer', (payload) => relayDescription(socket, 'offer', payload));
     socket.on('webrtc:answer', (payload) => relayDescription(socket, 'answer', payload));

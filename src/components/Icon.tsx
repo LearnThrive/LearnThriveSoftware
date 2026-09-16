@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 
-export type IconName = 'microphone' | 'microphone-off' | 'camera' | 'camera-off' | 'arrow' | 'plus' | 'link' | 'check' | 'leave' | 'people' | 'shield' | 'info' | 'refresh' | 'volume' | 'spark';
+export type IconName = 'microphone' | 'microphone-off' | 'camera' | 'camera-off' | 'arrow' | 'plus' | 'link' | 'check' | 'leave' | 'people' | 'shield' | 'info' | 'refresh' | 'volume' | 'spark'
+  | 'screen' | 'screen-off' | 'chat' | 'settings' | 'send' | 'expand' | 'collapse' | 'flip' | 'close' | 'pip';
 
 export function Icon({ name, size = 20, style }: { name: IconName; size?: number; style?: CSSProperties }) {
   const paths: Record<IconName, React.ReactNode> = {
@@ -19,6 +20,16 @@ export function Icon({ name, size = 20, style }: { name: IconName; size?: number
     refresh: <><path d="M20 10a8 8 0 1 0-2 8M20 4v6h-6" /></>,
     volume: <><path d="m11 4-6 5H2v6h3l6 5zM15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14" /></>,
     spark: <><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z" /></>,
+    screen: <><rect x="2" y="4" width="20" height="13" rx="2" /><path d="M8 21h8M12 17v4" /></>,
+    'screen-off': <><path d="m3 3 18 18M8 21h8M12 17v4M6 4h14a2 2 0 0 1 2 2v9M2 8v7a2 2 0 0 0 2 2h4" /></>,
+    chat: <><rect x="3" y="5" width="18" height="12" rx="3" /><path d="m8 17-2 3v-3" /></>,
+    settings: <><circle cx="12" cy="12" r="3" /><path d="M12 2v3m0 14v3M4.2 4.2l2.1 2.1m11.4 11.4 2.1 2.1M2 12h3m14 0h3M4.2 19.8l2.1-2.1m11.4-11.4 2.1-2.1" /></>,
+    send: <path d="m3 11 18-8-8 18-2-8-8-2z" />,
+    expand: <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />,
+    collapse: <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />,
+    flip: <><path d="M4 12a8 8 0 0 1 14.5-4.5M20 12a8 8 0 0 1-14.5 4.5" /><path d="M18.5 3v4.5H14M5.5 21v-4.5H10" /></>,
+    close: <path d="M6 6l12 12M18 6 6 18" />,
+    pip: <><rect x="2" y="4" width="20" height="14" rx="2" /><rect x="12" y="11" width="8" height="6" rx="1" fill="currentColor" stroke="none" /></>,
   };
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={style}>{paths[name]}</svg>;
 }

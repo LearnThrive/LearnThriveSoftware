@@ -2,7 +2,7 @@ import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { io, type Socket } from 'socket.io-client';
-import type { ClientToServerEvents, JoinedRoom, Participant, ServerToClientEvents } from '../shared/protocol';
+import type { ChatMessage, ClientToServerEvents, JoinedRoom, Participant, ServerToClientEvents } from '../shared/protocol';
 import { createSignallingServer } from './signalling';
 
 const DISCONNECT_GRACE_MS = 300;
@@ -61,7 +61,7 @@ describe('signalling through real Socket.IO clients', () => {
     first.emit('room:join', { roomId: 'room-one', name: '  Alice  ', media });
     await expect.poll(() => firstEvents.length, { timeout: 500 }).toBe(1);
     expect(firstEvents[0]).toEqual({
-      roomId: 'room-one', self: { id: first.id, name: 'Alice', media },
+      roomId: 'room-one', self: { id: first.id, name: 'Alice', media, screenSharing: false },
       peer: null, sessionId: null, initiator: false,
     });
 
@@ -75,7 +75,7 @@ describe('signalling through real Socket.IO clients', () => {
     expect(paired.initiator).toBe(false);
     expect(paired.sessionId).toMatch(/^[0-9a-f-]{36}$/);
     expect(announced).toEqual({
-      peer: { id: second.id, name: 'Bob', media },
+      peer: { id: second.id, name: 'Bob', media, screenSharing: false },
       sessionId: paired.sessionId, initiator: true,
     });
 
@@ -206,6 +206,66 @@ describe('signalling through real Socket.IO clients', () => {
     const duplicate = await join(first, 'Alice');
     expect(duplicate.self.media).toEqual({ audio: false, video: false });
     expect(unrelatedSignals).toEqual([]);
+  });
+
+  it('relays screen-share state only to the paired participant', async () => {
+    const first = await connect();
+    await join(first, 'Alice');
+    const second = await connect();
+    await join(second, 'Bob');
+    const outsider = await connect();
+    await join(outsider, 'Dara', 'room-two');
+    const outsiderSignals: unknown[] = [];
+    outsider.onAny((event, payload) => outsiderSignals.push({ event, payload }));
+    const sharing = new Promise((resolve) => second.once('participant:screen-share', resolve));
+    first.emit('participant:screen-share', { sharing: true });
+    expect(await sharing).toEqual({ id: first.id, sharing: true });
+    expect(outsiderSignals).toEqual([]);
+  });
+
+  it('relays chat messages to everyone in the room, including the sender, but not other rooms', async () => {
+    const first = await connect();
+    await join(first, 'Alice');
+    const second = await connect();
+    await join(second, 'Bob');
+    const outsider = await connect();
+    await join(outsider, 'Dara', 'room-two');
+    const outsiderMessages: unknown[] = [];
+    outsider.on('chat:message', (message) => outsiderMessages.push(message));
+    const fromFirst = new Promise<ChatMessage>((resolve) => first.once('chat:message', resolve));
+    const fromSecond = new Promise<ChatMessage>((resolve) => second.once('chat:message', resolve));
+    first.emit('chat:message', { text: '  Hello there  ' });
+    const [selfEcho, peerCopy] = await Promise.all([fromFirst, fromSecond]);
+    expect(selfEcho).toEqual(peerCopy);
+    expect(selfEcho.senderId).toBe(first.id);
+    expect(selfEcho.name).toBe('Alice');
+    expect(selfEcho.text).toBe('Hello there');
+    expect(typeof selfEcho.id).toBe('string');
+    expect(typeof selfEcho.timestamp).toBe('number');
+    expect(outsiderMessages).toEqual([]);
+  });
+
+  it('rejects empty, oversized, malformed, and out-of-room chat messages, and rate-limits spam', async () => {
+    const first = await connect();
+    await join(first, 'Alice');
+    const outsider = await connect();
+    const outsiderError = new Promise((resolve) => outsider.once('room:error', resolve));
+    outsider.emit('chat:message', { text: 'hi' });
+    await outsiderError;
+
+    for (const payload of [{ text: '   ' }, { text: 'x'.repeat(501) }, {}, { text: 123 }, null]) {
+      const error = new Promise((resolve) => first.once('room:error', resolve));
+      first.emit('chat:message', payload as Parameters<ClientToServerEvents['chat:message']>[0]);
+      expect(await error).toHaveProperty('message');
+    }
+
+    const received: unknown[] = [];
+    first.on('chat:message', (message) => received.push(message));
+    for (let i = 0; i < 6; i += 1) first.emit('chat:message', { text: `message ${i}` });
+    const limited = new Promise((resolve) => first.once('room:error', resolve));
+    first.emit('chat:message', { text: 'one too many' });
+    expect(await limited).toHaveProperty('message');
+    await expect.poll(() => received.length, { timeout: 500 }).toBe(6);
   });
 
   it('rejects signals from outsiders and from the wrong negotiating role', async () => {

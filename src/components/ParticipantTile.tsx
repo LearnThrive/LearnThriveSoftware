@@ -6,6 +6,7 @@ interface ParticipantTileProps {
   name: string;
   audio: boolean;
   video: boolean;
+  screenSharing?: boolean;
   local?: boolean;
   compact?: boolean;
   preview?: boolean;
@@ -15,10 +16,11 @@ function initials(name: string) {
   return name.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'Y';
 }
 
-export function ParticipantTile({ stream, name, audio, video, local = false, compact = false, preview = false }: ParticipantTileProps) {
+export function ParticipantTile({ stream, name, audio, video, screenSharing = false, local = false, compact = false, preview = false }: ParticipantTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [needsPlayback, setNeedsPlayback] = useState(false);
-  const hasVideo = video && Boolean(stream?.getVideoTracks().some(track => track.readyState === 'live'));
+  // While sharing, the arriving track is the screen, not the camera, so camera-off must not hide it.
+  const hasVideo = (screenSharing || video) && Boolean(stream?.getVideoTracks().some(track => track.readyState === 'live'));
 
   useEffect(() => {
     const element = videoRef.current;
@@ -37,13 +39,20 @@ export function ParticipantTile({ stream, name, audio, video, local = false, com
   };
 
   return (
-    <section className={`participant-tile ${local ? 'local-tile' : 'remote-tile'} ${compact ? 'compact-tile' : ''} ${preview ? 'preview-tile' : ''}`} aria-label={local ? 'Your camera preview' : `${name}'s video`}>
-      <video ref={videoRef} className={`${local ? 'mirrored' : ''} ${hasVideo ? '' : 'video-hidden'}`} autoPlay playsInline muted={local} aria-label={local ? 'Your video' : `${name}'s video stream`} />
+    <section
+      className={`participant-tile ${local ? 'local-tile' : 'remote-tile'} ${compact ? 'compact-tile' : ''} ${preview ? 'preview-tile' : ''} ${screenSharing ? 'screen-share-tile' : ''}`}
+      aria-label={local ? 'Your camera preview' : `${name}'s video`}
+    >
+      <video
+        ref={videoRef} className={`${local && !screenSharing ? 'mirrored' : ''} ${hasVideo ? '' : 'video-hidden'}`}
+        autoPlay playsInline muted={local} aria-label={local ? 'Your video' : `${name}'s video stream`}
+      />
       {!hasVideo && <div className="camera-placeholder">
         <div className="avatar">{initials(name)}</div>
         {!compact && <><h2>{preview ? 'Your space to get ready' : name}</h2><p>{local ? 'Your camera is off' : 'Camera is off'}</p></>}
       </div>}
       {preview && <div className="preview-tag"><span /> Camera preview</div>}
+      {screenSharing && <div className="screen-share-badge"><Icon name="screen" size={14} />{local ? 'You are presenting' : `${name} is presenting`}</div>}
       <div className="participant-caption">
         <span className="participant-name">{name || 'You'}{local && name !== 'You' ? ' (You)' : ''}</span>
         <span className="participant-media" aria-label={audio ? 'Microphone on' : 'Microphone off'} title={audio ? 'Microphone on' : 'Microphone off'}><Icon name={audio ? 'microphone' : 'microphone-off'} size={16} /></span>

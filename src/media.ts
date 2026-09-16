@@ -21,10 +21,30 @@ export function browserSupportError(): string | null {
   return null;
 }
 
-/** Owns local device tracks independently of room membership. */
+export interface DeviceOption { deviceId: string; label: string }
+
+export function canEnumerateDevices(): boolean {
+  return typeof navigator.mediaDevices?.enumerateDevices === 'function';
+}
+
+export async function listDevices(): Promise<{ cameras: DeviceOption[]; microphones: DeviceOption[] }> {
+  if (!canEnumerateDevices()) return { cameras: [], microphones: [] };
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const label = (kind: string, index: number) => `${kind} ${index + 1}`;
+  return {
+    cameras: devices.filter((device) => device.kind === 'videoinput')
+      .map((device, index) => ({ deviceId: device.deviceId, label: device.label || label('Camera', index) })),
+    microphones: devices.filter((device) => device.kind === 'audioinput')
+      .map((device, index) => ({ deviceId: device.deviceId, label: device.label || label('Microphone', index) })),
+  };
+}
+
+/** Owns local camera/microphone tracks independently of room membership. */
 export class LocalMedia {
   stream: MediaStream | null = null;
+  readonly selectedDevice: { audio?: string; video?: string } = {};
   private generation = 0;
+  private facing: 'user' | 'environment' = 'user';
 
   constructor(private readonly changed: () => void) {}
 
@@ -32,21 +52,14 @@ export class LocalMedia {
     return this.stream?.getTracks().find((track) => track.kind === kind && track.readyState === 'live');
   }
 
-  async enable(kind: 'audio' | 'video'): Promise<void> {
-    const existing = this.track(kind);
-    if (existing) {
-      existing.enabled = true;
-      this.changed();
-      return;
-    }
-    const support = browserSupportError();
-    if (support) throw new Error(support);
+  private async acquire(kind: 'audio' | 'video', constraint: MediaTrackConstraints) {
     const generation = this.generation;
+    const wasEnabled = this.track(kind)?.enabled ?? true;
     const acquired = await navigator.mediaDevices.getUserMedia({
-      audio: kind === 'audio' ? { echoCancellation: true, noiseSuppression: true, autoGainControl: true } : false,
-      video: kind === 'video' ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } : false,
+      audio: kind === 'audio' ? constraint : false,
+      video: kind === 'video' ? constraint : false,
     });
-    // A permission prompt can resolve after Leave or navigation.
+    // A permission prompt (or a slow device switch) can resolve after Leave or navigation.
     if (generation !== this.generation) {
       acquired.getTracks().forEach((track) => track.stop());
       return;
@@ -57,10 +70,46 @@ export class LocalMedia {
         old.stop();
         this.stream!.removeTrack(old);
       });
+      track.enabled = wasEnabled;
       this.stream!.addTrack(track);
       track.onended = () => this.changed();
     });
     this.changed();
+  }
+
+  async enable(kind: 'audio' | 'video'): Promise<void> {
+    if (this.track(kind)) {
+      this.track(kind)!.enabled = true;
+      this.changed();
+      return;
+    }
+    const support = browserSupportError();
+    if (support) throw new Error(support);
+    const preferred = this.selectedDevice[kind];
+    await this.acquire(kind, kind === 'audio'
+      ? { ...(preferred ? { deviceId: { exact: preferred } } : {}), echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+      : { ...(preferred ? { deviceId: { exact: preferred } } : { facingMode: this.facing }), width: { ideal: 1280 }, height: { ideal: 720 } });
+  }
+
+  /** Switches to a specific device. Only touches hardware if that kind is currently on. */
+  async switchDevice(kind: 'audio' | 'video', deviceId: string): Promise<void> {
+    this.selectedDevice[kind] = deviceId;
+    if (!this.track(kind)?.enabled) return;
+    const support = browserSupportError();
+    if (support) throw new Error(support);
+    await this.acquire(kind, kind === 'audio'
+      ? { deviceId: { exact: deviceId }, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+      : { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } });
+  }
+
+  /** Flips between front/rear camera by facingMode. Only touches hardware if video is currently on. */
+  async flipCamera(): Promise<void> {
+    this.facing = this.facing === 'user' ? 'environment' : 'user';
+    delete this.selectedDevice.video;
+    if (!this.track('video')?.enabled) return;
+    const support = browserSupportError();
+    if (support) throw new Error(support);
+    await this.acquire('video', { facingMode: { exact: this.facing }, width: { ideal: 1280 }, height: { ideal: 720 } });
   }
 
   disable(kind: 'audio' | 'video') {
