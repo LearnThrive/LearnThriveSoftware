@@ -58,6 +58,7 @@ function App() {
           <div><div className="meeting-title-line"><h1>Your meeting</h1><span className="participant-count"><Icon name="people" size={15} />{snapshot.peer ? '2' : '1'} / 2</span></div><p className="room-display">Room <span>{snapshot.roomId}</span></p></div>
           <div className={`connection-pill ${snapshot.connection === 'connected' ? 'connected' : ''}`} role="status"><span className="status-dot" />{snapshot.status}</div>
         </div>
+        {snapshot.peerReconnecting && <p className="peer-reconnecting" role="status"><span className="status-dot" />{snapshot.peer?.name ?? 'The other participant'} is reconnecting…</p>}
         <div className="meeting-stage">
           {snapshot.peer ? <ParticipantTile stream={snapshot.remoteStream} name={snapshot.peer.name} audio={snapshot.peer.media.audio} video={snapshot.peer.media.video} /> : <section className="waiting-tile" aria-label="Waiting for another participant">
             <div className="waiting-orbit"><div className="waiting-icon"><Icon name="people" size={34} /></div></div>
@@ -68,7 +69,7 @@ function App() {
           <div className="self-preview"><ParticipantTile stream={snapshot.localStream} name={snapshot.name || name || 'You'} audio={snapshot.audio} video={snapshot.video} local compact /></div>
           <span className="stage-caption"><span /> Learn together. Thrive together.</span>
         </div>
-        {(snapshot.error || snapshot.mediaError) && <div className="notice notice-error" role="alert"><Icon name="info" /><span>{snapshot.error || snapshot.mediaError}</span>{snapshot.connection === 'failed' && <button className="inline-action" type="button" onClick={retryConnection}>Try again</button>}</div>}
+        {(snapshot.error || snapshot.mediaError) && <div className="notice notice-error" role="alert"><Icon name="info" /><span>{snapshot.error || snapshot.mediaError}</span>{(snapshot.connection === 'failed' || snapshot.reconnectFailed) && <button className="inline-action" type="button" onClick={retryConnection}>Reconnect</button>}</div>}
         <div className="call-bottom">
           <p className="call-note"><Icon name="shield" size={17} />This session is not recorded.</p>
           <div className="call-controls" aria-label="Meeting controls">

@@ -10,9 +10,9 @@ Record only checks actually performed. Automated checks below were run and recor
 | --- | --- |
 | ESLint | Pass — `npm run lint`, 2026-09-16 |
 | TypeScript | Pass — `npm run typecheck`, 2026-09-16 |
-| Focused automated tests | Pass — 9/9, `npm test`, 2026-09-16 |
+| Focused automated tests | Pass — 16/16, `npm test`, 2026-09-16 |
 | Production frontend build | Pass — `npm run build`, 2026-09-16 |
-| Same-machine synthetic-media browser checks | Pass — 1/1, `npm run test:browser` (Chromium, fake camera/mic), 2026-09-16. Covers real WebRTC negotiation and connection, mute/camera state relay to the peer, third-participant rejection, and the leave/waiting lifecycle. |
+| Same-machine synthetic-media browser checks | Pass — 2/2, `npm run test:browser` (Chromium, fake camera/mic), 2026-09-16. Covers real WebRTC negotiation and connection, mute/camera state relay to the peer, third-participant rejection, the leave/waiting lifecycle, and a real network-drop reconnection (`context.setOffline`) recovering without a false departure. |
 | Physical camera preview and microphone permission | Not yet manually verified |
 | Two physical devices, including audible two-way speech | Not yet manually verified |
 | Temporary HTTPS tunnel | Instructions provided; no tunnel started |

@@ -1,5 +1,6 @@
 import { io, type Socket } from 'socket.io-client';
 import { MAX_NAME_LENGTH, ROOM_PATTERN, type ClientToServerEvents, type Participant, type ServerToClientEvents } from '../shared/protocol';
+import { classifyConnectionStatus } from './callStatus';
 import { browserSupportError, LocalMedia, mediaErrorMessage } from './media';
 import { PeerSession } from './peer';
 
@@ -21,6 +22,8 @@ export interface MeetingSnapshot {
   ice: string;
   rtcSignalling: string;
   copied: boolean;
+  peerReconnecting: boolean;
+  reconnectFailed: boolean;
 }
 
 export class MeetingController {
@@ -29,6 +32,7 @@ export class MeetingController {
     localStream: null, remoteStream: null, audio: false, video: false, preparing: false,
     peer: null, roomId: '', name: '', signalling: 'disconnected', connection: 'new',
     ice: 'new', rtcSignalling: 'stable', copied: false,
+    peerReconnecting: false, reconnectFailed: false,
   };
   private listeners = new Set<() => void>();
   private readonly media = new LocalMedia(() => this.mediaChanged());
@@ -36,8 +40,11 @@ export class MeetingController {
   private peer: PeerSession | null = null;
   private active = false;
   private actionVersion = 0;
-  private joinTimeout: ReturnType<typeof setTimeout> | undefined;
   private copyTimeout: ReturnType<typeof setTimeout> | undefined;
+  // socket.io's Manager (`socket.io`) is a separate emitter that `socket.removeAllListeners()`
+  // doesn't touch, and it can outlive a single Socket across reconnects — so this handler is
+  // tracked explicitly and unregistered by hand in closeSocket().
+  private reconnectFailedHandler: (() => void) | undefined;
 
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   getSnapshot = () => this.snapshot;
@@ -108,44 +115,51 @@ export class MeetingController {
     url.searchParams.set('room', roomId);
     window.history.replaceState(null, '', url);
     // Intentionally no URL: HTTPS tunnels and localhost use the current origin.
-    const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io({ autoConnect: false, reconnection: true });
+    const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io({
+      autoConnect: false, reconnection: true, reconnectionAttempts: 10, reconnectionDelayMax: 5000,
+    });
     this.socket = socket;
-    const armJoinTimeout = () => {
-      clearTimeout(this.joinTimeout);
-      this.joinTimeout = setTimeout(() => {
-        if (this.snapshot.phase === 'joining') this.rejectJoin('We could not reach the meeting server. Check your connection and try joining again.');
-        else this.update({ status: 'Reconnecting…', error: 'The meeting server is unavailable. Waiting to reconnect; you can also leave and try again.' });
-      }, 12000);
-    };
     socket.on('connect', () => {
       if (!this.active) return;
-      this.update({ signalling: 'connected', error: null });
+      this.update({ signalling: 'connected', error: null, reconnectFailed: false });
       socket.emit('room:join', { roomId, name, media: this.media.state() });
-      armJoinTimeout();
     });
     socket.on('disconnect', () => {
+      // The signalling channel dropping doesn't mean the WebRTC media connection has: leave
+      // the peer connection alone and let its own state reporting reflect what's really true.
       if (!this.active) return;
-      this.closePeer();
-      this.update({ signalling: 'disconnected', peer: null, status: 'Reconnecting…' });
-      armJoinTimeout();
+      this.update({ signalling: 'disconnected' });
     });
     socket.on('connect_error', (error) => {
       console.warn('[LearnThrive] Signalling connection failed', error.message);
-      this.update({ signalling: 'reconnecting', status: 'Reconnecting…' });
+      if (this.active) this.update({ signalling: 'reconnecting' });
     });
+    this.reconnectFailedHandler = () => {
+      if (!this.active) return;
+      if (this.snapshot.phase === 'joining') {
+        this.rejectJoin('We could not reach the meeting server. Check your connection and try joining again.');
+      } else {
+        this.update({
+          reconnectFailed: true, status: 'Unable to reconnect',
+          error: 'We could not reconnect to the meeting server. Check your connection, then try again.',
+        });
+      }
+    };
+    socket.io.on('reconnect_failed', this.reconnectFailedHandler);
     socket.on('room:joined', (payload) => {
-      clearTimeout(this.joinTimeout);
       this.update({ phase: 'meeting', status: payload.peer ? 'Connecting…' : 'Waiting for another participant…', error: null, peer: payload.peer });
       if (payload.peer && payload.sessionId) this.startPeer(payload.sessionId, payload.initiator);
       else this.closePeer();
     });
     socket.on('room:participant-joined', ({ peer, sessionId, initiator }) => {
-      this.update({ peer, status: 'Connecting…', error: null });
+      this.update({ peer, status: 'Connecting…', error: null, peerReconnecting: false });
       this.startPeer(sessionId, initiator);
     });
+    socket.on('room:participant-reconnecting', () => this.update({ peerReconnecting: true }));
+    socket.on('room:participant-reconnected', (peer) => this.update({ peerReconnecting: false, peer }));
     socket.on('room:participant-left', () => {
       this.closePeer();
-      this.update({ peer: null, status: 'Participant left', error: null });
+      this.update({ peer: null, status: 'Participant left', error: null, peerReconnecting: false });
     });
     socket.on('participant:media', ({ id, media }) => {
       if (this.snapshot.peer?.id === id) this.update({ peer: { ...this.snapshot.peer, media } });
@@ -158,7 +172,6 @@ export class MeetingController {
     socket.on('webrtc:offer', (payload) => this.peer?.description(payload));
     socket.on('webrtc:answer', (payload) => this.peer?.description(payload));
     socket.on('webrtc:ice-candidate', (payload) => this.peer?.candidate(payload));
-    armJoinTimeout();
     socket.connect();
   };
 
@@ -169,9 +182,7 @@ export class MeetingController {
       this.peer = new PeerSession(sessionId, initiator, this.socket, this.media, {
         stream: (remoteStream) => this.update({ remoteStream }),
         state: (connection, ice, rtcSignalling) => {
-          const status = connection === 'connected' ? 'Connected'
-            : connection === 'failed' || ice === 'failed' ? 'Connection failed'
-              : connection === 'disconnected' || ice === 'disconnected' ? 'Reconnecting…' : 'Connecting…';
+          const status = classifyConnectionStatus(connection, ice);
           this.update({ connection, ice, rtcSignalling, status,
             error: status === 'Connection failed' ? 'The media connection failed. Try reconnecting. Restrictive networks may need a TURN relay.' : null });
         },
@@ -193,7 +204,8 @@ export class MeetingController {
   }
 
   private closeSocket() {
-    clearTimeout(this.joinTimeout);
+    if (this.reconnectFailedHandler) this.socket?.io.off('reconnect_failed', this.reconnectFailedHandler);
+    this.reconnectFailedHandler = undefined;
     this.socket?.emit('room:leave');
     this.socket?.removeAllListeners();
     this.socket?.disconnect();
@@ -204,7 +216,10 @@ export class MeetingController {
   private rejectJoin(message: string) {
     this.active = false;
     this.closeSocket();
-    this.update({ phase: 'prejoin', status: 'Ready to join', signalling: 'disconnected', error: message, peer: null });
+    this.update({
+      phase: 'prejoin', status: 'Ready to join', signalling: 'disconnected', error: message, peer: null,
+      peerReconnecting: false, reconnectFailed: false,
+    });
   }
 
   retryConnection = () => {
@@ -220,7 +235,10 @@ export class MeetingController {
     this.actionVersion += 1;
     this.closeSocket();
     this.media.stop();
-    this.update({ phase: 'ended', status: 'Meeting ended', signalling: 'disconnected', peer: null, preparing: false, error: null, mediaError: null });
+    this.update({
+      phase: 'ended', status: 'Meeting ended', signalling: 'disconnected', peer: null, preparing: false, error: null, mediaError: null,
+      peerReconnecting: false, reconnectFailed: false,
+    });
   };
 
   reset = () => this.update({ phase: 'prejoin', status: 'Ready to join', error: null });

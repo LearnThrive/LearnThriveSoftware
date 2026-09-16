@@ -2,8 +2,10 @@ import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { io, type Socket } from 'socket.io-client';
-import type { ClientToServerEvents, JoinedRoom, ServerToClientEvents } from '../shared/protocol';
+import type { ClientToServerEvents, JoinedRoom, Participant, ServerToClientEvents } from '../shared/protocol';
 import { createSignallingServer } from './signalling';
+
+const DISCONNECT_GRACE_MS = 300;
 
 type Client = Socket<ServerToClientEvents, ClientToServerEvents>;
 const media = { audio: true, video: true };
@@ -14,7 +16,7 @@ describe('signalling through real Socket.IO clients', () => {
   let clients: Client[];
 
   beforeEach(async () => {
-    server = createSignallingServer();
+    server = createSignallingServer({ disconnectGraceMs: DISCONNECT_GRACE_MS });
     clients = [];
     server.httpServer.listen(0, '127.0.0.1');
     await once(server.httpServer, 'listening');
@@ -26,11 +28,12 @@ describe('signalling through real Socket.IO clients', () => {
     await new Promise<void>((resolve) => server.io.close(() => resolve()));
   });
 
-  async function connect(origin?: string) {
+  async function connect(origin?: string, extra?: { reconnection?: boolean; reconnectionDelay?: number; reconnectionDelayMax?: number }) {
     const client: Client = io(url, {
       transports: ['websocket'],
       reconnection: false,
       ...(origin ? { extraHeaders: { Origin: origin } } : {}),
+      ...extra,
     });
     clients.push(client);
     await new Promise<void>((resolve, reject) => {
@@ -38,6 +41,11 @@ describe('signalling through real Socket.IO clients', () => {
       client.once('connect_error', reject);
     });
     return client;
+  }
+
+  // Reconnects fast enough to land well inside DISCONNECT_GRACE_MS, simulating a brief network blip.
+  async function connectRecoverable() {
+    return connect(undefined, { reconnection: true, reconnectionDelay: 10, reconnectionDelayMax: 20 });
   }
 
   async function join(client: Client, name: string, roomId = 'room-one') {
@@ -118,6 +126,57 @@ describe('signalling through real Socket.IO clients', () => {
     await remaining;
     third.emit('room:leave');
     await expect.poll(() => server.rooms.size).toBe(0);
+  });
+
+  it('announces a participant as reconnecting before the grace period elapses, then leaving if they do not return', async () => {
+    const first = await connect();
+    await join(first, 'Alice');
+    const second = await connect();
+    await join(second, 'Bob');
+    const reconnecting = new Promise<void>((resolve) => first.once('room:participant-reconnecting', resolve));
+    const left = new Promise<void>((resolve) => first.once('room:participant-left', resolve));
+    second.disconnect();
+    await reconnecting;
+    await left;
+  });
+
+  it('recovers a briefly dropped connection without losing the pairing or notifying a departure', async () => {
+    const first = await connect();
+    await join(first, 'Alice');
+    const second = await connectRecoverable();
+    const original = await join(second, 'Bob');
+    const secondId = second.id;
+    const reconnecting = new Promise<void>((resolve) => first.once('room:participant-reconnecting', resolve));
+    const reconnected = new Promise<Participant>((resolve) => first.once('room:participant-reconnected', resolve));
+    const left = () => { throw new Error('should not have announced a departure for a recovered connection'); };
+    first.once('room:participant-left', left);
+    second.io.engine.close();
+    await reconnecting;
+    await reconnected;
+    expect(second.connected).toBe(true);
+    expect(second.id).toBe(secondId);
+    expect(second.recovered).toBe(true);
+    const candidate = new Promise((resolve) => second.once('webrtc:ice-candidate', resolve));
+    first.emit('webrtc:ice-candidate', {
+      sessionId: original.sessionId!,
+      candidate: { candidate: 'candidate:1 1 udp 1 127.0.0.1 5000 typ host' },
+    });
+    await candidate;
+    first.off('room:participant-left', left);
+  });
+
+  it('lets a newcomer take a stale disconnected slot immediately instead of waiting out the grace period', async () => {
+    const first = await connect();
+    await join(first, 'Alice');
+    const second = await connect();
+    await join(second, 'Bob');
+    const reconnecting = new Promise<void>((resolve) => first.once('room:participant-reconnecting', resolve));
+    second.disconnect();
+    await reconnecting;
+    const third = await connect();
+    const replacement = await join(third, 'Charlie');
+    expect(replacement.peer?.id).toBe(first.id);
+    expect(server.rooms.get('room-one')?.participants.size).toBe(2);
   });
 
   it('relays offers, answers, ICE, and media only to the paired participant', async () => {

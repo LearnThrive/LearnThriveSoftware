@@ -42,7 +42,8 @@ function parseCandidate(value: unknown): RTCIceCandidateInit | null {
   };
 }
 
-export function createSignallingServer() {
+export function createSignallingServer(options?: { disconnectGraceMs?: number }) {
+  const disconnectGraceMs = options?.disconnectGraceMs ?? 10_000;
   const app = express();
   app.disable('x-powered-by');
   app.get('/health', (_request, response) => response.json({ status: 'ok' }));
@@ -60,11 +61,23 @@ export function createSignallingServer() {
     allowRequest: (request, callback) => callback(null, acceptsOrigin(request.headers.origin)),
     pingInterval: 10_000,
     pingTimeout: 10_000,
+    // Lets a briefly-dropped transport resume with the same socket.id/data instead of
+    // looking like a new participant; leaveNow() still runs if it never comes back.
+    connectionStateRecovery: {},
   });
   const rooms = new Map<string, Room>();
+  const pendingDisconnects = new Map<string, { roomId: string; timer: ReturnType<typeof setTimeout> }>();
 
   function fail(socket: MeetingSocket, message: string) {
     socket.emit('room:error', { message });
+  }
+
+  function clearPending(socketId: string) {
+    const pending = pendingDisconnects.get(socketId);
+    if (!pending) return false;
+    clearTimeout(pending.timer);
+    pendingDisconnects.delete(socketId);
+    return true;
   }
 
   function sendJoined(socket: MeetingSocket, roomId: string, room: Room) {
@@ -77,11 +90,12 @@ export function createSignallingServer() {
     socket.emit('room:joined', payload);
   }
 
-  function leave(socket: MeetingSocket) {
+  function leaveNow(socket: MeetingSocket) {
     const roomId = socket.data.roomId;
     if (!roomId) return;
     delete socket.data.roomId;
     void socket.leave(`meeting:${roomId}`);
+    clearPending(socket.id);
     const room = rooms.get(roomId);
     if (!room || !room.participants.delete(socket.id)) return;
     room.sessionId = null;
@@ -122,6 +136,15 @@ export function createSignallingServer() {
   }
 
   io.on('connection', (socket) => {
+    if (socket.recovered && socket.data.roomId) {
+      const room = rooms.get(socket.data.roomId);
+      if (room?.participants.has(socket.id) && clearPending(socket.id)) {
+        const self = room.participants.get(socket.id)!;
+        const peer = [...room.participants.values()].find((participant) => participant.id !== socket.id);
+        if (peer) io.to(peer.id).emit('room:participant-reconnected', self);
+      }
+    }
+
     socket.on('room:join', (payload: unknown) => {
       if (!isRecord(payload) || typeof payload.roomId !== 'string' || !ROOM_PATTERN.test(payload.roomId)
         || typeof payload.name !== 'string' || payload.name.length > 256
@@ -141,8 +164,17 @@ export function createSignallingServer() {
       }
       const room = rooms.get(roomId) ?? { participants: new Map<string, Participant>(), sessionId: null };
       if (room.participants.size >= 2) {
-        socket.emit('room:full', { message: 'This meeting already has two participants.' });
-        return;
+        // A participant only sits here mid-grace-period after an unplanned disconnect;
+        // a newcomer displaces that stale slot instead of being told the room is full.
+        const stale = [...room.participants.keys()].find((id) => pendingDisconnects.has(id));
+        if (stale) {
+          clearPending(stale);
+          room.participants.delete(stale);
+          room.sessionId = null;
+        } else {
+          socket.emit('room:full', { message: 'This meeting already has two participants.' });
+          return;
+        }
       }
       const self: Participant = { id: socket.id, name: payload.name.trim(), media };
       room.participants.set(socket.id, self);
@@ -184,8 +216,19 @@ export function createSignallingServer() {
         if (id !== socket.id) io.to(id).emit('webrtc:ice-candidate', message);
       }
     });
-    socket.on('room:leave', () => leave(socket));
-    socket.on('disconnect', () => leave(socket));
+    socket.on('room:leave', () => leaveNow(socket));
+    socket.on('disconnect', () => {
+      const roomId = socket.data.roomId;
+      const room = roomId ? rooms.get(roomId) : undefined;
+      if (!room || !room.participants.has(socket.id)) return;
+      const peer = [...room.participants.values()].find((participant) => participant.id !== socket.id);
+      if (peer) io.to(peer.id).emit('room:participant-reconnecting');
+      const timer = setTimeout(() => {
+        pendingDisconnects.delete(socket.id);
+        leaveNow(socket);
+      }, disconnectGraceMs);
+      pendingDisconnects.set(socket.id, { roomId: roomId!, timer });
+    });
   });
 
   return { httpServer, io, rooms };
