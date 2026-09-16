@@ -1,8 +1,11 @@
 import type { Socket } from 'socket.io-client';
 import type { ClientToServerEvents, ServerToClientEvents, SignalCandidate, SignalDescription } from '../shared/protocol';
 import { getIceConfiguration } from './ice';
+import { createLogger } from './log';
 import type { LocalMedia } from './media';
 import { parseStats, type CallStats, type StatsSample } from './stats';
+
+const statsLog = createLogger('stats');
 
 const NEGOTIATION_RETRY_MS = 3000;
 const MAX_NEGOTIATION_ATTEMPTS = 3;
@@ -80,7 +83,7 @@ export class PeerSession {
       this.lastStatsSample = sample;
       this.callbacks.stats(stats);
     } catch (error) {
-      console.warn('[LearnThrive][stats] getStats failed', error);
+      statsLog.warn('getStats failed', error);
     }
   }
 

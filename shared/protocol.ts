@@ -9,7 +9,10 @@ export interface MeetingError { message: string }
 export interface ChatMessage { id: string; senderId: string; name: string; text: string; timestamp: number }
 export interface ClientToServerEvents {
   'room:join': (payload: JoinRequest) => void;
-  'room:leave': () => void;
+  // Acknowledged so the client can wait for the server to actually process the departure
+  // before tearing down the transport — emit-then-immediately-disconnect can otherwise lose
+  // the message, leaving a ghost that later falsely announces "left" to a fast rejoin.
+  'room:leave': (ack: () => void) => void;
   'participant:media': (payload: MediaState) => void;
   'participant:screen-share': (payload: { sharing: boolean }) => void;
   'chat:message': (payload: { text: string }) => void;
