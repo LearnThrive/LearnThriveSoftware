@@ -1,0 +1,209 @@
+import { once } from 'node:events';
+import type { AddressInfo } from 'node:net';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { io, type Socket } from 'socket.io-client';
+import type { ClientToServerEvents, JoinedRoom, ServerToClientEvents } from '../shared/protocol';
+import { createSignallingServer } from './signalling';
+
+type Client = Socket<ServerToClientEvents, ClientToServerEvents>;
+const media = { audio: true, video: true };
+
+describe('signalling through real Socket.IO clients', () => {
+  let server: ReturnType<typeof createSignallingServer>;
+  let url: string;
+  let clients: Client[];
+
+  beforeEach(async () => {
+    server = createSignallingServer();
+    clients = [];
+    server.httpServer.listen(0, '127.0.0.1');
+    await once(server.httpServer, 'listening');
+    url = `http://127.0.0.1:${(server.httpServer.address() as AddressInfo).port}`;
+  });
+
+  afterEach(async () => {
+    clients.forEach((client) => client.disconnect());
+    await new Promise<void>((resolve) => server.io.close(() => resolve()));
+  });
+
+  async function connect(origin?: string) {
+    const client: Client = io(url, {
+      transports: ['websocket'],
+      reconnection: false,
+      ...(origin ? { extraHeaders: { Origin: origin } } : {}),
+    });
+    clients.push(client);
+    await new Promise<void>((resolve, reject) => {
+      client.once('connect', () => resolve());
+      client.once('connect_error', reject);
+    });
+    return client;
+  }
+
+  async function join(client: Client, name: string, roomId = 'room-one') {
+    const result = new Promise<JoinedRoom>((resolve) => client.once('room:joined', resolve));
+    client.emit('room:join', { roomId, name, media });
+    return result;
+  }
+
+  it('admits the first participant as waiting, pairs the second, and rejects a third', async () => {
+    const first = await connect();
+    const firstEvents: JoinedRoom[] = [];
+    first.on('room:joined', (payload) => firstEvents.push(payload));
+    first.emit('room:join', { roomId: 'room-one', name: '  Alice  ', media });
+    await expect.poll(() => firstEvents.length, { timeout: 500 }).toBe(1);
+    expect(firstEvents[0]).toEqual({
+      roomId: 'room-one', self: { id: first.id, name: 'Alice', media },
+      peer: null, sessionId: null, initiator: false,
+    });
+
+    const peerEvent = new Promise<Parameters<ServerToClientEvents['room:participant-joined']>[0]>(
+      (resolve) => first.once('room:participant-joined', resolve),
+    );
+    const second = await connect();
+    const paired = await join(second, 'Bob');
+    const announced = await peerEvent;
+    expect(paired.peer?.id).toBe(first.id);
+    expect(paired.initiator).toBe(false);
+    expect(paired.sessionId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(announced).toEqual({
+      peer: { id: second.id, name: 'Bob', media },
+      sessionId: paired.sessionId, initiator: true,
+    });
+
+    const third = await connect();
+    const full = new Promise<Parameters<ServerToClientEvents['room:full']>[0]>(
+      (resolve) => third.once('room:full', resolve),
+    );
+    third.emit('room:join', { roomId: 'room-one', name: 'Charlie', media });
+    expect(await full).toEqual({ message: 'This meeting already has two participants.' });
+    expect(server.rooms.size).toBe(1);
+  });
+
+  it('makes a duplicate join idempotent and requires leaving before changing rooms', async () => {
+    const first = await connect();
+    await join(first, 'Alice');
+    const second = await connect();
+    const paired = await join(second, 'Bob');
+    const announcements: unknown[] = [];
+    second.on('room:participant-joined', (payload) => announcements.push(payload));
+    const duplicate = await join(first, 'Different name');
+    expect(duplicate.self.name).toBe('Alice');
+    expect(duplicate.sessionId).toBe(paired.sessionId);
+    expect(duplicate.initiator).toBe(true);
+    const error = new Promise((resolve) => first.once('room:error', resolve));
+    first.emit('room:join', { roomId: 'room-two', name: 'Alice', media });
+    await error;
+    expect(server.rooms.size).toBe(1);
+    expect(announcements).toEqual([]);
+  });
+
+  it('cleans up departure, gives a replacement a new session, and deletes empty rooms', async () => {
+    const first = await connect();
+    await join(first, 'Alice');
+    const second = await connect();
+    const original = await join(second, 'Bob');
+    const left = new Promise<void>((resolve) => first.once('room:participant-left', resolve));
+    second.disconnect();
+    await left;
+    const third = await connect();
+    const replacement = await join(third, 'Charlie');
+    expect(replacement.peer?.id).toBe(first.id);
+    expect(replacement.sessionId).not.toBe(original.sessionId);
+    const staleError = new Promise((resolve) => first.once('room:error', resolve));
+    first.emit('webrtc:offer', { sessionId: original.sessionId!, description: { type: 'offer', sdp: 'v=0\r\n' } });
+    await staleError;
+    const remaining = new Promise<void>((resolve) => third.once('room:participant-left', resolve));
+    first.emit('room:leave');
+    await remaining;
+    third.emit('room:leave');
+    await expect.poll(() => server.rooms.size).toBe(0);
+  });
+
+  it('relays offers, answers, ICE, and media only to the paired participant', async () => {
+    const first = await connect();
+    await join(first, 'Alice');
+    const second = await connect();
+    const paired = await join(second, 'Bob');
+    const unrelated = await connect();
+    await join(unrelated, 'Dara', 'room-two');
+    const unrelatedSignals: unknown[] = [];
+    unrelated.onAny((event, payload) => unrelatedSignals.push({ event, payload }));
+    const offerPayload = { sessionId: paired.sessionId!, description: { type: 'offer' as const, sdp: 'v=0\r\n' } };
+    const offer = new Promise((resolve) => second.once('webrtc:offer', resolve));
+    first.emit('webrtc:offer', { ...offerPayload, target: unrelated.id, roomId: 'room-two' } as typeof offerPayload);
+    expect(await offer).toEqual(offerPayload);
+    const answerPayload = { sessionId: paired.sessionId!, description: { type: 'answer' as const, sdp: 'v=0\r\n' } };
+    const answer = new Promise((resolve) => first.once('webrtc:answer', resolve));
+    second.emit('webrtc:answer', answerPayload);
+    expect(await answer).toEqual(answerPayload);
+    const icePayload = { sessionId: paired.sessionId!, candidate: { candidate: 'candidate:1 1 udp 1 127.0.0.1 5000 typ host', sdpMid: '0', sdpMLineIndex: 0 } };
+    const candidate = new Promise((resolve) => second.once('webrtc:ice-candidate', resolve));
+    first.emit('webrtc:ice-candidate', icePayload);
+    expect(await candidate).toEqual(icePayload);
+    const state = new Promise((resolve) => second.once('participant:media', resolve));
+    first.emit('participant:media', { audio: false, video: false });
+    expect(await state).toEqual({ id: first.id, media: { audio: false, video: false } });
+    const duplicate = await join(first, 'Alice');
+    expect(duplicate.self.media).toEqual({ audio: false, video: false });
+    expect(unrelatedSignals).toEqual([]);
+  });
+
+  it('rejects signals from outsiders and from the wrong negotiating role', async () => {
+    const first = await connect();
+    await join(first, 'Alice');
+    const second = await connect();
+    const paired = await join(second, 'Bob');
+    const outsider = await connect();
+    const payload = { sessionId: paired.sessionId!, description: { type: 'offer' as const, sdp: 'v=0\r\n' } };
+    for (const client of [second, outsider]) {
+      const error = new Promise((resolve) => client.once('room:error', resolve));
+      client.emit('webrtc:offer', payload);
+      expect(await error).toHaveProperty('message');
+    }
+    const wrongAnswer = new Promise((resolve) => first.once('room:error', resolve));
+    first.emit('webrtc:answer', { ...payload, description: { type: 'answer', sdp: 'v=0\r\n' } });
+    await wrongAnswer;
+  });
+
+  it('validates untrusted join, media, SDP, and candidate payloads', async () => {
+    const first = await connect();
+    const invalidJoins = [
+      null, {}, { roomId: '../bad', name: 'Alice', media },
+      { roomId: 'room-one', name: '', media },
+      { roomId: 'room-one', name: 'x'.repeat(41), media },
+      { roomId: 'room-one', name: 'Alice', media: { audio: 'yes', video: true } },
+    ];
+    for (const payload of invalidJoins) {
+      const error = new Promise((resolve) => first.once('room:error', resolve));
+      first.emit('room:join', payload as Parameters<ClientToServerEvents['room:join']>[0]);
+      expect(await error).toHaveProperty('message');
+      expect(server.rooms.size).toBe(0);
+    }
+    await join(first, 'Alice');
+    const second = await connect();
+    const paired = await join(second, 'Bob');
+    const invalidSignals = [
+      { sessionId: paired.sessionId, description: { type: 'answer', sdp: 'v=0' } },
+      { sessionId: paired.sessionId, description: { type: 'offer', sdp: 'x'.repeat(65_537) } },
+      { sessionId: '', description: { type: 'offer', sdp: 'v=0' } },
+    ];
+    for (const payload of invalidSignals) {
+      const error = new Promise((resolve) => first.once('room:error', resolve));
+      first.emit('webrtc:offer', payload as Parameters<ClientToServerEvents['webrtc:offer']>[0]);
+      expect(await error).toHaveProperty('message');
+    }
+    const invalidMedia = new Promise((resolve) => first.once('room:error', resolve));
+    first.emit('participant:media', { audio: 'yes', video: false } as unknown as typeof media);
+    await invalidMedia;
+    const invalidIce = new Promise((resolve) => first.once('room:error', resolve));
+    first.emit('webrtc:ice-candidate', { sessionId: paired.sessionId!, candidate: { candidate: 'x'.repeat(8193) } });
+    await invalidIce;
+  });
+
+  it('accepts local browser origins and rejects unapproved origins', async () => {
+    expect((await connect('http://localhost:5173')).connected).toBe(true);
+    expect((await connect('http://127.0.0.1:5173')).connected).toBe(true);
+    await expect(connect('https://unrelated.example')).rejects.toBeDefined();
+  });
+});
