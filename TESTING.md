@@ -4,15 +4,15 @@ This document separates automated checks, manual same-computer hardware checks a
 
 ## Verification record
 
-Record only checks actually performed. Implementation verification is pending; no success is asserted in this initial record.
+Record only checks actually performed. Automated checks below were run and recorded on 2026-09-16. Physical hardware and two-device checks still require a human tester and are not asserted here.
 
 | Check | Recorded result |
 | --- | --- |
-| ESLint | Pending |
-| TypeScript | Pending |
-| Focused automated tests | Pending |
-| Production frontend build | Pending |
-| Same-machine synthetic-media browser checks | Pending |
+| ESLint | Pass — `npm run lint`, 2026-09-16 |
+| TypeScript | Pass — `npm run typecheck`, 2026-09-16 |
+| Focused automated tests | Pass — 9/9, `npm test`, 2026-09-16 |
+| Production frontend build | Pass — `npm run build`, 2026-09-16 |
+| Same-machine synthetic-media browser checks | Pass — 1/1, `npm run test:browser` (Chromium, fake camera/mic), 2026-09-16. Covers real WebRTC negotiation and connection, mute/camera state relay to the peer, third-participant rejection, and the leave/waiting lifecycle. |
 | Physical camera preview and microphone permission | Not yet manually verified |
 | Two physical devices, including audible two-way speech | Not yet manually verified |
 | Temporary HTTPS tunnel | Instructions provided; no tunnel started |
