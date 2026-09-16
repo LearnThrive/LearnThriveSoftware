@@ -45,6 +45,11 @@ export class LocalMedia {
   readonly selectedDevice: { audio?: string; video?: string } = {};
   private generation = 0;
   private facing: 'user' | 'environment' = 'user';
+  // The user's latest mute/unmute intent per kind, updated synchronously by enable()/disable().
+  // acquire() reads this fresh when a pending device switch resolves, rather than trusting an
+  // enabled snapshot captured before the await — otherwise a mute click during an in-flight
+  // switch could be silently overwritten, re-enabling the mic/camera on the new device.
+  private desiredEnabled: { audio: boolean; video: boolean } = { audio: false, video: false };
 
   constructor(private readonly changed: () => void) {}
 
@@ -54,7 +59,6 @@ export class LocalMedia {
 
   private async acquire(kind: 'audio' | 'video', constraint: MediaTrackConstraints) {
     const generation = this.generation;
-    const wasEnabled = this.track(kind)?.enabled ?? true;
     const acquired = await navigator.mediaDevices.getUserMedia({
       audio: kind === 'audio' ? constraint : false,
       video: kind === 'video' ? constraint : false,
@@ -70,7 +74,7 @@ export class LocalMedia {
         old.stop();
         this.stream!.removeTrack(old);
       });
-      track.enabled = wasEnabled;
+      track.enabled = this.desiredEnabled[kind];
       this.stream!.addTrack(track);
       track.onended = () => this.changed();
     });
@@ -78,6 +82,7 @@ export class LocalMedia {
   }
 
   async enable(kind: 'audio' | 'video'): Promise<void> {
+    this.desiredEnabled[kind] = true;
     if (this.track(kind)) {
       this.track(kind)!.enabled = true;
       this.changed();
@@ -113,6 +118,7 @@ export class LocalMedia {
   }
 
   disable(kind: 'audio' | 'video') {
+    this.desiredEnabled[kind] = false;
     const track = this.track(kind);
     if (track) track.enabled = false;
     this.changed();

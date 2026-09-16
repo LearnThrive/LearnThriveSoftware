@@ -29,6 +29,7 @@ export interface MeetingSnapshot {
   audio: boolean;
   video: boolean;
   screenSharing: boolean;
+  screenSharePending: boolean;
   preparing: boolean;
   peer: Participant | null;
   roomId: string;
@@ -61,7 +62,7 @@ export interface DisplayChatMessage extends ChatMessage { own: boolean }
 export class MeetingController {
   private snapshot: MeetingSnapshot = {
     phase: 'prejoin', status: 'Ready to join', error: null, mediaError: null,
-    localStream: null, remoteStream: null, audio: false, video: false, screenSharing: false, preparing: false,
+    localStream: null, remoteStream: null, audio: false, video: false, screenSharing: false, screenSharePending: false, preparing: false,
     peer: null, roomId: '', name: '', signalling: 'disconnected', connection: 'new',
     ice: 'new', rtcSignalling: 'stable', copied: false,
     peerReconnecting: false, reconnectFailed: false,
@@ -196,15 +197,27 @@ export class MeetingController {
 
   toggleScreenShare = async () => {
     if (this.snapshot.screenSharing) { this.endScreenShare(); return; }
+    if (this.snapshot.screenSharePending) return;
     if (!canShareScreen()) { this.update({ error: 'Screen sharing is not supported in this browser.' }); return; }
+    // The share picker can sit open indefinitely, so this guards against a double-click leaking
+    // a second capture and against Leave firing while the picker is still up (checked below).
+    const version = this.actionVersion;
+    this.update({ screenSharePending: true });
     try {
       const track = await this.screenShare.start();
+      if (version !== this.actionVersion || !this.active) {
+        track.stop();
+        this.screenShare.stop();
+        return;
+      }
       this.peer?.setVideoOverride(track);
       this.update({ screenSharing: true, error: null });
       this.emitScreenShare(true);
     } catch (error) {
       mediaLog.warn('Screen share failed', error);
-      this.update({ error: screenShareErrorMessage(error) });
+      if (version === this.actionVersion) this.update({ error: screenShareErrorMessage(error) });
+    } finally {
+      if (version === this.actionVersion) this.update({ screenSharePending: false });
     }
   };
 

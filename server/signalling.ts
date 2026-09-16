@@ -185,6 +185,7 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
           clearPending(stale);
           room.participants.delete(stale);
           room.sessionId = null;
+          chatRateLimits.delete(stale);
         } else {
           socket.emit('room:full', { message: 'This meeting already has two participants.' });
           return;
