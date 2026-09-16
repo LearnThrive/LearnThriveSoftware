@@ -2,16 +2,19 @@ import type { Socket } from 'socket.io-client';
 import type { ClientToServerEvents, ServerToClientEvents, SignalCandidate, SignalDescription } from '../shared/protocol';
 import { getIceConfiguration } from './ice';
 import type { LocalMedia } from './media';
+import { parseStats, type CallStats, type StatsSample } from './stats';
 
 const NEGOTIATION_RETRY_MS = 3000;
 const MAX_NEGOTIATION_ATTEMPTS = 3;
 const MAX_ICE_RESTARTS = 2;
+const STATS_INTERVAL_MS = 2500;
 
 type SignallingSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 interface PeerCallbacks {
   stream: (stream: MediaStream) => void;
   state: (connection: RTCPeerConnectionState, ice: RTCIceConnectionState, signalling: RTCSignalingState) => void;
   error: (error: unknown) => void;
+  stats?: (stats: CallStats) => void;
 }
 
 export class PeerSession {
@@ -24,6 +27,9 @@ export class PeerSession {
   private negotiationTimer: ReturnType<typeof setTimeout> | undefined;
   private negotiationAttempts = 0;
   private iceRestarts = 0;
+  private videoOverride: MediaStreamTrack | null = null;
+  private statsTimer: ReturnType<typeof setInterval> | undefined;
+  private lastStatsSample: StatsSample | null = null;
 
   constructor(
     readonly sessionId: string,
@@ -62,6 +68,26 @@ export class PeerSession {
     this.pc.oniceconnectionstatechange = reportState;
     this.pc.onsignalingstatechange = reportState;
     if (initiator) this.negotiate(false);
+    if (callbacks.stats) this.statsTimer = setInterval(() => { void this.pollStats(); }, STATS_INTERVAL_MS);
+  }
+
+  private async pollStats() {
+    if (this.closed || !this.callbacks.stats) return;
+    try {
+      const report = await this.pc.getStats();
+      if (this.closed) return;
+      const { stats, sample } = parseStats(report, this.lastStatsSample);
+      this.lastStatsSample = sample;
+      this.callbacks.stats(stats);
+    } catch (error) {
+      console.warn('[LearnThrive][stats] getStats failed', error);
+    }
+  }
+
+  /** Overrides the outgoing video track (screen share) without renegotiating; null restores the camera. */
+  setVideoOverride(track: MediaStreamTrack | null) {
+    this.videoOverride = track;
+    this.syncTracks();
   }
 
   /** (Re)starts an offer/answer exchange. Only ever called for the deterministic initiator. */
@@ -127,17 +153,20 @@ export class PeerSession {
 
   syncTracks() {
     this.enqueue(async () => {
-      for (const kind of ['audio', 'video'] as const) {
-        const sender = this.senders.get(kind)!;
-        const track = this.media.track(kind) ?? null;
-        if (sender.track !== track) await sender.replaceTrack(track);
-      }
+      const audioSender = this.senders.get('audio')!;
+      const audioTrack = this.media.track('audio') ?? null;
+      if (audioSender.track !== audioTrack) await audioSender.replaceTrack(audioTrack);
+
+      const videoSender = this.senders.get('video')!;
+      const videoTrack = this.videoOverride ?? this.media.track('video') ?? null;
+      if (videoSender.track !== videoTrack) await videoSender.replaceTrack(videoTrack);
     });
   }
 
   close() {
     this.closed = true;
     clearTimeout(this.negotiationTimer);
+    clearInterval(this.statsTimer);
     this.pendingIce = [];
     this.pc.ontrack = null;
     this.pc.onicecandidate = null;

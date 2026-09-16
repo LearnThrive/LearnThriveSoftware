@@ -1,8 +1,17 @@
 import { io, type Socket } from 'socket.io-client';
-import { MAX_NAME_LENGTH, ROOM_PATTERN, type ClientToServerEvents, type Participant, type ServerToClientEvents } from '../shared/protocol';
+import {
+  MAX_CHAT_LENGTH, MAX_NAME_LENGTH, ROOM_PATTERN,
+  type ChatMessage, type ClientToServerEvents, type Participant, type ServerToClientEvents,
+} from '../shared/protocol';
 import { classifyConnectionStatus } from './callStatus';
-import { browserSupportError, LocalMedia, mediaErrorMessage } from './media';
+import { browserSupportError, listDevices, LocalMedia, mediaErrorMessage, type DeviceOption } from './media';
 import { PeerSession } from './peer';
+import { canShareScreen, screenShareErrorMessage, ScreenShare } from './screenShare';
+import { classifyQuality, type CallStats, type ConnectionQuality } from './stats';
+
+const NOTICE_DURATION_MS = 3500;
+const COPY_CONFIRMATION_MS = 2500;
+const MAX_CHAT_HISTORY = 200;
 
 export interface MeetingSnapshot {
   phase: 'prejoin' | 'joining' | 'meeting' | 'ended';
@@ -13,6 +22,7 @@ export interface MeetingSnapshot {
   remoteStream: MediaStream | null;
   audio: boolean;
   video: boolean;
+  screenSharing: boolean;
   preparing: boolean;
   peer: Participant | null;
   roomId: string;
@@ -24,27 +34,54 @@ export interface MeetingSnapshot {
   copied: boolean;
   peerReconnecting: boolean;
   reconnectFailed: boolean;
+  cameras: DeviceOption[];
+  microphones: DeviceOption[];
+  selectedCamera: string | undefined;
+  selectedMicrophone: string | undefined;
+  stats: CallStats | null;
+  quality: ConnectionQuality;
+  connectedAt: number | null;
+  notice: { id: number; text: string } | null;
+  chatOpen: boolean;
+  messages: DisplayChatMessage[];
+  unreadCount: number;
 }
+
+// "own" is resolved once, at the moment each message arrives, against the socket id live at
+// that instant — re-deriving it later from a stored senderId would misattribute older messages
+// if a non-recovered reconnect ever assigns this client a new socket id mid-meeting.
+export interface DisplayChatMessage extends ChatMessage { own: boolean }
 
 export class MeetingController {
   private snapshot: MeetingSnapshot = {
     phase: 'prejoin', status: 'Ready to join', error: null, mediaError: null,
-    localStream: null, remoteStream: null, audio: false, video: false, preparing: false,
+    localStream: null, remoteStream: null, audio: false, video: false, screenSharing: false, preparing: false,
     peer: null, roomId: '', name: '', signalling: 'disconnected', connection: 'new',
     ice: 'new', rtcSignalling: 'stable', copied: false,
     peerReconnecting: false, reconnectFailed: false,
+    cameras: [], microphones: [], selectedCamera: undefined, selectedMicrophone: undefined,
+    stats: null, quality: 'unknown', connectedAt: null, notice: null,
+    chatOpen: false, messages: [], unreadCount: 0,
   };
   private listeners = new Set<() => void>();
   private readonly media = new LocalMedia(() => this.mediaChanged());
+  private readonly screenShare = new ScreenShare(() => this.endScreenShare());
   private socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
   private peer: PeerSession | null = null;
   private active = false;
   private actionVersion = 0;
   private copyTimeout: ReturnType<typeof setTimeout> | undefined;
+  private noticeTimeout: ReturnType<typeof setTimeout> | undefined;
+  private noticeSeq = 0;
   // socket.io's Manager (`socket.io`) is a separate emitter that `socket.removeAllListeners()`
   // doesn't touch, and it can outlive a single Socket across reconnects — so this handler is
   // tracked explicitly and unregistered by hand in closeSocket().
   private reconnectFailedHandler: (() => void) | undefined;
+  private readonly handleDeviceChange = () => { void this.refreshDevices(true); };
+
+  constructor() {
+    navigator.mediaDevices?.addEventListener?.('devicechange', this.handleDeviceChange);
+  }
 
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   getSnapshot = () => this.snapshot;
@@ -54,12 +91,64 @@ export class MeetingController {
     this.listeners.forEach((listener) => listener());
   }
 
+  private announce(text: string) {
+    const id = ++this.noticeSeq;
+    clearTimeout(this.noticeTimeout);
+    this.update({ notice: { id, text } });
+    this.noticeTimeout = setTimeout(() => {
+      if (this.snapshot.notice?.id === id) this.update({ notice: null });
+    }, NOTICE_DURATION_MS);
+  }
+
   private mediaChanged() {
     const state = this.media.state();
-    this.update({ ...state, localStream: this.media.stream });
+    this.update({
+      ...state, localStream: this.media.stream,
+      selectedCamera: this.media.selectedDevice.video, selectedMicrophone: this.media.selectedDevice.audio,
+    });
     this.peer?.syncTracks();
     if (this.active && this.socket?.connected) this.socket.emit('participant:media', state);
   }
+
+  refreshDevices = async (checkSelection = false) => {
+    const { cameras, microphones } = await listDevices();
+    this.update({ cameras, microphones });
+    if (!checkSelection) return;
+    const missing: string[] = [];
+    if (this.media.selectedDevice.video && !cameras.some((camera) => camera.deviceId === this.media.selectedDevice.video)) {
+      delete this.media.selectedDevice.video;
+      missing.push('camera');
+    }
+    if (this.media.selectedDevice.audio && !microphones.some((mic) => mic.deviceId === this.media.selectedDevice.audio)) {
+      delete this.media.selectedDevice.audio;
+      missing.push('microphone');
+    }
+    if (missing.length) this.update({ mediaError: `Your ${missing.join(' and ')} was disconnected. Using the default device instead.` });
+  };
+
+  switchCamera = async (deviceId: string) => {
+    try { await this.media.switchDevice('video', deviceId); }
+    catch (error) {
+      console.warn('[LearnThrive][devices] Camera switch failed', error);
+      this.update({ mediaError: mediaErrorMessage(error, 'camera') });
+    }
+  };
+
+  switchMicrophone = async (deviceId: string) => {
+    try { await this.media.switchDevice('audio', deviceId); }
+    catch (error) {
+      console.warn('[LearnThrive][devices] Microphone switch failed', error);
+      this.update({ mediaError: mediaErrorMessage(error, 'microphone') });
+    }
+  };
+
+  flipCamera = async () => {
+    try { await this.media.flipCamera(); }
+    catch (error) {
+      console.warn('[LearnThrive][devices] Camera flip failed', error);
+      this.update({ mediaError: mediaErrorMessage(error, 'camera') });
+    }
+  };
 
   prepareMedia = async () => {
     if (this.snapshot.preparing) return;
@@ -77,6 +166,7 @@ export class MeetingController {
       }
     }
     if (version === this.actionVersion) this.update({ preparing: false, status: 'Ready to join', mediaError: errors.join(' ') || null });
+    void this.refreshDevices();
   };
 
   private async toggle(kind: 'audio' | 'video') {
@@ -98,6 +188,42 @@ export class MeetingController {
   toggleAudio = () => this.toggle('audio');
   toggleVideo = () => this.toggle('video');
 
+  toggleScreenShare = async () => {
+    if (this.snapshot.screenSharing) { this.endScreenShare(); return; }
+    if (!canShareScreen()) { this.update({ error: 'Screen sharing is not supported in this browser.' }); return; }
+    try {
+      const track = await this.screenShare.start();
+      this.peer?.setVideoOverride(track);
+      this.update({ screenSharing: true, error: null });
+      this.emitScreenShare(true);
+    } catch (error) {
+      console.warn('[LearnThrive][media] Screen share failed', error);
+      this.update({ error: screenShareErrorMessage(error) });
+    }
+  };
+
+  private endScreenShare() {
+    this.screenShare.stop();
+    this.peer?.setVideoOverride(null);
+    this.update({ screenSharing: false });
+    this.emitScreenShare(false);
+  }
+
+  private emitScreenShare(sharing: boolean) {
+    if (this.active && this.socket?.connected) this.socket.emit('participant:screen-share', { sharing });
+  }
+
+  toggleChat = () => {
+    const open = !this.snapshot.chatOpen;
+    this.update({ chatOpen: open, unreadCount: open ? 0 : this.snapshot.unreadCount });
+  };
+
+  sendChatMessage = (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || trimmed.length > MAX_CHAT_LENGTH || !this.active || !this.socket?.connected) return;
+    this.socket.emit('chat:message', { text: trimmed });
+  };
+
   join = (name: string, roomId: string) => {
     if (this.active) return;
     name = name.trim();
@@ -109,7 +235,10 @@ export class MeetingController {
       return;
     }
     this.active = true;
-    this.update({ phase: 'joining', status: 'Connecting…', error: null, roomId, name });
+    this.update({
+      phase: 'joining', status: 'Connecting…', error: null, roomId, name,
+      messages: [], unreadCount: 0, chatOpen: false,
+    });
     const url = new URL(window.location.href);
     url.pathname = '/meeting';
     url.searchParams.set('room', roomId);
@@ -131,7 +260,7 @@ export class MeetingController {
       this.update({ signalling: 'disconnected' });
     });
     socket.on('connect_error', (error) => {
-      console.warn('[LearnThrive] Signalling connection failed', error.message);
+      console.warn('[LearnThrive][signalling] Connection failed', error.message);
       if (this.active) this.update({ signalling: 'reconnecting' });
     });
     this.reconnectFailedHandler = () => {
@@ -152,17 +281,35 @@ export class MeetingController {
       else this.closePeer();
     });
     socket.on('room:participant-joined', ({ peer, sessionId, initiator }) => {
+      this.announce(`${peer.name} joined`);
       this.update({ peer, status: 'Connecting…', error: null, peerReconnecting: false });
       this.startPeer(sessionId, initiator);
     });
     socket.on('room:participant-reconnecting', () => this.update({ peerReconnecting: true }));
-    socket.on('room:participant-reconnected', (peer) => this.update({ peerReconnecting: false, peer }));
+    socket.on('room:participant-reconnected', (peer) => {
+      this.announce(`${peer.name} reconnected`);
+      this.update({ peerReconnecting: false, peer });
+    });
     socket.on('room:participant-left', () => {
       this.closePeer();
       this.update({ peer: null, status: 'Participant left', error: null, peerReconnecting: false });
     });
     socket.on('participant:media', ({ id, media }) => {
-      if (this.snapshot.peer?.id === id) this.update({ peer: { ...this.snapshot.peer, media } });
+      if (this.snapshot.peer?.id !== id) return;
+      const previous = this.snapshot.peer.media;
+      if (previous.audio && !media.audio) this.announce(`${this.snapshot.peer.name} muted their microphone`);
+      if (previous.video && !media.video) this.announce(`${this.snapshot.peer.name} turned off their camera`);
+      this.update({ peer: { ...this.snapshot.peer, media } });
+    });
+    socket.on('participant:screen-share', ({ id, sharing }) => {
+      if (this.snapshot.peer?.id !== id) return;
+      this.announce(sharing ? `${this.snapshot.peer.name} started sharing their screen` : `${this.snapshot.peer.name} stopped sharing their screen`);
+      this.update({ peer: { ...this.snapshot.peer, screenSharing: sharing } });
+    });
+    socket.on('chat:message', (message) => {
+      const own = message.senderId === this.socket?.id;
+      const unread = this.snapshot.chatOpen || own ? this.snapshot.unreadCount : this.snapshot.unreadCount + 1;
+      this.update({ messages: [...this.snapshot.messages, { ...message, own }].slice(-MAX_CHAT_HISTORY), unreadCount: unread });
     });
     socket.on('room:full', ({ message }) => this.rejectJoin(message));
     socket.on('room:error', ({ message }) => {
@@ -183,16 +330,24 @@ export class MeetingController {
         stream: (remoteStream) => this.update({ remoteStream }),
         state: (connection, ice, rtcSignalling) => {
           const status = classifyConnectionStatus(connection, ice);
-          this.update({ connection, ice, rtcSignalling, status,
-            error: status === 'Connection failed' ? 'The media connection failed. Try reconnecting. Restrictive networks may need a TURN relay.' : null });
+          const patch: Partial<MeetingSnapshot> = {
+            connection, ice, rtcSignalling, status,
+            error: status === 'Connection failed' ? 'The media connection failed. Try reconnecting. Restrictive networks may need a TURN relay.' : null,
+          };
+          if (connection === 'connected' && this.snapshot.connectedAt == null) patch.connectedAt = Date.now();
+          this.update(patch);
         },
         error: (error) => {
-          console.warn('[LearnThrive] Peer negotiation failed', error);
+          console.warn('[LearnThrive][peer] Negotiation failed', error);
           this.update({ status: 'Connection failed', error: 'We could not establish the media connection. Try reconnecting; restrictive networks may require TURN.' });
         },
+        stats: (stats) => this.update({ stats, quality: classifyQuality(stats) }),
       });
+      // A reconnect/replacement creates a fresh PeerSession, which otherwise wouldn't know we
+      // were already sharing our screen before the interruption.
+      if (this.snapshot.screenSharing) this.peer.setVideoOverride(this.screenShare.stream?.getVideoTracks()[0] ?? null);
     } catch (error) {
-      console.warn('[LearnThrive] Peer creation failed', error);
+      console.warn('[LearnThrive][peer] Creation failed', error);
       this.update({ status: 'Connection failed', error: 'Your browser could not start the call. Try a recent browser and check your network.' });
     }
   }
@@ -200,7 +355,7 @@ export class MeetingController {
   private closePeer() {
     this.peer?.close();
     this.peer = null;
-    this.update({ remoteStream: null, connection: 'new', ice: 'new', rtcSignalling: 'stable' });
+    this.update({ remoteStream: null, connection: 'new', ice: 'new', rtcSignalling: 'stable', stats: null, quality: 'unknown', connectedAt: null });
   }
 
   private closeSocket() {
@@ -216,9 +371,10 @@ export class MeetingController {
   private rejectJoin(message: string) {
     this.active = false;
     this.closeSocket();
+    this.screenShare.stop();
     this.update({
       phase: 'prejoin', status: 'Ready to join', signalling: 'disconnected', error: message, peer: null,
-      peerReconnecting: false, reconnectFailed: false,
+      peerReconnecting: false, reconnectFailed: false, screenSharing: false,
     });
   }
 
@@ -235,9 +391,12 @@ export class MeetingController {
     this.actionVersion += 1;
     this.closeSocket();
     this.media.stop();
+    this.screenShare.stop();
+    clearTimeout(this.noticeTimeout);
     this.update({
       phase: 'ended', status: 'Meeting ended', signalling: 'disconnected', peer: null, preparing: false, error: null, mediaError: null,
-      peerReconnecting: false, reconnectFailed: false,
+      peerReconnecting: false, reconnectFailed: false, screenSharing: false,
+      chatOpen: false, messages: [], unreadCount: 0, notice: null,
     });
   };
 
@@ -251,7 +410,7 @@ export class MeetingController {
       await navigator.clipboard.writeText(url.toString());
       this.update({ copied: true });
       clearTimeout(this.copyTimeout);
-      this.copyTimeout = setTimeout(() => this.update({ copied: false }), 2500);
+      this.copyTimeout = setTimeout(() => this.update({ copied: false }), COPY_CONFIRMATION_MS);
     } catch {
       this.update({ error: 'Your browser could not copy the link. Copy the meeting URL from your address bar instead.' });
     }
@@ -261,7 +420,10 @@ export class MeetingController {
     this.active = false;
     this.actionVersion += 1;
     clearTimeout(this.copyTimeout);
+    clearTimeout(this.noticeTimeout);
+    navigator.mediaDevices?.removeEventListener?.('devicechange', this.handleDeviceChange);
     this.closeSocket();
     this.media.stop();
+    this.screenShare.stop();
   };
 }
