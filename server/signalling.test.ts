@@ -122,9 +122,9 @@ describe('signalling through real Socket.IO clients', () => {
     first.emit('webrtc:offer', { sessionId: original.sessionId!, description: { type: 'offer', sdp: 'v=0\r\n' } });
     await staleError;
     const remaining = new Promise<void>((resolve) => third.once('room:participant-left', resolve));
-    first.emit('room:leave');
+    first.emit('room:leave', () => {});
     await remaining;
-    third.emit('room:leave');
+    third.emit('room:leave', () => {});
     await expect.poll(() => server.rooms.size).toBe(0);
   });
 
@@ -206,6 +206,14 @@ describe('signalling through real Socket.IO clients', () => {
     const duplicate = await join(first, 'Alice');
     expect(duplicate.self.media).toEqual({ audio: false, video: false });
     expect(unrelatedSignals).toEqual([]);
+  });
+
+  it('acknowledges room:leave only after the departure has actually been processed', async () => {
+    const first = await connect();
+    await join(first, 'Alice');
+    const acked = new Promise<void>((resolve) => first.emit('room:leave', resolve));
+    await acked;
+    expect(server.rooms.size).toBe(0);
   });
 
   it('relays screen-share state only to the paired participant', async () => {

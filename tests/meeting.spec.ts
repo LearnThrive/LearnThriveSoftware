@@ -1,9 +1,12 @@
 import { test, expect, type Browser, type Page } from '@playwright/test';
 
 async function openParticipant(browser: Browser, name: string, roomId?: string) {
-  const context = await browser.newContext({
-    permissions: ['camera', 'microphone', 'clipboard-read', 'clipboard-write'],
-  });
+  // Firefox/WebKit don't support Chromium-style permission grant strings (fake media there is
+  // handled entirely by firefoxUserPrefs in playwright.config.ts); only request them on Chromium.
+  const isChromium = browser.browserType().name() === 'chromium';
+  const context = await browser.newContext(
+    isChromium ? { permissions: ['camera', 'microphone', 'clipboard-read', 'clipboard-write'] } : {},
+  );
   const page = await context.newPage();
   await page.goto(roomId ? `/meeting?room=${roomId}` : '/meeting');
   await page.getByLabel('Your name').fill(name);
@@ -73,6 +76,71 @@ test('two participants connect over WebRTC, exchange media state, and a third is
 
   await contextA.close();
   await contextB.close();
+});
+
+test('chat messages send, receive, show an unread badge, and render unsafe-looking text as plain text', async ({ browser }) => {
+  const { context: contextA, page: pageA } = await openParticipant(browser, 'Tutor');
+  await pageA.getByRole('button', { name: 'Create meeting' }).click();
+  await enableDevices(pageA);
+  const roomId = await pageA.getByLabel('Room code').inputValue();
+  await joinMeeting(pageA);
+
+  const { context: contextB, page: pageB } = await openParticipant(browser, 'Student', roomId);
+  await enableDevices(pageB);
+  await joinMeeting(pageB);
+
+  await expect(pageA.locator('.connection-pill')).toHaveClass(/connected/, { timeout: 20_000 });
+  await expect(pageB.locator('.connection-pill')).toHaveClass(/connected/, { timeout: 20_000 });
+
+  let dialogFired = false;
+  pageA.on('dialog', (dialog) => { dialogFired = true; void dialog.dismiss(); });
+  pageB.on('dialog', (dialog) => { dialogFired = true; void dialog.dismiss(); });
+  const malicious = '<img src=x onerror=alert(1)>';
+
+  await test.step('A sends a message; it renders as literal text, never as an element', async () => {
+    await pageA.getByRole('button', { name: 'Toggle chat' }).click();
+    await pageA.getByPlaceholder('Type a message…').fill(malicious);
+    await pageA.getByRole('button', { name: 'Send message' }).click();
+    await expect(pageA.locator('.chat-message.own p')).toHaveText(malicious);
+    await expect(pageA.locator('.chat-message.own img')).toHaveCount(0);
+  });
+
+  await test.step('B sees an unread badge while chat is closed, then the message once opened', async () => {
+    await expect(pageB.getByRole('button', { name: 'Toggle chat' }).locator('.unread-badge')).toHaveText('1');
+    await pageB.getByRole('button', { name: 'Toggle chat' }).click();
+    await expect(pageB.getByRole('button', { name: 'Toggle chat' }).locator('.unread-badge')).toHaveCount(0);
+    await expect(pageB.locator('.chat-message:not(.own) p')).toHaveText(malicious);
+    await expect(pageB.locator('.chat-message:not(.own) img')).toHaveCount(0);
+  });
+
+  expect(dialogFired).toBe(false);
+  await contextA.close();
+  await contextB.close();
+});
+
+test('a participant can leave and rejoin the same room cleanly', async ({ browser }) => {
+  const { context: contextA, page: pageA } = await openParticipant(browser, 'Tutor');
+  await pageA.getByRole('button', { name: 'Create meeting' }).click();
+  const roomId = await pageA.getByLabel('Room code').inputValue();
+  await joinMeeting(pageA);
+  await expect(pageA.getByRole('region', { name: 'Waiting for another participant' })).toBeVisible();
+
+  await test.step('leaving reaches the ended screen', async () => {
+    await pageA.getByRole('button', { name: 'Leave meeting' }).click();
+    await expect(pageA.getByRole('heading', { name: /left the meeting/i })).toBeVisible();
+  });
+
+  await test.step('rejoining the same room from a fresh pre-join reconnects cleanly, with no ghost participant', async () => {
+    await pageA.getByRole('button', { name: 'Back to meeting setup' }).click();
+    await pageA.getByLabel('Your name').fill('Tutor');
+    await expect(pageA.getByLabel('Room code')).toHaveValue(roomId);
+    await joinMeeting(pageA);
+    await expect(pageA.getByRole('region', { name: 'Waiting for another participant' })).toBeVisible();
+    await expect(pageA.locator('.participant-count')).toHaveText('1 / 2');
+    await expect(pageA.locator('.connection-pill')).not.toContainText('Participant left');
+  });
+
+  await contextA.close();
 });
 
 test('a brief network drop recovers without a false departure notice', async ({ browser }) => {

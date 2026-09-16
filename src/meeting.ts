@@ -4,10 +4,16 @@ import {
   type ChatMessage, type ClientToServerEvents, type Participant, type ServerToClientEvents,
 } from '../shared/protocol';
 import { classifyConnectionStatus } from './callStatus';
+import { createLogger } from './log';
 import { browserSupportError, listDevices, LocalMedia, mediaErrorMessage, type DeviceOption } from './media';
 import { PeerSession } from './peer';
 import { canShareScreen, screenShareErrorMessage, ScreenShare } from './screenShare';
 import { classifyQuality, type CallStats, type ConnectionQuality } from './stats';
+
+const mediaLog = createLogger('media');
+const signallingLog = createLogger('signalling');
+const peerLog = createLogger('peer');
+const devicesLog = createLogger('devices');
 
 const NOTICE_DURATION_MS = 3500;
 const COPY_CONFIRMATION_MS = 2500;
@@ -129,7 +135,7 @@ export class MeetingController {
   switchCamera = async (deviceId: string) => {
     try { await this.media.switchDevice('video', deviceId); }
     catch (error) {
-      console.warn('[LearnThrive][devices] Camera switch failed', error);
+      devicesLog.warn('Camera switch failed', error);
       this.update({ mediaError: mediaErrorMessage(error, 'camera') });
     }
   };
@@ -137,7 +143,7 @@ export class MeetingController {
   switchMicrophone = async (deviceId: string) => {
     try { await this.media.switchDevice('audio', deviceId); }
     catch (error) {
-      console.warn('[LearnThrive][devices] Microphone switch failed', error);
+      devicesLog.warn('Microphone switch failed', error);
       this.update({ mediaError: mediaErrorMessage(error, 'microphone') });
     }
   };
@@ -145,7 +151,7 @@ export class MeetingController {
   flipCamera = async () => {
     try { await this.media.flipCamera(); }
     catch (error) {
-      console.warn('[LearnThrive][devices] Camera flip failed', error);
+      devicesLog.warn('Camera flip failed', error);
       this.update({ mediaError: mediaErrorMessage(error, 'camera') });
     }
   };
@@ -161,7 +167,7 @@ export class MeetingController {
       if (version !== this.actionVersion) return;
       try { await this.media.enable(kind); }
       catch (error) {
-        console.warn(`[LearnThrive] ${kind} acquisition failed`, error);
+        mediaLog.warn(`${kind} acquisition failed`, error);
         errors.push(mediaErrorMessage(error, kind === 'audio' ? 'microphone' : 'camera'));
       }
     }
@@ -178,7 +184,7 @@ export class MeetingController {
     this.update({ preparing: true, mediaError: null });
     try { await this.media.enable(kind); }
     catch (error) {
-      console.warn(`[LearnThrive] ${kind} acquisition failed`, error);
+      mediaLog.warn(`${kind} acquisition failed`, error);
       if (version === this.actionVersion) this.update({ mediaError: mediaErrorMessage(error, kind === 'audio' ? 'microphone' : 'camera') });
     } finally {
       if (version === this.actionVersion) this.update({ preparing: false });
@@ -197,7 +203,7 @@ export class MeetingController {
       this.update({ screenSharing: true, error: null });
       this.emitScreenShare(true);
     } catch (error) {
-      console.warn('[LearnThrive][media] Screen share failed', error);
+      mediaLog.warn('Screen share failed', error);
       this.update({ error: screenShareErrorMessage(error) });
     }
   };
@@ -260,7 +266,7 @@ export class MeetingController {
       this.update({ signalling: 'disconnected' });
     });
     socket.on('connect_error', (error) => {
-      console.warn('[LearnThrive][signalling] Connection failed', error.message);
+      signallingLog.warn('Connection failed', error.message);
       if (this.active) this.update({ signalling: 'reconnecting' });
     });
     this.reconnectFailedHandler = () => {
@@ -338,7 +344,7 @@ export class MeetingController {
           this.update(patch);
         },
         error: (error) => {
-          console.warn('[LearnThrive][peer] Negotiation failed', error);
+          peerLog.warn('Negotiation failed', error);
           this.update({ status: 'Connection failed', error: 'We could not establish the media connection. Try reconnecting; restrictive networks may require TURN.' });
         },
         stats: (stats) => this.update({ stats, quality: classifyQuality(stats) }),
@@ -347,7 +353,7 @@ export class MeetingController {
       // were already sharing our screen before the interruption.
       if (this.snapshot.screenSharing) this.peer.setVideoOverride(this.screenShare.stream?.getVideoTracks()[0] ?? null);
     } catch (error) {
-      console.warn('[LearnThrive][peer] Creation failed', error);
+      peerLog.warn('Creation failed', error);
       this.update({ status: 'Connection failed', error: 'Your browser could not start the call. Try a recent browser and check your network.' });
     }
   }
@@ -361,10 +367,22 @@ export class MeetingController {
   private closeSocket() {
     if (this.reconnectFailedHandler) this.socket?.io.off('reconnect_failed', this.reconnectFailedHandler);
     this.reconnectFailedHandler = undefined;
-    this.socket?.emit('room:leave');
-    this.socket?.removeAllListeners();
-    this.socket?.disconnect();
+    const socket = this.socket;
     this.socket = null;
+    if (socket) {
+      if (socket.connected) {
+        // emit() immediately followed by disconnect() can lose the leave message on the wire;
+        // wait for the server's ack (with a bounded fallback) so the room is actually cleared
+        // before we tear the transport down.
+        let finished = false;
+        const finish = () => { if (!finished) { finished = true; socket.disconnect(); } };
+        socket.emit('room:leave', finish);
+        setTimeout(finish, 800);
+      } else {
+        socket.disconnect();
+      }
+      socket.removeAllListeners();
+    }
     this.closePeer();
   }
 

@@ -255,7 +255,10 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
         if (id !== socket.id) io.to(id).emit('webrtc:ice-candidate', message);
       }
     });
-    socket.on('room:leave', () => leaveNow(socket));
+    socket.on('room:leave', (ack?: unknown) => {
+      leaveNow(socket);
+      if (typeof ack === 'function') ack();
+    });
     socket.on('disconnect', () => {
       const roomId = socket.data.roomId;
       const room = roomId ? rooms.get(roomId) : undefined;
