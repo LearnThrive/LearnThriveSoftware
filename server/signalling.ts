@@ -126,6 +126,7 @@ export function createSignallingServer() {
       if (!isRecord(payload) || typeof payload.roomId !== 'string' || !ROOM_PATTERN.test(payload.roomId)
         || typeof payload.name !== 'string' || payload.name.length > 256
         || !payload.name.trim() || payload.name.trim().length > MAX_NAME_LENGTH
+        // eslint-disable-next-line no-control-regex
         || /[\u0000-\u001f\u007f]/u.test(payload.name)) {
         return fail(socket, 'Enter a valid room code and a display name of 1–40 characters.');
       }
