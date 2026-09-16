@@ -1,0 +1,24 @@
+import type { CSSProperties } from 'react';
+
+export type IconName = 'microphone' | 'microphone-off' | 'camera' | 'camera-off' | 'arrow' | 'plus' | 'link' | 'check' | 'leave' | 'people' | 'shield' | 'info' | 'refresh' | 'volume' | 'spark';
+
+export function Icon({ name, size = 20, style }: { name: IconName; size?: number; style?: CSSProperties }) {
+  const paths: Record<IconName, React.ReactNode> = {
+    microphone: <><rect x="9" y="2" width="6" height="12" rx="3" /><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3m-4 0h8" /></>,
+    'microphone-off': <><path d="m3 3 18 18M9 9v3a3 3 0 0 0 5 2M9 5a3 3 0 0 1 6 0v6M5 10v2a7 7 0 0 0 12 5m2-7v2a7 7 0 0 1-.2 1.7M12 19v3m-4 0h8" /></>,
+    camera: <><rect x="2" y="5" width="14" height="14" rx="3" /><path d="m16 10 6-4v12l-6-4" /></>,
+    'camera-off': <><path d="m3 3 18 18M9 5h4a3 3 0 0 1 3 3v2l6-4v12l-6-4M16 17a2 2 0 0 1-2 2H5a3 3 0 0 1-3-3V8a3 3 0 0 1 1-2" /></>,
+    arrow: <><path d="M5 12h14m-5-5 5 5-5 5" /></>,
+    plus: <><path d="M12 5v14M5 12h14" /></>,
+    link: <><path d="m10 13 4-4m-6 6-1 1a3.5 3.5 0 0 1-5-5l4-4a3.5 3.5 0 0 1 5 0m2 2 1-1a3.5 3.5 0 0 1 5 5l-4 4a3.5 3.5 0 0 1-5 0" transform="translate(1 0)" /></>,
+    check: <path d="m5 12 4 4L19 6" />,
+    leave: <><path d="M3 15a2 2 0 0 0 2 1l3-1a2 2 0 0 0 1-2v-2a13 13 0 0 1 6 0v2a2 2 0 0 0 1 2l3 1a2 2 0 0 0 2-1l1-3C17 6 7 6 2 12z" /></>,
+    people: <><circle cx="9" cy="7" r="3" /><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6m2 5a5 5 0 0 1 3 4v2" /></>,
+    shield: <><path d="m12 2 8 3v6c0 5-8 10-8 10S4 16 4 11V5z" /><path d="m8 11 3 3 5-6" /></>,
+    info: <><circle cx="12" cy="12" r="9" /><path d="M12 11v6m0-10v.1" /></>,
+    refresh: <><path d="M20 10a8 8 0 1 0-2 8M20 4v6h-6" /></>,
+    volume: <><path d="m11 4-6 5H2v6h3l6 5zM15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14" /></>,
+    spark: <><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z" /></>,
+  };
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={style}>{paths[name]}</svg>;
+}
