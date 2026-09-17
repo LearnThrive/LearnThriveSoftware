@@ -23,6 +23,8 @@ export function useMeeting() {
     refreshDevices: controller.refreshDevices,
     toggleHand: controller.toggleHand,
     sendReaction: controller.sendReaction,
+    admitOne: controller.admitOne,
+    admitAll: controller.admitAll,
     join: controller.join,
     leave: controller.leave,
     reset: controller.reset,

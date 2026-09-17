@@ -1,9 +1,10 @@
 import { io, type Socket } from 'socket.io-client';
 import {
   MAX_CHAT_LENGTH, MAX_NAME_LENGTH, ROOM_PATTERN,
-  type ChatMessage, type ClientToServerEvents, type Participant, type ReactionEmoji, type ServerToClientEvents,
+  type ChatMessage, type ClientToServerEvents, type Participant, type ParticipantRole,
+  type ReactionEmoji, type ServerToClientEvents, type WaitingParticipant,
 } from '../shared/protocol';
-import { classifyConnectionStatus } from './callStatus';
+import { aggregateConnectionStatus } from './callStatus';
 import { createLogger } from './log';
 import { browserSupportError, listDevices, LocalMedia, mediaErrorMessage, type DeviceOption } from './media';
 import { PeerSession, type DirectionDiagnostics } from './peer';
@@ -22,36 +23,44 @@ const REACTION_DURATION_MS = 2200;
 
 export interface DisplayReaction { id: number; emoji: string; mine: boolean }
 
+/** Display + connection state for one other admitted participant. A room holds up to 3 of these
+ * (1 tutor + 3 students, minus yourself), each backed by its own independent PeerSession. */
+export interface RemotePeer {
+  participant: Participant;
+  stream: MediaStream | null;
+  connection: RTCPeerConnectionState;
+  ice: RTCIceConnectionState;
+  rtcSignalling: RTCSignalingState;
+  stats: CallStats | null;
+  direction: DirectionDiagnostics | null;
+  quality: ConnectionQuality;
+  connectedAt: number | null;
+  reconnecting: boolean;
+}
+
 export interface MeetingSnapshot {
-  phase: 'prejoin' | 'joining' | 'meeting' | 'ended';
+  phase: 'prejoin' | 'joining' | 'waiting' | 'meeting' | 'ended';
   status: string;
   error: string | null;
   mediaError: string | null;
   localStream: MediaStream | null;
-  remoteStream: MediaStream | null;
   audio: boolean;
   video: boolean;
   screenSharing: boolean;
   screenSharePending: boolean;
   preparing: boolean;
-  peer: Participant | null;
+  peers: RemotePeer[];
+  role: ParticipantRole | null;
+  waiting: WaitingParticipant[];
   roomId: string;
   name: string;
   signalling: string;
-  connection: string;
-  ice: string;
-  rtcSignalling: string;
   copied: boolean;
-  peerReconnecting: boolean;
   reconnectFailed: boolean;
   cameras: DeviceOption[];
   microphones: DeviceOption[];
   selectedCamera: string | undefined;
   selectedMicrophone: string | undefined;
-  stats: CallStats | null;
-  direction: DirectionDiagnostics | null;
-  quality: ConnectionQuality;
-  connectedAt: number | null;
   notice: { id: number; text: string } | null;
   chatOpen: boolean;
   messages: DisplayChatMessage[];
@@ -65,22 +74,27 @@ export interface MeetingSnapshot {
 // if a non-recovered reconnect ever assigns this client a new socket id mid-meeting.
 export interface DisplayChatMessage extends ChatMessage { own: boolean }
 
+function defaultRemotePeer(participant: Participant): RemotePeer {
+  return {
+    participant, stream: null, connection: 'new', ice: 'new', rtcSignalling: 'stable',
+    stats: null, direction: null, quality: 'unknown', connectedAt: null, reconnecting: false,
+  };
+}
+
 export class MeetingController {
   private snapshot: MeetingSnapshot = {
     phase: 'prejoin', status: 'Ready to join', error: null, mediaError: null,
-    localStream: null, remoteStream: null, audio: false, video: false, screenSharing: false, screenSharePending: false, preparing: false,
-    peer: null, roomId: '', name: '', signalling: 'disconnected', connection: 'new',
-    ice: 'new', rtcSignalling: 'stable', copied: false,
-    peerReconnecting: false, reconnectFailed: false,
-    cameras: [], microphones: [], selectedCamera: undefined, selectedMicrophone: undefined,
-    stats: null, direction: null, quality: 'unknown', connectedAt: null, notice: null,
+    localStream: null, audio: false, video: false, screenSharing: false, screenSharePending: false, preparing: false,
+    peers: [], role: null, waiting: [], roomId: '', name: '', signalling: 'disconnected', copied: false,
+    reconnectFailed: false,
+    cameras: [], microphones: [], selectedCamera: undefined, selectedMicrophone: undefined, notice: null,
     chatOpen: false, messages: [], unreadCount: 0, handRaised: false, reactions: [],
   };
   private listeners = new Set<() => void>();
   private readonly media = new LocalMedia(() => this.mediaChanged());
   private readonly screenShare = new ScreenShare(() => this.endScreenShare());
   private socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
-  private peer: PeerSession | null = null;
+  private peers = new Map<string, PeerSession>();
   private active = false;
   private actionVersion = 0;
   private copyTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -105,6 +119,15 @@ export class MeetingController {
     this.listeners.forEach((listener) => listener());
   }
 
+  private setPeers(peers: RemotePeer[]) {
+    this.update({ peers, status: aggregateConnectionStatus(peers) });
+  }
+
+  private updatePeer(peerId: string, patch: Partial<RemotePeer>) {
+    if (!this.snapshot.peers.some((peer) => peer.participant.id === peerId)) return;
+    this.setPeers(this.snapshot.peers.map((peer) => (peer.participant.id === peerId ? { ...peer, ...patch } : peer)));
+  }
+
   private announce(text: string) {
     const id = ++this.noticeSeq;
     clearTimeout(this.noticeTimeout);
@@ -120,7 +143,7 @@ export class MeetingController {
       ...state, localStream: this.media.stream,
       selectedCamera: this.media.selectedDevice.video, selectedMicrophone: this.media.selectedDevice.audio,
     });
-    this.peer?.syncTracks();
+    for (const session of this.peers.values()) session.syncTracks();
     if (this.active && this.socket?.connected) this.socket.emit('participant:media', state);
   }
 
@@ -217,7 +240,7 @@ export class MeetingController {
         this.screenShare.stop();
         return;
       }
-      this.peer?.setVideoOverride(track);
+      for (const session of this.peers.values()) session.setVideoOverride(track);
       this.update({ screenSharing: true, error: null });
       this.emitScreenShare(true);
     } catch (error) {
@@ -230,7 +253,7 @@ export class MeetingController {
 
   private endScreenShare() {
     this.screenShare.stop();
-    this.peer?.setVideoOverride(null);
+    for (const session of this.peers.values()) session.setVideoOverride(null);
     this.update({ screenSharing: false });
     this.emitScreenShare(false);
   }
@@ -271,7 +294,18 @@ export class MeetingController {
     }, REACTION_DURATION_MS);
   }
 
-  join = (name: string, roomId: string) => {
+  /** Tutor-only; a no-op for anyone else (also enforced server-side). */
+  admitOne = (id: string) => {
+    if (!this.active || !this.socket?.connected || this.snapshot.role !== 'tutor') return;
+    this.socket.emit('room:admit', { id });
+  };
+
+  admitAll = () => {
+    if (!this.active || !this.socket?.connected || this.snapshot.role !== 'tutor') return;
+    this.socket.emit('room:admit-all');
+  };
+
+  join = (name: string, roomId: string, role: ParticipantRole) => {
     if (this.active) return;
     name = name.trim();
     roomId = roomId.trim().toLowerCase();
@@ -283,7 +317,7 @@ export class MeetingController {
     }
     this.active = true;
     this.update({
-      phase: 'joining', status: 'Connecting…', error: null, roomId, name,
+      phase: 'joining', status: 'Connecting…', error: null, roomId, name, role: null, waiting: [],
       messages: [], unreadCount: 0, chatOpen: false, handRaised: false, reactions: [],
     });
     const url = new URL(window.location.href);
@@ -298,11 +332,11 @@ export class MeetingController {
     socket.on('connect', () => {
       if (!this.active) return;
       this.update({ signalling: 'connected', error: null, reconnectFailed: false });
-      socket.emit('room:join', { roomId, name, media: this.media.state() });
+      socket.emit('room:join', { roomId, name, media: this.media.state(), role });
     });
     socket.on('disconnect', () => {
-      // The signalling channel dropping doesn't mean the WebRTC media connection has: leave
-      // the peer connection alone and let its own state reporting reflect what's really true.
+      // The signalling channel dropping doesn't mean the WebRTC media connections have: leave
+      // the peer connections alone and let their own state reporting reflect what's really true.
       if (!this.active) return;
       this.update({ signalling: 'disconnected' });
     });
@@ -323,38 +357,48 @@ export class MeetingController {
     };
     socket.io.on('reconnect_failed', this.reconnectFailedHandler);
     socket.on('room:joined', (payload) => {
-      this.update({ phase: 'meeting', status: payload.peer ? 'Connecting…' : 'Waiting for another participant…', error: null, peer: payload.peer });
-      if (payload.peer && payload.sessionId) this.startPeer(payload.sessionId, payload.initiator);
-      else this.closePeer();
+      this.update({ phase: 'meeting', role: payload.self.role, waiting: payload.waiting, error: null });
+      const known = new Set(this.snapshot.peers.map((peer) => peer.participant.id));
+      const additions = payload.peers.filter((edge) => !known.has(edge.peer.id)).map((edge) => defaultRemotePeer(edge.peer));
+      if (additions.length) this.setPeers([...this.snapshot.peers, ...additions]);
+      for (const edge of payload.peers) this.startPeer(edge.peer.id, edge.sessionId, edge.initiator);
+    });
+    socket.on('room:waiting', () => {
+      this.update({ phase: 'waiting', status: 'Waiting to be admitted…', error: null });
+    });
+    socket.on('room:waiting-update', ({ waiting }) => this.update({ waiting }));
+    socket.on('room:admit-result', ({ admitted, remaining }) => {
+      if (admitted === 0) this.announce(remaining > 0 ? 'That student could not be admitted — the class may be full.' : 'That student is no longer waiting.');
+      else if (remaining > 0) this.announce(`Admitted ${admitted} — ${remaining} still waiting (class is full).`);
     });
     socket.on('room:participant-joined', ({ peer, sessionId, initiator }) => {
       this.announce(`${peer.name} joined`);
-      this.update({ peer, status: 'Connecting…', error: null, peerReconnecting: false });
-      this.startPeer(sessionId, initiator);
+      const known = this.snapshot.peers.some((entry) => entry.participant.id === peer.id);
+      if (!known) this.setPeers([...this.snapshot.peers, defaultRemotePeer(peer)]);
+      else this.updatePeer(peer.id, { participant: peer });
+      this.startPeer(peer.id, sessionId, initiator);
     });
-    socket.on('room:participant-reconnecting', () => this.update({ peerReconnecting: true }));
-    socket.on('room:participant-reconnected', (peer) => {
-      this.announce(`${peer.name} reconnected`);
-      this.update({ peerReconnecting: false, peer });
+    socket.on('room:participant-reconnecting', ({ id }) => this.updatePeer(id, { reconnecting: true }));
+    socket.on('room:participant-reconnected', (participant) => {
+      this.announce(`${participant.name} reconnected`);
+      this.updatePeer(participant.id, { reconnecting: false, participant });
     });
-    socket.on('room:participant-left', ({ name: departedName }) => {
-      this.closePeer();
-      this.update({
-        peer: null, status: departedName ? `${departedName} left the meeting` : 'Participant left',
-        error: null, peerReconnecting: false,
-      });
+    socket.on('room:participant-left', ({ id, name: departedName }) => {
+      this.closePeer(id);
+      this.announce(departedName ? `${departedName} left the meeting` : 'A participant left the meeting');
     });
     socket.on('participant:media', ({ id, media }) => {
-      if (this.snapshot.peer?.id !== id) return;
-      const previous = this.snapshot.peer.media;
-      if (previous.audio && !media.audio) this.announce(`${this.snapshot.peer.name} muted their microphone`);
-      if (previous.video && !media.video) this.announce(`${this.snapshot.peer.name} turned off their camera`);
-      this.update({ peer: { ...this.snapshot.peer, media } });
+      const peer = this.snapshot.peers.find((entry) => entry.participant.id === id);
+      if (!peer) return;
+      if (peer.participant.media.audio && !media.audio) this.announce(`${peer.participant.name} muted their microphone`);
+      if (peer.participant.media.video && !media.video) this.announce(`${peer.participant.name} turned off their camera`);
+      this.updatePeer(id, { participant: { ...peer.participant, media } });
     });
     socket.on('participant:screen-share', ({ id, sharing }) => {
-      if (this.snapshot.peer?.id !== id) return;
-      this.announce(sharing ? `${this.snapshot.peer.name} started sharing their screen` : `${this.snapshot.peer.name} stopped sharing their screen`);
-      this.update({ peer: { ...this.snapshot.peer, screenSharing: sharing } });
+      const peer = this.snapshot.peers.find((entry) => entry.participant.id === id);
+      if (!peer) return;
+      this.announce(sharing ? `${peer.participant.name} started sharing their screen` : `${peer.participant.name} stopped sharing their screen`);
+      this.updatePeer(id, { participant: { ...peer.participant, screenSharing: sharing } });
     });
     socket.on('chat:message', (message) => {
       const own = message.senderId === this.socket?.id;
@@ -362,12 +406,13 @@ export class MeetingController {
       this.update({ messages: [...this.snapshot.messages, { ...message, own }].slice(-MAX_CHAT_HISTORY), unreadCount: unread });
     });
     socket.on('participant:hand', ({ id, raised }) => {
-      if (this.snapshot.peer?.id !== id) return;
-      if (raised) this.announce(`${this.snapshot.peer.name} raised their hand`);
-      this.update({ peer: { ...this.snapshot.peer, handRaised: raised } });
+      const peer = this.snapshot.peers.find((entry) => entry.participant.id === id);
+      if (!peer) return;
+      if (raised) this.announce(`${peer.participant.name} raised their hand`);
+      this.updatePeer(id, { participant: { ...peer.participant, handRaised: raised } });
     });
     socket.on('participant:reaction', ({ id, emoji }) => {
-      if (this.snapshot.peer?.id !== id) return;
+      if (!this.snapshot.peers.some((entry) => entry.participant.id === id)) return;
       this.showReaction(emoji, false);
     });
     socket.on('room:full', ({ message }) => this.rejectJoin(message));
@@ -375,47 +420,59 @@ export class MeetingController {
       if (this.snapshot.phase === 'joining') this.rejectJoin(message);
       else this.update({ error: message });
     });
-    socket.on('webrtc:offer', (payload) => this.peer?.description(payload));
-    socket.on('webrtc:answer', (payload) => this.peer?.description(payload));
-    socket.on('webrtc:ice-candidate', (payload) => this.peer?.candidate(payload));
+    socket.on('webrtc:offer', (payload) => { for (const session of this.peers.values()) session.description(payload); });
+    socket.on('webrtc:answer', (payload) => { for (const session of this.peers.values()) session.description(payload); });
+    socket.on('webrtc:ice-candidate', (payload) => { for (const session of this.peers.values()) session.candidate(payload); });
     socket.connect();
   };
 
-  private startPeer(sessionId: string, initiator: boolean) {
-    if (this.peer?.sessionId === sessionId || !this.socket) return;
-    this.closePeer();
+  private startPeer(peerId: string, sessionId: string, initiator: boolean) {
+    const existing = this.peers.get(peerId);
+    if (existing?.sessionId === sessionId || !this.socket) return;
+    if (existing) this.closePeer(peerId, { keepDisplay: true });
     try {
-      this.peer = new PeerSession(sessionId, initiator, this.socket, this.media, {
-        stream: (remoteStream) => this.update({ remoteStream }),
+      const session = new PeerSession(sessionId, initiator, this.socket, this.media, {
+        stream: (stream) => this.updatePeer(peerId, { stream }),
         state: (connection, ice, rtcSignalling) => {
-          const status = classifyConnectionStatus(connection, ice);
-          const patch: Partial<MeetingSnapshot> = {
-            connection, ice, rtcSignalling, status,
-            error: status === 'Connection failed' ? 'The media connection failed. Try reconnecting. Restrictive networks may need a TURN relay.' : null,
-          };
-          if (connection === 'connected' && this.snapshot.connectedAt == null) patch.connectedAt = Date.now();
-          this.update(patch);
+          this.updatePeer(peerId, { connection, ice, rtcSignalling });
+          if (connection === 'failed') this.announce('A media connection failed. Restrictive networks may need a TURN relay.');
+          const current = this.snapshot.peers.find((peer) => peer.participant.id === peerId);
+          if (connection === 'connected' && current && current.connectedAt == null) this.updatePeer(peerId, { connectedAt: Date.now() });
         },
         error: (error) => {
           peerLog.warn('Negotiation failed', error);
-          this.update({ status: 'Connection failed', error: 'We could not establish the media connection. Try reconnecting; restrictive networks may require TURN.' });
+          this.announce('We could not establish a media connection. Restrictive networks may require TURN.');
         },
-        stats: (stats) => this.update({ stats, quality: classifyQuality(stats) }),
-        direction: (direction) => this.update({ direction }),
+        stats: (stats) => this.updatePeer(peerId, { stats, quality: classifyQuality(stats) }),
+        direction: (direction) => this.updatePeer(peerId, { direction }),
       });
       // A reconnect/replacement creates a fresh PeerSession, which otherwise wouldn't know we
       // were already sharing our screen before the interruption.
-      if (this.snapshot.screenSharing) this.peer.setVideoOverride(this.screenShare.stream?.getVideoTracks()[0] ?? null);
+      if (this.snapshot.screenSharing) session.setVideoOverride(this.screenShare.stream?.getVideoTracks()[0] ?? null);
+      this.peers.set(peerId, session);
     } catch (error) {
       peerLog.warn('Creation failed', error);
-      this.update({ status: 'Connection failed', error: 'Your browser could not start the call. Try a recent browser and check your network.' });
+      this.announce('Your browser could not start a call with a participant. Try a recent browser and check your network.');
     }
   }
 
-  private closePeer() {
-    this.peer?.close();
-    this.peer = null;
-    this.update({ remoteStream: null, connection: 'new', ice: 'new', rtcSignalling: 'stable', stats: null, direction: null, quality: 'unknown', connectedAt: null });
+  private closePeer(peerId: string, options?: { keepDisplay?: boolean }) {
+    this.peers.get(peerId)?.close();
+    this.peers.delete(peerId);
+    if (options?.keepDisplay) {
+      this.updatePeer(peerId, {
+        stream: null, connection: 'new', ice: 'new', rtcSignalling: 'stable',
+        stats: null, direction: null, quality: 'unknown', connectedAt: null,
+      });
+    } else {
+      this.setPeers(this.snapshot.peers.filter((peer) => peer.participant.id !== peerId));
+    }
+  }
+
+  private closeAllPeers() {
+    for (const session of this.peers.values()) session.close();
+    this.peers.clear();
+    this.setPeers([]);
   }
 
   private closeSocket() {
@@ -437,7 +494,7 @@ export class MeetingController {
       }
       socket.removeAllListeners();
     }
-    this.closePeer();
+    this.closeAllPeers();
   }
 
   private rejectJoin(message: string) {
@@ -445,24 +502,24 @@ export class MeetingController {
     this.closeSocket();
     this.screenShare.stop();
     this.update({
-      phase: 'prejoin', status: 'Ready to join', signalling: 'disconnected', error: message, peer: null,
-      peerReconnecting: false, reconnectFailed: false, screenSharing: false, handRaised: false, reactions: [],
+      phase: 'prejoin', status: 'Ready to join', signalling: 'disconnected', error: message,
+      waiting: [], reconnectFailed: false, screenSharing: false, handRaised: false, reactions: [],
     });
   }
 
   retryConnection = () => {
-    const { name, roomId } = this.snapshot;
-    if (!this.active) return;
+    const { name, roomId, role } = this.snapshot;
+    if (!this.active || !role) return;
     this.active = false;
     this.closeSocket();
-    this.join(name, roomId);
+    this.join(name, roomId, role);
   };
 
-  /** Rejoins the same room under the same name from the ended screen, skipping pre-join. */
+  /** Rejoins the same room under the same name and role from the ended screen, skipping pre-join. */
   rejoin = () => {
-    const { name, roomId } = this.snapshot;
-    if (this.active || !name || !ROOM_PATTERN.test(roomId)) return;
-    this.join(name, roomId);
+    const { name, roomId, role } = this.snapshot;
+    if (this.active || !name || !role || !ROOM_PATTERN.test(roomId)) return;
+    this.join(name, roomId, role);
   };
 
   leave = () => {
@@ -473,8 +530,8 @@ export class MeetingController {
     this.screenShare.stop();
     clearTimeout(this.noticeTimeout);
     this.update({
-      phase: 'ended', status: 'Meeting ended', signalling: 'disconnected', peer: null, preparing: false, error: null, mediaError: null,
-      peerReconnecting: false, reconnectFailed: false, screenSharing: false,
+      phase: 'ended', status: 'Meeting ended', signalling: 'disconnected', preparing: false, error: null, mediaError: null,
+      reconnectFailed: false, screenSharing: false, waiting: [],
       chatOpen: false, messages: [], unreadCount: 0, notice: null, handRaised: false, reactions: [],
     });
   };
