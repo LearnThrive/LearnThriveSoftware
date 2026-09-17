@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import express from 'express';
 import { Server, type Socket } from 'socket.io';
 import { isDevTunnelHost } from '../shared/allowedHosts';
-import { MAX_CHAT_LENGTH, MAX_NAME_LENGTH, ROOM_PATTERN } from '../shared/protocol';
+import { MAX_CHAT_LENGTH, MAX_NAME_LENGTH, REACTION_EMOJIS, ROOM_PATTERN } from '../shared/protocol';
 import type {
   ChatMessage, ClientToServerEvents, JoinedRoom, MediaState, Participant,
   ServerToClientEvents, SignalCandidate, SignalDescription,
@@ -11,6 +11,23 @@ import type {
 
 const CHAT_RATE_WINDOW_MS = 4000;
 const CHAT_RATE_MAX_MESSAGES = 6;
+const REACTION_RATE_WINDOW_MS = 4000;
+const REACTION_RATE_MAX = 10;
+
+function createRateLimiter(windowMs: number, max: number) {
+  const hits = new Map<string, number[]>();
+  return {
+    allow(id: string): boolean {
+      const now = Date.now();
+      const recent = (hits.get(id) ?? []).filter((sentAt) => now - sentAt < windowMs);
+      if (recent.length >= max) { hits.set(id, recent); return false; }
+      recent.push(now);
+      hits.set(id, recent);
+      return true;
+    },
+    clear(id: string) { hits.delete(id); },
+  };
+}
 
 interface Room {
   participants: Map<string, Participant>;
@@ -83,19 +100,11 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
   });
   const rooms = new Map<string, Room>();
   const pendingDisconnects = new Map<string, { roomId: string; timer: ReturnType<typeof setTimeout> }>();
-  const chatRateLimits = new Map<string, number[]>();
+  const chatRateLimiter = createRateLimiter(CHAT_RATE_WINDOW_MS, CHAT_RATE_MAX_MESSAGES);
+  const reactionRateLimiter = createRateLimiter(REACTION_RATE_WINDOW_MS, REACTION_RATE_MAX);
 
   function fail(socket: MeetingSocket, message: string) {
     socket.emit('room:error', { message });
-  }
-
-  function allowChatMessage(socketId: string): boolean {
-    const now = Date.now();
-    const recent = (chatRateLimits.get(socketId) ?? []).filter((sentAt) => now - sentAt < CHAT_RATE_WINDOW_MS);
-    if (recent.length >= CHAT_RATE_MAX_MESSAGES) { chatRateLimits.set(socketId, recent); return false; }
-    recent.push(now);
-    chatRateLimits.set(socketId, recent);
-    return true;
   }
 
   function clearPending(socketId: string) {
@@ -122,14 +131,16 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
     delete socket.data.roomId;
     void socket.leave(`meeting:${roomId}`);
     clearPending(socket.id);
-    chatRateLimits.delete(socket.id);
+    chatRateLimiter.clear(socket.id);
+    reactionRateLimiter.clear(socket.id);
     const room = rooms.get(roomId);
+    const departing = room?.participants.get(socket.id) ?? null;
     if (!room || !room.participants.delete(socket.id)) return;
     room.sessionId = null;
     if (room.participants.size === 0) {
       rooms.delete(roomId);
     } else {
-      for (const id of room.participants.keys()) io.to(id).emit('room:participant-left');
+      for (const id of room.participants.keys()) io.to(id).emit('room:participant-left', { name: departing?.name ?? null });
     }
   }
 
@@ -198,13 +209,14 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
           clearPending(stale);
           room.participants.delete(stale);
           room.sessionId = null;
-          chatRateLimits.delete(stale);
+          chatRateLimiter.clear(stale);
+          reactionRateLimiter.clear(stale);
         } else {
           socket.emit('room:full', { message: 'This meeting already has two participants.' });
           return;
         }
       }
-      const self: Participant = { id: socket.id, name: payload.name.trim(), media, screenSharing: false };
+      const self: Participant = { id: socket.id, name: payload.name.trim(), media, screenSharing: false, handRaised: false };
       room.participants.set(socket.id, self);
       rooms.set(roomId, room);
       socket.data.roomId = roomId;
@@ -251,10 +263,33 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
       }
       const text = payload.text.trim();
       if (!text || text.length > MAX_CHAT_LENGTH) return fail(socket, `Messages must be 1–${MAX_CHAT_LENGTH} characters.`);
-      if (!allowChatMessage(socket.id)) return fail(socket, 'You are sending messages too quickly. Please slow down.');
+      if (!chatRateLimiter.allow(socket.id)) return fail(socket, 'You are sending messages too quickly. Please slow down.');
       // Plain text only: no markdown/HTML is ever interpreted server-side or client-side.
       const message: ChatMessage = { id: randomUUID(), senderId: socket.id, name: self.name, text, timestamp: Date.now() };
       for (const id of room.participants.keys()) io.to(id).emit('chat:message', message);
+    });
+    socket.on('participant:hand', (payload: unknown) => {
+      const room = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
+      const self = room?.participants.get(socket.id);
+      if (!room || !self || !isRecord(payload) || typeof payload.raised !== 'boolean') {
+        return fail(socket, 'Invalid hand-raise update.');
+      }
+      self.handRaised = payload.raised;
+      for (const id of room.participants.keys()) {
+        if (id !== socket.id) io.to(id).emit('participant:hand', { id: socket.id, raised: payload.raised });
+      }
+    });
+    socket.on('participant:reaction', (payload: unknown) => {
+      const room = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
+      const self = room?.participants.get(socket.id);
+      if (!room || !self) return fail(socket, 'You are not currently in a meeting.');
+      if (!isRecord(payload) || typeof payload.emoji !== 'string' || !(REACTION_EMOJIS as readonly string[]).includes(payload.emoji)) {
+        return fail(socket, 'Invalid reaction.');
+      }
+      if (!reactionRateLimiter.allow(socket.id)) return fail(socket, 'You are sending reactions too quickly. Please slow down.');
+      for (const id of room.participants.keys()) {
+        if (id !== socket.id) io.to(id).emit('participant:reaction', { id: socket.id, emoji: payload.emoji });
+      }
     });
     socket.on('webrtc:offer', (payload) => relayDescription(socket, 'offer', payload));
     socket.on('webrtc:answer', (payload) => relayDescription(socket, 'answer', payload));

@@ -13,11 +13,31 @@ const MAX_ICE_RESTARTS = 2;
 const STATS_INTERVAL_MS = 2500;
 
 type SignallingSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
+
+export interface TrackSnapshot {
+  id: string;
+  enabled: boolean;
+  muted: boolean;
+  readyState: MediaStreamTrackState;
+}
+
+export interface DirectionDiagnostics {
+  localAudio: TrackSnapshot | null;
+  localVideo: TrackSnapshot | null;
+  remoteAudio: TrackSnapshot | null;
+  remoteVideo: TrackSnapshot | null;
+  audioDirection: RTCRtpTransceiverDirection | null;
+  audioCurrentDirection: RTCRtpTransceiverDirection | null;
+  videoDirection: RTCRtpTransceiverDirection | null;
+  videoCurrentDirection: RTCRtpTransceiverDirection | null;
+}
+
 interface PeerCallbacks {
   stream: (stream: MediaStream) => void;
   state: (connection: RTCPeerConnectionState, ice: RTCIceConnectionState, signalling: RTCSignalingState) => void;
   error: (error: unknown) => void;
   stats?: (stats: CallStats) => void;
+  direction?: (diagnostics: DirectionDiagnostics) => void;
 }
 
 export class PeerSession {
@@ -71,20 +91,49 @@ export class PeerSession {
     this.pc.oniceconnectionstatechange = reportState;
     this.pc.onsignalingstatechange = reportState;
     if (initiator) this.negotiate(false);
-    if (callbacks.stats) this.statsTimer = setInterval(() => { void this.pollStats(); }, STATS_INTERVAL_MS);
+    if (callbacks.stats || callbacks.direction) this.statsTimer = setInterval(() => { void this.pollStats(); }, STATS_INTERVAL_MS);
   }
 
   private async pollStats() {
-    if (this.closed || !this.callbacks.stats) return;
-    try {
-      const report = await this.pc.getStats();
-      if (this.closed) return;
-      const { stats, sample } = parseStats(report, this.lastStatsSample);
-      this.lastStatsSample = sample;
-      this.callbacks.stats(stats);
-    } catch (error) {
-      statsLog.warn('getStats failed', error);
+    if (this.closed) return;
+    if (this.callbacks.stats) {
+      try {
+        const report = await this.pc.getStats();
+        if (this.closed) return;
+        const { stats, sample } = parseStats(report, this.lastStatsSample);
+        this.lastStatsSample = sample;
+        this.callbacks.stats(stats);
+      } catch (error) {
+        statsLog.warn('getStats failed', error);
+      }
     }
+    if (!this.closed) this.callbacks.direction?.(this.getDirectionDiagnostics());
+  }
+
+  private snapshotTrack(track: MediaStreamTrack | null | undefined): TrackSnapshot | null {
+    if (!track) return null;
+    return { id: track.id, enabled: track.enabled, muted: track.muted, readyState: track.readyState };
+  }
+
+  /** Live track/transceiver state for the debug panel — this is what makes an asymmetric
+   * "I can't see them" bug (as opposed to a negotiation failure) visible: it distinguishes
+   * "no remote track", "track exists but muted/ended", and "direction never negotiated to receive". */
+  getDirectionDiagnostics(): DirectionDiagnostics {
+    const audioSender = this.senders.get('audio');
+    const videoSender = this.senders.get('video');
+    const transceivers = this.pc.getTransceivers();
+    const audioTransceiver = transceivers.find((t) => t.sender === audioSender);
+    const videoTransceiver = transceivers.find((t) => t.sender === videoSender);
+    return {
+      localAudio: this.snapshotTrack(audioSender?.track),
+      localVideo: this.snapshotTrack(videoSender?.track),
+      remoteAudio: this.snapshotTrack(this.remote.getAudioTracks()[0]),
+      remoteVideo: this.snapshotTrack(this.remote.getVideoTracks()[0]),
+      audioDirection: audioTransceiver?.direction ?? null,
+      audioCurrentDirection: audioTransceiver?.currentDirection ?? null,
+      videoDirection: videoTransceiver?.direction ?? null,
+      videoCurrentDirection: videoTransceiver?.currentDirection ?? null,
+    };
   }
 
   /** Overrides the outgoing video track (screen share) without renegotiating; null restores the camera. */

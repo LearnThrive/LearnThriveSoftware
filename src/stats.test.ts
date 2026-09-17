@@ -6,9 +6,9 @@ function report(entries: Array<[string, Record<string, unknown>]>): RTCStatsRepo
 }
 
 const BASE_STATS: CallStats = {
-  rtt: null, jitter: null, packetsLost: null, packetsReceived: null,
+  rtt: null, jitter: null, packetsLost: null, packetsReceived: null, packetsSent: null,
   inboundBitrateKbps: null, outboundBitrateKbps: null, frameRate: null, resolution: null,
-  localCandidateType: null, remoteCandidateType: null,
+  framesEncoded: null, framesDecoded: null, localCandidateType: null, remoteCandidateType: null,
 };
 
 function makeReport(timestamp: number, bytesReceived: number, bytesSent: number) {
@@ -22,9 +22,9 @@ function makeReport(timestamp: number, bytesReceived: number, bytesSent: number)
     ['inbound1', {
       type: 'inbound-rtp', kind: 'video', isRemote: false, timestamp,
       jitter: 0.01, packetsLost: 2, packetsReceived: 998, bytesReceived,
-      framesPerSecond: 30, frameWidth: 1280, frameHeight: 720,
+      framesPerSecond: 30, frameWidth: 1280, frameHeight: 720, framesDecoded: 900,
     }],
-    ['outbound1', { type: 'outbound-rtp', kind: 'video', isRemote: false, timestamp, bytesSent }],
+    ['outbound1', { type: 'outbound-rtp', kind: 'video', isRemote: false, timestamp, bytesSent, packetsSent: 500, framesEncoded: 895 }],
   ]);
 }
 
@@ -39,6 +39,9 @@ describe('parseStats', () => {
     expect(stats.packetsReceived).toBe(998);
     expect(stats.frameRate).toBe(30);
     expect(stats.resolution).toBe('1280×720');
+    expect(stats.framesDecoded).toBe(900);
+    expect(stats.framesEncoded).toBe(895);
+    expect(stats.packetsSent).toBe(500);
     expect(stats.inboundBitrateKbps).toBeNull();
   });
 

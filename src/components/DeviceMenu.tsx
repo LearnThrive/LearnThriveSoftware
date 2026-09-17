@@ -1,5 +1,6 @@
-import { useEffect, useRef, type RefObject } from 'react';
+import { useRef, type RefObject } from 'react';
 import type { DeviceOption } from '../media';
+import { usePopoverDismiss } from '../usePopoverDismiss';
 import { Icon } from './Icon';
 
 interface DeviceMenuProps {
@@ -14,35 +15,21 @@ interface DeviceMenuProps {
   canFlip: boolean;
   onFlip: () => void;
   triggerRef: RefObject<HTMLButtonElement | null>;
+  layoutMode?: 'focus' | 'sideBySide';
+  onLayoutMode?: (mode: 'focus' | 'sideBySide') => void;
 }
 
 export function DeviceMenu({
-  open, onClose, cameras, microphones, selectedCamera, selectedMicrophone, onSelectCamera, onSelectMicrophone, canFlip, onFlip, triggerRef,
+  open, onClose, cameras, microphones, selectedCamera, selectedMicrophone, onSelectCamera, onSelectMicrophone, canFlip, onFlip,
+  triggerRef, layoutMode, onLayoutMode,
 }: DeviceMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    // Escape is a pure keyboard dismissal, so focus returns to the trigger. A click outside
-    // already tells us where the user wants focus (wherever they clicked), so that path leaves
-    // focus alone rather than yanking it back.
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      onClose();
-      triggerRef.current?.focus();
-    };
-    const onClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) onClose();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('mousedown', onClickOutside);
-    return () => { window.removeEventListener('keydown', onKeyDown); window.removeEventListener('mousedown', onClickOutside); };
-  }, [open, onClose, triggerRef]);
+  usePopoverDismiss(open, onClose, menuRef, triggerRef);
 
   if (!open) return null;
 
   return (
-    <div className="device-menu" ref={menuRef} role="menu" aria-label="Camera and microphone options">
+    <div className="device-menu" ref={menuRef} role="menu" aria-label="Meeting settings">
       <div className="device-menu-group">
         <label htmlFor="camera-select">Camera</label>
         <select id="camera-select" value={selectedCamera ?? ''} onChange={(event) => onSelectCamera(event.target.value)}>
@@ -58,6 +45,13 @@ export function DeviceMenu({
         </select>
       </div>
       {canFlip && <button type="button" className="device-menu-flip" onClick={onFlip}><Icon name="flip" size={16} />Switch front/rear camera</button>}
+      {layoutMode && onLayoutMode && <div className="device-menu-group">
+        <label id="layout-label">Layout</label>
+        <div className="device-menu-layout" role="group" aria-labelledby="layout-label">
+          <button type="button" className={layoutMode === 'focus' ? 'is-active' : ''} aria-pressed={layoutMode === 'focus'} onClick={() => onLayoutMode('focus')}>Focus</button>
+          <button type="button" className={layoutMode === 'sideBySide' ? 'is-active' : ''} aria-pressed={layoutMode === 'sideBySide'} onClick={() => onLayoutMode('sideBySide')}>Side by side</button>
+        </div>
+      </div>}
     </div>
   );
 }

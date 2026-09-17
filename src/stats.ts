@@ -3,10 +3,13 @@ export interface CallStats {
   jitter: number | null;
   packetsLost: number | null;
   packetsReceived: number | null;
+  packetsSent: number | null;
   inboundBitrateKbps: number | null;
   outboundBitrateKbps: number | null;
   frameRate: number | null;
   resolution: string | null;
+  framesEncoded: number | null;
+  framesDecoded: number | null;
   localCandidateType: string | null;
   remoteCandidateType: string | null;
 }
@@ -14,9 +17,9 @@ export interface CallStats {
 export interface StatsSample { timestamp: number; bytesSent: number | null; bytesReceived: number | null }
 
 const EMPTY_STATS: CallStats = {
-  rtt: null, jitter: null, packetsLost: null, packetsReceived: null,
+  rtt: null, jitter: null, packetsLost: null, packetsReceived: null, packetsSent: null,
   inboundBitrateKbps: null, outboundBitrateKbps: null, frameRate: null, resolution: null,
-  localCandidateType: null, remoteCandidateType: null,
+  framesEncoded: null, framesDecoded: null, localCandidateType: null, remoteCandidateType: null,
 };
 
 /** Browsers disagree on which optional stats fields exist, so every read is feature-detected. */
@@ -50,11 +53,16 @@ export function parseStats(report: RTCStatsReport, previous: StatsSample | null)
       if (entry.kind === 'video') {
         if (typeof entry.framesPerSecond === 'number') stats.frameRate = Math.round(entry.framesPerSecond);
         if (typeof entry.frameWidth === 'number' && typeof entry.frameHeight === 'number') stats.resolution = `${entry.frameWidth}×${entry.frameHeight}`;
+        if (typeof entry.framesDecoded === 'number') stats.framesDecoded = (stats.framesDecoded ?? 0) + entry.framesDecoded;
       }
     }
 
-    if (entry.type === 'outbound-rtp' && !entry.isRemote && typeof entry.bytesSent === 'number') {
-      bytesSent = (bytesSent ?? 0) + entry.bytesSent;
+    if (entry.type === 'outbound-rtp' && !entry.isRemote) {
+      if (typeof entry.bytesSent === 'number') bytesSent = (bytesSent ?? 0) + entry.bytesSent;
+      if (typeof entry.packetsSent === 'number') stats.packetsSent = (stats.packetsSent ?? 0) + entry.packetsSent;
+      if (entry.kind === 'video' && typeof entry.framesEncoded === 'number') {
+        stats.framesEncoded = (stats.framesEncoded ?? 0) + entry.framesEncoded;
+      }
     }
   });
 

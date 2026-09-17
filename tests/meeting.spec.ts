@@ -22,6 +22,18 @@ async function joinMeeting(page: Page) {
   await page.getByRole('button', { name: 'Join meeting' }).click();
 }
 
+// Once a peer exists, the remote/local tiles become clickable (to set the main/focused view),
+// which correctly changes their accessible role from "region" to "button" and their name to
+// describe the action rather than just the content.
+function mainViewControl(page: Page, participantName: string) {
+  return page.getByRole('button', { name: `Make ${participantName}'s view the main view` });
+}
+
+async function leaveMeeting(page: Page) {
+  await page.getByRole('button', { name: 'Leave meeting' }).click();
+  await page.getByRole('button', { name: 'Yes, leave' }).click();
+}
+
 test('two participants connect over WebRTC, exchange media state, and a third is rejected', async ({ browser }) => {
   const { context: contextA, page: pageA } = await openParticipant(browser, 'Tutor');
   await test.step('first participant creates a meeting and enables devices', async () => {
@@ -47,8 +59,8 @@ test('two participants connect over WebRTC, exchange media state, and a third is
   await test.step('both peers reach a connected WebRTC state', async () => {
     await expect(pageA.locator('.connection-pill')).toHaveClass(/connected/, { timeout: 20_000 });
     await expect(pageB.locator('.connection-pill')).toHaveClass(/connected/, { timeout: 20_000 });
-    await expect(pageA.getByRole('region', { name: "Student's video" })).toBeVisible();
-    await expect(pageB.getByRole('region', { name: "Tutor's video" })).toBeVisible();
+    await expect(mainViewControl(pageA, 'Student')).toBeVisible();
+    await expect(mainViewControl(pageB, 'Tutor')).toBeVisible();
   });
 
   await test.step('muting and disabling video relay to the peer', async () => {
@@ -68,9 +80,9 @@ test('two participants connect over WebRTC, exchange media state, and a third is
   });
 
   await test.step('leaving ends the call for one side and returns the other to waiting', async () => {
-    await pageA.getByRole('button', { name: 'Leave meeting' }).click();
+    await leaveMeeting(pageA);
     await expect(pageA.getByRole('heading', { name: /left the meeting/i })).toBeVisible();
-    await expect(pageB.locator('.connection-pill')).toContainText('Participant left');
+    await expect(pageB.locator('.connection-pill')).toContainText('Tutor left the meeting');
     await expect(pageB.getByRole('region', { name: 'Waiting for another participant' })).toBeVisible();
   });
 
@@ -126,12 +138,12 @@ test('a participant can leave and rejoin the same room cleanly', async ({ browse
   await expect(pageA.getByRole('region', { name: 'Waiting for another participant' })).toBeVisible();
 
   await test.step('leaving reaches the ended screen', async () => {
-    await pageA.getByRole('button', { name: 'Leave meeting' }).click();
+    await leaveMeeting(pageA);
     await expect(pageA.getByRole('heading', { name: /left the meeting/i })).toBeVisible();
   });
 
   await test.step('rejoining the same room from a fresh pre-join reconnects cleanly, with no ghost participant', async () => {
-    await pageA.getByRole('button', { name: 'Back to meeting setup' }).click();
+    await pageA.getByRole('button', { name: 'Return to meeting setup' }).click();
     await pageA.getByLabel('Your name').fill('Tutor');
     await expect(pageA.getByLabel('Room code')).toHaveValue(roomId);
     await joinMeeting(pageA);
@@ -160,14 +172,14 @@ test('a brief network drop recovers without a false departure notice', async ({ 
   await test.step('the peer is marked reconnecting, never a false departure, while offline', async () => {
     await contextB.setOffline(true);
     await expect(pageA.locator('.peer-reconnecting')).toBeVisible({ timeout: 10_000 });
-    await expect(pageA.getByRole('region', { name: "Student's video" })).toBeVisible();
+    await expect(mainViewControl(pageA, 'Student')).toBeVisible();
   });
 
   await test.step('coming back online clears the notice and the pairing survives', async () => {
     await contextB.setOffline(false);
     await expect(pageA.locator('.peer-reconnecting')).toBeHidden({ timeout: 15_000 });
-    await expect(pageA.getByRole('region', { name: "Student's video" })).toBeVisible();
-    await expect(pageB.getByRole('region', { name: "Tutor's video" })).toBeVisible();
+    await expect(mainViewControl(pageA, 'Student')).toBeVisible();
+    await expect(mainViewControl(pageB, 'Tutor')).toBeVisible();
     await expect(pageA.locator('.connection-pill')).not.toContainText('Participant left');
   });
 
