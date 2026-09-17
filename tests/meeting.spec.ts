@@ -193,6 +193,107 @@ test('a brief network drop recovers without a false departure notice', async ({ 
     await expect(pageA.locator('.connection-pill')).not.toContainText('Participant left');
   });
 
+  await test.step('chat still works after the reconnect, proving the room state was not corrupted', async () => {
+    await pageA.getByRole('button', { name: 'Toggle chat' }).click();
+    await pageA.getByPlaceholder('Type a message…').fill('still here');
+    await pageA.getByRole('button', { name: 'Send message' }).click();
+    await pageB.getByRole('button', { name: 'Toggle chat' }).click();
+    await expect(pageB.locator('.chat-message:not(.own) p')).toHaveText('still here');
+  });
+
   await contextA.close();
   await contextB.close();
+});
+
+test('clicking a tile changes the main view, side-by-side works, and the participant panel reflects both sides', async ({ browser }) => {
+  const { context: contextA, page: pageA } = await openParticipant(browser, 'Tutor');
+  await pageA.getByRole('button', { name: 'Create meeting' }).click();
+  await enableDevices(pageA);
+  const roomId = await pageA.getByLabel('Room code').inputValue();
+  await joinMeeting(pageA);
+
+  const { context: contextB, page: pageB } = await openParticipant(browser, 'Student', roomId);
+  await enableDevices(pageB);
+  await joinMeeting(pageB);
+
+  await expect(pageA.locator('.connection-pill')).toHaveClass(/connected/, { timeout: 20_000 });
+  await expect(pageB.locator('.connection-pill')).toHaveClass(/connected/, { timeout: 20_000 });
+
+  await test.step('clicking the local tile makes it the main view; clicking it again swaps back', async () => {
+    await expect(pageA.locator('.meeting-stage>.local-tile')).toHaveCount(0);
+    await pageA.getByRole('button', { name: "Make your view the main view" }).click();
+    await expect(pageA.locator('.meeting-stage>.local-tile')).toHaveCount(1);
+    await mainViewControl(pageA, 'Student').click();
+    await expect(pageA.locator('.meeting-stage>.local-tile')).toHaveCount(0);
+  });
+
+  await test.step('side-by-side shows both tiles as direct, equally-sized stage children', async () => {
+    await pageA.getByRole('button', { name: 'Meeting settings' }).click();
+    await pageA.getByRole('button', { name: 'Side by side' }).click();
+    await pageA.keyboard.press('Escape');
+    await expect(pageA.locator('.stage-side-by-side')).toBeVisible();
+    await expect(pageA.locator('.stage-side-by-side>.participant-tile')).toHaveCount(2);
+    await expect(pageA.locator('.self-preview')).toHaveCount(0);
+  });
+
+  await test.step('the People panel lists both participants with their live mic/camera state', async () => {
+    await pageA.getByRole('button', { name: 'Participants' }).click();
+    const panel = pageA.locator('.participant-panel');
+    await expect(panel).toContainText('Tutor (You)');
+    await expect(panel).toContainText('Student');
+    await pageA.keyboard.press('Escape');
+  });
+
+  await test.step('raising a hand relays to the peer and is reflected in the participant panel', async () => {
+    await pageA.getByRole('button', { name: 'Raise your hand' }).click();
+    await expect(pageB.locator('.participant-toast')).toContainText(/raised their hand/i);
+    await pageB.getByRole('button', { name: 'Participants' }).click();
+    await expect(pageB.locator('.participant-panel [aria-label="Hand raised"]')).toBeVisible();
+    await pageA.getByRole('button', { name: 'Lower your hand' }).click();
+  });
+
+  await contextA.close();
+  await contextB.close();
+});
+
+test('emoji reactions relay to the peer and disappear on their own (rate-limiting is covered server-side)', async ({ browser }) => {
+  const { context: contextA, page: pageA } = await openParticipant(browser, 'Tutor');
+  await pageA.getByRole('button', { name: 'Create meeting' }).click();
+  await enableDevices(pageA);
+  const roomId = await pageA.getByLabel('Room code').inputValue();
+  await joinMeeting(pageA);
+
+  const { context: contextB, page: pageB } = await openParticipant(browser, 'Student', roomId);
+  await enableDevices(pageB);
+  await joinMeeting(pageB);
+
+  await expect(pageA.locator('.connection-pill')).toHaveClass(/connected/, { timeout: 20_000 });
+  await expect(pageB.locator('.connection-pill')).toHaveClass(/connected/, { timeout: 20_000 });
+
+  await test.step('sending a reaction shows it on both sides and it disappears on its own', async () => {
+    await pageA.getByRole('button', { name: 'Send a reaction' }).click();
+    await pageA.getByRole('button', { name: 'Send 🎉 reaction' }).click();
+    await expect(pageA.locator('.floating-reaction')).toBeVisible();
+    await expect(pageB.locator('.floating-reaction')).toBeVisible();
+    await expect(pageA.locator('.floating-reaction')).toHaveCount(0, { timeout: 4_000 });
+    await expect(pageB.locator('.floating-reaction')).toHaveCount(0, { timeout: 4_000 });
+  });
+
+  await contextA.close();
+  await contextB.close();
+});
+
+test('the copied invite link uses the page\'s current origin, with no build-time configuration', async ({ browser }) => {
+  const { context, page } = await openParticipant(browser, 'Tutor');
+  await page.getByRole('button', { name: 'Create meeting' }).click();
+  const roomId = await page.getByLabel('Room code').inputValue();
+
+  await page.getByRole('button', { name: 'Copy invite link' }).first().click();
+  const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
+  const currentOrigin = await page.evaluate(() => window.location.origin);
+
+  expect(clipboardText.startsWith(currentOrigin)).toBe(true);
+  expect(clipboardText).toContain(`/meeting?room=${roomId}`);
+
+  await context.close();
 });
