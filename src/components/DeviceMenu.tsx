@@ -15,13 +15,16 @@ interface DeviceMenuProps {
   canFlip: boolean;
   onFlip: () => void;
   triggerRef: RefObject<HTMLButtonElement | null>;
-  layoutMode?: 'focus' | 'sideBySide';
-  onLayoutMode?: (mode: 'focus' | 'sideBySide') => void;
+  layoutMode?: 'focus' | 'sideBySide' | 'gallery';
+  onLayoutMode?: (mode: 'focus' | 'sideBySide' | 'gallery') => void;
+  // Side by side only makes sense for exactly one other participant — at 2+ others, Gallery
+  // takes over as the "everyone roughly equal" option instead.
+  sideBySideAvailable?: boolean;
 }
 
 export function DeviceMenu({
   open, onClose, cameras, microphones, selectedCamera, selectedMicrophone, onSelectCamera, onSelectMicrophone, canFlip, onFlip,
-  triggerRef, layoutMode, onLayoutMode,
+  triggerRef, layoutMode, onLayoutMode, sideBySideAvailable,
 }: DeviceMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   usePopoverDismiss(open, onClose, menuRef, triggerRef);
@@ -49,7 +52,8 @@ export function DeviceMenu({
         <label id="layout-label">Layout</label>
         <div className="device-menu-layout" role="group" aria-labelledby="layout-label">
           <button type="button" className={layoutMode === 'focus' ? 'is-active' : ''} aria-pressed={layoutMode === 'focus'} onClick={() => onLayoutMode('focus')}>Focus</button>
-          <button type="button" className={layoutMode === 'sideBySide' ? 'is-active' : ''} aria-pressed={layoutMode === 'sideBySide'} onClick={() => onLayoutMode('sideBySide')}>Side by side</button>
+          {sideBySideAvailable && <button type="button" className={layoutMode === 'sideBySide' ? 'is-active' : ''} aria-pressed={layoutMode === 'sideBySide'} onClick={() => onLayoutMode('sideBySide')}>Side by side</button>}
+          <button type="button" className={layoutMode === 'gallery' ? 'is-active' : ''} aria-pressed={layoutMode === 'gallery'} onClick={() => onLayoutMode('gallery')}>Gallery</button>
         </div>
       </div>}
     </div>
