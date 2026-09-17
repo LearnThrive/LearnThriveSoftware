@@ -341,8 +341,10 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
       const self = room?.participants.get(socket.id);
       if (!room || !roomId || !self || self.role !== 'tutor') return fail(socket, 'Only the tutor can admit students.');
       if (!isRecord(payload) || typeof payload.id !== 'string') return fail(socket, 'Invalid admit request.');
+      // A failed admit isn't a malformed request — it's an ordinary race (the student left, or
+      // the class filled up in the meantime) — so it's reported once, via room:admit-result
+      // (which the client turns into a toast), not also as a room:error banner.
       const admitted = admitWaitingId(roomId, room, payload.id) ? 1 : 0;
-      if (admitted === 0) fail(socket, 'That student is no longer waiting, or the class is full.');
       socket.emit('room:admit-result', { admitted, remaining: room.waiting.size });
       broadcastWaiting(room);
     });
