@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import express from 'express';
 import { Server, type Socket } from 'socket.io';
+import { isDevTunnelHost } from '../shared/allowedHosts';
 import { MAX_CHAT_LENGTH, MAX_NAME_LENGTH, ROOM_PATTERN } from '../shared/protocol';
 import type {
   ChatMessage, ClientToServerEvents, JoinedRoom, MediaState, Participant,
@@ -56,7 +57,19 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
   if (tunnelHost && /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/i.test(tunnelHost)) {
     allowedOrigins.add(`https://${tunnelHost.toLowerCase()}`);
   }
-  const acceptsOrigin = (origin: string | undefined) => !origin || allowedOrigins.has(origin);
+  const acceptsOrigin = (origin: string | undefined) => {
+    if (!origin) return true;
+    if (allowedOrigins.has(origin)) return true;
+    // Same ephemeral-subdomain allowance as vite.config.ts's allowedHosts, so a fresh Quick
+    // Tunnel/Tailscale session works without editing .env; still requires HTTPS and an exact
+    // known suffix, never a bare wildcard.
+    try {
+      const url = new URL(origin);
+      return url.protocol === 'https:' && isDevTunnelHost(url.hostname);
+    } catch {
+      return false;
+    }
+  };
   const io = new Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>(httpServer, {
     // This process only handles small signalling messages; never media streams.
     maxHttpBufferSize: 100_000,

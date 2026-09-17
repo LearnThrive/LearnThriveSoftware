@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import { DEV_TUNNEL_HOST_SUFFIXES } from './shared/allowedHosts';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
@@ -9,7 +10,10 @@ export default defineConfig(({ mode }) => {
       host: '127.0.0.1',
       port: 5173,
       strictPort: true,
-      allowedHosts: env.TUNNEL_HOST ? [env.TUNNEL_HOST] : [],
+      // Vite's leading-dot syntax allows any subdomain of that suffix — covers Cloudflare Quick
+      // Tunnel and Tailscale's randomly-generated hostnames with no per-session .env edit.
+      // TUNNEL_HOST remains available for a stable named domain (see README).
+      allowedHosts: [...DEV_TUNNEL_HOST_SUFFIXES, ...(env.TUNNEL_HOST ? [env.TUNNEL_HOST] : [])],
       proxy: { '/socket.io': { target: 'http://127.0.0.1:3001', ws: true } },
     },
   };
