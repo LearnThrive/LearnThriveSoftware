@@ -61,13 +61,21 @@ export class PeerSession {
     private readonly media: LocalMedia,
     private readonly callbacks: PeerCallbacks,
   ) {
-    for (const kind of ['audio', 'video'] as const) {
-      const track = media.track(kind);
-      const transceiver = this.pc.addTransceiver(track ?? kind, {
-        direction: 'sendrecv',
-        streams: media.stream ? [media.stream] : [],
-      });
-      this.senders.set(kind, transceiver.sender);
+    // Only the initiator pre-adds transceivers before any signalling. If the answerer also
+    // pre-adds its own, Chrome's offer-matching in setRemoteDescription does not reuse them —
+    // it creates a *second*, separate pair of (recvonly) transceivers for the offer's m-lines
+    // and leaves the answerer's own pre-added, track-carrying transceivers orphaned with a null
+    // mid, so the answer always declares recvonly and the answerer's camera/mic are captured
+    // locally but never actually sent. That is what produced the asymmetric "one side can't see
+    // the other" bug: the side that joins second (and is therefore never the initiator) could
+    // never be seen by the other side. The answerer instead attaches its tracks to the
+    // transceivers Chrome auto-creates once it has the offer — see `attachAnswererTracks`.
+    if (initiator) {
+      for (const kind of ['audio', 'video'] as const) {
+        const track = media.track(kind);
+        const transceiver = this.pc.addTransceiver(track ?? kind, { direction: 'sendrecv', streams: media.stream ? [media.stream] : [] });
+        this.senders.set(kind, transceiver.sender);
+      }
     }
     this.pc.onicecandidate = ({ candidate }) => {
       if (candidate && !this.closed) this.socket.emit('webrtc:ice-candidate', { sessionId, candidate: candidate.toJSON() });
@@ -81,6 +89,9 @@ export class PeerSession {
     };
     this.pc.onconnectionstatechange = () => {
       reportState();
+      // Refresh the debug panel the moment we connect instead of leaving it on stale "none"
+      // placeholders until the next periodic poll (up to STATS_INTERVAL_MS later).
+      if (this.pc.connectionState === 'connected') void this.pollStats();
       // Only the deterministic initiator ever restarts ICE, so the two sides can never
       // both start a fresh offer at once.
       if (this.pc.connectionState === 'failed' && this.initiator && !this.closed && this.iceRestarts < MAX_ICE_RESTARTS) {
@@ -187,12 +198,26 @@ export class PeerSession {
       for (const candidate of this.pendingIce) await this.pc.addIceCandidate(candidate);
       this.pendingIce = [];
       if (description.type === 'offer') {
+        if (this.senders.size === 0) this.attachAnswererTracks();
         await this.pc.setLocalDescription(await this.pc.createAnswer());
         if (!this.closed && this.pc.localDescription) {
           this.socket.emit('webrtc:answer', { sessionId: this.sessionId, description: this.pc.localDescription.toJSON() });
         }
       }
     });
+  }
+
+  /** Attaches the answerer's own tracks to the transceivers Chrome auto-created while applying
+   * the initiator's offer (see the constructor comment for why we can't pre-add our own). */
+  private attachAnswererTracks() {
+    for (const transceiver of this.pc.getTransceivers()) {
+      const kind = transceiver.receiver.track?.kind as 'audio' | 'video' | undefined;
+      if (!kind || this.senders.has(kind)) continue;
+      transceiver.direction = 'sendrecv';
+      const track = this.media.track(kind);
+      if (track) void transceiver.sender.replaceTrack(track);
+      this.senders.set(kind, transceiver.sender);
+    }
   }
 
   candidate(payload: SignalCandidate) {
@@ -203,15 +228,17 @@ export class PeerSession {
     });
   }
 
+  /** No-ops if the answerer's senders aren't set up yet (the initiator's offer hasn't arrived) —
+   * `attachAnswererTracks` reads live media state once it runs, so nothing is lost. */
   syncTracks() {
     this.enqueue(async () => {
-      const audioSender = this.senders.get('audio')!;
+      const audioSender = this.senders.get('audio');
       const audioTrack = this.media.track('audio') ?? null;
-      if (audioSender.track !== audioTrack) await audioSender.replaceTrack(audioTrack);
+      if (audioSender && audioSender.track !== audioTrack) await audioSender.replaceTrack(audioTrack);
 
-      const videoSender = this.senders.get('video')!;
+      const videoSender = this.senders.get('video');
       const videoTrack = this.videoOverride ?? this.media.track('video') ?? null;
-      if (videoSender.track !== videoTrack) await videoSender.replaceTrack(videoTrack);
+      if (videoSender && videoSender.track !== videoTrack) await videoSender.replaceTrack(videoTrack);
     });
   }
 
