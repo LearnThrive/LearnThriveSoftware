@@ -10,7 +10,7 @@ Everything lives in `D:\LearnThriveSoftware`. The marketing project at `D:\Learn
 - A modern browser with WebRTC support: current Chrome, Edge, or Firefox are actively tested (see [Browser support](#browser-support)). Safari/iOS work is expected but has not been verified on this Windows development machine.
 - Camera/microphone permissions for participants who want to send media. Joining with both disabled is supported.
 - Headphones for local testing.
-- Optional `cloudflared` for a temporary HTTPS test on two physical devices. It is not needed for local testing and is not installed or started by this project.
+- Optional [Tailscale](https://tailscale.com/) (recommended) or `cloudflared` for a temporary HTTPS test on two physical devices — see [TAILSCALE_TESTING.md](TAILSCALE_TESTING.md) and [LAPTOP_PHONE_TEST.md](LAPTOP_PHONE_TEST.md). Neither is needed for local same-machine testing, and neither is installed or started by this project.
 
 ## Install and start
 
@@ -103,7 +103,13 @@ Pre-join and in-call menus list cameras/microphones via `navigator.mediaDevices.
 
 `RTCPeerConnection.getStats()` is polled every 2.5 seconds and parsed into RTT, jitter, packet loss, inbound/outbound bitrate, frame rate, resolution, and ICE candidate types — every field is feature-detected, since Chromium/Firefox/Safari report different subsets. A conservative, deliberately coarse classifier turns that into **Excellent / Good / Fair / Poor**, shown as a small "Connection: Good"-style pill; this is not a precise measurement.
 
-Appending `?debug=1` to the URL reveals a development diagnostics panel with the full detail: socket id, room id, participant count, WebRTC/ICE/signalling state, exact candidate type and whether the active path is host/srflx/relay, RTT/jitter/loss/bitrate, active camera/microphone, local/remote track state, screen-share state, and reconnect state. This panel is never shown without the query flag, and doesn't expose raw local IP addresses beyond the ICE candidate type itself.
+Appending `?debug=1` to the URL reveals a development diagnostics panel with the full detail: socket id, room id, participant count, WebRTC/ICE/signalling state, exact candidate type and whether the active path is host/srflx/relay, RTT/jitter/loss/bitrate, frames encoded/decoded, packets sent/received, active camera/microphone, per-track state (id/enabled/muted/readyState) for local and remote audio/video separately, the requested and actually-negotiated transceiver direction for audio and video, screen-share state, hand-raised state, and reconnect state. This panel is never shown without the query flag, and doesn't expose raw local IP addresses beyond the ICE candidate type itself. See [ASYMMETRIC_VIDEO_TEST.md](ASYMMETRIC_VIDEO_TEST.md) for how to read these fields when diagnosing a one-way video problem.
+
+## Layout, People panel, hand-raise and reactions
+
+Clicking either participant's tile makes it the main view (Teams-style click-to-focus); this is presentation-only local UI state, kept in React state, and never changes what media is actually sent. Two layout modes — **Focus** (one large, one small) and **Side-by-side** (roughly equal) — are chosen per device from the Settings panel and are not synced to the other participant, and are not remembered between meetings. Starting a screen share automatically focuses it and restores whichever view was chosen before sharing when it ends.
+
+The **People** panel lists both participants with live microphone/camera/hand-raised state. **Raise hand** and **emoji reactions** are both ephemeral, relayed only through the existing Socket.IO connection (never stored, never affecting the 2-participant room cap), with reactions rate-limited server-side and animated briefly on both sides (respecting `prefers-reduced-motion`).
 
 ## ICE and optional TURN
 
@@ -133,7 +139,7 @@ All optional; all read from `.env` (never committed — see `.env.example`), or 
 
 | Variable | Used by | Purpose |
 | --- | --- | --- |
-| `TUNNEL_HOST` | server | Adds `https://<value>` to the signalling server's allowed CORS origins, for one temporary Cloudflare Quick Tunnel hostname. See [LAPTOP_PHONE_TEST.md](LAPTOP_PHONE_TEST.md). |
+| `TUNNEL_HOST` | server + Vite | Adds one exact extra hostname to the allowed origins/hosts, for a **fixed custom domain** (e.g. a future named Cloudflare Tunnel). Not needed for Cloudflare Quick Tunnel or Tailscale — those are already covered automatically by their `.trycloudflare.com`/`.ts.net` suffixes in `shared/allowedHosts.ts`. See [TAILSCALE_TESTING.md](TAILSCALE_TESTING.md) and [LAPTOP_PHONE_TEST.md](LAPTOP_PHONE_TEST.md). |
 | `VITE_TURN_URL` | browser | Comma-separated TURN/TURNS URL(s). STUN-only if unset. |
 | `VITE_TURN_USERNAME` | browser | TURN username. Required alongside the two above for TURN to activate. |
 | `VITE_TURN_CREDENTIAL` | browser | TURN credential. Same as above — browser-exposed, not a server secret. |
@@ -172,6 +178,6 @@ Possible later iterations include temporary TURN credentials; authenticated pare
 
 **Same computer:** open the local URL in a normal Chrome window and Incognito, or a second browser. Join the same room with two different display names. Some computers/drivers may not allow two browser sessions to use the same physical webcam simultaneously. Audio feedback may occur if both sessions use speakers on the same device; headphones are recommended.
 
-**Two physical devices:** see **[LAPTOP_PHONE_TEST.md](LAPTOP_PHONE_TEST.md)** for the exact procedure, using a temporary Cloudflare Quick Tunnel. No production deployment is required.
+**Two physical devices:** see **[LAPTOP_PHONE_TEST.md](LAPTOP_PHONE_TEST.md)** for the exact procedure — [Tailscale](https://tailscale.com/) (see [TAILSCALE_TESTING.md](TAILSCALE_TESTING.md)) is the recommended, repeatable option; a temporary Cloudflare Quick Tunnel remains documented as a fallback. No production deployment is required, and no `.env` editing is required for either.
 
 Full checklists and the verification record live in [TESTING.md](TESTING.md).

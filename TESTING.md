@@ -23,13 +23,15 @@ npm run test:browser
 | --- | --- |
 | ESLint | Pass |
 | TypeScript | Pass |
-| Unit/integration tests (Vitest) | Pass — 34/34 (server room/session/chat/screen-share logic; client media-device races, connection-status/quality classifiers, ICE config, media error messages) |
+| Unit/integration tests (Vitest) | Pass — 38/38 (server room/session/chat/screen-share/hand-raise/reaction logic and dev-tunnel origin handling; client media-device races, connection-status/quality classifiers, ICE config, media error messages, stats parsing) |
 | Production frontend build | Pass |
-| Browser tests (Playwright, Chromium) | Pass — 4/4 |
-| Browser tests (Playwright, Firefox) | Pass — 4/4 |
+| Browser tests (Playwright, Chromium) | Pass — 7/7 |
+| Browser tests (Playwright, Firefox) | Pass — 7/7 |
 | Browser tests (Playwright, WebKit/Safari) | Not run — no WebKit automation available on this Windows machine; see [Safari row](#test-matrix) below |
 
-The 4 Playwright scenarios (run against both Chromium and Firefox, using each browser's fake-camera/microphone support so no physical hardware is involved): two real peers connecting over WebRTC with mute/camera-off relayed live and a third participant correctly rejected; chat send/receive with an unread badge and a proof that `<img src=x onerror=alert(1)>` renders as inert plain text, never as markup; a participant leaving and cleanly rejoining the same room with no ghost participant; and a real network drop (`context.setOffline`) recovering without a false "participant left".
+The 7 Playwright scenarios (run against both Chromium and Firefox, using each browser's fake-camera/microphone support so no physical hardware is involved): two real peers connecting over WebRTC — including a direct assertion that remote video actually renders on both sides, not just that the connection reports "connected" (a regression test for the asymmetric-video bug described below) — with mute/camera-off relayed live and a third participant correctly rejected; chat send/receive with an unread badge and a proof that `<img src=x onerror=alert(1)>` renders as inert plain text, never as markup; a participant leaving and cleanly rejoining the same room with no ghost participant; a real network drop (`context.setOffline`) recovering without a false "participant left", and chat still working afterwards; click-to-focus swapping the main tile, side-by-side layout, and the People panel reflecting both participants' live state, including a relayed hand-raise; emoji reactions relaying to the peer and expiring on their own; and the copied invite link using the page's actual current origin rather than any build-time value.
+
+**A real WebRTC negotiation bug was found and fixed this pass** — whichever participant joined second could never be seen by the other side, because Chrome doesn't reuse an answerer's pre-added transceivers when applying an offer. See [ASYMMETRIC_VIDEO_TEST.md](ASYMMETRIC_VIDEO_TEST.md) for the full explanation. It's covered by the automated remote-video assertion above; a fresh physical laptop ↔ phone retest (see [LAPTOP_PHONE_TEST.md](LAPTOP_PHONE_TEST.md)) is still needed to confirm it on real cameras and real hardware, since the automated test uses synthetic media.
 
 **Screen sharing has no automated browser test.** Headless Chromium has no real desktop to capture via `getDisplayMedia()`, so automating it would either not work or be flaky depending on the CI/dev machine — it's a manual test below instead (see [Test matrix](#test-matrix)). The underlying track-replacement mechanism (`RTCRtpSender.replaceTrack()`) is the same code path already exercised indirectly by the mute/camera-off Playwright assertions.
 
@@ -53,8 +55,14 @@ Columns record what was **genuinely run**, not what should theoretically work. `
 | Network drop / reconnect | ✅ automated | ⬜ | ✅ automated | ⬜ | N/A | ⬜ Not yet tested | ⬜ Not yet tested⁵ | `context.setOffline` in Playwright; real Wi-Fi toggle still needs a human |
 | Refresh mid-call | ⬜ Not yet tested | ⬜ | ⬜ | ⬜ | ⬜ Not yet tested | ⬜ Not yet tested | ⬜ Not yet tested | Should behave like the tested leave/rejoin path, not yet run via an actual page reload |
 | TURN relay (vs. direct/STUN) | ⬜ Not yet tested⁶ | ⬜ | ⬜ | ⬜ | N/A | ⬜ Not yet tested | ⬜ Not yet tested | No TURN service is provisioned by this project; needs an external one to test against |
-| Mobile portrait layout | N/A | N/A | N/A | ⬜ Not yet tested | N/A | N/A | ⬜ Not yet tested | Emulated 360x800 and 375x812 viewports visually inspected in-session (see Manual browser review below); real iPhone not yet tested |
-| Mobile landscape layout | N/A | N/A | N/A | ⬜ Not yet tested | N/A | N/A | ⬜ Not yet tested | Not yet inspected at any width in this pass |
+| Mobile portrait layout | N/A | N/A | N/A | ⬜ Not yet tested | N/A | N/A | ⬜ Not yet tested | Emulated 375x812/390x844 viewports visually inspected in-session (see Manual browser review below); real Android/iPhone not yet tested |
+| Mobile landscape layout | N/A | N/A | N/A | ⬜ Not yet tested | N/A | N/A | ⬜ Not yet tested | Emulated 844x390 inspected and a real layout bug (controls below the fold at short heights) found and fixed this pass; real device not yet tested |
+| Click-to-focus / Side-by-side layout | ✅ automated | ⬜ | ✅ automated | ⬜ | ⬜ Not yet tested | ⬜ Not yet tested | ⬜ Not yet tested | Playwright asserts the main tile swaps and side-by-side renders both tiles as equal stage children |
+| People panel (live mic/camera/hand state) | ✅ automated | ⬜ | ✅ automated | ⬜ | ⬜ Not yet tested | ⬜ Not yet tested | ⬜ Not yet tested | |
+| Raise hand | ✅ automated | ⬜ | ✅ automated | ⬜ | ⬜ Not yet tested | ⬜ Not yet tested | ⬜ Not yet tested | Relay + toast notice + panel state all asserted |
+| Emoji reactions | ✅ automated | ⬜ | ✅ automated | ⬜ | ⬜ Not yet tested | ⬜ Not yet tested | ⬜ Not yet tested | Rate-limiting covered server-side (`server/signalling.test.ts`), not re-tested at the UI layer |
+| Invite link uses current origin (no `.env` edit) | ✅ automated | ⬜ | ✅ automated | ⬜ | ⬜ Not yet tested | ⬜ Not yet tested | ⬜ Not yet tested | Asserts the copied link's origin matches `window.location.origin` |
+| Asymmetric video (one side can't see the other) | ✅ automated (regression test) | ⬜ | ✅ automated (regression test) | ⬜ | ⬜ Not yet tested | ⬜ Not yet tested | ⬜ Not yet tested — **was reproduced, then fixed, needs physical retest** | See [ASYMMETRIC_VIDEO_TEST.md](ASYMMETRIC_VIDEO_TEST.md) |
 
 ¹ Edge is Chromium-based and shares the rendering/WebRTC engine exercised by the Chrome results, but was not separately launched or verified.
 ² Playwright's fake audio devices produce synthetic tones, not real speech — this can only be confirmed by a human listening.
@@ -90,7 +98,7 @@ Some computers and drivers will not allow two browser sessions to use the same p
 
 ## Test B — Two physical devices with temporary HTTPS
 
-See [LAPTOP_PHONE_TEST.md](LAPTOP_PHONE_TEST.md) for the exact step-by-step procedure, including the Cloudflare Quick Tunnel setup. In short:
+See [LAPTOP_PHONE_TEST.md](LAPTOP_PHONE_TEST.md) for the exact step-by-step procedure. [Tailscale](https://tailscale.com/) (see [TAILSCALE_TESTING.md](TAILSCALE_TESTING.md)) is the recommended, repeatable option — a stable URL, no `.env` editing, and private to your own devices; Cloudflare Quick Tunnel remains documented as a fallback. In short:
 
 ```text
 Browser -> HTTPS Quick Tunnel -> Vite 127.0.0.1:5173
@@ -167,7 +175,7 @@ Enable development diagnostics by opening `http://localhost:5173/?debug=1` or ap
 | Symptom | Check |
 | --- | --- |
 | Cannot open local page | `npm run dev` is still running; ports 5173 and 3001 are free; try `127.0.0.1` for local IPv4 |
-| Vite blocks tunnel hostname | Exact `TUNNEL_HOST` has no scheme/path; restart `npm run dev`; tunnel hostname has not changed |
+| Vite blocks tunnel hostname | Shouldn't happen for Quick Tunnel (`.trycloudflare.com`) or Tailscale (`.ts.net`) — both are auto-allowed, no `.env` edit needed. For a custom/named domain, set `TUNNEL_HOST` to the exact hostname (no scheme/path) and restart `npm run dev` |
 | Tunnel origin error | Vite is listening on `127.0.0.1:5173`; cloudflared command targets that exact address |
 | Quick Tunnel will not start | Follow the official Cloudflare troubleshooting notes; an existing `.cloudflared/config.yaml` can prevent Quick Tunnel mode |
 | Permission request unavailable | HTTPS/localhost secure context, browser site permission, and OS camera/microphone privacy settings |

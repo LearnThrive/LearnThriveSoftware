@@ -1,12 +1,30 @@
 # Laptop to Phone Test
 
-A step-by-step guide for testing a real call between this laptop and a phone. This has **not** been performed as part of this build — it requires you, a second physical device, and (optionally) `cloudflared`. Record your actual results in [TESTING.md](TESTING.md)'s test matrix; don't mark rows as passed until you've genuinely run them.
+A step-by-step guide for testing a real call between this laptop and a phone.
+
+**This has been performed once already.** It found two real defects: video only worked in one direction (laptop couldn't see the phone), and an audible feedback/screech, most noticeable on the phone. Both have been investigated and addressed since:
+
+- The video defect was root-caused and fixed (a WebRTC negotiation bug affecting whichever side joins second) — see [ASYMMETRIC_VIDEO_TEST.md](ASYMMETRIC_VIDEO_TEST.md) for the full explanation and how to check for it if it recurs.
+- The feedback risk has been hardened against: local video is now always rendered muted everywhere in the app (pre-join preview, meeting tile, screen-share preview, device-test preview), so this app's own UI can never loop your own microphone audio back through your own speakers. **Use headphones on at least one device anyway** — see [Audio feedback](#audio-feedback-use-headphones) below; this is a physical-acoustics risk (two nearby speakers/microphones), not something any app-level fix alone can fully prevent.
+
+Record your actual results in [TESTING.md](TESTING.md)'s test matrix; don't mark rows as passed until you've genuinely run them again.
+
+## Audio feedback — use headphones
+
+If both devices are physically near each other with their speakers on, you can get a real audio feedback loop (a screech/echo) **regardless of this or any app** — device A's microphone picks up device B's speaker output, sends it back to device B, which plays it out its speaker, which A's microphone picks up again. This is ordinary room acoustics with two open mic+speaker pairs nearby, the same as with a phone call on speakerphone next to another phone on speakerphone.
+
+**Use headphones on at least one of the two devices** (ideally both) whenever they're in the same room. If you must test without headphones, keep the devices in separate rooms, or mute one side's microphone while the other is talking.
 
 ## What you need
 
 - This laptop, with the project installed (`npm install` already run).
 - A phone (or any second physical device) on the same or a different network.
-- Optionally, [`cloudflared`](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/downloads/) installed, if you want to test across two different networks (e.g. laptop on Wi-Fi, phone on mobile data) rather than the same LAN. This project does not install it for you.
+- **Recommended:** [Tailscale](https://tailscale.com/) installed on both devices — see [TAILSCALE_TESTING.md](TAILSCALE_TESTING.md) for the full walkthrough. It gives a stable URL that doesn't change between test sessions.
+- **Fallback:** [`cloudflared`](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/downloads/) for a one-off Cloudflare Quick Tunnel, covered below. Neither tool is installed or started by this project.
+
+## No `.env` editing is required for either option
+
+Invite links are generated from the page's own current URL (`window.location.origin`), never a hardcoded address, and both `.trycloudflare.com` (Quick Tunnel) and `.ts.net` (Tailscale) hostnames are automatically allowed by both Vite and the signalling server. You do **not** need to create or edit `.env`, and you do **not** need to restart the dev server after starting a tunnel. `.env` is still used for genuinely optional configuration — TURN credentials, or a fixed custom domain — see [README.md's environment variables](README.md#environment-variables).
 
 ## Terminal 1 — start the app
 
@@ -17,81 +35,84 @@ npm run dev
 
 This starts both the Vite frontend (port **5173**) and the signalling server (port **3001**) together. Leave this terminal running for the whole test.
 
-## Terminal 2 — start the tunnel (if using one)
+## Terminal 2 — expose it (choose one)
 
-If Cloudflare Tunnel is installed:
+### Option A — Tailscale (recommended)
+
+```powershell
+tailscale serve 5173
+```
+
+Gives a stable `https://your-laptop-name.your-tailnet.ts.net` address. See [TAILSCALE_TESTING.md](TAILSCALE_TESTING.md) for the full setup and why it's preferred.
+
+### Option B — Cloudflare Quick Tunnel (fallback)
 
 ```powershell
 cloudflared tunnel --url http://localhost:5173
 ```
 
-Watch the output for a line containing a generated hostname that looks like:
+Watch the output for a line containing a generated hostname:
 
 ```text
 https://some-random-words-1234.trycloudflare.com
 ```
 
-That `https://....trycloudflare.com` URL is your temporary public HTTPS address. It's normal for it not to serve the app until `npm run dev` (Terminal 1) is already running. A new tunnel session generates a **different** hostname every time — don't reuse an old one.
+That's your temporary public HTTPS address — it's normal for it not to serve the app until `npm run dev` (Terminal 1) is already running. A new tunnel session generates a **different** hostname every time; just open whatever it prints, no configuration needed.
 
-If your laptop and phone are already on the **same Wi-Fi network**, you can skip the tunnel and instead try `http://<your-laptop's-LAN-IP>:5173` directly from the phone — but note the important caveat in [Localhost and HTTPS behaviour](#localhost-and-https-behaviour) below: this plain-HTTP path will likely **not** be allowed to use the camera/microphone on the phone, because it isn't a secure context. The tunnel (HTTPS) is the reliable path; treat the direct-LAN-IP approach as a fallback only if you understand that limitation.
+Unlike Tailscale, this URL is reachable by **anyone** who has it, not just your own devices — treat it as a deliberate, temporary test and stop the tunnel (`Ctrl+C`) when you're done.
 
-If you use the tunnel, set the exact hostname before continuing:
+### Same-Wi-Fi fallback (no tunnel at all)
 
-1. In `D:\LearnThriveSoftware`, create `.env` from `.env.example` if it doesn't already exist (`Copy-Item .env.example .env`).
-2. Edit `.env` and set `TUNNEL_HOST` to your **exact generated hostname**, with no `https://`, no port, no path:
-
-   ```dotenv
-   TUNNEL_HOST=some-random-words-1234.trycloudflare.com
-   ```
-
-3. Restart `npm run dev` (Terminal 1: `Ctrl+C`, then run it again) so Vite picks up `TUNNEL_HOST`.
+If the laptop and phone are already on the same Wi-Fi network, you can try `http://<laptop's-LAN-IP>:5173` directly from the phone instead of a tunnel — but this plain-HTTP path will likely **not** be allowed to use the camera/microphone on the phone, because it isn't a secure context. Treat this as a fallback only if you understand that limitation; the tunnel (HTTPS) is the reliable path.
 
 ## The test
 
-1. Open the tunnel URL (`https://....trycloudflare.com`) on the **laptop**, in a normal browser window (not the one running any previous test session).
+1. Open your chosen URL (the `.ts.net` address, or the `.trycloudflare.com` address) on the **laptop**, in a normal browser window.
 2. Create a meeting.
 3. Enter a display name for the laptop participant, e.g. **Tutor**.
 4. Join the meeting. It should show "Waiting for another participant..." with your own camera preview visible if you enabled it.
 5. Choose **Copy Invite Link**.
-6. Send that invite URL to the phone (e.g. via a messaging app, email, or AirDrop — whatever's convenient). It must be the **tunnel** URL, not a `localhost` one.
+6. Send that invite URL to the phone (messaging app, email, AirDrop — whatever's convenient). It must be the same tunnel/Tailscale URL, not a `localhost` one.
 7. Open the invite link on the **phone**, in its normal browser (not an in-app browser embedded inside a messaging app — those often block camera/microphone access).
 8. Grant camera/microphone permission when prompted.
 9. Enter a display name for the phone participant, e.g. **Student**.
 10. Join.
-11. **Confirm remote video both ways**: the laptop should see the phone's live camera, and the phone should see the laptop's live camera (or each other's initials placeholder if camera is off — confirm that too).
-12. **Confirm remote audio both ways**: speak on the laptop and confirm you can hear it on the phone, then the reverse. Use headphones or enough physical separation to avoid echo.
+11. **Confirm remote video both ways**: the laptop should see the phone's live camera, and the phone should see the laptop's live camera (or each other's initials placeholder if camera is off — confirm that too). If either direction fails, go straight to [ASYMMETRIC_VIDEO_TEST.md](ASYMMETRIC_VIDEO_TEST.md).
+12. **Confirm remote audio both ways**: speak on the laptop and confirm you can hear it on the phone, then the reverse. **Use headphones** (see above) to avoid feedback while doing this.
 13. **Test mute**: mute the laptop's microphone and confirm the phone's UI shows it and can no longer hear the laptop; unmute and confirm audio returns.
 14. **Test camera toggle**: turn the laptop's camera off and confirm the phone sees an initials placeholder, not a black frame; turn it back on and confirm live video resumes.
-15. **Send chat messages both ways**: type a message on the laptop, confirm it appears on the phone (and shows an unread badge if the phone's chat panel is closed); reply from the phone and confirm the laptop receives it.
-16. **Test screen sharing from the laptop**: click Share Screen on the laptop and choose a window or the whole screen.
-17. **Verify the phone receives the screen share**: the phone's main tile should switch to the laptop's shared screen, letterboxed (not cropped), with a "presenting" indicator. Stop sharing (either the in-app button or the browser's native "Stop sharing" control) and confirm the laptop's camera returns on the phone's screen.
-18. **Switch the laptop's camera/microphone** if you have more than one available (via the Devices menu) and confirm the call is not interrupted.
-19. **Test the phone's front/rear camera switch** if the control appears (it only shows up when the phone reports more than one camera).
-20. **Rotate the phone** between portrait and landscape and confirm the layout adapts without overflow or clipped controls.
-21. **Temporarily disable Wi-Fi** on the phone (or laptop) for 5-10 seconds.
-22. **Restore Wi-Fi**.
-23. **Confirm recovery**: the other participant should show "reconnecting..." during the gap, then recover automatically — not an immediate false "participant left", and not a frozen UI.
-24. **Refresh the phone's page** during the active call.
-25. **Confirm rejoin works**: the phone should return to the pre-join screen and be able to rejoin the same room; the laptop should detect the phone's departure and then its return without anything getting stuck.
-26. **Open a third browser session** (e.g. a third device, or an incognito window on the laptop) and try to join the same room.
-27. **Confirm third-participant rejection**: it should see "This meeting already has two participants." and the original two-person call should be undisturbed.
-28. **Leave** the call from one side.
-29. **Rejoin** using the same invite link/room code.
-30. **Confirm no ghost participant remains** — the rejoining side should reach a clean waiting/connected state, not get stuck or see a stale "participant left" about itself.
+15. **Send chat messages both ways.**
+16. **Test the People panel, raise hand, and reactions**: open the People panel on one side and confirm it shows both participants' live mic/camera/hand state; raise a hand and confirm the other side sees a notice and the panel updates; send a reaction and confirm it animates briefly on both sides.
+17. **Test Focus and Side-by-side layouts**: click either tile to make it the main view on one device, and switch to Side-by-side from Settings; confirm the other participant's own view is unaffected (layout choice is local/per-device, not synced).
+18. **Test screen sharing from the laptop.**
+19. **Verify the phone receives the screen share**, letterboxed, with the shared tile automatically becoming the main view; confirm it restores your prior focus/layout choice when sharing stops.
+20. **Switch the laptop's camera/microphone** if you have more than one available, and confirm the call is not interrupted.
+21. **Test the phone's front/rear camera switch** if the control appears.
+22. **Rotate the phone** between portrait and landscape and confirm the layout adapts without overflow or clipped controls, and the local preview never covers the controls, the remote participant's face, or a screen share.
+23. **Temporarily disable Wi-Fi** on the phone (or laptop) for 5-10 seconds, then restore it — confirm "reconnecting..." then automatic recovery, not a false "participant left".
+24. **Refresh the phone's page** during the active call and confirm it can rejoin cleanly, no ghost participant.
+25. **Open a third browser session** and confirm it's rejected with "This meeting already has two participants."
+26. **Leave the call** from one side using the Leave button, confirm the in-app confirmation prompt (not a native browser popup), and confirm the ended screen offers Rejoin / Return to meeting setup / Copy meeting link.
+27. **Rejoin** using the same invite link/room code and confirm no ghost participant remains.
+
+## Per-browser results
+
+Fill these in as you actually run them — don't check a box you haven't tested.
+
+**Phone browsers:**
+
+- [ ] Android Chrome
+- [ ] Samsung Internet (if the phone has it)
+- [ ] iPhone Safari (if a second device is available)
+
+**Laptop browser used for this test:** ____________________
 
 ## Debug mode inspection
 
-Open `?debug=1` appended to the URL on either device (e.g. `https://your-tunnel-url.trycloudflare.com/meeting?room=xxxx&debug=1`) to see a development diagnostics panel. Inspect in particular:
-
-- **Connection state** — WebRTC connection state and ICE connection state, separate from whether Socket.IO itself is connected.
-- **ICE state** — should reach `connected` or `completed` for a working call.
-- **Candidate type** — whether the active path is `host` (direct, same network), `srflx` (STUN, direct across NAT), or `relay` (TURN). On most home/mobile-data combinations without a configured TURN server, expect `srflx`; if the call fails to connect at all on a restrictive network, that's often because no TURN relay is configured (this project doesn't provision one — see [README.md](README.md#ice-and-optional-turn)).
-- **RTT** and **packet loss** — sanity-check these against how the call actually sounded/looked.
-
-Compare the diagnostics panel on both devices side by side, since each side reports its own view of the connection.
+Open `?debug=1` appended to the URL on either device to see the development diagnostics panel. See [ASYMMETRIC_VIDEO_TEST.md](ASYMMETRIC_VIDEO_TEST.md) for exactly which fields to compare if video is asymmetric; otherwise, sanity-check connection state, ICE candidate type (`host`/`srflx`/`relay`), RTT, and packet loss against how the call actually sounded/looked.
 
 ## When you're done
 
-Stop the app (`Ctrl+C` in Terminal 1) and the tunnel (`Ctrl+C` in Terminal 2, if used). A future Quick Tunnel session generates a new hostname, so you'll need to update `.env` and restart `npm run dev` again next time.
+Stop the app (`Ctrl+C` in Terminal 1) and the tunnel (`Ctrl+C` in Terminal 2, if used). A Quick Tunnel session generates a new hostname next time; a Tailscale Serve address stays the same.
 
 Record your actual results — including anything that didn't work — in [TESTING.md](TESTING.md)'s test matrix. Don't mark a row as passed unless you actually performed that exact check.
