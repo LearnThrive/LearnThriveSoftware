@@ -68,15 +68,14 @@ If the laptop and phone are already on the same Wi-Fi network, you can try `http
 ## The test
 
 1. Open your chosen URL (the `.ts.net` address, or the `.trycloudflare.com` address) on the **laptop**, in a normal browser window.
-2. Create a meeting.
-3. Enter a display name for the laptop participant, e.g. **Tutor**.
-4. Join the meeting. It should show "Waiting for another participant..." with your own camera preview visible if you enabled it.
-5. Choose **Copy Invite Link**.
-6. Send that invite URL to the phone (messaging app, email, AirDrop — whatever's convenient). It must be the same tunnel/Tailscale URL, not a `localhost` one.
-7. Open the invite link on the **phone**, in its normal browser (not an in-app browser embedded inside a messaging app — those often block camera/microphone access).
-8. Grant camera/microphone permission when prompted.
-9. Enter a display name for the phone participant, e.g. **Student**.
-10. Join.
+2. Enter a display name for the laptop participant, e.g. **Tutor**, then choose **Create meeting** — this makes the laptop the tutor for a freshly-generated room code.
+3. Start the class. It should show "Waiting for other participants..." with your own camera preview visible if you enabled it.
+4. Choose **Copy Invite Link**.
+5. Send that invite URL to the phone (messaging app, email, AirDrop — whatever's convenient). It must be the same tunnel/Tailscale URL, not a `localhost` one.
+6. Open the invite link on the **phone**, in its normal browser (not an in-app browser embedded inside a messaging app — those often block camera/microphone access).
+7. Grant camera/microphone permission when prompted.
+8. Enter a display name for the phone participant, e.g. **Student**, then **Join meeting** — this places the phone in the waiting room, not the call itself.
+9. On the **laptop**, open the **Waiting room** control and **Admit** the phone. (This step is real and required — it's not a bug that the phone doesn't appear immediately.)
 11. **Confirm remote video both ways**: the laptop should see the phone's live camera, and the phone should see the laptop's live camera (or each other's initials placeholder if camera is off — confirm that too). If either direction fails, go straight to [ASYMMETRIC_VIDEO_TEST.md](ASYMMETRIC_VIDEO_TEST.md).
 12. **Confirm remote audio both ways**: speak on the laptop and confirm you can hear it on the phone, then the reverse. **Use headphones** (see above) to avoid feedback while doing this.
 13. **Test mute**: mute the laptop's microphone and confirm the phone's UI shows it and can no longer hear the laptop; unmute and confirm audio returns.
@@ -91,7 +90,7 @@ If the laptop and phone are already on the same Wi-Fi network, you can try `http
 22. **Rotate the phone** between portrait and landscape and confirm the layout adapts without overflow or clipped controls, and the local preview never covers the controls, the remote participant's face, or a screen share.
 23. **Temporarily disable Wi-Fi** on the phone (or laptop) for 5-10 seconds, then restore it — confirm "reconnecting..." then automatic recovery, not a false "participant left".
 24. **Refresh the phone's page** during the active call and confirm it can rejoin cleanly, no ghost participant.
-25. **Open a third browser session** and confirm it's rejected with "This meeting already has two participants."
+25. **Open a third browser session as another student** (join with the same room code — don't use "Create meeting", which would start a separate class) and confirm it lands in the waiting room, the tutor sees a live waiting-room badge and can admit it from the Waiting room panel, and the existing call is undisturbed until then.
 26. **Leave the call** from one side using the Leave button, confirm the in-app confirmation prompt (not a native browser popup), and confirm the ended screen offers Rejoin / Return to meeting setup / Copy meeting link.
 27. **Rejoin** using the same invite link/room code and confirm no ghost participant remains.
 

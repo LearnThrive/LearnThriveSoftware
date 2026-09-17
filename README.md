@@ -1,6 +1,6 @@
 # LearnThrive Meeting Prototype
 
-A separate, experimental one-to-one browser classroom for LearnThrive Tuition. React and native WebRTC provide camera, microphone, screen sharing and peer media; a small Express/Socket.IO server coordinates the two participants and relays an ephemeral text chat. This is a technical proof of concept, not a production tuition platform — see [PRODUCTION_GAPS.md](PRODUCTION_GAPS.md) for what real classroom use would still need.
+A separate, experimental browser classroom for LearnThrive Tuition: one tutor plus up to three students (4 participants max). React and native WebRTC provide camera, microphone, screen sharing and peer media over a direct mesh (each participant connects to every other one); a small Express/Socket.IO server coordinates room membership, tutor/student roles, a waiting room the tutor admits students from, and relays an ephemeral text chat. This is a technical proof of concept, not a production tuition platform — see [PRODUCTION_GAPS.md](PRODUCTION_GAPS.md) for what real classroom use would still need, including the eventual move to a proper SFU (see [Architecture](#architecture)).
 
 Everything lives in `D:\LearnThriveSoftware`. The marketing project at `D:\LearnThrive` is a read-only brand reference. Public logo assets were copied from its `public\brand` directory and its favicon into this project's `public\brand`; there are no runtime imports from the marketing project.
 
@@ -26,7 +26,7 @@ Open **http://localhost:5173**. If your system resolves localhost to an unavaila
 
 One `npm run dev` command starts Vite on loopback port **5173** and the signalling server on loopback port **3001**. Keep that terminal open. Press `Ctrl+C` to stop both. Ports are fixed so another application on either port should be stopped or reconfigured before starting this project.
 
-Create a meeting, enter a display name, prepare your camera/microphone in the pre-join screen and join. Copy the invite link for the second participant, who can also enter the same room code. Opening an invite does not automatically enter the meeting.
+**Create meeting** to start a class as its tutor (this mints a fresh room code and enters you immediately), or enter an existing room code and **Join meeting** to join as a student. Prepare your camera/microphone in the pre-join screen first. A student who joins lands in a waiting room and only enters the class once the tutor admits them (from the **Waiting room** control once in the call) — this is deliberate, not a bug: every student always waits for the tutor, even if seats are free. Copy the invite link to bring in students; opening an invite does not automatically enter the meeting.
 
 For a real laptop ↔ phone test, see **[LAPTOP_PHONE_TEST.md](LAPTOP_PHONE_TEST.md)**.
 
@@ -47,18 +47,22 @@ The frontend build does not start or package a production signalling service. Us
 
 ```mermaid
 flowchart LR
-    subgraph BA["Browser A"]
-        UIA["React UI"] --> MCA["MeetingController"]
-        MCA --> PSA["PeerSession"]
+    subgraph BA["Browser A (e.g. Tutor)"]
+        UIA["React UI"] --> MCA["MeetingController\n(peers: Map<id, PeerSession>)"]
     end
-    subgraph BB["Browser B"]
+    subgraph BB["Browser B (Student)"]
         UIB["React UI"] --> MCB["MeetingController"]
-        MCB --> PSB["PeerSession"]
+    end
+    subgraph BC["Browser C (Student)"]
+        UIC["React UI"] --> MCC["MeetingController"]
     end
     MCA -- "Socket.IO" --> Vite["Vite dev server\n(/socket.io proxy)"]
     MCB -- "Socket.IO" --> Vite
-    Vite --> Sig["Express + Socket.IO\nsignalling server"]
-    PSA <-. "WebRTC media\n(direct, or via TURN)" .-> PSB
+    MCC -- "Socket.IO" --> Vite
+    Vite --> Sig["Express + Socket.IO\nsignalling server\n(rooms, roles, waiting room, edges)"]
+    MCA <-. "WebRTC media (direct/TURN)" .-> MCB
+    MCA <-. "WebRTC media (direct/TURN)" .-> MCC
+    MCB <-. "WebRTC media (direct/TURN)" .-> MCC
 ```
 
 ```text
@@ -69,11 +73,15 @@ Local HTTP / optional temporary HTTPS entry point
 
 The browser Socket.IO client uses the current origin (`io()`), so the same room works locally and through one HTTPS tunnel. Browser-facing signalling configuration contains no hard-coded localhost URL.
 
-**Negotiation.** The first participant to join waits; when the second joins, the first (the deterministic initiator) creates the offer and the second answers. ICE candidates received before a remote description is set are queued. A server-issued pair/session identifier prevents late messages from an old pairing being applied to a replacement participant. Audio and video transceivers allow a participant to join without devices and enable media later. The initiator also owns ICE restart on a persistent connection failure — only ever the initiator, so the two sides can never both start a fresh offer at once (no negotiation storms).
+**Capacity and roles.** Exactly one **tutor** plus up to three **students** — 4 admitted participants max (`MAX_PARTICIPANTS` in `shared/protocol.ts`). Whoever clicks **Create meeting** is the tutor for that (freshly-generated) room; there is no UI path to join an existing room as a tutor, and the server independently enforces both caps regardless of what a client claims. Every student always lands in a **waiting room** first and needs the tutor to explicitly **Admit** them (or **Admit all**) — this holds even if seats are free, since a classroom shouldn't let a student go live with nobody having let them in. The waiting room has its own small abuse-prevention cap (`WAITING_ROOM_CAP`), independent of the 3-student limit.
 
-**Signalling server.** Holds room membership in memory, limits each room to two sockets, validates all input, and forwards signalling, chat and screen-share state only between participants confirmed to be in the same room. It cleans membership on leave/disconnect. It does **not** proxy, process or store audio/video, and it does not persist chat. Media travels directly between the WebRTC peers, or through an optional TURN relay when a direct route cannot be established.
+**Mesh negotiation (P2P, not an SFU — see below).** A room with N admitted participants has up to `N × (N-1) / 2` direct `RTCPeerConnection` edges (6 at the 4-person maximum) — `MeetingController` holds a `Map<peerId, PeerSession>` instead of one singular peer. Each edge gets its own server-issued session id and initiator, decided once at the moment that edge is created (whoever was already admitted initiates towards the newcomer) — this is *not* the same as "whoever joined the room first," which stops working correctly once there are 3+ participants (an edge between two students who both joined after the tutor has neither end equal to "the first participant," so that older shortcut would leave such an edge unable to negotiate at all). ICE candidates received before a remote description is set are queued per edge. The initiator of a given edge also owns ICE restart on a persistent failure for that edge only, so its two ends can never both start a fresh offer at once (no negotiation storms), and one struggling edge can't affect the others.
 
-**Client controllers.** `MeetingController` (`src/meeting.ts`) owns Socket.IO, room/chat/device/screen-share state and orchestrates a single `PeerSession` (`src/peer.ts`), which owns the one `RTCPeerConnection` for the call. `LocalMedia` (`src/media.ts`) owns camera/microphone tracks independently of room membership, so mute/camera-off/device-switch never tears down or reacquires more than the one track being changed. Normal mute/camera controls toggle the existing track's `enabled` state; device switches and screen sharing use `RTCRtpSender.replaceTrack()` on the existing connection — none of these renegotiate. WebRTC connection state and Socket.IO signalling state are tracked and reported separately; a connected socket alone never claims the call is connected.
+**Signalling server.** Holds room membership (admitted participants, the waiting queue, and the current set of edges) in memory, validates all input, and forwards signalling, chat, and screen-share/hand/reaction state only between participants confirmed to be in the same room — WebRTC offer/answer/ICE are routed to the *specific* other participant on that edge, never broadcast room-wide. It cleans up membership, the waiting queue, and edges on leave/disconnect (with the same disconnect-grace-period protection for a waiting student as for an admitted one, so a brief blip doesn't silently drop their place in the queue). It does **not** proxy, process or store audio/video, and it does not persist chat. Media travels directly between WebRTC peers, or through an optional TURN relay when a direct route cannot be established.
+
+**Client controllers.** `MeetingController` (`src/meeting.ts`) owns Socket.IO, room/chat/device/screen-share state and orchestrates a `PeerSession` (`src/peer.ts`) per other admitted participant — `PeerSession` itself is unchanged from a 2-person design and is fully self-contained per edge (no shared mutable state), so running several concurrently is safe. `LocalMedia` (`src/media.ts`) owns camera/microphone tracks independently of room membership, so mute/camera-off/device-switch never tears down or reacquires more than the one track being changed, and fans the same track out to every active `PeerSession` (one `MediaStreamTrack` backing multiple `RTCRtpSender`s across multiple connections is standard WebRTC). Normal mute/camera controls toggle the existing track's `enabled` state; device switches and screen sharing use `RTCRtpSender.replaceTrack()` on every active connection — none of these renegotiate. WebRTC connection state and Socket.IO signalling state are tracked per peer and reported separately; the one headline "Connected"-style pill is a worst-of aggregate across all current peers (`aggregateConnectionStatus` in `src/callStatus.ts`), and a connected socket alone never claims the call is connected.
+
+**Why P2P mesh and not an SFU.** A Cloudflare Realtime SFU is the intended target architecture for a real classroom (controlled per-client upload, easier multi-party screen sharing, centrally-managed quality) — but that needs a real Cloudflare account and app credentials, which this build doesn't have. The mesh is a deliberate, working interim: it costs more client bandwidth/CPU than an SFU would (each participant uploads to every other one directly — up to 3 simultaneous outgoing streams at full capacity), which is an accepted tradeoff for a prototype, not something to rely on at real scale.
 
 ## Reconnection architecture
 
@@ -105,11 +113,11 @@ Pre-join and in-call menus list cameras/microphones via `navigator.mediaDevices.
 
 Appending `?debug=1` to the URL reveals a development diagnostics panel with the full detail: socket id, room id, participant count, WebRTC/ICE/signalling state, exact candidate type and whether the active path is host/srflx/relay, RTT/jitter/loss/bitrate, frames encoded/decoded, packets sent/received, active camera/microphone, per-track state (id/enabled/muted/readyState) for local and remote audio/video separately, the requested and actually-negotiated transceiver direction for audio and video, screen-share state, hand-raised state, and reconnect state. This panel is never shown without the query flag, and doesn't expose raw local IP addresses beyond the ICE candidate type itself. See [ASYMMETRIC_VIDEO_TEST.md](ASYMMETRIC_VIDEO_TEST.md) for how to read these fields when diagnosing a one-way video problem.
 
-## Layout, People panel, hand-raise and reactions
+## Layout, People panel, waiting room, hand-raise and reactions
 
-Clicking either participant's tile makes it the main view (Teams-style click-to-focus); this is presentation-only local UI state, kept in React state, and never changes what media is actually sent. Two layout modes — **Focus** (one large, one small) and **Side-by-side** (roughly equal) — are chosen per device from the Settings panel and are not synced to the other participant, and are not remembered between meetings. Starting a screen share automatically focuses it and restores whichever view was chosen before sharing when it ends.
+Clicking any tile makes it the main view (Teams-style click-to-focus); this is presentation-only local UI state, kept in React state, and never changes what media is actually sent. Three layout modes — **Focus** (one large tile + up to 3 compact others), **Side-by-side** (roughly equal, only offered with exactly one other participant), and **Gallery** (an adaptive grid, a clean 2×2 at the 4-participant maximum) — are chosen per device from the Settings panel, are not synced to other participants, and are not remembered between meetings. Starting a screen share automatically focuses it and restores whichever view was chosen before sharing when it ends.
 
-The **People** panel lists both participants with live microphone/camera/hand-raised state. **Raise hand** and **emoji reactions** are both ephemeral, relayed only through the existing Socket.IO connection (never stored, never affecting the 2-participant room cap), with reactions rate-limited server-side and animated briefly on both sides (respecting `prefers-reduced-motion`).
+The **People** panel lists every participant with a Tutor/Student role badge and live microphone/camera/hand-raised state. The tutor-only **Waiting room** panel lists students waiting to be admitted, with a live count badge, a per-student **Admit**, and an **Admit all** that admits as many as currently fit and reports the rest (e.g. "Admitted 2 — 3 still waiting") rather than either silently dropping the overflow or blocking the whole action. **Raise hand** and **emoji reactions** are both ephemeral, relayed only through the existing Socket.IO connection (never stored, never affecting the admitted-participant cap), with reactions rate-limited server-side and animated briefly on all sides (respecting `prefers-reduced-motion`).
 
 ## ICE and optional TURN
 
@@ -155,8 +163,9 @@ Actively tested with real (fake-device) automated WebRTC calls in this project's
 
 ## Current limitations
 
-- Exactly two participants; no group conferencing, no SFU.
-- No authentication, identity verification, authorised invitations or meeting expiry. Possession of a room link/code is effectively bearer access to a free seat; display names are self-declared.
+- Exactly 1 tutor + up to 3 students (4 max); no larger group conferencing.
+- P2P mesh, not an SFU — see [Architecture](#architecture) for why, and [PRODUCTION_GAPS.md](PRODUCTION_GAPS.md) for the SFU migration this is standing in for.
+- No authentication, identity verification, authorised invitations or meeting expiry. Possession of a room link/code is effectively bearer access to a free seat, and role (tutor vs. student) is self-declared by the client and only checked for the two capacity rules — not the identity of who's actually claiming it; display names are self-declared too.
 - A public development tunnel exposes this prototype to anyone who has its URL. Share only for a deliberate test and stop the tunnel afterwards. The random URL is not authentication.
 - In-memory rooms only. Restarting the signalling process loses membership; there is no database, and chat is intentionally ephemeral (never stored).
 - STUN-only by default; restrictive networks may require TURN.
@@ -164,7 +173,7 @@ Actively tested with real (fake-device) automated WebRTC calls in this project's
 - No scheduling, dashboards, payments, homework or platform integration.
 - No whiteboard.
 - No recording, screenshots, automatic transcription or AI notes. Sessions are not recorded by this application.
-- No Picture-in-Picture or audio-output-device selection (`setSinkId`) — both are optional per this project's brief and were intentionally left out to keep the media/device-switching logic focused; PiP in particular adds real cross-browser complexity for a 2-person call where both windows are typically already visible side by side.
+- No Picture-in-Picture or audio-output-device selection (`setSinkId`) — both are optional per this project's brief and were intentionally left out to keep the media/device-switching logic focused.
 - Hardware, permission prompts, mobile autoplay and network traversal require manual testing; synthetic browser media cannot establish those facts. See [TESTING.md](TESTING.md) for exactly what has and hasn't been verified.
 - Prototype only; not production-ready. Validation and room isolation do not replace authentication or access control.
 
@@ -174,9 +183,9 @@ Production work would require authenticated LearnThrive accounts, authorised roo
 
 Possible later iterations include temporary TURN credentials; authenticated parent/student/tutor access; scheduled lesson rooms; screen-share annotation; whiteboard; persistent chat with moderation; attendance; and richer connection-quality history. These features are intentionally outside this prototype. Any future recording capability would need an explicit product/policy decision; recording is not enabled here.
 
-## Two-person testing
+## Multi-participant testing
 
-**Same computer:** open the local URL in a normal Chrome window and Incognito, or a second browser. Join the same room with two different display names. Some computers/drivers may not allow two browser sessions to use the same physical webcam simultaneously. Audio feedback may occur if both sessions use speakers on the same device; headphones are recommended.
+**Same computer:** open the local URL in a normal Chrome window and Incognito, or a second/third/fourth browser session — one as the tutor (Create meeting), the rest as students (join with the room code, then get admitted from the tutor's Waiting room panel). Some computers/drivers may not allow multiple browser sessions to use the same physical webcam simultaneously. Audio feedback may occur if multiple sessions use speakers on the same device; headphones are recommended.
 
 **Two physical devices:** see **[LAPTOP_PHONE_TEST.md](LAPTOP_PHONE_TEST.md)** for the exact procedure — [Tailscale](https://tailscale.com/) (see [TAILSCALE_TESTING.md](TAILSCALE_TESTING.md)) is the recommended, repeatable option; a temporary Cloudflare Quick Tunnel remains documented as a fallback. No production deployment is required, and no `.env` editing is required for either.
 

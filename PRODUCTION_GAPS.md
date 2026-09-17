@@ -5,15 +5,16 @@ This document lists what stands between this prototype and real use with LearnTh
 ## Identity and access
 
 - **Authentication.** There is none. A display name is a self-declared string with no verification.
-- **Parent/student/tutor identity.** No concept of roles or accounts exists at all; every participant is interchangeable.
+- **Parent/student/tutor identity.** A `role` (tutor/student) exists now, but it's entirely self-declared by the client and validated only against the two capacity rules (one tutor, up to three students) — the server has no way to confirm the person claiming "tutor" is actually the tutor. No accounts, no verified identity, no concept of a specific parent/student pairing.
 - **Scheduled lesson authorisation.** Anyone with a room code can join at any time; there is no link between a room and a specific booked lesson, time window, or pair of people.
 - **Expiring room credentials.** Room codes are permanent for the lifetime of the (in-memory) server process. Production needs server-issued, time-limited, single-lesson credentials rather than a bearer code.
-- **Room authorisation.** The server enforces a 2-participant cap and room isolation (verified by an adversarial review, twice, during this build), but it does not enforce *who* those two participants are allowed to be.
+- **Room authorisation.** The server enforces the 1-tutor/3-student capacity and room isolation (verified by an adversarial review, twice, during this build), but it does not enforce *who* is allowed to claim the tutor seat or any given student seat — anyone with the room link can currently claim whichever role their client declares, subject only to the capacity rules.
 
 ## Infrastructure
 
 - **Production signalling hosting.** The signalling server runs as a local dev process (`tsx watch`) on loopback. Production needs a hosted, supervised, horizontally-scalable deployment with a real process manager and restart policy.
 - **Managed TURN.** STUN-only by default; TURN is supported via environment variables but no TURN service is provisioned, purchased, or operated by this project. Real-world NAT/firewall traversal at scale needs a managed or self-hosted TURN service with credential rotation.
+- **SFU migration (Cloudflare Realtime).** Media currently travels over a direct P2P mesh — each participant uploads directly to every other one (up to 3 simultaneous outgoing streams at the 4-person maximum). A Cloudflare Realtime SFU is the intended target architecture (controlled per-client upload, easier multi-party screen sharing, centrally-managed quality) but needs a real Cloudflare account and app credentials that this build doesn't have, so it hasn't been attempted. See [README.md's Architecture section](README.md#architecture) for the reasoning and the exact mesh design this is standing in for.
 - **Production HTTPS/domain.** Local development uses `localhost`/loopback, or a temporary Cloudflare Quick Tunnel for manual two-device testing. Neither is a production origin, certificate, or domain strategy.
 - **Availability monitoring.** Nothing watches whether the signalling server is up, degraded, or leaking memory over time.
 - **Backups / config recovery.** There is no persistent state to back up today (rooms and chat are intentionally in-memory and ephemeral), but as soon as any persistent identity/scheduling data is added, it will need a real backup and recovery plan.
@@ -43,6 +44,19 @@ This document lists what stands between this prototype and real use with LearnTh
 
 None of these block real use of the prototype as it stands; they're straightforward to pick up later.
 
+## Classroom V2 — deferred to future initiatives
+
+The capacity/roles/waiting-room work in this pass was deliberately scoped to *only* what had a concrete specification. A number of named features were mentioned as future direction but have **no design of any kind yet** — not even the high-level decisions this document normally records — so building them now would mean inventing their behaviour with no real requirements to build against. Each needs its own dedicated spec and planning pass before implementation:
+
+- **Cloudflare Realtime SFU migration** (see the Infrastructure section above for why it wasn't attempted this pass).
+- **Collaborative whiteboard** (Excalidraw or similar) — pages, permissions, backgrounds, follow-tutor mode, laser pointer, export/import.
+- **Polls and "Understanding Check."**
+- **Tutor moderation** — mute-all, remove participant, end class for everyone, per-student camera/microphone permissions.
+- **Room lock.**
+- **Additional layout modes named in passing** — Speaker, Present, Board — beyond the Focus/Side-by-side/Gallery modes actually built this pass.
+- **Pin / Spotlight** as distinct concepts from the click-to-focus already built.
+- **Data Saver / audio-only mode, and simulcast** beyond what a future SFU migration would need anyway.
+
 ## What this prototype does establish
 
-To be clear about what *is* already solid, so the gaps above are read in context: room isolation, session-pairing staleness rejection, 2-participant capacity enforcement, and the new chat/screen-share/device surface have all been through adversarial security review (twice) with no must-fix issues found. The reliability work (reconnection, negotiation correctness, leave/rejoin) has real regression tests, not just manual spot checks. The gap is specifically the *production* concerns above — identity, hosting, abuse-resistance at scale, and safety policy — not the core WebRTC/signalling architecture itself.
+To be clear about what *is* already solid, so the gaps above are read in context: room isolation, session-pairing staleness rejection, the 1-tutor/3-student capacity and waiting-room enforcement, mesh-edge isolation (a signal on one edge cannot reach a third participant), and the chat/screen-share/device surface have all been through adversarial security review with no must-fix issues found. The reliability work (reconnection, negotiation correctness, leave/rejoin, a waiting student surviving a brief disconnect) has real regression tests, not just manual spot checks. The gap is specifically the *production* concerns above — identity, hosting, abuse-resistance at scale, and safety policy — not the core WebRTC/signalling architecture itself.
