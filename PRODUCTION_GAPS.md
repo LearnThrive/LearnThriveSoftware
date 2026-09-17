@@ -34,6 +34,15 @@ This document lists what stands between this prototype and real use with LearnTh
 
 - **Final Safari/iOS testing.** This prototype was built and automated-tested on Windows (Chrome and Firefox via Playwright). Safari and iOS Safari have not been tested at all — see [TESTING.md](TESTING.md)'s test matrix. Given LearnThrive students plausibly join from iPhones/iPads, this is a real gap to close before considering any wider trial, not just a formality.
 
+## Considered but intentionally not built this pass
+
+- **Background blur.** Investigated only, not implemented. A real virtual-background/blur feature needs either a browser-native API (no stable, widely-supported one exists for `getUserMedia` video across target browsers today) or a client-side segmentation model (e.g. MediaPipe Selfie Segmentation) run per frame — a real performance and bundle-size cost that needs its own evaluation, not something to bolt on inside an unrelated feature pass. Left for a dedicated future piece of work.
+- **Draggable/corner-snapping local preview.** The local preview tile is currently fixed-position (bottom-right, per breakpoint). Making it draggable was explicitly optional in scope and was skipped to avoid adding drag-state complexity/risk to the tile component during a pass already carrying a critical negotiation fix.
+- **Double-click-to-fullscreen on the main tile.** Explicitly optional; skipped because reliably distinguishing single-click (focus swap) from double-click (fullscreen) without any click-handling regressions would need its own careful testing pass. A dedicated fullscreen button already exists and works.
+- **Friendly connection-detail popover on the quality pill.** Explicitly optional; skipped since the `?debug=1` panel already exposes RTT/jitter/loss/bitrate in full for anyone testing, and a second, simplified user-facing surface for the same data would duplicate it.
+
+None of these block real use of the prototype as it stands; they're straightforward to pick up later.
+
 ## What this prototype does establish
 
 To be clear about what *is* already solid, so the gaps above are read in context: room isolation, session-pairing staleness rejection, 2-participant capacity enforcement, and the new chat/screen-share/device surface have all been through adversarial security review (twice) with no must-fix issues found. The reliability work (reconnection, negotiation correctness, leave/rejoin) has real regression tests, not just manual spot checks. The gap is specifically the *production* concerns above — identity, hosting, abuse-resistance at scale, and safety policy — not the core WebRTC/signalling architecture itself.
