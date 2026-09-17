@@ -333,4 +333,11 @@ describe('signalling through real Socket.IO clients', () => {
     expect((await connect('http://127.0.0.1:5173')).connected).toBe(true);
     await expect(connect('https://unrelated.example')).rejects.toBeDefined();
   });
+
+  it('accepts HTTPS Cloudflare Quick Tunnel and Tailscale hostnames without needing TUNNEL_HOST, but not over plain HTTP', async () => {
+    expect((await connect('https://deutsche-handed-videos-his.trycloudflare.com')).connected).toBe(true);
+    expect((await connect('https://my-laptop.tailnet-name.ts.net')).connected).toBe(true);
+    await expect(connect('http://deutsche-handed-videos-his.trycloudflare.com')).rejects.toBeDefined();
+    await expect(connect('https://evil-trycloudflare.com')).rejects.toBeDefined();
+  });
 });
