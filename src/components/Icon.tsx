@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 
 export type IconName = 'microphone' | 'microphone-off' | 'camera' | 'camera-off' | 'arrow' | 'plus' | 'link' | 'check' | 'leave' | 'people' | 'shield' | 'info' | 'refresh' | 'volume' | 'spark'
-  | 'screen' | 'screen-off' | 'chat' | 'settings' | 'send' | 'expand' | 'collapse' | 'flip' | 'close' | 'pip';
+  | 'screen' | 'screen-off' | 'chat' | 'settings' | 'send' | 'expand' | 'collapse' | 'flip' | 'close' | 'pip' | 'hand';
 
 export function Icon({ name, size = 20, style }: { name: IconName; size?: number; style?: CSSProperties }) {
   const paths: Record<IconName, React.ReactNode> = {
@@ -30,6 +30,7 @@ export function Icon({ name, size = 20, style }: { name: IconName; size?: number
     flip: <><path d="M4 12a8 8 0 0 1 14.5-4.5M20 12a8 8 0 0 1-14.5 4.5" /><path d="M18.5 3v4.5H14M5.5 21v-4.5H10" /></>,
     close: <path d="M6 6l12 12M18 6 6 18" />,
     pip: <><rect x="2" y="4" width="20" height="14" rx="2" /><rect x="12" y="11" width="8" height="6" rx="1" fill="currentColor" stroke="none" /></>,
+    hand: <><path d="M8 12V5a1.5 1.5 0 0 1 3 0v5M11 10V4a1.5 1.5 0 0 1 3 0v6M14 10V5a1.5 1.5 0 0 1 3 0v7" /><path d="M17 11v-1a1.5 1.5 0 0 1 3 0v4a7 7 0 0 1-7 7h-1a7 7 0 0 1-6-3.4l-2.7-4.5a1.4 1.4 0 0 1 2.3-1.6L8 14" /></>,
   };
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={style}>{paths[name]}</svg>;
 }

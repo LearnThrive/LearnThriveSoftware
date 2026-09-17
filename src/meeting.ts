@@ -1,12 +1,12 @@
 import { io, type Socket } from 'socket.io-client';
 import {
   MAX_CHAT_LENGTH, MAX_NAME_LENGTH, ROOM_PATTERN,
-  type ChatMessage, type ClientToServerEvents, type Participant, type ServerToClientEvents,
+  type ChatMessage, type ClientToServerEvents, type Participant, type ReactionEmoji, type ServerToClientEvents,
 } from '../shared/protocol';
 import { classifyConnectionStatus } from './callStatus';
 import { createLogger } from './log';
 import { browserSupportError, listDevices, LocalMedia, mediaErrorMessage, type DeviceOption } from './media';
-import { PeerSession } from './peer';
+import { PeerSession, type DirectionDiagnostics } from './peer';
 import { canShareScreen, screenShareErrorMessage, ScreenShare } from './screenShare';
 import { classifyQuality, type CallStats, type ConnectionQuality } from './stats';
 
@@ -18,6 +18,9 @@ const devicesLog = createLogger('devices');
 const NOTICE_DURATION_MS = 3500;
 const COPY_CONFIRMATION_MS = 2500;
 const MAX_CHAT_HISTORY = 200;
+const REACTION_DURATION_MS = 2200;
+
+export interface DisplayReaction { id: number; emoji: string; mine: boolean }
 
 export interface MeetingSnapshot {
   phase: 'prejoin' | 'joining' | 'meeting' | 'ended';
@@ -46,12 +49,15 @@ export interface MeetingSnapshot {
   selectedCamera: string | undefined;
   selectedMicrophone: string | undefined;
   stats: CallStats | null;
+  direction: DirectionDiagnostics | null;
   quality: ConnectionQuality;
   connectedAt: number | null;
   notice: { id: number; text: string } | null;
   chatOpen: boolean;
   messages: DisplayChatMessage[];
   unreadCount: number;
+  handRaised: boolean;
+  reactions: DisplayReaction[];
 }
 
 // "own" is resolved once, at the moment each message arrives, against the socket id live at
@@ -67,8 +73,8 @@ export class MeetingController {
     ice: 'new', rtcSignalling: 'stable', copied: false,
     peerReconnecting: false, reconnectFailed: false,
     cameras: [], microphones: [], selectedCamera: undefined, selectedMicrophone: undefined,
-    stats: null, quality: 'unknown', connectedAt: null, notice: null,
-    chatOpen: false, messages: [], unreadCount: 0,
+    stats: null, direction: null, quality: 'unknown', connectedAt: null, notice: null,
+    chatOpen: false, messages: [], unreadCount: 0, handRaised: false, reactions: [],
   };
   private listeners = new Set<() => void>();
   private readonly media = new LocalMedia(() => this.mediaChanged());
@@ -80,6 +86,7 @@ export class MeetingController {
   private copyTimeout: ReturnType<typeof setTimeout> | undefined;
   private noticeTimeout: ReturnType<typeof setTimeout> | undefined;
   private noticeSeq = 0;
+  private reactionSeq = 0;
   // socket.io's Manager (`socket.io`) is a separate emitter that `socket.removeAllListeners()`
   // doesn't touch, and it can outlive a single Socket across reconnects — so this handler is
   // tracked explicitly and unregistered by hand in closeSocket().
@@ -243,6 +250,27 @@ export class MeetingController {
     this.socket.emit('chat:message', { text: trimmed });
   };
 
+  toggleHand = () => {
+    if (!this.active || !this.socket?.connected) return;
+    const raised = !this.snapshot.handRaised;
+    this.update({ handRaised: raised });
+    this.socket.emit('participant:hand', { raised });
+  };
+
+  sendReaction = (emoji: ReactionEmoji) => {
+    if (!this.active || !this.socket?.connected) return;
+    this.socket.emit('participant:reaction', { emoji });
+    this.showReaction(emoji, true);
+  };
+
+  private showReaction(emoji: string, mine: boolean) {
+    const id = ++this.reactionSeq;
+    this.update({ reactions: [...this.snapshot.reactions, { id, emoji, mine }] });
+    setTimeout(() => {
+      this.update({ reactions: this.snapshot.reactions.filter((reaction) => reaction.id !== id) });
+    }, REACTION_DURATION_MS);
+  }
+
   join = (name: string, roomId: string) => {
     if (this.active) return;
     name = name.trim();
@@ -256,7 +284,7 @@ export class MeetingController {
     this.active = true;
     this.update({
       phase: 'joining', status: 'Connecting…', error: null, roomId, name,
-      messages: [], unreadCount: 0, chatOpen: false,
+      messages: [], unreadCount: 0, chatOpen: false, handRaised: false, reactions: [],
     });
     const url = new URL(window.location.href);
     url.pathname = '/meeting';
@@ -309,9 +337,12 @@ export class MeetingController {
       this.announce(`${peer.name} reconnected`);
       this.update({ peerReconnecting: false, peer });
     });
-    socket.on('room:participant-left', () => {
+    socket.on('room:participant-left', ({ name: departedName }) => {
       this.closePeer();
-      this.update({ peer: null, status: 'Participant left', error: null, peerReconnecting: false });
+      this.update({
+        peer: null, status: departedName ? `${departedName} left the meeting` : 'Participant left',
+        error: null, peerReconnecting: false,
+      });
     });
     socket.on('participant:media', ({ id, media }) => {
       if (this.snapshot.peer?.id !== id) return;
@@ -329,6 +360,15 @@ export class MeetingController {
       const own = message.senderId === this.socket?.id;
       const unread = this.snapshot.chatOpen || own ? this.snapshot.unreadCount : this.snapshot.unreadCount + 1;
       this.update({ messages: [...this.snapshot.messages, { ...message, own }].slice(-MAX_CHAT_HISTORY), unreadCount: unread });
+    });
+    socket.on('participant:hand', ({ id, raised }) => {
+      if (this.snapshot.peer?.id !== id) return;
+      if (raised) this.announce(`${this.snapshot.peer.name} raised their hand`);
+      this.update({ peer: { ...this.snapshot.peer, handRaised: raised } });
+    });
+    socket.on('participant:reaction', ({ id, emoji }) => {
+      if (this.snapshot.peer?.id !== id) return;
+      this.showReaction(emoji, false);
     });
     socket.on('room:full', ({ message }) => this.rejectJoin(message));
     socket.on('room:error', ({ message }) => {
@@ -361,6 +401,7 @@ export class MeetingController {
           this.update({ status: 'Connection failed', error: 'We could not establish the media connection. Try reconnecting; restrictive networks may require TURN.' });
         },
         stats: (stats) => this.update({ stats, quality: classifyQuality(stats) }),
+        direction: (direction) => this.update({ direction }),
       });
       // A reconnect/replacement creates a fresh PeerSession, which otherwise wouldn't know we
       // were already sharing our screen before the interruption.
@@ -374,7 +415,7 @@ export class MeetingController {
   private closePeer() {
     this.peer?.close();
     this.peer = null;
-    this.update({ remoteStream: null, connection: 'new', ice: 'new', rtcSignalling: 'stable', stats: null, quality: 'unknown', connectedAt: null });
+    this.update({ remoteStream: null, connection: 'new', ice: 'new', rtcSignalling: 'stable', stats: null, direction: null, quality: 'unknown', connectedAt: null });
   }
 
   private closeSocket() {
@@ -405,7 +446,7 @@ export class MeetingController {
     this.screenShare.stop();
     this.update({
       phase: 'prejoin', status: 'Ready to join', signalling: 'disconnected', error: message, peer: null,
-      peerReconnecting: false, reconnectFailed: false, screenSharing: false,
+      peerReconnecting: false, reconnectFailed: false, screenSharing: false, handRaised: false, reactions: [],
     });
   }
 
@@ -414,6 +455,13 @@ export class MeetingController {
     if (!this.active) return;
     this.active = false;
     this.closeSocket();
+    this.join(name, roomId);
+  };
+
+  /** Rejoins the same room under the same name from the ended screen, skipping pre-join. */
+  rejoin = () => {
+    const { name, roomId } = this.snapshot;
+    if (this.active || !name || !ROOM_PATTERN.test(roomId)) return;
     this.join(name, roomId);
   };
 
@@ -427,7 +475,7 @@ export class MeetingController {
     this.update({
       phase: 'ended', status: 'Meeting ended', signalling: 'disconnected', peer: null, preparing: false, error: null, mediaError: null,
       peerReconnecting: false, reconnectFailed: false, screenSharing: false,
-      chatOpen: false, messages: [], unreadCount: 0, notice: null,
+      chatOpen: false, messages: [], unreadCount: 0, notice: null, handRaised: false, reactions: [],
     });
   };
 

@@ -1,15 +1,23 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { MAX_NAME_LENGTH, ROOM_PATTERN } from '../shared/protocol';
+import { MAX_NAME_LENGTH, ROOM_PATTERN, type ReactionEmoji } from '../shared/protocol';
 import { useMeeting } from './useMeeting';
 import { canShareScreen } from './screenShare';
 import { qualityLabel } from './stats';
+import type { DirectionDiagnostics, TrackSnapshot } from './peer';
 import { Icon } from './components/Icon';
 import { MediaControls } from './components/MediaControls';
 import { ParticipantTile } from './components/ParticipantTile';
 import { ChatPanel } from './components/ChatPanel';
 import { DeviceMenu } from './components/DeviceMenu';
+import { ParticipantPanel } from './components/ParticipantPanel';
+import { ReactionPicker } from './components/ReactionPicker';
+import { ReactionsLayer } from './components/ReactionsLayer';
+import { LeaveConfirm } from './components/LeaveConfirm';
 import { MeetingTimer } from './components/Timer';
 import { MicLevelMeter } from './components/MicLevelMeter';
+
+type FocusTarget = 'remote' | 'local';
+type LayoutMode = 'focus' | 'sideBySide';
 
 function Brand() {
   return <div className="brand" aria-label="LearnThrive Tuition"><img src="/brand/learnthrive-mark.png" alt="" /><div className="wordmark">Learn<span>Thrive</span><small>TUITION</small></div></div>;
@@ -22,19 +30,34 @@ function candidatePathLabel(local: string | null, remote: string | null) {
   return 'Reflexive (STUN)';
 }
 
+function trackLabel(track: TrackSnapshot | null) {
+  if (!track) return 'none';
+  return `${track.id.slice(0, 8)} · ${track.enabled ? 'enabled' : 'disabled'} · ${track.muted ? 'muted' : 'unmuted'} · ${track.readyState}`;
+}
+
 function App() {
   const {
     snapshot, prepareMedia, toggleAudio, toggleVideo, toggleScreenShare, toggleChat, sendChatMessage,
-    switchCamera, switchMicrophone, flipCamera, join, leave, reset, copyInvite, retryConnection,
+    switchCamera, switchMicrophone, flipCamera, toggleHand, sendReaction, join, leave, reset, rejoin, copyInvite, retryConnection,
   } = useMeeting();
   const [name, setName] = useState('');
   const [room, setRoom] = useState(() => new URLSearchParams(window.location.search).get('room')?.trim().toLowerCase() || '');
   const [created, setCreated] = useState(false);
   const [deviceMenuOpen, setDeviceMenuOpen] = useState(false);
+  const [participantPanelOpen, setParticipantPanelOpen] = useState(false);
+  const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [focusTarget, setFocusTarget] = useState<FocusTarget>('remote');
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>('focus');
+  const focusTargetRef = useRef<FocusTarget>('remote');
+  const preShareFocusRef = useRef<FocusTarget | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const deviceMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const chatTriggerRef = useRef<HTMLButtonElement>(null);
+  const participantTriggerRef = useRef<HTMLButtonElement>(null);
+  const reactionTriggerRef = useRef<HTMLButtonElement>(null);
+  const leaveTriggerRef = useRef<HTMLButtonElement>(null);
   const inCall = snapshot.phase === 'meeting';
   const ended = snapshot.phase === 'ended';
   const joining = snapshot.phase === 'joining';
@@ -70,6 +93,20 @@ function App() {
     return () => document.removeEventListener('fullscreenchange', onChange);
   }, [fullscreenSupported]);
 
+  useEffect(() => { focusTargetRef.current = focusTarget; }, [focusTarget]);
+
+  // Whoever's sharing becomes visible to the watcher automatically; the watcher's prior choice
+  // (main-view preference, not what's transmitted) is restored once sharing ends.
+  useEffect(() => {
+    if (snapshot.peer?.screenSharing) {
+      if (preShareFocusRef.current === null) preShareFocusRef.current = focusTargetRef.current;
+      setFocusTarget('remote');
+    } else if (preShareFocusRef.current !== null) {
+      setFocusTarget(preShareFocusRef.current);
+      preShareFocusRef.current = null;
+    }
+  }, [snapshot.peer?.screenSharing]);
+
   useEffect(() => {
     if (!inCall) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -94,6 +131,26 @@ function App() {
     ? `${((snapshot.stats.packetsLost / (snapshot.stats.packetsLost + snapshot.stats.packetsReceived)) * 100).toFixed(1)}%` : 'n/a';
   const activeCameraLabel = snapshot.cameras.find(c => c.deviceId === snapshot.selectedCamera)?.label ?? 'Default';
   const activeMicLabel = snapshot.microphones.find(m => m.deviceId === snapshot.selectedMicrophone)?.label ?? 'Default';
+  const direction: DirectionDiagnostics | null = snapshot.direction;
+
+  const canFocusToggle = layoutMode === 'focus' && Boolean(snapshot.peer);
+  const remoteTile = (compact: boolean) => snapshot.peer
+    ? <ParticipantTile
+        stream={snapshot.remoteStream} name={snapshot.peer.name} audio={snapshot.peer.media.audio}
+        video={snapshot.peer.media.video} screenSharing={snapshot.peer.screenSharing} compact={compact}
+        focused={canFocusToggle && focusTarget === 'remote'} onFocus={canFocusToggle ? () => setFocusTarget('remote') : undefined}
+      />
+    : <section className="waiting-tile" aria-label="Waiting for another participant">
+        <div className="waiting-orbit"><div className="waiting-icon"><Icon name="people" size={34} /></div></div>
+        <p className="eyebrow">YOUR CLASSROOM IS READY</p><h2>A little company,<br />a lot of possibility.</h2>
+        <p className="waiting-description">Share your invite link to bring the<br className="desktop-break" /> other participant into the meeting.</p>
+        <button className="button button-mint" type="button" onClick={() => void copyInvite()} aria-label="Copy invite link"><Icon name={snapshot.copied ? 'check' : 'link'} />{snapshot.copied ? 'Invite link copied' : 'Copy invite link'}</button>
+      </section>;
+  const localTile = (compact: boolean) => <ParticipantTile
+    stream={snapshot.localStream} name={snapshot.name || name || 'You'} audio={snapshot.audio} video={snapshot.video}
+    screenSharing={snapshot.screenSharing} local compact={compact}
+    focused={canFocusToggle && focusTarget === 'local'} onFocus={canFocusToggle ? () => setFocusTarget('local') : undefined}
+  />;
 
   return <div className={`app ${inCall ? 'call-app' : ''}`}>
     <a className="skip-link" href="#main-content">Skip to meeting</a>
@@ -109,7 +166,11 @@ function App() {
         <p className="eyebrow">UNTIL NEXT TIME</p>
         <h1>You’ve left the meeting.</h1>
         <p>Your camera and microphone are off.<br />You can return whenever you’re ready.</p>
-        <button className="button button-primary" type="button" onClick={reset}>Back to meeting setup<Icon name="arrow" /></button>
+        <div className="ended-actions">
+          <button className="button button-primary" type="button" onClick={rejoin}>Rejoin this meeting<Icon name="arrow" /></button>
+          <button className="button button-secondary" type="button" onClick={reset}>Return to meeting setup</button>
+          <button className="button button-secondary" type="button" onClick={() => void copyInvite()}><Icon name={snapshot.copied ? 'check' : 'link'} size={16} />{snapshot.copied ? 'Link copied' : 'Copy meeting link'}</button>
+        </div>
         <div className="ended-footer">A little learning. A little growing. LearnThrive.</div>
       </section> : inCall ? <>
         <div className="meeting-heading">
@@ -130,18 +191,14 @@ function App() {
         {snapshot.notice && <div className="participant-toast" role="status" key={snapshot.notice.id}>{snapshot.notice.text}</div>}
         <div className="call-body">
           <div className="meeting-stage" ref={stageRef}>
-            {snapshot.peer
-              ? <ParticipantTile
-                  stream={snapshot.remoteStream} name={snapshot.peer.name} audio={snapshot.peer.media.audio}
-                  video={snapshot.peer.media.video} screenSharing={snapshot.peer.screenSharing}
-                />
-              : <section className="waiting-tile" aria-label="Waiting for another participant">
-                <div className="waiting-orbit"><div className="waiting-icon"><Icon name="people" size={34} /></div></div>
-                <p className="eyebrow">YOUR CLASSROOM IS READY</p><h2>A little company,<br />a lot of possibility.</h2>
-                <p className="waiting-description">Share your invite link to bring the<br className="desktop-break" /> other participant into the meeting.</p>
-                <button className="button button-mint" type="button" onClick={() => void copyInvite()} aria-label="Copy invite link"><Icon name={snapshot.copied ? 'check' : 'link'} />{snapshot.copied ? 'Invite link copied' : 'Copy invite link'}</button>
-              </section>}
-            <div className="self-preview"><ParticipantTile stream={snapshot.localStream} name={snapshot.name || name || 'You'} audio={snapshot.audio} video={snapshot.video} screenSharing={snapshot.screenSharing} local compact /></div>
+            {layoutMode === 'sideBySide' && snapshot.peer ? (
+              <div className="stage-side-by-side">{remoteTile(false)}{localTile(false)}</div>
+            ) : focusTarget === 'local' && snapshot.peer ? (
+              <>{localTile(false)}<div className="self-preview">{remoteTile(true)}</div></>
+            ) : (
+              <>{remoteTile(false)}<div className="self-preview">{localTile(true)}</div></>
+            )}
+            <ReactionsLayer reactions={snapshot.reactions} />
             <span className="stage-caption"><span /> Learn together. Thrive together.</span>
             {fullscreenSupported && <button type="button" className="stage-fullscreen" onClick={toggleFullscreen} aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}><Icon name={isFullscreen ? 'collapse' : 'expand'} size={17} /></button>}
           </div>
@@ -152,14 +209,15 @@ function App() {
           <p className="call-note"><Icon name="shield" size={17} />This session is not recorded.</p>
           <div className="call-controls" aria-label="Meeting controls">
             <MediaControls audio={snapshot.audio} video={snapshot.video} onAudio={() => void toggleAudio()} onVideo={() => void toggleVideo()} disabled={snapshot.preparing} inCall />
-            <div className="control-item device-menu-anchor">
-              <button ref={deviceMenuTriggerRef} type="button" className="media-button" onClick={() => setDeviceMenuOpen(open => !open)} aria-label="Camera and microphone options" aria-haspopup="menu" aria-expanded={deviceMenuOpen}><Icon name="settings" size={20} /></button>
-              <span>Devices</span>
+            <div className="control-item popover-anchor">
+              <button ref={deviceMenuTriggerRef} type="button" className="media-button" onClick={() => setDeviceMenuOpen(open => !open)} aria-label="Meeting settings" aria-haspopup="menu" aria-expanded={deviceMenuOpen}><Icon name="settings" size={20} /></button>
+              <span>Settings</span>
               <DeviceMenu
                 open={deviceMenuOpen} onClose={() => setDeviceMenuOpen(false)} cameras={snapshot.cameras} microphones={snapshot.microphones}
                 selectedCamera={snapshot.selectedCamera} selectedMicrophone={snapshot.selectedMicrophone}
                 onSelectCamera={(id) => void switchCamera(id)} onSelectMicrophone={(id) => void switchMicrophone(id)}
                 canFlip={snapshot.cameras.length > 1} onFlip={() => void flipCamera()} triggerRef={deviceMenuTriggerRef}
+                layoutMode={layoutMode} onLayoutMode={setLayoutMode}
               />
             </div>
             <span className="controls-divider" />
@@ -167,9 +225,27 @@ function App() {
             <div className="control-item"><button ref={chatTriggerRef} type="button" className={`media-button ${snapshot.chatOpen ? 'is-on' : ''}`} onClick={toggleChat} aria-pressed={snapshot.chatOpen} aria-label="Toggle chat">
               <Icon name="chat" size={21} />{snapshot.unreadCount > 0 && !snapshot.chatOpen && <span className="unread-badge">{snapshot.unreadCount > 9 ? '9+' : snapshot.unreadCount}</span>}
             </button><span>Chat</span></div>
+            <div className="control-item popover-anchor">
+              <button ref={participantTriggerRef} type="button" className="media-button" onClick={() => setParticipantPanelOpen(open => !open)} aria-label="Participants" aria-haspopup="menu" aria-expanded={participantPanelOpen}><Icon name="people" size={20} /></button>
+              <span>People</span>
+              <ParticipantPanel
+                open={participantPanelOpen} onClose={() => setParticipantPanelOpen(false)} triggerRef={participantTriggerRef}
+                selfName={snapshot.name || name || 'You'} selfAudio={snapshot.audio} selfVideo={snapshot.video} selfHandRaised={snapshot.handRaised}
+                peer={snapshot.peer} peerReconnecting={snapshot.peerReconnecting}
+              />
+            </div>
+            <div className="control-item popover-anchor">
+              <button ref={reactionTriggerRef} type="button" className="media-button" onClick={() => setReactionPickerOpen(open => !open)} aria-label="Send a reaction" aria-haspopup="menu" aria-expanded={reactionPickerOpen}><Icon name="spark" size={20} /></button>
+              <span>React</span>
+              <ReactionPicker open={reactionPickerOpen} onClose={() => setReactionPickerOpen(false)} onSelect={(emoji: ReactionEmoji) => sendReaction(emoji)} triggerRef={reactionTriggerRef} />
+            </div>
+            <div className="control-item"><button type="button" className={`media-button ${snapshot.handRaised ? 'is-on' : ''}`} onClick={toggleHand} aria-pressed={snapshot.handRaised} aria-label={snapshot.handRaised ? 'Lower your hand' : 'Raise your hand'}><Icon name="hand" size={20} /></button><span>{snapshot.handRaised ? 'Lower hand' : 'Raise hand'}</span></div>
             <span className="controls-divider" />
             {!snapshot.peer && <div className="control-item"><button type="button" className="media-button invite-control" onClick={() => void copyInvite()} aria-label="Copy invite link"><Icon name={snapshot.copied ? 'check' : 'link'} size={22} /></button><span>{snapshot.copied ? 'Copied' : 'Invite'}</span></div>}
-            <div className="control-item"><button type="button" className="media-button leave-control" onClick={leave} aria-label="Leave meeting"><Icon name="leave" size={23} /></button><span>Leave</span></div>
+            <div className="control-item popover-anchor">
+              <button ref={leaveTriggerRef} type="button" className="media-button leave-control" onClick={() => setLeaveConfirmOpen(true)} aria-label="Leave meeting"><Icon name="leave" size={23} /></button><span>Leave</span>
+              <LeaveConfirm open={leaveConfirmOpen} onClose={() => setLeaveConfirmOpen(false)} onConfirm={() => { setLeaveConfirmOpen(false); leave(); }} triggerRef={leaveTriggerRef} />
+            </div>
           </div>
           <div className="call-bottom-spacer" />
         </div>
@@ -198,6 +274,7 @@ function App() {
               </div>
             </div>
             <div className="permission-note"><Icon name="shield" size={19} /><p>Your preview is only visible to you.<br />Your camera and microphone stay off until you enable them.</p></div>
+            {import.meta.env.DEV && <p className="dev-feedback-note"><Icon name="info" size={15} />Testing nearby devices? Use headphones on one device to prevent audio feedback.</p>}
           </section>
           <section className="join-panel" aria-labelledby="join-heading">
             <div className="join-panel-top"><h2 id="join-heading">Make yourself at home.</h2><p>Check your details before stepping in.</p></div>
@@ -231,12 +308,21 @@ function App() {
         <dt>Packet loss</dt><dd>{lossPercent}</dd>
         <dt>Bitrate</dt><dd>in {snapshot.stats?.inboundBitrateKbps ?? 'n/a'} kbps / out {snapshot.stats?.outboundBitrateKbps ?? 'n/a'} kbps</dd>
         <dt>Frame rate / resolution</dt><dd>{snapshot.stats?.frameRate ?? 'n/a'} fps / {snapshot.stats?.resolution ?? 'n/a'}</dd>
+        <dt>Frames encoded / decoded</dt><dd>{snapshot.stats?.framesEncoded ?? 'n/a'} / {snapshot.stats?.framesDecoded ?? 'n/a'}</dd>
+        <dt>Packets sent / received</dt><dd>{snapshot.stats?.packetsSent ?? 'n/a'} / {snapshot.stats?.packetsReceived ?? 'n/a'}</dd>
         <dt>Quality</dt><dd>{qualityLabel(snapshot.quality)}</dd>
+        <dt>Local audio track</dt><dd>{trackLabel(direction?.localAudio ?? null)}</dd>
+        <dt>Local video track</dt><dd>{trackLabel(direction?.localVideo ?? null)}</dd>
+        <dt>Remote audio track</dt><dd>{trackLabel(direction?.remoteAudio ?? null)}</dd>
+        <dt>Remote video track</dt><dd>{trackLabel(direction?.remoteVideo ?? null)}</dd>
+        <dt>Audio transceiver direction</dt><dd>{direction?.audioDirection ?? 'n/a'} (negotiated: {direction?.audioCurrentDirection ?? 'n/a'})</dd>
+        <dt>Video transceiver direction</dt><dd>{direction?.videoDirection ?? 'n/a'} (negotiated: {direction?.videoCurrentDirection ?? 'n/a'})</dd>
         <dt>Active camera</dt><dd>{activeCameraLabel}</dd>
         <dt>Active microphone</dt><dd>{activeMicLabel}</dd>
         <dt>Screen sharing</dt><dd>{snapshot.screenSharing ? 'you' : snapshot.peer?.screenSharing ? 'peer' : 'no'}</dd>
-        <dt>Local tracks</dt><dd>{tracks(snapshot.localStream)}</dd>
-        <dt>Remote tracks</dt><dd>{tracks(snapshot.remoteStream)}</dd>
+        <dt>Hand raised</dt><dd>{snapshot.handRaised ? 'you' : ''}{snapshot.handRaised && snapshot.peer?.handRaised ? ', ' : ''}{snapshot.peer?.handRaised ? 'peer' : ''}{!snapshot.handRaised && !snapshot.peer?.handRaised ? 'no' : ''}</dd>
+        <dt>Local tracks (stream)</dt><dd>{tracks(snapshot.localStream)}</dd>
+        <dt>Remote tracks (stream)</dt><dd>{tracks(snapshot.remoteStream)}</dd>
       </dl></details>}
     </main>
 

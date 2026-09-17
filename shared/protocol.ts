@@ -1,5 +1,5 @@
 export interface MediaState { audio: boolean; video: boolean }
-export interface Participant { id: string; name: string; media: MediaState; screenSharing: boolean }
+export interface Participant { id: string; name: string; media: MediaState; screenSharing: boolean; handRaised: boolean }
 export interface JoinRequest { roomId: string; name: string; media: MediaState }
 export interface JoinedRoom { roomId: string; self: Participant; peer: Participant | null; sessionId: string | null; initiator: boolean }
 export interface PeerJoined { peer: Participant; sessionId: string; initiator: boolean }
@@ -7,6 +7,8 @@ export interface SignalDescription { sessionId: string; description: RTCSessionD
 export interface SignalCandidate { sessionId: string; candidate: RTCIceCandidateInit }
 export interface MeetingError { message: string }
 export interface ChatMessage { id: string; senderId: string; name: string; text: string; timestamp: number }
+export const REACTION_EMOJIS = ['👍', '❤️', '😂', '🎉', '👏'] as const;
+export type ReactionEmoji = typeof REACTION_EMOJIS[number];
 export interface ClientToServerEvents {
   'room:join': (payload: JoinRequest) => void;
   // Acknowledged so the client can wait for the server to actually process the departure
@@ -15,6 +17,8 @@ export interface ClientToServerEvents {
   'room:leave': (ack: () => void) => void;
   'participant:media': (payload: MediaState) => void;
   'participant:screen-share': (payload: { sharing: boolean }) => void;
+  'participant:hand': (payload: { raised: boolean }) => void;
+  'participant:reaction': (payload: { emoji: string }) => void;
   'chat:message': (payload: { text: string }) => void;
   'webrtc:offer': (payload: SignalDescription) => void;
   'webrtc:answer': (payload: SignalDescription) => void;
@@ -23,13 +27,15 @@ export interface ClientToServerEvents {
 export interface ServerToClientEvents {
   'room:joined': (payload: JoinedRoom) => void;
   'room:participant-joined': (payload: PeerJoined) => void;
-  'room:participant-left': () => void;
+  'room:participant-left': (payload: { name: string | null }) => void;
   'room:participant-reconnecting': () => void;
   'room:participant-reconnected': (payload: Participant) => void;
   'room:full': (payload: MeetingError) => void;
   'room:error': (payload: MeetingError) => void;
   'participant:media': (payload: { id: string; media: MediaState }) => void;
   'participant:screen-share': (payload: { id: string; sharing: boolean }) => void;
+  'participant:hand': (payload: { id: string; raised: boolean }) => void;
+  'participant:reaction': (payload: { id: string; emoji: string }) => void;
   'chat:message': (payload: ChatMessage) => void;
   'webrtc:offer': (payload: SignalDescription) => void;
   'webrtc:answer': (payload: SignalDescription) => void;
