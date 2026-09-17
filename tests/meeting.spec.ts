@@ -63,6 +63,16 @@ test('two participants connect over WebRTC, exchange media state, and a third is
     await expect(mainViewControl(pageB, 'Tutor')).toBeVisible();
   });
 
+  await test.step('remote video actually arrives on both sides, not just the signalling connection', async () => {
+    // Regression test: the answerer (whichever peer did not create the offer) used to end up
+    // with its camera/mic captured locally but never actually sent — the transceiver carrying
+    // the track was orphaned by Chrome's offer-matching, and a second, recvonly-only transceiver
+    // pair carried the real negotiation. That left the peer connection reporting "connected"
+    // while the remote tile silently stayed on the camera-off placeholder forever.
+    await expect(pageA.locator('.remote-tile .camera-placeholder')).toHaveCount(0, { timeout: 10_000 });
+    await expect(pageB.locator('.remote-tile .camera-placeholder')).toHaveCount(0, { timeout: 10_000 });
+  });
+
   await test.step('muting and disabling video relay to the peer', async () => {
     await pageA.getByRole('button', { name: 'Turn microphone off' }).click();
     await expect(pageB.locator('.remote-tile .participant-media')).toHaveAttribute('aria-label', 'Microphone off');
