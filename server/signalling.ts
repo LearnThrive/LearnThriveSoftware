@@ -3,9 +3,11 @@ import { randomUUID } from 'node:crypto';
 import express from 'express';
 import { Server, type Socket } from 'socket.io';
 import { isDevTunnelHost } from '../shared/allowedHosts';
-import { MAX_CHAT_LENGTH, MAX_NAME_LENGTH, REACTION_EMOJIS, ROOM_PATTERN } from '../shared/protocol';
+import {
+  MAX_CHAT_LENGTH, MAX_NAME_LENGTH, MAX_STUDENTS, REACTION_EMOJIS, ROOM_PATTERN, WAITING_ROOM_CAP,
+} from '../shared/protocol';
 import type {
-  ChatMessage, ClientToServerEvents, JoinedRoom, MediaState, Participant,
+  ChatMessage, ClientToServerEvents, JoinedRoom, MediaState, Participant, ParticipantRole,
   ServerToClientEvents, SignalCandidate, SignalDescription,
 } from '../shared/protocol';
 
@@ -29,9 +31,16 @@ function createRateLimiter(windowMs: number, max: number) {
   };
 }
 
+// One RTCPeerConnection edge between two already-admitted participants. A room with up to 4
+// admitted participants (1 tutor + 3 students) can have up to 6 of these (a full mesh).
+interface Edge { sessionId: string; participantIds: [string, string]; initiatorId: string }
+// A student who has joined but not yet been let in by the tutor. Keyed by socket id in
+// Room.waiting; Map insertion order gives FIFO for free, so no separate ordering field is kept.
+interface WaitingEntry { name: string; media: MediaState }
 interface Room {
   participants: Map<string, Participant>;
-  sessionId: string | null;
+  waiting: Map<string, WaitingEntry>;
+  edges: Map<string, Edge>;
 }
 interface SocketData { roomId?: string }
 type MeetingSocket = Socket<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>;
@@ -43,6 +52,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function parseMedia(value: unknown): MediaState | null {
   if (!isRecord(value) || typeof value.audio !== 'boolean' || typeof value.video !== 'boolean') return null;
   return { audio: value.audio, video: value.video };
+}
+
+function parseRole(value: unknown): ParticipantRole | null {
+  return value === 'tutor' || value === 'student' ? value : null;
 }
 
 function parseCandidate(value: unknown): RTCIceCandidateInit | null {
@@ -115,14 +128,89 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
     return true;
   }
 
-  function sendJoined(socket: MeetingSocket, roomId: string, room: Room) {
+  function tutorOf(room: Room): Participant | undefined {
+    for (const participant of room.participants.values()) if (participant.role === 'tutor') return participant;
+    return undefined;
+  }
+
+  function studentCount(room: Room): number {
+    let count = 0;
+    for (const participant of room.participants.values()) if (participant.role === 'student') count += 1;
+    return count;
+  }
+
+  function otherIdOnEdge(edge: Edge, socketId: string): string {
+    return edge.participantIds[0] === socketId ? edge.participantIds[1] : edge.participantIds[0];
+  }
+
+  function broadcastWaiting(room: Room) {
+    const tutor = tutorOf(room);
+    if (!tutor) return;
+    io.to(tutor.id).emit('room:waiting-update', {
+      waiting: [...room.waiting.entries()].map(([id, entry]) => ({ id, name: entry.name })),
+    });
+  }
+
+  // Admits a participant already cleared to join (role/capacity checks are the caller's
+  // responsibility). Creates one edge to every already-admitted participant, with the existing
+  // participant on each edge always the initiator — the same rule the old code re-derived from
+  // room-wide Map order, now stored once per edge at creation time instead. Re-deriving it from
+  // room order breaks with 3+ participants: an edge between two students who joined after the
+  // tutor would have neither end equal to "the first id in the room," so neither could ever
+  // become the initiator and that edge would never negotiate.
+  function admitParticipant(socket: MeetingSocket, roomId: string, room: Room, self: Participant) {
+    const peers: JoinedRoom['peers'] = [];
+    for (const [otherId, other] of room.participants) {
+      const sessionId = randomUUID();
+      room.edges.set(sessionId, { sessionId, participantIds: [otherId, self.id], initiatorId: otherId });
+      io.to(otherId).emit('room:participant-joined', { peer: self, sessionId, initiator: true });
+      peers.push({ peer: other, sessionId, initiator: false });
+    }
+    room.participants.set(self.id, self);
+    socket.data.roomId = roomId;
+    void socket.join(`meeting:${roomId}`);
+    const waiting = self.role === 'tutor' ? [...room.waiting.entries()].map(([id, entry]) => ({ id, name: entry.name })) : [];
+    socket.emit('room:joined', { roomId, self, peers, waiting });
+  }
+
+  // Re-describes a still-admitted participant's existing edges — used only when a client resends
+  // room:join for a room it's already in (e.g. a page that didn't realize it had already joined).
+  function resendJoinedState(socket: MeetingSocket, roomId: string, room: Room) {
     const self = room.participants.get(socket.id)!;
-    const peer = [...room.participants.values()].find((participant) => participant.id !== socket.id) ?? null;
-    const payload: JoinedRoom = {
-      roomId, self, peer, sessionId: room.sessionId,
-      initiator: !!peer && room.participants.keys().next().value === socket.id,
+    const peers: JoinedRoom['peers'] = [];
+    for (const edge of room.edges.values()) {
+      if (!edge.participantIds.includes(socket.id)) continue;
+      const other = room.participants.get(otherIdOnEdge(edge, socket.id));
+      if (other) peers.push({ peer: other, sessionId: edge.sessionId, initiator: edge.initiatorId === socket.id });
+    }
+    const waiting = self.role === 'tutor' ? [...room.waiting.entries()].map(([id, entry]) => ({ id, name: entry.name })) : [];
+    socket.emit('room:joined', { roomId, self, peers, waiting });
+  }
+
+  // Silently drops a stale (mid-grace-period) participant so a same-role newcomer can take their
+  // slot instead of being told the room/seat is full. No departure notice is sent — the
+  // newcomer's own admission (which immediately follows) is what the remaining participants see.
+  function evictStale(room: Room, staleId: string) {
+    room.participants.delete(staleId);
+    clearPending(staleId);
+    chatRateLimiter.clear(staleId);
+    reactionRateLimiter.clear(staleId);
+    for (const [sessionId, edge] of room.edges) {
+      if (edge.participantIds.includes(staleId)) room.edges.delete(sessionId);
+    }
+  }
+
+  function admitWaitingId(roomId: string, room: Room, waitingId: string): boolean {
+    const entry = room.waiting.get(waitingId);
+    if (!entry || studentCount(room) >= MAX_STUDENTS) return false;
+    const waitingSocket = io.sockets.sockets.get(waitingId);
+    if (!waitingSocket) { room.waiting.delete(waitingId); return false; } // gone for good; clean up, don't count as admitted
+    room.waiting.delete(waitingId);
+    const newParticipant: Participant = {
+      id: waitingId, name: entry.name, media: entry.media, screenSharing: false, handRaised: false, role: 'student',
     };
-    socket.emit('room:joined', payload);
+    admitParticipant(waitingSocket, roomId, room, newParticipant);
+    return true;
   }
 
   function leaveNow(socket: MeetingSocket) {
@@ -131,55 +219,65 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
     delete socket.data.roomId;
     void socket.leave(`meeting:${roomId}`);
     clearPending(socket.id);
+    const room = rooms.get(roomId);
+    if (!room) return;
+
+    if (room.waiting.delete(socket.id)) {
+      if (room.participants.size === 0 && room.waiting.size === 0) rooms.delete(roomId);
+      else broadcastWaiting(room);
+      return;
+    }
+
     chatRateLimiter.clear(socket.id);
     reactionRateLimiter.clear(socket.id);
-    const room = rooms.get(roomId);
-    const departing = room?.participants.get(socket.id) ?? null;
-    if (!room || !room.participants.delete(socket.id)) return;
-    room.sessionId = null;
-    if (room.participants.size === 0) {
-      rooms.delete(roomId);
-    } else {
-      for (const id of room.participants.keys()) io.to(id).emit('room:participant-left', { name: departing?.name ?? null });
+    const departing = room.participants.get(socket.id) ?? null;
+    if (!room.participants.delete(socket.id)) return;
+    const remainingIds = new Set<string>();
+    for (const [sessionId, edge] of room.edges) {
+      if (!edge.participantIds.includes(socket.id)) continue;
+      room.edges.delete(sessionId);
+      remainingIds.add(otherIdOnEdge(edge, socket.id));
     }
+    for (const id of remainingIds) io.to(id).emit('room:participant-left', { id: socket.id, name: departing?.name ?? null });
+    if (room.participants.size === 0 && room.waiting.size === 0) rooms.delete(roomId);
   }
 
-  function pairedRoom(socket: MeetingSocket, sessionId: unknown) {
-    const room = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
-    if (!room || !room.participants.has(socket.id) || room.participants.size !== 2
-      || typeof sessionId !== 'string' || !room.sessionId || sessionId !== room.sessionId) {
+  function edgeFor(socket: MeetingSocket, sessionId: unknown): { edge: Edge; otherId: string } | null {
+    const roomId = socket.data.roomId;
+    const room = roomId ? rooms.get(roomId) : undefined;
+    const edge = room && typeof sessionId === 'string' ? room.edges.get(sessionId) : undefined;
+    if (!room || !room.participants.has(socket.id) || !edge || !edge.participantIds.includes(socket.id)) {
       fail(socket, 'This connection is no longer active.');
       return null;
     }
-    return room;
+    return { edge, otherId: otherIdOnEdge(edge, socket.id) };
   }
 
   function relayDescription(socket: MeetingSocket, kind: 'offer' | 'answer', payload: unknown) {
     if (!isRecord(payload)) return fail(socket, 'Invalid connection message.');
-    const room = pairedRoom(socket, payload.sessionId);
-    if (!room) return;
-    const initiator = room.participants.keys().next().value === socket.id;
+    const ctx = edgeFor(socket, payload.sessionId);
+    if (!ctx) return;
+    const initiator = ctx.edge.initiatorId === socket.id;
     const description = payload.description;
     if (initiator !== (kind === 'offer') || !isRecord(description) || description.type !== kind
       || typeof description.sdp !== 'string' || description.sdp.length === 0 || description.sdp.length > 65_536) {
       return fail(socket, 'Invalid connection message.');
     }
-    const message: SignalDescription = {
-      sessionId: room.sessionId!, description: { type: kind, sdp: description.sdp },
-    };
-    // Recipients come only from server membership, never a client-supplied target.
-    for (const id of room.participants.keys()) {
-      if (id !== socket.id) io.to(id).emit(kind === 'offer' ? 'webrtc:offer' : 'webrtc:answer', message);
-    }
+    const message: SignalDescription = { sessionId: ctx.edge.sessionId, description: { type: kind, sdp: description.sdp } };
+    // The recipient comes only from the server-held edge, never a client-supplied target.
+    io.to(ctx.otherId).emit(kind === 'offer' ? 'webrtc:offer' : 'webrtc:answer', message);
   }
 
   io.on('connection', (socket) => {
     if (socket.recovered && socket.data.roomId) {
       const room = rooms.get(socket.data.roomId);
-      if (room?.participants.has(socket.id) && clearPending(socket.id)) {
+      if (room?.waiting.has(socket.id)) {
+        clearPending(socket.id);
+      } else if (room?.participants.has(socket.id) && clearPending(socket.id)) {
         const self = room.participants.get(socket.id)!;
-        const peer = [...room.participants.values()].find((participant) => participant.id !== socket.id);
-        if (peer) io.to(peer.id).emit('room:participant-reconnected', self);
+        for (const edge of room.edges.values()) {
+          if (edge.participantIds.includes(socket.id)) io.to(otherIdOnEdge(edge, socket.id)).emit('room:participant-reconnected', self);
+        }
       }
     }
 
@@ -188,49 +286,80 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
         || typeof payload.name !== 'string' || payload.name.length > 256
         || !payload.name.trim() || payload.name.trim().length > MAX_NAME_LENGTH
         // eslint-disable-next-line no-control-regex
-        || /[\u0000-\u001f\u007f]/u.test(payload.name)) {
+        || /[ -]/u.test(payload.name)) {
         return fail(socket, 'Enter a valid room code and a display name of 1–40 characters.');
       }
       const media = parseMedia(payload.media);
       if (!media) return fail(socket, 'Invalid microphone or camera status.');
+      const role = parseRole(payload.role);
+      if (!role) return fail(socket, 'Invalid role.');
       const roomId = payload.roomId;
+      const name = payload.name.trim();
+
       if (socket.data.roomId) {
         if (socket.data.roomId !== roomId) return fail(socket, 'Leave your current meeting before joining another.');
         const existing = rooms.get(roomId);
-        if (existing) sendJoined(socket, roomId, existing);
+        if (existing?.participants.has(socket.id)) resendJoinedState(socket, roomId, existing);
+        else if (existing?.waiting.has(socket.id)) socket.emit('room:waiting', { roomId });
         return;
       }
-      const room = rooms.get(roomId) ?? { participants: new Map<string, Participant>(), sessionId: null };
-      if (room.participants.size >= 2) {
-        // A participant only sits here mid-grace-period after an unplanned disconnect;
-        // a newcomer displaces that stale slot instead of being told the room is full.
-        const stale = [...room.participants.keys()].find((id) => pendingDisconnects.has(id));
-        if (stale) {
-          clearPending(stale);
-          room.participants.delete(stale);
-          room.sessionId = null;
-          chatRateLimiter.clear(stale);
-          reactionRateLimiter.clear(stale);
-        } else {
-          socket.emit('room:full', { message: 'This meeting already has two participants.' });
-          return;
+
+      const room = rooms.get(roomId) ?? { participants: new Map<string, Participant>(), waiting: new Map(), edges: new Map() };
+
+      if (role === 'tutor') {
+        const existingTutor = tutorOf(room);
+        if (existingTutor) {
+          if (!pendingDisconnects.has(existingTutor.id)) {
+            socket.emit('room:full', { message: 'This class already has a tutor.' });
+            return;
+          }
+          evictStale(room, existingTutor.id);
         }
+        const self: Participant = { id: socket.id, name, media, screenSharing: false, handRaised: false, role };
+        rooms.set(roomId, room);
+        admitParticipant(socket, roomId, room, self);
+        return;
       }
-      const self: Participant = { id: socket.id, name: payload.name.trim(), media, screenSharing: false, handRaised: false };
-      room.participants.set(socket.id, self);
+
+      // Students always wait for the tutor to admit them, even if a seat is already free —
+      // capacity is enforced at admission time (room:admit/room:admit-all), not here.
+      if (room.waiting.size >= WAITING_ROOM_CAP) {
+        socket.emit('room:full', { message: 'The waiting room is full right now. Please try again shortly.' });
+        return;
+      }
+      room.waiting.set(socket.id, { name, media });
       rooms.set(roomId, room);
       socket.data.roomId = roomId;
       void socket.join(`meeting:${roomId}`);
-      if (room.participants.size === 2) room.sessionId = randomUUID();
-      // The responder learns its session before the initiator can create an offer.
-      sendJoined(socket, roomId, room);
-      if (room.sessionId) {
-        for (const id of room.participants.keys()) {
-          if (id !== socket.id) io.to(id).emit('room:participant-joined', {
-            peer: self, sessionId: room.sessionId, initiator: true,
-          });
-        }
+      socket.emit('room:waiting', { roomId });
+      broadcastWaiting(room);
+    });
+
+    socket.on('room:admit', (payload: unknown) => {
+      const roomId = socket.data.roomId;
+      const room = roomId ? rooms.get(roomId) : undefined;
+      const self = room?.participants.get(socket.id);
+      if (!room || !roomId || !self || self.role !== 'tutor') return fail(socket, 'Only the tutor can admit students.');
+      if (!isRecord(payload) || typeof payload.id !== 'string') return fail(socket, 'Invalid admit request.');
+      const admitted = admitWaitingId(roomId, room, payload.id) ? 1 : 0;
+      if (admitted === 0) fail(socket, 'That student is no longer waiting, or the class is full.');
+      socket.emit('room:admit-result', { admitted, remaining: room.waiting.size });
+      broadcastWaiting(room);
+    });
+
+    socket.on('room:admit-all', () => {
+      const roomId = socket.data.roomId;
+      const room = roomId ? rooms.get(roomId) : undefined;
+      const self = room?.participants.get(socket.id);
+      if (!room || !roomId || !self || self.role !== 'tutor') return fail(socket, 'Only the tutor can admit students.');
+      const waitingIds = [...room.waiting.keys()]; // snapshot before the loop mutates room.waiting
+      let admitted = 0;
+      for (const id of waitingIds) {
+        if (studentCount(room) >= MAX_STUDENTS) break;
+        if (admitWaitingId(roomId, room, id)) admitted += 1;
       }
+      socket.emit('room:admit-result', { admitted, remaining: room.waiting.size });
+      broadcastWaiting(room);
     });
 
     socket.on('participant:media', (payload: unknown) => {
@@ -295,14 +424,12 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
     socket.on('webrtc:answer', (payload) => relayDescription(socket, 'answer', payload));
     socket.on('webrtc:ice-candidate', (payload: unknown) => {
       if (!isRecord(payload)) return fail(socket, 'Invalid connection candidate.');
-      const room = pairedRoom(socket, payload.sessionId);
-      if (!room) return;
+      const ctx = edgeFor(socket, payload.sessionId);
+      if (!ctx) return;
       const candidate = parseCandidate(payload.candidate);
       if (!candidate) return fail(socket, 'Invalid connection candidate.');
-      const message: SignalCandidate = { sessionId: room.sessionId!, candidate };
-      for (const id of room.participants.keys()) {
-        if (id !== socket.id) io.to(id).emit('webrtc:ice-candidate', message);
-      }
+      const message: SignalCandidate = { sessionId: ctx.edge.sessionId, candidate };
+      io.to(ctx.otherId).emit('webrtc:ice-candidate', message);
     });
     socket.on('room:leave', (ack?: unknown) => {
       leaveNow(socket);
@@ -311,13 +438,17 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
     socket.on('disconnect', () => {
       const roomId = socket.data.roomId;
       const room = roomId ? rooms.get(roomId) : undefined;
-      if (!room || !room.participants.has(socket.id)) return;
-      const peer = [...room.participants.values()].find((participant) => participant.id !== socket.id);
-      if (peer) io.to(peer.id).emit('room:participant-reconnecting');
-      const timer = setTimeout(() => {
-        pendingDisconnects.delete(socket.id);
-        leaveNow(socket);
-      }, disconnectGraceMs);
+      if (!room) return;
+      if (room.waiting.has(socket.id)) {
+        const timer = setTimeout(() => { pendingDisconnects.delete(socket.id); leaveNow(socket); }, disconnectGraceMs);
+        pendingDisconnects.set(socket.id, { roomId: roomId!, timer });
+        return;
+      }
+      if (!room.participants.has(socket.id)) return;
+      for (const edge of room.edges.values()) {
+        if (edge.participantIds.includes(socket.id)) io.to(otherIdOnEdge(edge, socket.id)).emit('room:participant-reconnecting', { id: socket.id });
+      }
+      const timer = setTimeout(() => { pendingDisconnects.delete(socket.id); leaveNow(socket); }, disconnectGraceMs);
       pendingDisconnects.set(socket.id, { roomId: roomId!, timer });
     });
   });
