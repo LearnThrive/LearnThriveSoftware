@@ -30,7 +30,7 @@ export function ParticipantPanel({
         <li>
           <span className="participant-row-name">{selfName || 'You'} (You)</span>
           <span className="participant-row-state">
-            {selfHandRaised && <Icon name="hand" size={14} />}
+            {selfHandRaised && <span aria-label="Hand raised" title="Hand raised"><Icon name="hand" size={14} /></span>}
             <Icon name={selfAudio ? 'microphone' : 'microphone-off'} size={14} />
             <Icon name={selfVideo ? 'camera' : 'camera-off'} size={14} />
           </span>
@@ -39,7 +39,7 @@ export function ParticipantPanel({
           <li>
             <span className="participant-row-name">{peer.name}{peerReconnecting ? ' — reconnecting…' : ''}</span>
             <span className="participant-row-state">
-              {peer.handRaised && <Icon name="hand" size={14} />}
+              {peer.handRaised && <span aria-label="Hand raised" title="Hand raised"><Icon name="hand" size={14} /></span>}
               <Icon name={peer.media.audio ? 'microphone' : 'microphone-off'} size={14} />
               <Icon name={peer.media.video ? 'camera' : 'camera-off'} size={14} />
             </span>
