@@ -106,6 +106,11 @@ test('a tutor and one student connect over WebRTC, exchange media state, and a t
   await test.step('the tutor starts the class and waits', async () => {
     await pageA.getByRole('button', { name: 'Start class' }).click();
     await expect(pageA.getByRole('region', { name: 'Waiting for other participants' })).toBeVisible();
+    // Regression: a lone tutor with no peers yet must get a real status ("Waiting…"), not a
+    // stale pre-join leftover like "Ready to join" or "Connecting…" that never gets corrected
+    // (nothing else recomputes status until a peer actually joins) — see meeting.ts's join()
+    // and room:joined handler.
+    await expect(pageA.locator('.connection-pill')).toHaveText('Waiting…');
   });
 
   const { context: contextB, page: pageB } = await openParticipant(browser, 'Student', roomId);
