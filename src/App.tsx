@@ -21,9 +21,11 @@ import { ClassControlsMenu } from './components/ClassControlsMenu';
 import { PollPanel } from './components/PollPanel';
 import { UnderstandingCheckPanel } from './components/UnderstandingCheckPanel';
 import { ClassTimer } from './components/ClassTimer';
+import { Whiteboard } from './components/Whiteboard';
 
 type FocusTarget = 'local' | string; // string = a peer's participant id
 type LayoutMode = 'focus' | 'sideBySide' | 'gallery';
+type WorkspaceMode = 'call' | 'board' | 'present';
 
 function Brand() {
   return <div className="brand" aria-label="LearnThrive Tuition"><img src="/brand/learnthrive-mark.png" alt="" /><div className="wordmark">Learn<span>Thrive</span><small>TUITION</small></div></div>;
@@ -48,7 +50,9 @@ function App() {
     setRoomLocked, setStudentsCanShareScreen, setStudentsCanChat, muteParticipant, muteAll, allowUnmute,
     removeParticipant, stopShare, lowerHand, deleteChatMessage, clearChat, createPoll, closePoll, clearPoll,
     votePoll, startUnderstandingCheck, endUnderstandingCheck, respondUnderstanding, startTimer, pauseTimer,
-    resumeTimer, stopTimer,
+    resumeTimer, stopTimer, sendBoardUpdate, sendBoardCursor, sendBoardLaser, createBoardPage, renameBoardPage,
+    deleteBoardPage, reorderBoardPages, switchBoardPage, setBoardBackground, setStudentsCanDraw, clearBoardPage,
+    followMe, importBoard, duplicateBoardPage, commitLocalPageElements,
     join, leave, reset, rejoin, copyInvite, retryConnection,
   } = useMeeting();
   const [name, setName] = useState('');
@@ -64,8 +68,10 @@ function App() {
   // null = no explicit choice yet — the render logic auto-picks the first peer as main.
   const [focusTarget, setFocusTargetState] = useState<FocusTarget | null>(null);
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('focus');
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('call');
   const focusTargetRef = useRef<FocusTarget | null>(null);
   const preShareFocusRef = useRef<FocusTarget | null>(null);
+  const preShareWorkspaceRef = useRef<WorkspaceMode | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const deviceMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const chatTriggerRef = useRef<HTMLButtonElement>(null);
@@ -124,6 +130,7 @@ function App() {
   // preference, not what's transmitted) is restored once sharing ends. Only a peer's own share
   // triggers this — your own share doesn't need to redirect your own view.
   const sharingPeerId = snapshot.peers.find((peer) => peer.participant.screenSharing)?.participant.id ?? null;
+  const someoneIsSharing = sharingPeerId != null || snapshot.screenSharing;
   useEffect(() => {
     if (sharingPeerId) {
       if (preShareFocusRef.current === null) preShareFocusRef.current = focusTargetRef.current;
@@ -134,8 +141,22 @@ function App() {
     }
   }, [sharingPeerId]);
 
+  // A share starting automatically surfaces Present mode; the workspace mode chosen before it
+  // started (Call or Board) is restored once sharing ends — the same restore-on-end pattern the
+  // pre-existing focus-target effect above already uses for the video tile focus.
   useEffect(() => {
-    if (!inCall) return;
+    if (someoneIsSharing) {
+      if (preShareWorkspaceRef.current === null) preShareWorkspaceRef.current = workspaceMode;
+      setWorkspaceMode('present');
+    } else if (preShareWorkspaceRef.current !== null) {
+      setWorkspaceMode(preShareWorkspaceRef.current);
+      preShareWorkspaceRef.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- workspaceMode is read only to capture it once when sharing starts
+  }, [someoneIsSharing]);
+
+  useEffect(() => {
+    if (!inCall || workspaceMode === 'board') return;
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       const typing = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
@@ -146,13 +167,14 @@ function App() {
         case 'c': toggleChat(); break;
         case 's': if (screenShareSupported) void toggleScreenShare(); break;
         case 'h': toggleHand(); break;
+        case 'w': setWorkspaceMode((mode) => (mode === 'board' ? 'call' : 'board')); break;
         default: return;
       }
       event.preventDefault();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [inCall, screenShareSupported, toggleAudio, toggleVideo, toggleChat, toggleScreenShare, toggleHand]);
+  }, [inCall, workspaceMode, screenShareSupported, toggleAudio, toggleVideo, toggleChat, toggleScreenShare, toggleHand]);
 
   const tracks = (stream: MediaStream | null) => stream?.getTracks().map(track => `${track.kind}: ${track.enabled ? 'enabled' : 'disabled'} / ${track.readyState}`).join(', ') || 'None';
   const activeCameraLabel = snapshot.cameras.find(c => c.deviceId === snapshot.selectedCamera)?.label ?? 'Default';
@@ -231,6 +253,11 @@ function App() {
             <p className="room-display">Room <span>{snapshot.roomId}</span></p>
           </div>
           <div className="meeting-heading-status">
+            <div className="workspace-mode-tabs" role="tablist" aria-label="Workspace mode">
+              <button type="button" role="tab" aria-selected={workspaceMode === 'call'} onClick={() => setWorkspaceMode('call')}><Icon name="camera" size={14} />Call</button>
+              <button type="button" role="tab" aria-selected={workspaceMode === 'board'} onClick={() => setWorkspaceMode('board')}><Icon name="poll" size={14} />Board</button>
+              {someoneIsSharing && <button type="button" role="tab" aria-selected={workspaceMode === 'present'} onClick={() => setWorkspaceMode('present')}><Icon name="screen" size={14} />Present</button>}
+            </div>
             <div className={`connection-pill ${snapshot.status === 'Connected' ? 'connected' : ''}`} role="status"><span className="status-dot" />{snapshot.status}</div>
           </div>
         </div>
@@ -239,20 +266,33 @@ function App() {
         {snapshot.poll && <PollPanel poll={snapshot.poll} isTutor={snapshot.role === 'tutor'} onVote={votePoll} onClose={closePoll} onClear={clearPoll} />}
         {snapshot.understandingCheck && <UnderstandingCheckPanel check={snapshot.understandingCheck} isTutor={snapshot.role === 'tutor'} onRespond={respondUnderstanding} onEnd={endUnderstandingCheck} />}
         <div className="call-body">
-          <div className="meeting-stage" ref={stageRef}>
-            {layoutMode === 'gallery' && snapshot.peers.length > 0 ? (
-              <div className="stage-gallery">{selfTile(false)}{snapshot.peers.map((peer) => peerTile(peer, false))}</div>
-            ) : layoutMode === 'sideBySide' && snapshot.peers.length === 1 ? (
-              <div className="stage-side-by-side">{peerTile(snapshot.peers[0], false)}{selfTile(false)}</div>
-            ) : snapshot.peers.length === 0 ? (
-              <>{waitingTile}<div className="focus-strip">{selfTile(true)}</div></>
-            ) : (
-              <>{effectiveFocus === 'local' ? selfTile(false) : peerTile(mainPeer!, false)}<div className="focus-strip">{otherTiles()}</div></>
-            )}
-            <ReactionsLayer reactions={snapshot.reactions} />
-            <span className="stage-caption"><span /> Learn together. Thrive together.</span>
-            {fullscreenSupported && <button type="button" className="stage-fullscreen" onClick={toggleFullscreen} aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}><Icon name={isFullscreen ? 'collapse' : 'expand'} size={17} /></button>}
-          </div>
+          {workspaceMode === 'board' ? (
+            <Whiteboard
+              role={snapshot.role ?? 'student'} pages={snapshot.board.pages} activePageId={snapshot.board.activePageId}
+              elementsByPage={snapshot.board.elementsByPage} studentsCanDraw={snapshot.board.studentsCanDraw}
+              pointers={snapshot.boardPointers} followMeSeq={snapshot.boardFollowMeSeq}
+              onUpdate={sendBoardUpdate} onCursor={sendBoardCursor} onLaser={sendBoardLaser} onCommitLocal={commitLocalPageElements}
+              onSwitchPage={switchBoardPage} onCreatePage={createBoardPage} onRenamePage={renameBoardPage}
+              onDuplicatePage={duplicateBoardPage} onDeletePage={deleteBoardPage} onReorderPages={reorderBoardPages}
+              onBackground={setBoardBackground} onSetStudentsCanDraw={setStudentsCanDraw} onClearPage={clearBoardPage}
+              onFollowMe={followMe} onImport={importBoard}
+            />
+          ) : (
+            <div className="meeting-stage" ref={stageRef}>
+              {layoutMode === 'gallery' && snapshot.peers.length > 0 ? (
+                <div className="stage-gallery">{selfTile(false)}{snapshot.peers.map((peer) => peerTile(peer, false))}</div>
+              ) : layoutMode === 'sideBySide' && snapshot.peers.length === 1 ? (
+                <div className="stage-side-by-side">{peerTile(snapshot.peers[0], false)}{selfTile(false)}</div>
+              ) : snapshot.peers.length === 0 ? (
+                <>{waitingTile}<div className="focus-strip">{selfTile(true)}</div></>
+              ) : (
+                <>{effectiveFocus === 'local' ? selfTile(false) : peerTile(mainPeer!, false)}<div className="focus-strip">{otherTiles()}</div></>
+              )}
+              <ReactionsLayer reactions={snapshot.reactions} />
+              <span className="stage-caption"><span /> Learn together. Thrive together.</span>
+              {fullscreenSupported && <button type="button" className="stage-fullscreen" onClick={toggleFullscreen} aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}><Icon name={isFullscreen ? 'collapse' : 'expand'} size={17} /></button>}
+            </div>
+          )}
           <ChatPanel
             messages={snapshot.messages} open={snapshot.chatOpen} onClose={toggleChat} onSend={sendChatMessage} triggerRef={chatTriggerRef}
             isTutor={snapshot.role === 'tutor'} onDeleteMessage={deleteChatMessage} onClearChat={clearChat}
@@ -387,6 +427,8 @@ function App() {
         <dt>Screen sharing</dt><dd>{snapshot.screenSharing ? 'you' : sharingPeerId ? 'a peer' : 'no'}</dd>
         <dt>Hand raised (you)</dt><dd>{snapshot.handRaised ? 'yes' : 'no'}</dd>
         <dt>Local tracks (stream)</dt><dd>{tracks(snapshot.localStream)}</dd>
+        <dt>Whiteboard pages</dt><dd>{snapshot.board.pages.length}</dd>
+        <dt>Whiteboard elements (active page)</dt><dd>{(snapshot.board.elementsByPage[snapshot.board.activePageId] ?? []).filter((element) => !element.isDeleted).length}</dd>
         {snapshot.peers.map((peer) => {
           const direction: DirectionDiagnostics | null = peer.direction;
           return <div key={peer.participant.id} className="diagnostics-peer">
