@@ -744,6 +744,38 @@ describe('signalling through real Socket.IO clients', () => {
     expect(server.rooms.get('room-one')?.participants.has(studentId!)).toBe(false);
   });
 
+  it('bans a removed student\'s name from rejoining until the tutor explicitly allows it, case-insensitively', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const student = await connect();
+    await admit(tutor, student, 'Bob');
+
+    const banUpdate = new Promise<{ names: string[] }>((resolve) => tutor.once('room:removed-list-update', resolve));
+    tutor.emit('room:remove-participant', { id: student.id! });
+    expect(await banUpdate).toEqual({ names: ['Bob'] });
+
+    // A different casing of the same name is still caught (the ban is stored lowercased).
+    const retrying = await connect();
+    const rejected = new Promise<{ message: string }>((resolve) => retrying.once('room:full', resolve));
+    requestJoin(retrying, 'bob', 'student');
+    expect(await rejected).toEqual({ message: 'You were removed from this class by the tutor.' });
+
+    // A genuinely different student is unaffected.
+    const other = await connect();
+    const waiting = new Promise<void>((resolve) => other.once('room:waiting', () => resolve()));
+    requestJoin(other, 'Carol', 'student');
+    await waiting;
+
+    const unbanned = new Promise<{ names: string[] }>((resolve) => tutor.once('room:removed-list-update', resolve));
+    tutor.emit('room:allow-rejoin', { name: 'Bob' });
+    expect(await unbanned).toEqual({ names: [] });
+
+    const rejoining = await connect();
+    const rejoinWaiting = new Promise<void>((resolve) => rejoining.once('room:waiting', () => resolve()));
+    requestJoin(rejoining, 'Bob', 'student');
+    await rejoinWaiting;
+  });
+
   it('cascades a tutor\'s departure into room:ended for every remaining participant and every still-waiting student', async () => {
     const tutor = await connect();
     await joinTutor(tutor, 'Alice');

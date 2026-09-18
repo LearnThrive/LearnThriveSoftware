@@ -95,6 +95,7 @@ export interface ClientToServerEvents {
   'room:mute-all': () => void;
   'room:allow-unmute': (payload: { id: string }) => void;
   'room:remove-participant': (payload: { id: string }) => void;
+  'room:allow-rejoin': (payload: { name: string }) => void;
   'room:stop-share': (payload: { id: string }) => void;
   'room:lower-hand': (payload: { id: string }) => void;
   'participant:media': (payload: MediaState) => void;
@@ -151,6 +152,10 @@ export interface ServerToClientEvents {
   'room:participant-reconnected': (payload: Participant) => void;
   // Sent only to a participant the tutor has just removed, before their transport is closed.
   'room:removed': () => void;
+  // Tutor-only: the full current list of removed-and-not-yet-allowed-back names, a full-list
+  // replace like room:waiting-update. Never sent to students — who was removed is tutor-only
+  // information, same reasoning as anonymous poll voter identity.
+  'room:removed-list-update': (payload: { names: string[] }) => void;
   // Sent to every remaining admitted participant and every still-waiting student when the tutor
   // departs — replaces room:participant-left for this case rather than firing alongside it.
   'room:ended': () => void;

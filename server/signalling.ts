@@ -74,6 +74,14 @@ interface Room {
   board: RoomBoard;
   announcement: Announcement | null;
   announcementTimer: ReturnType<typeof setTimeout> | null;
+  // A removed student's *name* (keyed lowercase for case-insensitive matching, valued with the
+  // original casing for display), not their socket id — a refresh gets a new socket id, so
+  // id-based tracking wouldn't catch a rejoin attempt at all. Cleared automatically when the room
+  // itself is torn down (no separate cleanup needed); the tutor can also lift a single ban early
+  // via room:allow-rejoin. This is a deliberately name-based, not identity-based, guard — this
+  // app has no accounts, so it's trivially bypassed by rejoining under a different name, same
+  // honest limitation as every other role/identity check in this codebase.
+  removedNames: Map<string, string>;
 }
 interface SocketData { roomId?: string }
 type MeetingSocket = Socket<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>;
@@ -88,7 +96,7 @@ function createRoom(): Room {
       pages: [{ id: firstPageId, name: 'Board 1', background: 'blank', elements: new Map() }],
       activePageId: firstPageId, studentsCanDraw: true,
     },
-    announcement: null, announcementTimer: null,
+    announcement: null, announcementTimer: null, removedNames: new Map(),
   };
 }
 
@@ -434,6 +442,7 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
     void socket.join(`meeting:${roomId}`);
     const waiting = self.role === 'tutor' ? [...room.waiting.entries()].map(([id, entry]) => ({ id, name: entry.name })) : [];
     socket.emit('room:joined', { roomId, self, peers, waiting, ...personalizedExtras(room, self.id, self.role), board: buildBoardState(room), announcement: room.announcement });
+    if (self.role === 'tutor') socket.emit('room:removed-list-update', { names: [...room.removedNames.values()] });
   }
 
   // Re-describes a still-admitted participant's existing edges plus current room-level state —
@@ -452,6 +461,7 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
     }
     const waiting = self.role === 'tutor' ? [...room.waiting.entries()].map(([id, entry]) => ({ id, name: entry.name })) : [];
     socket.emit('room:joined', { roomId, self, peers, waiting, ...personalizedExtras(room, self.id, self.role), board: buildBoardState(room), announcement: room.announcement });
+    if (self.role === 'tutor') socket.emit('room:removed-list-update', { names: [...room.removedNames.values()] });
   }
 
   // Silently drops a stale (mid-grace-period) participant so a same-role newcomer can take their
@@ -624,6 +634,11 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
         return;
       }
 
+      if (room.removedNames.has(name.toLowerCase())) {
+        socket.emit('room:full', { message: 'You were removed from this class by the tutor.' });
+        return;
+      }
+
       // Students always wait for the tutor to admit them, even if a seat is already free —
       // capacity is enforced at admission time (room:admit/room:admit-all), not here.
       if (room.waiting.size >= WAITING_ROOM_CAP) {
@@ -716,11 +731,21 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
       if (!target || target.role !== 'student') return fail(socket, 'That student is not currently in the class.');
       const targetSocket = io.sockets.sockets.get(payload.id);
       if (!targetSocket) return fail(socket, 'That participant already disconnected.');
+      ctx.room.removedNames.set(target.name.toLowerCase(), target.name);
+      socket.emit('room:removed-list-update', { names: [...ctx.room.removedNames.values()] });
       targetSocket.emit('room:removed');
       leaveNow(targetSocket);
       // Safety net in case the removed client doesn't disconnect itself promptly, mirroring the
       // bounded-fallback pattern MeetingController's own closeSocket() already uses for leave.
       setTimeout(() => { if (targetSocket.connected) targetSocket.disconnect(true); }, 2000);
+    });
+
+    socket.on('room:allow-rejoin', (payload: unknown) => {
+      const ctx = requireTutor(socket, 'Only the tutor can allow a removed student to rejoin.');
+      if (!ctx) return;
+      if (!isRecord(payload) || typeof payload.name !== 'string') return fail(socket, 'Invalid request.');
+      ctx.room.removedNames.delete(payload.name.toLowerCase());
+      socket.emit('room:removed-list-update', { names: [...ctx.room.removedNames.values()] });
     });
 
     socket.on('room:stop-share', (payload: unknown) => {

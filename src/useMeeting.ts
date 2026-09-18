@@ -33,6 +33,7 @@ export function useMeeting() {
     muteAll: controller.muteAll,
     allowUnmute: controller.allowUnmute,
     removeParticipant: controller.removeParticipant,
+    allowRejoin: controller.allowRejoin,
     stopShare: controller.stopShare,
     lowerHand: controller.lowerHand,
     deleteChatMessage: controller.deleteChatMessage,
