@@ -241,6 +241,11 @@ test('the tutor can leave and rejoin the same room cleanly, as the tutor', async
 test('a brief network drop recovers without a false departure notice, and chat still works afterwards', async ({ browser }) => {
   const { pageA, pageB, contextA, contextB } = await connectTutorAndOneStudent(browser);
 
+  await test.step('the student raises a hand before going offline', async () => {
+    await pageB.getByRole('button', { name: 'Raise your hand' }).click();
+    await expect(pageB.getByRole('button', { name: 'Lower your hand' })).toBeVisible();
+  });
+
   await test.step('the peer is marked reconnecting, never a false departure, while offline', async () => {
     await contextB.setOffline(true);
     await expect(pageA.locator('.peer-reconnecting')).toBeVisible({ timeout: 10_000 });
@@ -255,6 +260,10 @@ test('a brief network drop recovers without a false departure notice, and chat s
     // Genuinely reconnected, not stuck in some in-between state — a false departure would show
     // as a transient toast, not as this pill ever failing to reach "connected" again.
     await expect(pageA.locator('.connection-pill')).toHaveClass(/connected/);
+    // A resync must restore the student's own hand-raised state, not just tell peers about it —
+    // regression coverage for a real bug found while auditing reconnect state (see meeting.ts's
+    // room:joined handler).
+    await expect(pageB.getByRole('button', { name: 'Lower your hand' })).toBeVisible();
   });
 
   await test.step('chat still works after the reconnect, proving the room state was not corrupted', async () => {

@@ -494,6 +494,10 @@ export class MeetingController {
         forceMuted: payload.self.forceMuted, roomSettings: payload.settings,
         poll: payload.poll, understandingCheck: payload.understandingCheck, timer: payload.timer,
         board: payload.board,
+        // Unlike media/screen-share (whose local source of truth is the live track/capture, not
+        // the server), hand-raise has no other local record — a reconnect must restore it from
+        // the resync or a participant who reconnects mid-raise would silently show as lowered.
+        handRaised: payload.self.handRaised,
       });
       // Comply immediately if a force-mute directive was missed while offline (a resync via this
       // same event) and the mic is still enabled from before the disconnect.

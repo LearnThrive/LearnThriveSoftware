@@ -4,6 +4,8 @@ export interface CallStats {
   packetsLost: number | null;
   packetsReceived: number | null;
   packetsSent: number | null;
+  bytesSent: number | null;
+  bytesReceived: number | null;
   inboundBitrateKbps: number | null;
   outboundBitrateKbps: number | null;
   frameRate: number | null;
@@ -12,14 +14,20 @@ export interface CallStats {
   framesDecoded: number | null;
   localCandidateType: string | null;
   remoteCandidateType: string | null;
+  // The selected pair's transport protocol only (udp/tcp) — deliberately not the local/remote
+  // IP:port themselves, to keep the existing "no raw local IP addresses beyond candidate type"
+  // privacy stance intact even as this exposes a bit more of the selected pair than before.
+  selectedCandidateProtocol: string | null;
 }
 
 export interface StatsSample { timestamp: number; bytesSent: number | null; bytesReceived: number | null }
 
 const EMPTY_STATS: CallStats = {
   rtt: null, jitter: null, packetsLost: null, packetsReceived: null, packetsSent: null,
+  bytesSent: null, bytesReceived: null,
   inboundBitrateKbps: null, outboundBitrateKbps: null, frameRate: null, resolution: null,
   framesEncoded: null, framesDecoded: null, localCandidateType: null, remoteCandidateType: null,
+  selectedCandidateProtocol: null,
 };
 
 /** Browsers disagree on which optional stats fields exist, so every read is feature-detected. */
@@ -43,6 +51,7 @@ export function parseStats(report: RTCStatsReport, previous: StatsSample | null)
       const remote = typeof entry.remoteCandidateId === 'string' ? (report.get(entry.remoteCandidateId) as Record<string, unknown> | undefined) : undefined;
       if (typeof local?.candidateType === 'string') stats.localCandidateType = local.candidateType;
       if (typeof remote?.candidateType === 'string') stats.remoteCandidateType = remote.candidateType;
+      if (typeof local?.protocol === 'string') stats.selectedCandidateProtocol = local.protocol;
     }
 
     if (entry.type === 'inbound-rtp' && !entry.isRemote) {
@@ -78,6 +87,8 @@ export function parseStats(report: RTCStatsReport, previous: StatsSample | null)
     }
   }
 
+  stats.bytesSent = bytesSent;
+  stats.bytesReceived = bytesReceived;
   return { stats, sample: { timestamp, bytesSent, bytesReceived } };
 }
 
