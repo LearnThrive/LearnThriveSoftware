@@ -51,6 +51,7 @@ export class PeerSession {
   private negotiationAttempts = 0;
   private iceRestarts = 0;
   private videoOverride: MediaStreamTrack | null = null;
+  private audioOverride: MediaStreamTrack | null = null;
   private statsTimer: ReturnType<typeof setInterval> | undefined;
   private lastStatsSample: StatsSample | null = null;
 
@@ -153,6 +154,13 @@ export class PeerSession {
     this.syncTracks();
   }
 
+  /** Overrides the outgoing audio track (shared tab/system audio, or a mix with the microphone —
+   * see ScreenShare.mixWithMicrophone) without renegotiating; null restores the plain microphone. */
+  setAudioOverride(track: MediaStreamTrack | null) {
+    this.audioOverride = track;
+    this.syncTracks();
+  }
+
   /** (Re)starts an offer/answer exchange. Only ever called for the deterministic initiator. */
   private negotiate(iceRestart: boolean) {
     if (!this.initiator || this.closed) return;
@@ -233,7 +241,7 @@ export class PeerSession {
   syncTracks() {
     this.enqueue(async () => {
       const audioSender = this.senders.get('audio');
-      const audioTrack = this.media.track('audio') ?? null;
+      const audioTrack = this.audioOverride ?? this.media.track('audio') ?? null;
       if (audioSender && audioSender.track !== audioTrack) await audioSender.replaceTrack(audioTrack);
 
       const videoSender = this.senders.get('video');

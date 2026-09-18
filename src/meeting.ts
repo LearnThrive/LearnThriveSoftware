@@ -63,6 +63,7 @@ export interface MeetingSnapshot {
   audio: boolean;
   video: boolean;
   screenSharing: boolean;
+  screenShareAudio: boolean;
   screenSharePending: boolean;
   preparing: boolean;
   peers: RemotePeer[];
@@ -112,7 +113,7 @@ function defaultRemotePeer(participant: Participant): RemotePeer {
 export class MeetingController {
   private snapshot: MeetingSnapshot = {
     phase: 'prejoin', status: 'Ready to join', error: null, mediaError: null,
-    localStream: null, audio: false, video: false, screenSharing: false, screenSharePending: false, preparing: false,
+    localStream: null, audio: false, video: false, screenSharing: false, screenShareAudio: false, screenSharePending: false, preparing: false,
     peers: [], role: null, waiting: [], roomId: '', name: '', signalling: 'disconnected', copied: false,
     reconnectFailed: false,
     cameras: [], microphones: [], selectedCamera: undefined, selectedMicrophone: undefined, notice: null,
@@ -271,14 +272,15 @@ export class MeetingController {
     const version = this.actionVersion;
     this.update({ screenSharePending: true });
     try {
-      const track = await this.screenShare.start();
+      const { video, audio } = await this.screenShare.start(this.media.track('audio') ?? null);
       if (version !== this.actionVersion || !this.active) {
-        track.stop();
+        video.stop();
+        audio?.stop();
         this.screenShare.stop();
         return;
       }
-      for (const session of this.peers.values()) session.setVideoOverride(track);
-      this.update({ screenSharing: true, error: null });
+      for (const session of this.peers.values()) { session.setVideoOverride(video); session.setAudioOverride(audio); }
+      this.update({ screenSharing: true, screenShareAudio: this.screenShare.hasAudio, error: null });
       this.emitScreenShare(true);
     } catch (error) {
       mediaLog.warn('Screen share failed', error);
@@ -290,8 +292,8 @@ export class MeetingController {
 
   private endScreenShare() {
     this.screenShare.stop();
-    for (const session of this.peers.values()) session.setVideoOverride(null);
-    this.update({ screenSharing: false });
+    for (const session of this.peers.values()) { session.setVideoOverride(null); session.setAudioOverride(null); }
+    this.update({ screenSharing: false, screenShareAudio: false });
     this.emitScreenShare(false);
   }
 
@@ -627,8 +629,11 @@ export class MeetingController {
         direction: (direction) => this.updatePeer(peerId, { direction }),
       });
       // A reconnect/replacement creates a fresh PeerSession, which otherwise wouldn't know we
-      // were already sharing our screen before the interruption.
-      if (this.snapshot.screenSharing) session.setVideoOverride(this.screenShare.stream?.getVideoTracks()[0] ?? null);
+      // were already sharing our screen (and any shared/mixed audio) before the interruption.
+      if (this.snapshot.screenSharing) {
+        session.setVideoOverride(this.screenShare.stream?.getVideoTracks()[0] ?? null);
+        session.setAudioOverride(this.screenShare.outgoingAudioTrack);
+      }
       this.peers.set(peerId, session);
     } catch (error) {
       peerLog.warn('Creation failed', error);
@@ -683,7 +688,7 @@ export class MeetingController {
     this.screenShare.stop();
     this.update({
       phase: 'prejoin', status: 'Ready to join', signalling: 'disconnected', error: message,
-      waiting: [], reconnectFailed: false, screenSharing: false, handRaised: false, reactions: [],
+      waiting: [], reconnectFailed: false, screenSharing: false, screenShareAudio: false, handRaised: false, reactions: [],
     });
   }
 
@@ -715,7 +720,7 @@ export class MeetingController {
     clearTimeout(this.noticeTimeout);
     this.update({
       phase: 'ended', status, signalling: 'disconnected', preparing: false, error: null, mediaError: null,
-      reconnectFailed: false, screenSharing: false, waiting: [],
+      reconnectFailed: false, screenSharing: false, screenShareAudio: false, waiting: [],
       chatOpen: false, messages: [], unreadCount: 0, notice: null, handRaised: false, reactions: [],
       endedReason: reason, board: DEFAULT_BOARD_STATE, boardPointers: {},
     });
