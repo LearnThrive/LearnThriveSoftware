@@ -1,8 +1,9 @@
 import { io, type Socket } from 'socket.io-client';
 import {
   MAX_CHAT_LENGTH, MAX_NAME_LENGTH, ROOM_PATTERN,
-  type ChatMessage, type ClientToServerEvents, type Participant, type ParticipantRole,
-  type ReactionEmoji, type ServerToClientEvents, type WaitingParticipant,
+  type ChatMessage, type ClientToServerEvents, type Participant, type ParticipantRole, type PollState,
+  type PollVisibility, type ReactionEmoji, type RoomSettings, type RoomTimerState, type ServerToClientEvents,
+  type TimerMode, type UnderstandingCheckState, type UnderstandingStatus, type WaitingParticipant,
 } from '../shared/protocol';
 import { aggregateConnectionStatus } from './callStatus';
 import { createLogger } from './log';
@@ -22,6 +23,13 @@ const MAX_CHAT_HISTORY = 200;
 const REACTION_DURATION_MS = 2200;
 
 export interface DisplayReaction { id: number; emoji: string; mine: boolean }
+
+// 'left' is a self-initiated departure (Leave, or a rejected/failed join); the ended screen offers
+// Rejoin only for this case. 'removed' and 'classEnded' are tutor-driven — the room is gone (or
+// this participant no longer belongs in it), so Rejoin is hidden for both.
+export type EndedReason = 'left' | 'removed' | 'classEnded';
+
+const DEFAULT_ROOM_SETTINGS: RoomSettings = { locked: false, studentsCanShareScreen: true, studentsCanChat: true };
 
 /** Display + connection state for one other admitted participant. A room holds up to 3 of these
  * (1 tutor + 3 students, minus yourself), each backed by its own independent PeerSession. */
@@ -67,6 +75,12 @@ export interface MeetingSnapshot {
   unreadCount: number;
   handRaised: boolean;
   reactions: DisplayReaction[];
+  forceMuted: boolean;
+  roomSettings: RoomSettings;
+  poll: PollState | null;
+  understandingCheck: UnderstandingCheckState | null;
+  timer: RoomTimerState | null;
+  endedReason: EndedReason | null;
 }
 
 // "own" is resolved once, at the moment each message arrives, against the socket id live at
@@ -89,6 +103,7 @@ export class MeetingController {
     reconnectFailed: false,
     cameras: [], microphones: [], selectedCamera: undefined, selectedMicrophone: undefined, notice: null,
     chatOpen: false, messages: [], unreadCount: 0, handRaised: false, reactions: [],
+    forceMuted: false, roomSettings: DEFAULT_ROOM_SETTINGS, poll: null, understandingCheck: null, timer: null, endedReason: null,
   };
   private listeners = new Set<() => void>();
   private readonly media = new LocalMedia(() => this.mediaChanged());
@@ -209,6 +224,10 @@ export class MeetingController {
   private async toggle(kind: 'audio' | 'video') {
     if (this.snapshot.preparing) return;
     if (this.media.track(kind)?.enabled) { this.media.disable(kind); return; }
+    if (kind === 'audio' && this.snapshot.forceMuted) {
+      this.announce('The tutor has muted you. Ask them to allow you to unmute.');
+      return;
+    }
     const support = browserSupportError();
     if (support) { this.update({ mediaError: support }); return; }
     const version = this.actionVersion;
@@ -305,6 +324,50 @@ export class MeetingController {
     this.socket.emit('room:admit-all');
   };
 
+  denyOne = (id: string) => {
+    if (!this.active || !this.socket?.connected || this.snapshot.role !== 'tutor') return;
+    this.socket.emit('room:deny', { id });
+  };
+
+  private tutorEmit<K extends keyof ClientToServerEvents>(event: K, ...args: Parameters<ClientToServerEvents[K]>) {
+    if (!this.active || !this.socket?.connected || this.snapshot.role !== 'tutor') return;
+    (this.socket.emit as (event: K, ...args: Parameters<ClientToServerEvents[K]>) => void)(event, ...args);
+  }
+
+  setRoomLocked = (locked: boolean) => this.tutorEmit('room:settings', { locked });
+  setStudentsCanShareScreen = (value: boolean) => this.tutorEmit('room:settings', { studentsCanShareScreen: value });
+  setStudentsCanChat = (value: boolean) => this.tutorEmit('room:settings', { studentsCanChat: value });
+  muteParticipant = (id: string) => this.tutorEmit('room:mute-participant', { id });
+  muteAll = () => this.tutorEmit('room:mute-all');
+  allowUnmute = (id: string) => this.tutorEmit('room:allow-unmute', { id });
+  removeParticipant = (id: string) => this.tutorEmit('room:remove-participant', { id });
+  stopShare = (id: string) => this.tutorEmit('room:stop-share', { id });
+  lowerHand = (id: string) => this.tutorEmit('room:lower-hand', { id });
+
+  deleteChatMessage = (id: string) => this.tutorEmit('chat:delete', { id });
+  clearChat = () => this.tutorEmit('chat:clear');
+
+  createPoll = (question: string, options: string[], anonymous: boolean, resultsVisible: PollVisibility) =>
+    this.tutorEmit('poll:create', { question, options, anonymous, resultsVisible });
+  closePoll = () => this.tutorEmit('poll:close');
+  clearPoll = () => this.tutorEmit('poll:clear');
+  votePoll = (optionId: string) => {
+    if (!this.active || !this.socket?.connected) return;
+    this.socket.emit('poll:vote', { optionId });
+  };
+
+  startUnderstandingCheck = () => this.tutorEmit('understanding:start');
+  endUnderstandingCheck = () => this.tutorEmit('understanding:end');
+  respondUnderstanding = (status: UnderstandingStatus) => {
+    if (!this.active || !this.socket?.connected) return;
+    this.socket.emit('understanding:respond', { status });
+  };
+
+  startTimer = (mode: TimerMode, durationMs: number | null) => this.tutorEmit('timer:start', { mode, durationMs });
+  pauseTimer = () => this.tutorEmit('timer:pause');
+  resumeTimer = () => this.tutorEmit('timer:resume');
+  stopTimer = () => this.tutorEmit('timer:stop');
+
   join = (name: string, roomId: string, role: ParticipantRole) => {
     if (this.active) return;
     name = name.trim();
@@ -319,6 +382,7 @@ export class MeetingController {
     this.update({
       phase: 'joining', status: 'Connecting…', error: null, roomId, name, role: null, waiting: [],
       messages: [], unreadCount: 0, chatOpen: false, handRaised: false, reactions: [],
+      forceMuted: false, roomSettings: DEFAULT_ROOM_SETTINGS, poll: null, understandingCheck: null, timer: null, endedReason: null,
     });
     const url = new URL(window.location.href);
     url.pathname = '/meeting';
@@ -357,12 +421,21 @@ export class MeetingController {
     };
     socket.io.on('reconnect_failed', this.reconnectFailedHandler);
     socket.on('room:joined', (payload) => {
-      this.update({ phase: 'meeting', role: payload.self.role, waiting: payload.waiting, error: null });
+      this.update({
+        phase: 'meeting', role: payload.self.role, waiting: payload.waiting, error: null,
+        forceMuted: payload.self.forceMuted, roomSettings: payload.settings,
+        poll: payload.poll, understandingCheck: payload.understandingCheck, timer: payload.timer,
+      });
+      // Comply immediately if a force-mute directive was missed while offline (a resync via this
+      // same event) and the mic is still enabled from before the disconnect.
+      if (payload.self.forceMuted && this.media.track('audio')?.enabled) this.media.disable('audio');
       const known = new Set(this.snapshot.peers.map((peer) => peer.participant.id));
       const additions = payload.peers.filter((edge) => !known.has(edge.peer.id)).map((edge) => defaultRemotePeer(edge.peer));
       if (additions.length) this.setPeers([...this.snapshot.peers, ...additions]);
       for (const edge of payload.peers) this.startPeer(edge.peer.id, edge.sessionId, edge.initiator);
     });
+    socket.on('room:denied', () => this.rejectJoin('The tutor declined to admit you to this class.'));
+    socket.on('room:settings-update', (settings) => this.update({ roomSettings: settings }));
     socket.on('room:waiting', () => {
       this.update({ phase: 'waiting', status: 'Waiting to be admitted…', error: null });
     });
@@ -415,6 +488,26 @@ export class MeetingController {
       if (!this.snapshot.peers.some((entry) => entry.participant.id === id)) return;
       this.showReaction(emoji, false);
     });
+    socket.on('participant:force-muted', ({ id, forceMuted }) => {
+      if (id === this.socket?.id) {
+        this.update({ forceMuted });
+        if (forceMuted && this.media.track('audio')?.enabled) this.media.disable('audio');
+        this.announce(forceMuted ? 'The tutor muted your microphone.' : 'The tutor allowed you to unmute.');
+      } else {
+        const peer = this.snapshot.peers.find((entry) => entry.participant.id === id);
+        if (peer) this.updatePeer(id, { participant: { ...peer.participant, forceMuted } });
+      }
+    });
+    socket.on('room:stop-share', () => { if (this.snapshot.screenSharing) this.endScreenShare(); });
+    socket.on('chat:message-deleted', ({ id }) => {
+      this.update({ messages: this.snapshot.messages.filter((message) => message.id !== id) });
+    });
+    socket.on('chat:cleared', () => this.update({ messages: [] }));
+    socket.on('poll:update', (poll) => this.update({ poll }));
+    socket.on('understanding:update', (understandingCheck) => this.update({ understandingCheck }));
+    socket.on('timer:update', (timer) => this.update({ timer }));
+    socket.on('room:removed', () => this.endMeeting('removed', 'Removed from class'));
+    socket.on('room:ended', () => this.endMeeting('classEnded', 'Class ended'));
     socket.on('room:full', ({ message }) => this.rejectJoin(message));
     socket.on('room:error', ({ message }) => {
       if (this.snapshot.phase === 'joining') this.rejectJoin(message);
@@ -522,7 +615,11 @@ export class MeetingController {
     this.join(name, roomId, role);
   };
 
-  leave = () => {
+  leave = () => this.endMeeting('left', 'Meeting ended');
+
+  // Shared by an explicit Leave, a tutor removing this participant, and a tutor ending the class
+  // for everyone — only the reported reason and status text differ; the teardown is identical.
+  private endMeeting(reason: EndedReason, status: string) {
     this.active = false;
     this.actionVersion += 1;
     this.closeSocket();
@@ -530,11 +627,12 @@ export class MeetingController {
     this.screenShare.stop();
     clearTimeout(this.noticeTimeout);
     this.update({
-      phase: 'ended', status: 'Meeting ended', signalling: 'disconnected', preparing: false, error: null, mediaError: null,
+      phase: 'ended', status, signalling: 'disconnected', preparing: false, error: null, mediaError: null,
       reconnectFailed: false, screenSharing: false, waiting: [],
       chatOpen: false, messages: [], unreadCount: 0, notice: null, handRaised: false, reactions: [],
+      endedReason: reason,
     });
-  };
+  }
 
   reset = () => this.update({ phase: 'prejoin', status: 'Ready to join', error: null });
 

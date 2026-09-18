@@ -17,6 +17,10 @@ import { ReactionsLayer } from './components/ReactionsLayer';
 import { LeaveConfirm } from './components/LeaveConfirm';
 import { MeetingTimer } from './components/Timer';
 import { MicLevelMeter } from './components/MicLevelMeter';
+import { ClassControlsMenu } from './components/ClassControlsMenu';
+import { PollPanel } from './components/PollPanel';
+import { UnderstandingCheckPanel } from './components/UnderstandingCheckPanel';
+import { ClassTimer } from './components/ClassTimer';
 
 type FocusTarget = 'local' | string; // string = a peer's participant id
 type LayoutMode = 'focus' | 'sideBySide' | 'gallery';
@@ -40,7 +44,11 @@ function trackLabel(track: TrackSnapshot | null) {
 function App() {
   const {
     snapshot, prepareMedia, toggleAudio, toggleVideo, toggleScreenShare, toggleChat, sendChatMessage,
-    switchCamera, switchMicrophone, flipCamera, toggleHand, sendReaction, admitOne, admitAll,
+    switchCamera, switchMicrophone, flipCamera, toggleHand, sendReaction, admitOne, admitAll, denyOne,
+    setRoomLocked, setStudentsCanShareScreen, setStudentsCanChat, muteParticipant, muteAll, allowUnmute,
+    removeParticipant, stopShare, lowerHand, deleteChatMessage, clearChat, createPoll, closePoll, clearPoll,
+    votePoll, startUnderstandingCheck, endUnderstandingCheck, respondUnderstanding, startTimer, pauseTimer,
+    resumeTimer, stopTimer,
     join, leave, reset, rejoin, copyInvite, retryConnection,
   } = useMeeting();
   const [name, setName] = useState('');
@@ -51,6 +59,7 @@ function App() {
   const [waitingRoomPanelOpen, setWaitingRoomPanelOpen] = useState(false);
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
+  const [classControlsOpen, setClassControlsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   // null = no explicit choice yet — the render logic auto-picks the first peer as main.
   const [focusTarget, setFocusTargetState] = useState<FocusTarget | null>(null);
@@ -64,6 +73,7 @@ function App() {
   const waitingRoomTriggerRef = useRef<HTMLButtonElement>(null);
   const reactionTriggerRef = useRef<HTMLButtonElement>(null);
   const leaveTriggerRef = useRef<HTMLButtonElement>(null);
+  const classControlsTriggerRef = useRef<HTMLButtonElement>(null);
   const setFocusTarget = (target: FocusTarget) => setFocusTargetState(target);
   const inCall = snapshot.phase === 'meeting';
   const waitingForAdmission = snapshot.phase === 'waiting';
@@ -135,13 +145,14 @@ function App() {
         case 'v': toggleVideo(); break;
         case 'c': toggleChat(); break;
         case 's': if (screenShareSupported) void toggleScreenShare(); break;
+        case 'h': toggleHand(); break;
         default: return;
       }
       event.preventDefault();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [inCall, screenShareSupported, toggleAudio, toggleVideo, toggleChat, toggleScreenShare]);
+  }, [inCall, screenShareSupported, toggleAudio, toggleVideo, toggleChat, toggleScreenShare, toggleHand]);
 
   const tracks = (stream: MediaStream | null) => stream?.getTracks().map(track => `${track.kind}: ${track.enabled ? 'enabled' : 'disabled'} / ${track.readyState}`).join(', ') || 'None';
   const activeCameraLabel = snapshot.cameras.find(c => c.deviceId === snapshot.selectedCamera)?.label ?? 'Default';
@@ -153,13 +164,13 @@ function App() {
   const peerTile = (peer: RemotePeer, compact: boolean) => <ParticipantTile
     key={peer.participant.id}
     stream={peer.stream} name={peer.participant.name} audio={peer.participant.media.audio}
-    video={peer.participant.media.video} screenSharing={peer.participant.screenSharing} compact={compact}
+    video={peer.participant.media.video} screenSharing={peer.participant.screenSharing} compact={compact} role={peer.participant.role}
     focused={canFocusToggle && effectiveFocus === peer.participant.id} onFocus={canFocusToggle ? () => setFocusTarget(peer.participant.id) : undefined}
   />;
   const selfTile = (compact: boolean) => <ParticipantTile
     key="local"
     stream={snapshot.localStream} name={snapshot.name || name || 'You'} audio={snapshot.audio} video={snapshot.video}
-    screenSharing={snapshot.screenSharing} local compact={compact}
+    screenSharing={snapshot.screenSharing} local compact={compact} role={snapshot.role}
     focused={canFocusToggle && effectiveFocus === 'local'} onFocus={canFocusToggle ? () => setFocusTarget('local') : undefined}
   />;
   const waitingTile = <section className="waiting-tile" aria-label="Waiting for other participants">
@@ -188,14 +199,14 @@ function App() {
 
     <main id="main-content" className={inCall || waitingForAdmission ? 'call-main' : 'prejoin-main'}>
       {ended ? <section className="ended-panel">
-        <div className="ended-icon"><Icon name="check" size={34} /></div>
-        <p className="eyebrow">UNTIL NEXT TIME</p>
-        <h1>You’ve left the meeting.</h1>
-        <p>Your camera and microphone are off.<br />You can return whenever you’re ready.</p>
+        <div className="ended-icon"><Icon name={snapshot.endedReason === 'removed' ? 'info' : 'check'} size={34} /></div>
+        <p className="eyebrow">{snapshot.endedReason === 'classEnded' ? 'CLASS ENDED' : snapshot.endedReason === 'removed' ? 'REMOVED' : 'UNTIL NEXT TIME'}</p>
+        <h1>{snapshot.endedReason === 'classEnded' ? 'The tutor ended the class.' : snapshot.endedReason === 'removed' ? 'You were removed from the class.' : 'You’ve left the meeting.'}</h1>
+        <p>Your camera and microphone are off.<br />{snapshot.endedReason === 'left' ? 'You can return whenever you’re ready.' : 'Contact your tutor if you think this was a mistake.'}</p>
         <div className="ended-actions">
-          <button className="button button-primary" type="button" onClick={rejoin}>Rejoin this meeting<Icon name="arrow" /></button>
+          {snapshot.endedReason === 'left' && <button className="button button-primary" type="button" onClick={rejoin}>Rejoin this meeting<Icon name="arrow" /></button>}
           <button className="button button-secondary" type="button" onClick={reset}>Return to meeting setup</button>
-          <button className="button button-secondary" type="button" onClick={() => void copyInvite()}><Icon name={snapshot.copied ? 'check' : 'link'} size={16} />{snapshot.copied ? 'Link copied' : 'Copy meeting link'}</button>
+          {snapshot.endedReason === 'left' && <button className="button button-secondary" type="button" onClick={() => void copyInvite()}><Icon name={snapshot.copied ? 'check' : 'link'} size={16} />{snapshot.copied ? 'Link copied' : 'Copy meeting link'}</button>}
         </div>
         <div className="ended-footer">A little learning. A little growing. LearnThrive.</div>
       </section> : waitingForAdmission ? <section className="waiting-admission-panel">
@@ -215,6 +226,7 @@ function App() {
               <h1>Your meeting</h1>
               <span className="participant-count"><Icon name="people" size={15} />{1 + snapshot.peers.length} / {MAX_PARTICIPANTS}</span>
               <MeetingTimer connectedAt={snapshot.peers.find((peer) => peer.connectedAt != null)?.connectedAt ?? null} />
+              {snapshot.timer && <ClassTimer timer={snapshot.timer} isTutor={snapshot.role === 'tutor'} onPause={pauseTimer} onResume={resumeTimer} onStop={stopTimer} />}
             </div>
             <p className="room-display">Room <span>{snapshot.roomId}</span></p>
           </div>
@@ -224,6 +236,8 @@ function App() {
         </div>
         {reconnectingPeers.length > 0 && <p className="peer-reconnecting" role="status"><span className="status-dot" />{reconnectingPeers.map((peer) => peer.participant.name).join(', ')} {reconnectingPeers.length > 1 ? 'are' : 'is'} reconnecting…</p>}
         {snapshot.notice && <div className="participant-toast" role="status" key={snapshot.notice.id}>{snapshot.notice.text}</div>}
+        {snapshot.poll && <PollPanel poll={snapshot.poll} isTutor={snapshot.role === 'tutor'} onVote={votePoll} onClose={closePoll} onClear={clearPoll} />}
+        {snapshot.understandingCheck && <UnderstandingCheckPanel check={snapshot.understandingCheck} isTutor={snapshot.role === 'tutor'} onRespond={respondUnderstanding} onEnd={endUnderstandingCheck} />}
         <div className="call-body">
           <div className="meeting-stage" ref={stageRef}>
             {layoutMode === 'gallery' && snapshot.peers.length > 0 ? (
@@ -239,13 +253,17 @@ function App() {
             <span className="stage-caption"><span /> Learn together. Thrive together.</span>
             {fullscreenSupported && <button type="button" className="stage-fullscreen" onClick={toggleFullscreen} aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}><Icon name={isFullscreen ? 'collapse' : 'expand'} size={17} /></button>}
           </div>
-          <ChatPanel messages={snapshot.messages} open={snapshot.chatOpen} onClose={toggleChat} onSend={sendChatMessage} triggerRef={chatTriggerRef} />
+          <ChatPanel
+            messages={snapshot.messages} open={snapshot.chatOpen} onClose={toggleChat} onSend={sendChatMessage} triggerRef={chatTriggerRef}
+            isTutor={snapshot.role === 'tutor'} onDeleteMessage={deleteChatMessage} onClearChat={clearChat}
+            canChat={snapshot.role === 'tutor' || snapshot.roomSettings.studentsCanChat}
+          />
         </div>
         {(snapshot.error || snapshot.mediaError) && <div className="notice notice-error" role="alert"><Icon name="info" /><span>{snapshot.error || snapshot.mediaError}</span>{snapshot.reconnectFailed && <button className="inline-action" type="button" onClick={retryConnection}>Reconnect</button>}</div>}
         <div className="call-bottom">
           <p className="call-note"><Icon name="shield" size={17} />This session is not recorded.</p>
           <div className="call-controls" aria-label="Meeting controls">
-            <MediaControls audio={snapshot.audio} video={snapshot.video} onAudio={() => void toggleAudio()} onVideo={() => void toggleVideo()} disabled={snapshot.preparing} inCall />
+            <MediaControls audio={snapshot.audio} video={snapshot.video} onAudio={() => void toggleAudio()} onVideo={() => void toggleVideo()} disabled={snapshot.preparing} inCall forceMuted={snapshot.forceMuted} />
             <div className="control-item popover-anchor">
               <button ref={deviceMenuTriggerRef} type="button" className="media-button" onClick={() => setDeviceMenuOpen(open => !open)} aria-label="Meeting settings" aria-haspopup="menu" aria-expanded={deviceMenuOpen}><Icon name="settings" size={20} /></button>
               <span>Settings</span>
@@ -258,7 +276,10 @@ function App() {
               />
             </div>
             <span className="controls-divider" />
-            {screenShareSupported && <div className="control-item"><button type="button" className={`media-button ${snapshot.screenSharing ? 'is-on' : ''}`} onClick={() => void toggleScreenShare()} aria-pressed={snapshot.screenSharing} aria-label={snapshot.screenSharing ? 'Stop sharing your screen' : 'Share your screen'}><Icon name={snapshot.screenSharing ? 'screen-off' : 'screen'} size={21} /></button><span>{snapshot.screenSharing ? 'Stop sharing' : 'Share screen'}</span></div>}
+            {screenShareSupported && (() => {
+              const shareBlocked = snapshot.role === 'student' && !snapshot.roomSettings.studentsCanShareScreen && !snapshot.screenSharing;
+              return <div className="control-item"><button type="button" className={`media-button ${snapshot.screenSharing ? 'is-on' : ''}`} disabled={shareBlocked} onClick={() => void toggleScreenShare()} aria-pressed={snapshot.screenSharing} aria-label={shareBlocked ? 'The tutor has turned off screen sharing for students' : snapshot.screenSharing ? 'Stop sharing your screen' : 'Share your screen'}><Icon name={snapshot.screenSharing ? 'screen-off' : 'screen'} size={21} /></button><span>{snapshot.screenSharing ? 'Stop sharing' : 'Share screen'}</span></div>;
+            })()}
             <div className="control-item"><button ref={chatTriggerRef} type="button" className={`media-button ${snapshot.chatOpen ? 'is-on' : ''}`} onClick={toggleChat} aria-pressed={snapshot.chatOpen} aria-label="Toggle chat">
               <Icon name="chat" size={21} />{snapshot.unreadCount > 0 && !snapshot.chatOpen && <span className="unread-badge">{snapshot.unreadCount > 9 ? '9+' : snapshot.unreadCount}</span>}
             </button><span>Chat</span></div>
@@ -269,6 +290,8 @@ function App() {
                 open={participantPanelOpen} onClose={() => setParticipantPanelOpen(false)} triggerRef={participantTriggerRef}
                 selfName={snapshot.name || name || 'You'} selfRole={snapshot.role} selfAudio={snapshot.audio} selfVideo={snapshot.video} selfHandRaised={snapshot.handRaised}
                 peers={snapshot.peers}
+                onMuteParticipant={muteParticipant} onAllowUnmute={allowUnmute} onRemoveParticipant={removeParticipant}
+                onLowerHand={lowerHand} onStopShare={stopShare}
               />
             </div>
             {snapshot.role === 'tutor' && <div className="control-item popover-anchor">
@@ -276,7 +299,21 @@ function App() {
                 <Icon name="people" size={20} />{snapshot.waiting.length > 0 && <span className="unread-badge">{snapshot.waiting.length > 9 ? '9+' : snapshot.waiting.length}</span>}
               </button>
               <span>Waiting room</span>
-              <WaitingRoomPanel open={waitingRoomPanelOpen} onClose={() => setWaitingRoomPanelOpen(false)} triggerRef={waitingRoomTriggerRef} waiting={snapshot.waiting} onAdmit={admitOne} onAdmitAll={admitAll} />
+              <WaitingRoomPanel open={waitingRoomPanelOpen} onClose={() => setWaitingRoomPanelOpen(false)} triggerRef={waitingRoomTriggerRef} waiting={snapshot.waiting} onAdmit={admitOne} onAdmitAll={admitAll} onDeny={denyOne} />
+            </div>}
+            {snapshot.role === 'tutor' && <div className="control-item popover-anchor">
+              <button ref={classControlsTriggerRef} type="button" className={`media-button ${snapshot.roomSettings.locked ? 'is-on' : ''}`} onClick={() => setClassControlsOpen(open => !open)} aria-label="Class controls" aria-haspopup="menu" aria-expanded={classControlsOpen}>
+                <Icon name={snapshot.roomSettings.locked ? 'lock' : 'settings'} size={20} />
+              </button>
+              <span>Class controls</span>
+              <ClassControlsMenu
+                open={classControlsOpen} onClose={() => setClassControlsOpen(false)} triggerRef={classControlsTriggerRef}
+                roomSettings={snapshot.roomSettings} onSetLocked={setRoomLocked} onSetStudentsCanShareScreen={setStudentsCanShareScreen}
+                onSetStudentsCanChat={setStudentsCanChat} onMuteAll={muteAll}
+                pollActive={snapshot.poll != null} onCreatePoll={createPoll}
+                understandingActive={snapshot.understandingCheck != null} onStartUnderstandingCheck={startUnderstandingCheck}
+                timerActive={snapshot.timer != null} onStartTimer={startTimer}
+              />
             </div>}
             <div className="control-item popover-anchor">
               <button ref={reactionTriggerRef} type="button" className="media-button" onClick={() => setReactionPickerOpen(open => !open)} aria-label="Send a reaction" aria-haspopup="menu" aria-expanded={reactionPickerOpen}><Icon name="spark" size={20} /></button>
@@ -287,8 +324,8 @@ function App() {
             <span className="controls-divider" />
             {snapshot.peers.length === 0 && <div className="control-item"><button type="button" className="media-button invite-control" onClick={() => void copyInvite()} aria-label="Copy invite link"><Icon name={snapshot.copied ? 'check' : 'link'} size={22} /></button><span>{snapshot.copied ? 'Copied' : 'Invite'}</span></div>}
             <div className="control-item popover-anchor">
-              <button ref={leaveTriggerRef} type="button" className="media-button leave-control" onClick={() => setLeaveConfirmOpen(true)} aria-label="Leave meeting"><Icon name="leave" size={23} /></button><span>Leave</span>
-              <LeaveConfirm open={leaveConfirmOpen} onClose={() => setLeaveConfirmOpen(false)} onConfirm={() => { setLeaveConfirmOpen(false); leave(); }} triggerRef={leaveTriggerRef} />
+              <button ref={leaveTriggerRef} type="button" className="media-button leave-control" onClick={() => setLeaveConfirmOpen(true)} aria-label={snapshot.role === 'tutor' ? 'End class' : 'Leave meeting'}><Icon name="leave" size={23} /></button><span>{snapshot.role === 'tutor' ? 'End class' : 'Leave'}</span>
+              <LeaveConfirm open={leaveConfirmOpen} onClose={() => setLeaveConfirmOpen(false)} onConfirm={() => { setLeaveConfirmOpen(false); leave(); }} triggerRef={leaveTriggerRef} isTutor={snapshot.role === 'tutor'} />
             </div>
           </div>
           <div className="call-bottom-spacer" />

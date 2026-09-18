@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import type { ParticipantRole } from '../../shared/protocol';
 import { Icon } from './Icon';
+import { RoleBadge } from './RoleBadge';
 
 interface ParticipantTileProps {
   stream: MediaStream | null;
@@ -12,6 +14,7 @@ interface ParticipantTileProps {
   preview?: boolean;
   focused?: boolean;
   onFocus?: () => void;
+  role?: ParticipantRole | null;
 }
 
 function initials(name: string) {
@@ -19,7 +22,7 @@ function initials(name: string) {
 }
 
 export function ParticipantTile({
-  stream, name, audio, video, screenSharing = false, local = false, compact = false, preview = false, focused, onFocus,
+  stream, name, audio, video, screenSharing = false, local = false, compact = false, preview = false, focused, onFocus, role = null,
 }: ParticipantTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [needsPlayback, setNeedsPlayback] = useState(false);
@@ -76,7 +79,7 @@ export function ParticipantTile({
       />
       {!hasVideo && <div className="camera-placeholder">
         <div className="avatar">{initials(name)}</div>
-        {!compact && <><h2>{preview ? 'Your space to get ready' : name}</h2><p>{local ? 'Your camera is off' : videoTrackMuted && video ? 'Video is paused' : 'Camera is off'}</p></>}
+        {!compact && <><h2>{preview ? 'Your space to get ready' : name}{!preview && <RoleBadge role={role} />}</h2><p>{local ? 'Your camera is off' : videoTrackMuted && video ? 'Video is paused' : 'Camera is off'}</p></>}
       </div>}
       {preview && <div className="preview-tag"><span /> Camera preview</div>}
       {screenSharing && <div className="screen-share-badge"><Icon name="screen" size={14} />{local ? 'You are presenting' : `${name} is presenting`}</div>}

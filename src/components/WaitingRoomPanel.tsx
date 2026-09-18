@@ -10,11 +10,12 @@ interface WaitingRoomPanelProps {
   waiting: WaitingParticipant[];
   onAdmit: (id: string) => void;
   onAdmitAll: () => void;
+  onDeny: (id: string) => void;
 }
 
 // Tutor-only: capacity itself is enforced server-side, so this stays a thin trigger — the only
 // client-side gate is "is there anyone waiting to admit at all."
-export function WaitingRoomPanel({ open, onClose, triggerRef, waiting, onAdmit, onAdmitAll }: WaitingRoomPanelProps) {
+export function WaitingRoomPanel({ open, onClose, triggerRef, waiting, onAdmit, onAdmitAll, onDeny }: WaitingRoomPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   usePopoverDismiss(open, onClose, panelRef, triggerRef);
 
@@ -33,7 +34,10 @@ export function WaitingRoomPanel({ open, onClose, triggerRef, waiting, onAdmit, 
           {waiting.map((entry) => (
             <li key={entry.id}>
               <span className="participant-row-name">{entry.name}</span>
-              <button type="button" className="button-secondary" onClick={() => onAdmit(entry.id)} aria-label={`Admit ${entry.name}`}><Icon name="check" size={14} />Admit</button>
+              <span className="waiting-room-actions">
+                <button type="button" className="button-secondary" onClick={() => onAdmit(entry.id)} aria-label={`Admit ${entry.name}`}><Icon name="check" size={14} />Admit</button>
+                <button type="button" className="button-secondary waiting-room-deny" onClick={() => onDeny(entry.id)} aria-label={`Deny ${entry.name}`}><Icon name="close" size={14} />Deny</button>
+              </span>
             </li>
           ))}
         </ul>
