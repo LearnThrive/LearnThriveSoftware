@@ -2,7 +2,7 @@
 
 How to configure real Cloudflare Realtime TURN credentials for this prototype, and how to prove the relay path actually carries media rather than just being configured. See [README.md's TURN section](README.md#ice-and-optional-turn) for the architecture; this document is the step-by-step test procedure.
 
-**Status of this document as written:** the backend endpoint (`GET /api/turn-credentials`) and the frontend consumption/fallback/`?forceTurn=1` logic are implemented and covered by an automated test for the "not configured" (503) path. **The happy path against a real Cloudflare account has not been exercised** — this build has no Cloudflare Realtime TURN key. Section 3 below (a real relay call) and the different-network test in [TESTING.md](TESTING.md) are still required before this is considered proven end-to-end. Do not mark those as done without actually performing them.
+**Status of this document as written:** a real Cloudflare Realtime TURN key is now configured in this environment's `.env`, and the full happy path has been exercised end to end — see the real observed results in section 3 below. The backend endpoint (`GET /api/turn-credentials`) and the frontend consumption/fallback/`?forceTurn=1` logic are covered by automated tests for the "not configured" (503), "configured but rejected" (502), and rate-limited (429) paths — see section 4. **The different-network test in [TESTING.md](TESTING.md) is still required** — this environment has no second physical network to test against; a forced-relay call over loopback (both participants on the same machine, same network) is not the same test as a genuinely different network, even though it does prove the relay itself works. Do not mark the different-network row as done without actually performing it on two real networks.
 
 ## 1. Get a Cloudflare Realtime TURN key
 
@@ -45,6 +45,36 @@ Configuration alone doesn't prove TURN *works* — a relay entry can be present 
 4. Repeat without `?forceTurn=1` and confirm the candidate path is normally Direct or Reflexive (STUN) on a typical network — establishing that the forced-relay run in step 3 was a genuine, non-trivial test, not just what would have happened anyway.
 
 Record the actual result (pass/fail, and the observed candidate path) in [TESTING.md](TESTING.md)'s test matrix — don't mark this row passed without having actually run it.
+
+### Actual observed results (this environment, real Cloudflare Realtime TURN key)
+
+Performed via two automated Chromium contexts (Playwright, synthetic `--use-fake-device-for-media-stream` video/audio), both on `?forceTurn=1&debug=1`, both on the same machine/network (loopback — this proves the relay itself works, not a different-network path; see the status note above). Read directly from the development diagnostics panel after ~6 seconds connected:
+
+| Metric | Tutor side (viewing Student) | Student side (viewing Tutor) |
+| --- | --- | --- |
+| Candidate path | **Relay (TURN)** (local relay, remote relay, udp) | **Relay (TURN)** (local relay, remote relay, udp) |
+| RTT / Jitter | 19 ms / 3 ms | 20 ms / 2 ms |
+| Bitrate | in 351 kbps / out 351 kbps | in 351 kbps / out 351 kbps |
+| Bytes sent / received | 199,594 / 201,104 | 201,187 / 199,513 |
+| Packets sent / received | 440 / 440 | 441 / 439 |
+| Frames encoded / decoded | 90 / 91 | 91 / 90 |
+| Remote video | 640×360 @ 20fps, live | 640×360 @ 20fps, live |
+| Packet loss | 0 | 0 |
+
+Both sides selected a genuine relay candidate pair (not host/srflx) and carried real, increasing frame/packet/byte counts — proof media actually flowed through Cloudflare's relay, not just that ICE completed. **Baseline (no `forceTurn`), same network:** candidate path was Direct (local host, remote host, udp) — confirming the forced-relay run above was a real, non-trivial test rather than what would have happened anyway.
+
+**Still required, not covered by the above:** the same proof across two genuinely different networks (see [TESTING.md](TESTING.md) and section 8 of the different-network test), and with real hardware/camera rather than synthetic media.
+
+### Failure-path proof (deliberately broken configuration)
+
+Rather than editing the real `.env` (which would require re-entering the real secret afterward), the failure paths were proven with environment overrides scoped to individual automated tests in `server/signalling.test.ts`, run against the real Cloudflare endpoint:
+
+- **Not configured (503):** both env vars unset — `GET /api/turn-credentials` returns `503 {"error":"TURN is not configured on this server."}` immediately, no network call made. Client (`src/ice.ts`) catches this, logs a dev-only warning, and falls back to STUN-only — never surfaces a raw error to the user.
+- **Configured but rejected (502):** obviously-fake credentials (`not-a-real-key-id-...`) — a real network call to Cloudflare's endpoint, which rejected it (HTTP 404 from Cloudflare itself, for an unrecognized key ID). The server logs the real error server-side (`console.error`) and returns a clean `502 {"error":"Could not generate temporary TURN credentials."}` to the client — confirmed the response body never contains "cloudflare" or any part of Cloudflare's own error payload. Client falls back to STUN-only exactly as in the 503 case.
+- **Rate-limited (429):** 21 rapid requests from the same client with configured-but-bogus credentials — the first 20 each reach Cloudflare and get a real 502; the 21st is rejected by the server's own rate limiter (20/min) before it would even attempt a 21st Cloudflare call, returning `429 {"error":"Too many TURN credential requests. Please slow down."}`.
+- **Direct P2P still works when TURN is down:** the existing `?forceTurn=1` proof above is unaffected by any of this — a normal (non-forced) call with TURN unavailable still connects via STUN/host candidates, exactly as the "baseline" row in section 3 shows, since `getIceConfiguration()` always returns a valid STUN-only configuration when the Cloudflare cache is empty.
+
+All three failure paths are permanent automated regression tests (`server/signalling.test.ts`), not one-off manual runs — they'll keep failing loudly if this behavior ever regresses. The real `.env` credentials were never modified, read into a test, or printed at any point; each test only ever set short-lived, obviously-fake override values on `process.env` for its own duration.
 
 ## 4. Credential refresh over a long session
 
