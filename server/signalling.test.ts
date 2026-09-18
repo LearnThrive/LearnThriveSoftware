@@ -90,12 +90,13 @@ describe('signalling through real Socket.IO clients', () => {
     await expect.poll(() => tutorEvents.length, { timeout: 500 }).toBe(1);
     const firstPageId = tutorEvents[0].board.activePageId;
     expect(tutorEvents[0]).toEqual({
-      roomId: 'room-one', self: { id: tutor.id, name: 'Alice', media, screenSharing: false, handRaised: false, role: 'tutor', forceMuted: false },
+      roomId: 'room-one', self: { id: tutor.id, name: 'Alice', media, screenSharing: false, handRaised: false, handRaisedAt: null, role: 'tutor', forceMuted: false },
       peers: [], waiting: [], settings: DEFAULT_SETTINGS, poll: null, understandingCheck: null, timer: null,
       board: {
         pages: [{ id: firstPageId, name: 'Board 1', background: 'blank' }],
         activePageId: firstPageId, elementsByPage: { [firstPageId]: [] }, studentsCanDraw: true,
       },
+      announcement: null,
     });
 
     const waitingUpdate = new Promise<{ waiting: WaitingParticipant[] }>((resolve) => tutor.once('room:waiting-update', resolve));
@@ -108,7 +109,7 @@ describe('signalling through real Socket.IO clients', () => {
       (resolve) => tutor.once('room:participant-joined', resolve),
     );
     const admitted = await admit(tutor, student);
-    expect(admitted.self).toEqual({ id: student.id, name: 'Bob', media, screenSharing: false, handRaised: false, role: 'student', forceMuted: false });
+    expect(admitted.self).toEqual({ id: student.id, name: 'Bob', media, screenSharing: false, handRaised: false, handRaisedAt: null, role: 'student', forceMuted: false });
     expect(admitted.peers).toEqual([{ peer: tutorEvents[0].self, sessionId: admitted.peers[0].sessionId, initiator: false }]);
     expect(admitted.peers[0].sessionId).toMatch(/^[0-9a-f-]{36}$/);
     expect(await peerAnnounced).toEqual({ peer: admitted.self, sessionId: admitted.peers[0].sessionId, initiator: true });
@@ -1237,6 +1238,52 @@ describe('signalling through real Socket.IO clients', () => {
     expect(payload.poll?.question).toBe('Ready?');
     expect(payload.understandingCheck).not.toBeNull();
     expect(payload.timer?.mode).toBe('stopwatch');
+  });
+
+  it('sends a tutor announcement to every participant, tutor-only, and a new one replaces the last', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const student = await connect();
+    await admit(tutor, student);
+
+    const rejected = new Promise((resolve) => student.once('room:error', resolve));
+    student.emit('announce:send', { text: 'not allowed' });
+    expect(await rejected).toEqual({ message: 'Only the tutor can send an announcement.' });
+
+    const firstOnStudent = new Promise<{ id: string; text: string; sentAt: number } | null>((resolve) => student.once('announce:update', resolve));
+    tutor.emit('announce:send', { text: 'You have 5 minutes remaining.' });
+    const first = await firstOnStudent;
+    expect(first?.text).toBe('You have 5 minutes remaining.');
+
+    const secondOnStudent = new Promise<{ id: string; text: string } | null>((resolve) => student.once('announce:update', resolve));
+    tutor.emit('announce:send', { text: 'Open question 4.' });
+    const second = await secondOnStudent;
+    expect(second?.text).toBe('Open question 4.');
+    expect(second?.id).not.toBe(first?.id);
+  });
+
+  it("orders raised hands by time raised and clears handRaisedAt on lower — the Help Queue's ordering key", async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const studentA = await connect();
+    await admit(tutor, studentA, 'Bob');
+    const studentB = await connect();
+    await admit(tutor, studentB, 'Cate');
+
+    studentB.emit('participant:hand', { raised: true });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    studentA.emit('participant:hand', { raised: true });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const room = server.rooms.get('room-one')!;
+    const a = room.participants.get(studentA.id!)!;
+    const b = room.participants.get(studentB.id!)!;
+    expect(a.handRaisedAt).toBeGreaterThan(b.handRaisedAt!);
+
+    tutor.emit('room:lower-hand', { id: studentB.id! });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(room.participants.get(studentB.id!)!.handRaisedAt).toBeNull();
+    expect(room.participants.get(studentA.id!)!.handRaisedAt).not.toBeNull();
   });
 
   it('reports TURN as unconfigured (503) rather than crashing when no Cloudflare credentials are set', async () => {

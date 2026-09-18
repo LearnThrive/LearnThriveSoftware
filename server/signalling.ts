@@ -4,14 +4,14 @@ import express from 'express';
 import { Server, type Socket } from 'socket.io';
 import { isDevTunnelHost } from '../shared/allowedHosts';
 import {
-  MAX_BOARD_ELEMENT_BYTES, MAX_BOARD_ELEMENTS_PER_PAGE, MAX_BOARD_IMPORT_BYTES, MAX_BOARD_PAGE_NAME_LENGTH,
-  MAX_BOARD_PAGES, MAX_BOARD_UPDATE_BATCH, MAX_CHAT_LENGTH, MAX_NAME_LENGTH, MAX_POLL_OPTION_LENGTH,
-  MAX_POLL_OPTIONS, MAX_POLL_QUESTION_LENGTH, MAX_STUDENTS, MIN_POLL_OPTIONS, REACTION_EMOJIS, ROOM_PATTERN,
-  WAITING_ROOM_CAP,
+  ANNOUNCEMENT_TTL_MS, MAX_ANNOUNCEMENT_LENGTH, MAX_BOARD_ELEMENT_BYTES, MAX_BOARD_ELEMENTS_PER_PAGE,
+  MAX_BOARD_IMPORT_BYTES, MAX_BOARD_PAGE_NAME_LENGTH, MAX_BOARD_PAGES, MAX_BOARD_UPDATE_BATCH, MAX_CHAT_LENGTH,
+  MAX_NAME_LENGTH, MAX_POLL_OPTION_LENGTH, MAX_POLL_OPTIONS, MAX_POLL_QUESTION_LENGTH, MAX_STUDENTS,
+  MIN_POLL_OPTIONS, REACTION_EMOJIS, ROOM_PATTERN, WAITING_ROOM_CAP,
 } from '../shared/protocol';
 import type {
-  BoardBackground, BoardElement, BoardPage, BoardState, ChatMessage, ClientToServerEvents, JoinedRoom,
-  MediaState, Participant, ParticipantRole, PollState, PollVisibility, RoomSettings, RoomTimerState,
+  Announcement, BoardBackground, BoardElement, BoardPage, BoardState, ChatMessage, ClientToServerEvents,
+  JoinedRoom, MediaState, Participant, ParticipantRole, PollState, PollVisibility, RoomSettings, RoomTimerState,
   ServerToClientEvents, SignalCandidate, SignalDescription, TimerMode, UnderstandingCheckState, UnderstandingStatus,
 } from '../shared/protocol';
 
@@ -72,6 +72,8 @@ interface Room {
   understandingCheck: RoomUnderstandingCheck | null;
   timer: RoomTimer | null;
   board: RoomBoard;
+  announcement: Announcement | null;
+  announcementTimer: ReturnType<typeof setTimeout> | null;
 }
 interface SocketData { roomId?: string }
 type MeetingSocket = Socket<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>;
@@ -86,6 +88,7 @@ function createRoom(): Room {
       pages: [{ id: firstPageId, name: 'Board 1', background: 'blank', elements: new Map() }],
       activePageId: firstPageId, studentsCanDraw: true,
     },
+    announcement: null, announcementTimer: null,
   };
 }
 
@@ -430,7 +433,7 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
     socket.data.roomId = roomId;
     void socket.join(`meeting:${roomId}`);
     const waiting = self.role === 'tutor' ? [...room.waiting.entries()].map(([id, entry]) => ({ id, name: entry.name })) : [];
-    socket.emit('room:joined', { roomId, self, peers, waiting, ...personalizedExtras(room, self.id, self.role), board: buildBoardState(room) });
+    socket.emit('room:joined', { roomId, self, peers, waiting, ...personalizedExtras(room, self.id, self.role), board: buildBoardState(room), announcement: room.announcement });
   }
 
   // Re-describes a still-admitted participant's existing edges plus current room-level state —
@@ -448,7 +451,7 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
       if (other) peers.push({ peer: other, sessionId: edge.sessionId, initiator: edge.initiatorId === socket.id });
     }
     const waiting = self.role === 'tutor' ? [...room.waiting.entries()].map(([id, entry]) => ({ id, name: entry.name })) : [];
-    socket.emit('room:joined', { roomId, self, peers, waiting, ...personalizedExtras(room, self.id, self.role), board: buildBoardState(room) });
+    socket.emit('room:joined', { roomId, self, peers, waiting, ...personalizedExtras(room, self.id, self.role), board: buildBoardState(room), announcement: room.announcement });
   }
 
   // Silently drops a stale (mid-grace-period) participant so a same-role newcomer can take their
@@ -475,7 +478,7 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
     if (!waitingSocket) { room.waiting.delete(waitingId); return false; } // gone for good; clean up, don't count as admitted
     room.waiting.delete(waitingId);
     const newParticipant: Participant = {
-      id: waitingId, name: entry.name, media: entry.media, screenSharing: false, handRaised: false, role: 'student', forceMuted: false,
+      id: waitingId, name: entry.name, media: entry.media, screenSharing: false, handRaised: false, handRaisedAt: null, role: 'student', forceMuted: false,
     };
     admitParticipant(waitingSocket, roomId, room, newParticipant);
     return true;
@@ -610,7 +613,7 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
           }
           evictStale(room, existingTutor.id);
         }
-        const self: Participant = { id: socket.id, name, media, screenSharing: false, handRaised: false, role, forceMuted: false };
+        const self: Participant = { id: socket.id, name, media, screenSharing: false, handRaised: false, handRaisedAt: null, role, forceMuted: false };
         rooms.set(roomId, room);
         admitParticipant(socket, roomId, room, self);
         return;
@@ -739,6 +742,7 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
       const target = ctx.room.participants.get(payload.id);
       if (!target) return fail(socket, 'That participant is not currently in the class.');
       target.handRaised = false;
+      target.handRaisedAt = null;
       // Includes the target (unlike the self-report participant:hand broadcast below) — they
       // haven't applied this optimistically themselves, so their own client needs telling too.
       for (const id of ctx.room.participants.keys()) io.to(id).emit('participant:hand', { id: payload.id, raised: false });
@@ -811,6 +815,7 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
         return fail(socket, 'Invalid hand-raise update.');
       }
       self.handRaised = payload.raised;
+      self.handRaisedAt = payload.raised ? Date.now() : null;
       for (const id of room.participants.keys()) {
         if (id !== socket.id) io.to(id).emit('participant:hand', { id: socket.id, raised: payload.raised });
       }
@@ -1079,6 +1084,25 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
         io.to(id).emit('board:cleared', { pageId: parsed.pageId });
         if (parsed.elements.length > 0) io.to(id).emit('board:update', { pageId: parsed.pageId, elements: parsed.elements });
       }
+    });
+
+    socket.on('announce:send', (payload: unknown) => {
+      const ctx = requireTutor(socket, 'Only the tutor can send an announcement.');
+      if (!ctx) return;
+      if (!isRecord(payload) || typeof payload.text !== 'string') return fail(socket, 'Invalid announcement.');
+      const text = payload.text.trim();
+      if (!text || text.length > MAX_ANNOUNCEMENT_LENGTH) return fail(socket, `Announcements must be 1–${MAX_ANNOUNCEMENT_LENGTH} characters.`);
+      if (ctx.room.announcementTimer) clearTimeout(ctx.room.announcementTimer);
+      const announcement: Announcement = { id: randomUUID(), text, sentAt: Date.now() };
+      ctx.room.announcement = announcement;
+      for (const id of ctx.room.participants.keys()) io.to(id).emit('announce:update', announcement);
+      // Auto-expires so it genuinely disappears for everyone in sync, rather than each client
+      // fading it out locally on its own independent timer.
+      ctx.room.announcementTimer = setTimeout(() => {
+        ctx.room.announcement = null;
+        ctx.room.announcementTimer = null;
+        for (const id of ctx.room.participants.keys()) io.to(id).emit('announce:update', null);
+      }, ANNOUNCEMENT_TTL_MS);
     });
 
     socket.on('webrtc:offer', (payload) => relayDescription(socket, 'offer', payload));

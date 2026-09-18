@@ -1,10 +1,10 @@
 import { io, type Socket } from 'socket.io-client';
 import {
   MAX_CHAT_LENGTH, MAX_NAME_LENGTH, ROOM_PATTERN,
-  type BoardBackground, type BoardElement, type BoardState, type ChatMessage, type ClientToServerEvents,
-  type Participant, type ParticipantRole, type PollState, type PollVisibility, type ReactionEmoji,
-  type RoomSettings, type RoomTimerState, type ServerToClientEvents, type TimerMode, type UnderstandingCheckState,
-  type UnderstandingStatus, type WaitingParticipant,
+  type Announcement, type BoardBackground, type BoardElement, type BoardState, type ChatMessage,
+  type ClientToServerEvents, type Participant, type ParticipantRole, type PollState, type PollVisibility,
+  type ReactionEmoji, type RoomSettings, type RoomTimerState, type ServerToClientEvents, type TimerMode,
+  type UnderstandingCheckState, type UnderstandingStatus, type WaitingParticipant,
 } from '../shared/protocol';
 import { aggregateConnectionStatus } from './callStatus';
 import { reconcileBoardElements } from './board';
@@ -97,6 +97,7 @@ export interface MeetingSnapshot {
   // re-enable local follow-mode and jump to the tutor's current page — a one-shot signal, not a
   // persistent room-state field, so it can't be represented as a plain snapshot value change.
   boardFollowMeSeq: number;
+  announcement: Announcement | null;
 }
 
 // "own" is resolved once, at the moment each message arrives, against the socket id live at
@@ -120,7 +121,7 @@ export class MeetingController {
     cameras: [], microphones: [], selectedCamera: undefined, selectedMicrophone: undefined, notice: null,
     chatOpen: false, messages: [], unreadCount: 0, handRaised: false, reactions: [],
     forceMuted: false, roomSettings: DEFAULT_ROOM_SETTINGS, poll: null, understandingCheck: null, timer: null, endedReason: null,
-    board: DEFAULT_BOARD_STATE, boardPointers: {}, boardFollowMeSeq: 0,
+    board: DEFAULT_BOARD_STATE, boardPointers: {}, boardFollowMeSeq: 0, announcement: null,
   };
   // Set by duplicateBoardPage() while waiting for board:page-create's own pages-update echo to
   // learn the new page's id (the server doesn't otherwise report it) — see duplicateBoardPage.
@@ -412,6 +413,8 @@ export class MeetingController {
   followMe = () => this.tutorEmit('board:follow-me');
   importBoard = (pageId: string, elements: BoardElement[]) => this.tutorEmit('board:import', { pageId, elements });
 
+  sendAnnouncement = (text: string) => this.tutorEmit('announce:send', { text });
+
   // Composed client-side from create+rename+update rather than a dedicated wire event — the
   // client already holds the source page's elements locally (every page's elements are always
   // mirrored, not just the active one), so the server needs no new duplication logic at all.
@@ -455,7 +458,7 @@ export class MeetingController {
       phase: 'joining', status: 'Connecting…', error: null, roomId, name, role: null, waiting: [],
       messages: [], unreadCount: 0, chatOpen: false, handRaised: false, reactions: [],
       forceMuted: false, roomSettings: DEFAULT_ROOM_SETTINGS, poll: null, understandingCheck: null, timer: null, endedReason: null,
-      board: DEFAULT_BOARD_STATE, boardPointers: {},
+      board: DEFAULT_BOARD_STATE, boardPointers: {}, announcement: null,
     });
     const url = new URL(window.location.href);
     url.pathname = '/meeting';
@@ -498,7 +501,7 @@ export class MeetingController {
         phase: 'meeting', role: payload.self.role, waiting: payload.waiting, error: null,
         forceMuted: payload.self.forceMuted, roomSettings: payload.settings,
         poll: payload.poll, understandingCheck: payload.understandingCheck, timer: payload.timer,
-        board: payload.board,
+        board: payload.board, announcement: payload.announcement,
         // Unlike media/screen-share (whose local source of truth is the live track/capture, not
         // the server), hand-raise has no other local record — a reconnect must restore it from
         // the resync or a participant who reconnects mid-raise would silently show as lowered.
@@ -560,10 +563,19 @@ export class MeetingController {
       this.update({ messages: [...this.snapshot.messages, { ...message, own }].slice(-MAX_CHAT_HISTORY), unreadCount: unread });
     });
     socket.on('participant:hand', ({ id, raised }) => {
+      // A self-report (raising/lowering your own hand) never echoes back to its own sender, so
+      // reaching here about our own id only ever means the tutor lowered it via room:lower-hand —
+      // which, unlike a self-report, needs to correct *our own* snapshot.handRaised, not a peer
+      // entry (searching `peers` for our own id would never find anything, since that array only
+      // ever holds *other* participants).
+      if (id === this.socket?.id) { this.update({ handRaised: raised }); return; }
       const peer = this.snapshot.peers.find((entry) => entry.participant.id === id);
       if (!peer) return;
       if (raised) this.announce(`${peer.participant.name} raised their hand`);
-      this.updatePeer(id, { participant: { ...peer.participant, handRaised: raised } });
+      // The lightweight participant:hand broadcast carries no timestamp (unlike the full
+      // Participant object room:joined resyncs) — approximated with local receipt time, which is
+      // fine for a UI-only "how long has this hand been up" display, not anything ordering-critical.
+      this.updatePeer(id, { participant: { ...peer.participant, handRaised: raised, handRaisedAt: raised ? Date.now() : null } });
     });
     socket.on('participant:reaction', ({ id, emoji }) => {
       if (!this.snapshot.peers.some((entry) => entry.participant.id === id)) return;
@@ -612,6 +624,7 @@ export class MeetingController {
       this.update({ boardPointers: { ...this.snapshot.boardPointers, [id]: { id, name, x, y, tool: 'laser', updatedAt: Date.now() } } });
     });
     socket.on('board:follow-me', () => this.update({ boardFollowMeSeq: this.snapshot.boardFollowMeSeq + 1 }));
+    socket.on('announce:update', (announcement) => this.update({ announcement }));
     socket.on('room:removed', () => this.endMeeting('removed', 'Removed from class'));
     socket.on('room:ended', () => this.endMeeting('classEnded', 'Class ended'));
     socket.on('room:full', ({ message }) => this.rejectJoin(message));
@@ -743,7 +756,7 @@ export class MeetingController {
       phase: 'ended', status, signalling: 'disconnected', preparing: false, error: null, mediaError: null,
       reconnectFailed: false, screenSharing: false, screenShareAudio: false, waiting: [],
       chatOpen: false, messages: [], unreadCount: 0, notice: null, handRaised: false, reactions: [],
-      endedReason: reason, board: DEFAULT_BOARD_STATE, boardPointers: {},
+      endedReason: reason, board: DEFAULT_BOARD_STATE, boardPointers: {}, announcement: null,
     });
   }
 

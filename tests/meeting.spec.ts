@@ -603,3 +603,29 @@ test('the collaborative whiteboard syncs a drawn element to the student, gates d
   await contextA.close();
   await contextB.close();
 });
+
+test('the tutor can send a prominent announcement, and the Help Queue lists raised hands in order with an elapsed time', async ({ browser }) => {
+  const { pageA, pageB, contextA, contextB } = await connectTutorAndOneStudent(browser);
+
+  await test.step('a tutor announcement reaches the student as a distinct banner, not a chat message', async () => {
+    await pageA.getByRole('button', { name: 'Class controls' }).click();
+    await pageA.getByRole('button', { name: 'Send announcement' }).click();
+    await pageA.getByLabel('Announcement').fill('You have 5 minutes remaining.');
+    await pageA.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(pageB.locator('.announcement-banner')).toContainText('You have 5 minutes remaining.');
+    await expect(pageB.locator('.chat-message')).toHaveCount(0);
+  });
+
+  await test.step('the Help Queue shows a raised hand, tutor-only, and marking it helped lowers the hand for both sides', async () => {
+    await pageB.getByRole('button', { name: 'Raise your hand' }).click();
+    await expect(pageA.locator('.help-queue-panel')).toContainText('Student');
+    await expect(pageB.locator('.help-queue-panel')).toHaveCount(0);
+
+    await pageA.getByRole('button', { name: 'Mark as helped' }).click();
+    await expect(pageA.locator('.help-queue-panel')).toHaveCount(0);
+    await expect(pageB.getByRole('button', { name: 'Raise your hand' })).toBeVisible();
+  });
+
+  await contextA.close();
+  await contextB.close();
+});
