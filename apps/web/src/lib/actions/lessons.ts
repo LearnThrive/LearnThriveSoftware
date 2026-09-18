@@ -32,7 +32,7 @@ export interface CreateLessonState {
 // state) rather than blocking outright — plan section 30: "warn... allow Admin override".
 // Re-submitting with confirmOverride=1 proceeds despite the same conflicts.
 export async function createLessonAction(_prevState: CreateLessonState, formData: FormData): Promise<CreateLessonState> {
-  await requireRole(["ADMIN"]);
+  const user = await requireRole(["ADMIN"]);
   const data = getDataProvider();
 
   const assignmentId = text(formData, "assignmentId");
@@ -89,7 +89,7 @@ export async function createLessonAction(_prevState: CreateLessonState, formData
 
   await createLessonOrSeries(data, {
     assignment, title, subject, startAt, durationMinutes, locationType,
-    ...(location ? { location } : {}), ...(notes ? { notes } : {}), reportRequired, recurrence,
+    ...(location ? { location } : {}), ...(notes ? { notes } : {}), reportRequired, recurrence, createdBy: user.id,
   });
   revalidatePath("/dashboard/calendar");
   redirect("/dashboard/calendar");
@@ -106,8 +106,7 @@ export async function rescheduleLessonAction(formData: FormData): Promise<void> 
   const lesson = await data.lessons.get(lessonId);
   if (!lesson) throw new Error("Lesson not found.");
 
-  await rescheduleLesson(data, lessonId, newStartAtIso, scope);
-  void user; // reserved for the activity log once ActivityEvent exists (Phase H)
+  await rescheduleLesson(data, lessonId, newStartAtIso, scope, user.id);
   revalidatePath("/dashboard/calendar");
   revalidatePath(`/dashboard/lessons/${lessonId}`);
 }

@@ -2,7 +2,7 @@
 
 ## Scope of this document
 
-This covers the domain surface introduced so far — Tutors, Clients, Students, and Tuition Assignments (Phase C). Lesson, LessonAttendance, LessonReport, TutorAvailability, Classroom, Notification, and ActivityEvent are named in the plan behind this migration as part of the eventual full domain model but are deliberately not defined yet — they arrive with the phases that actually use them (D, E, F, G, H). Defining empty types for them now, with nothing reading or writing them, would be scaffolding without substance.
+This covers the domain surface introduced so far — Tutors, Clients, Students, and Tuition Assignments (Phase C). Lesson and TutorAvailability arrived in Phase D (see `docs/SCHEDULING.md`); LessonAttendanceRecord and LessonActivityEvent arrived in Phase F (see `docs/ATTENDANCE.md`). LessonReport and Notification are still named in the plan behind this migration as part of the eventual full domain model but are deliberately not defined yet — they arrive with the phases that actually use them (G, H). Defining empty types for them now, with nothing reading or writing them, would be scaffolding without substance.
 
 Source: `packages/data/src/domain.ts`.
 

@@ -1,4 +1,6 @@
-import type { Client, ClientStudentLink, Lesson, Student, TuitionAssignment, Tutor, TutorAvailabilityBlock } from "./domain";
+import type {
+  Client, ClientStudentLink, Lesson, LessonActivityEvent, LessonAttendanceRecord, Student, TuitionAssignment, Tutor, TutorAvailabilityBlock,
+} from "./domain";
 
 // Every repository interface follows the same shape deliberately — a future
 // SupabaseTutorRepository/SupabaseClientRepository/etc. implements these same interfaces (see
@@ -66,6 +68,18 @@ export interface AvailabilityRepository {
   remove(id: string): Promise<void>;
 }
 
+export interface AttendanceRepository {
+  forLesson(lessonId: string): Promise<LessonAttendanceRecord[]>;
+  // One record per (lessonId, studentId) — marking the same Student again replaces their record
+  // rather than appending a second one, since only the current attendance decision matters.
+  upsert(record: LessonAttendanceRecord): Promise<LessonAttendanceRecord>;
+}
+
+export interface ActivityRepository {
+  forLesson(lessonId: string): Promise<LessonActivityEvent[]>;
+  append(event: Omit<LessonActivityEvent, "id" | "createdAt">): Promise<LessonActivityEvent>;
+}
+
 export interface DataProvider {
   tutors: TutorRepository;
   clients: ClientRepository;
@@ -73,4 +87,6 @@ export interface DataProvider {
   assignments: AssignmentRepository;
   lessons: LessonRepository;
   availability: AvailabilityRepository;
+  attendance: AttendanceRepository;
+  activity: ActivityRepository;
 }

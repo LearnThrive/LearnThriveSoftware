@@ -32,6 +32,12 @@ function loadTsModule(fileUrl) {
       const subpath = specifier.slice("@learnthrive/data/".length);
       return loadTsModule(new URL(`../../../packages/data/src/${subpath}.ts`, import.meta.url));
     }
+    // apps/web's own tsconfig path alias (@/* -> ./src/*) — same reasoning as @learnthrive/data/*
+    // above: real Node require() has no idea this alias exists at all.
+    if (specifier.startsWith("@/")) {
+      const subpath = specifier.slice("@/".length);
+      return loadTsModule(new URL(`../src/${subpath}.ts`, import.meta.url));
+    }
     return nodeRequire(specifier); // bare specifier (node:*, an npm package) — real Node resolution
   };
 

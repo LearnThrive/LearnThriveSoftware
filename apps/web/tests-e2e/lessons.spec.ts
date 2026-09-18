@@ -218,3 +218,38 @@ test('lesson detail surfaces a joinError message from the query string', async (
   await page.goto('/dashboard/lessons/lesson-gcse-maths-upcoming?joinError=This%20lesson%20has%20been%20cancelled.');
   await expect(page.locator('[role="alert"]')).toContainText('This lesson has been cancelled.');
 });
+
+test('a Tutor cannot complete a lesson until every Student has an attendance record, then can once marked, with the event on the activity timeline', async ({ page }) => {
+  await login(page, ADMIN.email, ADMIN.password);
+  await page.goto('/dashboard/admin/lessons/new');
+  await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Ayaan' });
+  await page.locator('#lesson-title').fill('Lesson to complete');
+  await page.locator('#lesson-date').fill('2026-11-26');
+  await page.locator('#lesson-time').fill('14:00');
+  await page.getByRole('button', { name: 'Schedule lesson' }).click();
+  await expect(page).toHaveURL(/\/dashboard\/calendar$/);
+
+  for (let i = 0; i < 12; i += 1) {
+    const title = await page.locator('.fc-toolbar-title').innerText();
+    if (title.includes('November 2026')) break;
+    await page.locator('.fc-next-button').click();
+  }
+  await page.locator('.fc-event', { hasText: 'Lesson to complete' }).click();
+  await expect(page).toHaveURL(/\/dashboard\/lessons\/(.+)/);
+  const lessonUrl = page.url();
+
+  await login(page, TUTOR.email, TUTOR.password);
+  await page.goto(lessonUrl);
+  const completeButton = page.getByRole('button', { name: /Complete Lesson|Mark attendance for every Student/ });
+  await expect(completeButton).toBeDisabled();
+
+  await page.locator('select[aria-label="Attendance status for Ayaan Ahmed"]').selectOption('ATTENDED');
+  await page.getByRole('button', { name: 'Mark', exact: true }).click();
+  await expect(page.locator('.attendance-list')).toContainText('ATTENDED');
+
+  await expect(completeButton).toBeEnabled();
+  await completeButton.click();
+  await expect(page.locator('.dashboard-page')).toContainText('COMPLETED');
+  await expect(page.locator('.activity-list')).toContainText('Attendance marked for Ayaan Ahmed: ATTENDED');
+  await expect(page.locator('.activity-list')).toContainText('Lesson marked complete');
+});

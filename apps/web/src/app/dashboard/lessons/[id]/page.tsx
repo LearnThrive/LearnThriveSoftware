@@ -5,8 +5,12 @@ import { createMetadata } from "@/lib/metadata";
 import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
 import { cancelLessonAction } from "@/lib/actions/lessons";
 import { joinClassroomAction } from "@/lib/actions/classroom";
+import { markAttendanceAction, completeLessonAction } from "@/lib/actions/attendance";
 import { formatInTimeZone } from "@/lib/scheduling/timezone";
 import { isWithinJoinWindow } from "@/lib/scheduling/joinWindow";
+import type { AttendanceStatus } from "@learnthrive/data/domain";
+
+const ATTENDANCE_STATUSES: AttendanceStatus[] = ["ATTENDED", "LATE", "ABSENT", "EXCUSED"];
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -40,16 +44,23 @@ export default async function LessonDetailPage({
   if (!lesson) notFound();
   if (!canView(user, lesson)) redirect("/403");
 
-  const [tutor, students] = await Promise.all([
+  const [tutor, students, attendanceRecords, activityEvents] = await Promise.all([
     data.tutors.get(lesson.tutorId),
     Promise.all(lesson.studentIds.map((sid) => data.students.get(sid))),
+    data.attendance.forLesson(lesson.id),
+    data.activity.forLesson(lesson.id),
   ]);
+  const attendanceByStudent = new Map(attendanceRecords.map((r) => [r.studentId, r]));
 
   const startFormatted = formatInTimeZone(lesson.startAt, "Europe/London", { dateStyle: "full", timeStyle: "short" });
   const isAdmin = user.role === "ADMIN";
+  const isOwningTutor = user.role === "TUTOR" && user.profileId === lesson.tutorId;
+  const canManageAttendance = isAdmin || isOwningTutor;
   const canCancel = isAdmin && lesson.status === "PLANNED";
   const canJoin = lesson.locationType === "ONLINE" && lesson.status !== "CANCELLED" && (user.role === "TUTOR" || user.role === "STUDENT");
   const joinWindowOpen = canJoin && isWithinJoinWindow(lesson, user.role as "TUTOR" | "STUDENT");
+  const canComplete = canManageAttendance && lesson.status !== "CANCELLED" && lesson.status !== "COMPLETED";
+  const allAttendanceMarked = lesson.studentIds.every((sid) => attendanceByStudent.has(sid));
 
   return (
     <div className="dashboard-page">
@@ -93,9 +104,60 @@ export default async function LessonDetailPage({
         </form>
       )}
 
-      <p className="dashboard-page__note">
-        Attendance, lesson reports, and full activity history arrive in later phases of this platform.
-      </p>
+      {canManageAttendance && (
+        <>
+          <h2>Attendance</h2>
+          <ul className="people-list attendance-list">
+            {students.filter(Boolean).map((student) => {
+              const record = attendanceByStudent.get(student!.id);
+              return (
+                <li key={student!.id}>
+                  {student!.name}
+                  {record && <span className="people-list__meta">{record.status}{record.notes ? ` — ${record.notes}` : ""}</span>}
+                  <form action={markAttendanceAction} style={{ marginLeft: "auto", display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                    <input type="hidden" name="lessonId" value={lesson.id} />
+                    <input type="hidden" name="studentId" value={student!.id} />
+                    <select name="status" defaultValue={record?.status ?? "ATTENDED"} aria-label={`Attendance status for ${student!.name}`}>
+                      {ATTENDANCE_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+                    </select>
+                    <button type="submit" className="button-text">{record ? "Update" : "Mark"}</button>
+                  </form>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+
+      {canComplete && (
+        <form action={completeLessonAction} style={{ marginTop: "1rem" }}>
+          <input type="hidden" name="lessonId" value={lesson.id} />
+          <button type="submit" className="button button--primary" disabled={!allAttendanceMarked}>
+            <span>{allAttendanceMarked ? "Complete Lesson" : "Mark attendance for every Student to complete this lesson"}</span>
+          </button>
+        </form>
+      )}
+
+      {canManageAttendance && (
+        <>
+          <h2>Activity</h2>
+          <ul className="people-list activity-list">
+            {activityEvents.length === 0 && <li className="people-list__empty">No activity recorded yet.</li>}
+            {activityEvents.map((event) => (
+              <li key={event.id}>
+                {event.message}
+                <span className="people-list__meta">{formatInTimeZone(event.createdAt, "Europe/London", { dateStyle: "medium", timeStyle: "short" })}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {!canManageAttendance && (
+        <p className="dashboard-page__note">
+          Lesson reports and student progress history arrive in a later phase of this platform.
+        </p>
+      )}
     </div>
   );
 }

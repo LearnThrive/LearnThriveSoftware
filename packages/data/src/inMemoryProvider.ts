@@ -1,7 +1,10 @@
 import { randomUUID } from "node:crypto";
-import type { Client, ClientStudentLink, Lesson, Student, TuitionAssignment, Tutor, TutorAvailabilityBlock } from "./domain";
 import type {
-  AssignmentRepository, AvailabilityRepository, ClientRepository, DataProvider, LessonRepository, StudentRepository, TutorRepository,
+  Client, ClientStudentLink, Lesson, LessonActivityEvent, LessonAttendanceRecord, Student, TuitionAssignment, Tutor, TutorAvailabilityBlock,
+} from "./domain";
+import type {
+  ActivityRepository, AssignmentRepository, AttendanceRepository, AvailabilityRepository, ClientRepository, DataProvider, LessonRepository,
+  StudentRepository, TutorRepository,
 } from "./repositories";
 
 // Fixed, well-known ids for the seeded demo people (plan section 89's scenario) — not random,
@@ -181,6 +184,31 @@ class InMemoryAvailabilityRepository implements AvailabilityRepository {
   async remove(id: string) { this.store.delete(id); }
 }
 
+class InMemoryAttendanceRepository implements AttendanceRepository {
+  // Keyed by `${lessonId}:${studentId}` — the natural composite key for "one record per Student
+  // per Lesson" (plan section 38), without needing a synthetic id nothing else ever refers to.
+  constructor(private readonly store: Map<string, LessonAttendanceRecord>) {}
+  async forLesson(lessonId: string) {
+    return [...this.store.values()].filter((r) => r.lessonId === lessonId);
+  }
+  async upsert(record: LessonAttendanceRecord) {
+    this.store.set(`${record.lessonId}:${record.studentId}`, record);
+    return record;
+  }
+}
+
+class InMemoryActivityRepository implements ActivityRepository {
+  constructor(private readonly store: Map<string, LessonActivityEvent>) {}
+  async forLesson(lessonId: string) {
+    return [...this.store.values()].filter((e) => e.lessonId === lessonId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+  async append(event: Omit<LessonActivityEvent, "id" | "createdAt">) {
+    const full: LessonActivityEvent = { ...event, id: randomUUID(), createdAt: now() };
+    this.store.set(full.id, full);
+    return full;
+  }
+}
+
 function seedProvider(): DataProvider {
   const tutorStore = new Map<string, Tutor>();
   const clientStore = new Map<string, Client>();
@@ -188,6 +216,8 @@ function seedProvider(): DataProvider {
   const assignmentStore = new Map<string, TuitionAssignment>();
   const lessonStore = new Map<string, Lesson>();
   const availabilityStore = new Map<string, TutorAvailabilityBlock>();
+  const attendanceStore = new Map<string, LessonAttendanceRecord>();
+  const activityStore = new Map<string, LessonActivityEvent>();
   const links: ClientStudentLink[] = [];
 
   tutorStore.set(SEED_IDS.tutorJamiePatel, {
@@ -251,6 +281,8 @@ function seedProvider(): DataProvider {
     assignments: new InMemoryAssignmentRepository(assignmentStore),
     lessons: new InMemoryLessonRepository(lessonStore),
     availability: new InMemoryAvailabilityRepository(availabilityStore),
+    attendance: new InMemoryAttendanceRepository(attendanceStore),
+    activity: new InMemoryActivityRepository(activityStore),
   };
 }
 
