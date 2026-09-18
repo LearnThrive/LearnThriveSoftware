@@ -16,6 +16,7 @@ export const SEED_IDS = {
   availabilityThursday: "availability-jamie-thursday",
   lessonCompleted: "lesson-gcse-maths-completed",
   lessonUpcoming: "lesson-gcse-maths-upcoming",
+  classroomRoomUpcoming: "classroom-room-gcse-maths-upcoming",
 } as const;
 
 function now() {
@@ -240,6 +241,7 @@ function seedProvider(): DataProvider {
     studentIds: [SEED_IDS.studentAyaanAhmed], clientIds: [SEED_IDS.clientSarahAhmed],
     title: "GCSE Mathematics — Ayaan", subject: "Mathematics", startAt: nextTuesday, durationMinutes: 60,
     locationType: "ONLINE", reportRequired: true, status: "PLANNED", createdAt: now(), updatedAt: now(),
+    classroomRoomId: SEED_IDS.classroomRoomUpcoming,
   });
 
   return {

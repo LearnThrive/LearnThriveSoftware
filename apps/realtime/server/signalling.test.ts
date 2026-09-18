@@ -7,6 +7,7 @@ import type {
   PollState, RoomTimerState, ServerToClientEvents, UnderstandingCheckState, WaitingParticipant,
 } from '@learnthrive/shared/protocol';
 import { createSignallingServer } from './signalling';
+import { signClassroomJoinToken } from '@learnthrive/shared/classroomToken';
 
 const DISCONNECT_GRACE_MS = 300;
 
@@ -1446,4 +1447,63 @@ describe('signalling through real Socket.IO clients', () => {
       if (previousApiToken !== undefined) process.env.CLOUDFLARE_TURN_API_TOKEN = previousApiToken; else delete process.env.CLOUDFLARE_TURN_API_TOKEN;
     }
   }, 60_000);
+
+  describe('platform-authenticated join (classroom join tokens)', () => {
+    it('a valid token joins using the TOKEN\'s own name/role, ignoring any different values also sent alongside it', async () => {
+      const tutor = await connect();
+      tutor.emit('room:join', {
+        roomId: 'irrelevant-room-the-client-tried-to-claim', name: 'Impersonator', role: 'student', media,
+        token: signClassroomJoinToken({ roomId: 'room-one', lessonId: 'lesson-1', name: 'Jamie Patel', role: 'tutor', exp: Date.now() + 60_000 }),
+      });
+      const joined = await new Promise<JoinedRoom>((resolve) => tutor.once('room:joined', resolve));
+      expect(joined.roomId).toBe('room-one');
+      expect(joined.self.name).toBe('Jamie Patel');
+      expect(joined.self.role).toBe('tutor');
+    });
+
+    it('an expired token is rejected with a clear message, not silently treated as a normal join', async () => {
+      const client = await connect();
+      client.emit('room:join', {
+        roomId: 'room-one', name: 'Someone', role: 'student', media,
+        token: signClassroomJoinToken({ roomId: 'room-one', lessonId: 'lesson-1', name: 'Late Student', role: 'student', exp: Date.now() - 1000 }),
+      });
+      const error = await new Promise((resolve) => client.once('room:error', resolve));
+      expect(error).toEqual({ message: 'Your classroom link has expired or is invalid. Return to your lesson and try again.' });
+    });
+
+    it('a tampered token (signature no longer matches the body) is rejected', async () => {
+      const client = await connect();
+      const realToken = signClassroomJoinToken({ roomId: 'room-one', lessonId: 'lesson-1', name: 'Real Student', role: 'student', exp: Date.now() + 60_000 });
+      const [body] = realToken.split('.');
+      const tamperedToken = `${body}.not-the-real-signature`;
+      client.emit('room:join', { roomId: 'room-one', name: 'Someone', role: 'student', media, token: tamperedToken });
+      const error = await new Promise((resolve) => client.once('room:error', resolve));
+      expect(error).toEqual({ message: 'Your classroom link has expired or is invalid. Return to your lesson and try again.' });
+    });
+
+    it('a token forged with a different secret is rejected (proves the signature is actually checked, not just present)', async () => {
+      const client = await connect();
+      // Same shape as a real token, but signed with a DIFFERENT secret than the one the running
+      // server uses (CLASSROOM_JOIN_SECRET is unset here, so the server uses its own dev
+      // fallback) — simulates an attacker who knows the token *format* but not the real secret.
+      const previousSecret = process.env.CLASSROOM_JOIN_SECRET;
+      process.env.CLASSROOM_JOIN_SECRET = 'a-different-secret-the-server-does-not-use';
+      let forgedToken: string;
+      try {
+        forgedToken = signClassroomJoinToken({ roomId: 'room-one', lessonId: 'lesson-1', name: 'Forged', role: 'tutor', exp: Date.now() + 60_000 });
+      } finally {
+        if (previousSecret !== undefined) process.env.CLASSROOM_JOIN_SECRET = previousSecret; else delete process.env.CLASSROOM_JOIN_SECRET;
+      }
+      client.emit('room:join', { roomId: 'room-one', name: 'Someone', role: 'student', media, token: forgedToken });
+      const error = await new Promise((resolve) => client.once('room:error', resolve));
+      expect(error).toEqual({ message: 'Your classroom link has expired or is invalid. Return to your lesson and try again.' });
+    });
+
+    it('the pre-existing manual name/role entry path still works unchanged alongside the token path', async () => {
+      const tutor = await connect();
+      const joined = await joinTutor(tutor, 'Manually Entered Name');
+      expect(joined.self.name).toBe('Manually Entered Name');
+      expect(joined.self.role).toBe('tutor');
+    });
+  });
 });

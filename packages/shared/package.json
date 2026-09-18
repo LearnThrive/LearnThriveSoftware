@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./protocol": "./protocol.ts",
-    "./allowedHosts": "./allowedHosts.ts"
+    "./allowedHosts": "./allowedHosts.ts",
+    "./classroomToken": "./classroomToken.ts"
   }
 }

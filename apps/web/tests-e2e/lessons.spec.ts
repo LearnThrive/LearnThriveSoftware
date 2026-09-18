@@ -195,3 +195,26 @@ test('a Client only sees lessons belonging to their own Students on the calendar
   // "Unrelated lesson" created for a different family earlier in this suite.
   await expect(page.locator('.fc-event', { hasText: 'Unrelated lesson' })).toHaveCount(0);
 });
+
+test('a Tutor sees a disabled Join Classroom control outside the join window, for the seeded upcoming online lesson', async ({ page }) => {
+  await login(page, TUTOR.email, TUTOR.password);
+  await page.goto('/dashboard/lessons/lesson-gcse-maths-upcoming');
+  const joinButton = page.getByRole('button', { name: /Join Classroom|Classroom opens closer to the start time/ });
+  await expect(joinButton).toBeVisible();
+  // The seed lesson is scheduled for "next Tuesday" relative to when the demo data was seeded —
+  // outside this test's actual run time in every realistic case, so the button must be disabled.
+  await expect(joinButton).toBeDisabled();
+  await expect(joinButton).toHaveText('Classroom opens closer to the start time');
+});
+
+test('a Client never sees a Join Classroom control (only the assigned Tutor or Student can join)', async ({ page }) => {
+  await login(page, CLIENT.email, CLIENT.password);
+  await page.goto('/dashboard/lessons/lesson-gcse-maths-upcoming');
+  await expect(page.getByRole('button', { name: /Join Classroom|Classroom opens closer to the start time/ })).toHaveCount(0);
+});
+
+test('lesson detail surfaces a joinError message from the query string', async ({ page }) => {
+  await login(page, TUTOR.email, TUTOR.password);
+  await page.goto('/dashboard/lessons/lesson-gcse-maths-upcoming?joinError=This%20lesson%20has%20been%20cancelled.');
+  await expect(page.locator('[role="alert"]')).toContainText('This lesson has been cancelled.');
+});

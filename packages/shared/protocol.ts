@@ -12,7 +12,12 @@ export interface Participant {
   role: ParticipantRole; forceMuted: boolean;
 }
 export interface WaitingParticipant { id: string; name: string }
-export interface JoinRequest { roomId: string; name: string; media: MediaState; role: ParticipantRole }
+// `token`: an optional signed classroom-join token (see shared/classroomToken.ts) issued by the
+// platform (apps/web) after it has authorised this specific join. When present and valid, the
+// server uses the token's own name/role — never the client-declared name/media below — for
+// identity, though `role` must still be supplied here for the pre-token dev/manual-entry path
+// (see plan section 36) to keep working unchanged.
+export interface JoinRequest { roomId: string; name: string; media: MediaState; role: ParticipantRole; token?: string }
 // One entry per already-admitted participant the joiner needs a WebRTC connection to — replaces
 // the old singular peer/sessionId/initiator now that a room can hold up to 4 admitted people.
 export interface PeerEdge { peer: Participant; sessionId: string; initiator: boolean }
