@@ -3,8 +3,8 @@ import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { io, type Socket } from 'socket.io-client';
 import type {
-  ChatMessage, ClientToServerEvents, JoinedRoom, Participant, ParticipantRole, PollState, RoomTimerState,
-  ServerToClientEvents, UnderstandingCheckState, WaitingParticipant,
+  BoardElement, ChatMessage, ClientToServerEvents, JoinedRoom, Participant, ParticipantRole,
+  PollState, RoomTimerState, ServerToClientEvents, UnderstandingCheckState, WaitingParticipant,
 } from '../shared/protocol';
 import { createSignallingServer } from './signalling';
 
@@ -88,9 +88,14 @@ describe('signalling through real Socket.IO clients', () => {
     tutor.on('room:joined', (payload) => tutorEvents.push(payload));
     requestJoin(tutor, '  Alice  ', 'tutor');
     await expect.poll(() => tutorEvents.length, { timeout: 500 }).toBe(1);
+    const firstPageId = tutorEvents[0].board.activePageId;
     expect(tutorEvents[0]).toEqual({
       roomId: 'room-one', self: { id: tutor.id, name: 'Alice', media, screenSharing: false, handRaised: false, role: 'tutor', forceMuted: false },
       peers: [], waiting: [], settings: DEFAULT_SETTINGS, poll: null, understandingCheck: null, timer: null,
+      board: {
+        pages: [{ id: firstPageId, name: 'Board 1', background: 'blank' }],
+        activePageId: firstPageId, elementsByPage: { [firstPageId]: [] }, studentsCanDraw: true,
+      },
     });
 
     const waitingUpdate = new Promise<{ waiting: WaitingParticipant[] }>((resolve) => tutor.once('room:waiting-update', resolve));
@@ -902,5 +907,261 @@ describe('signalling through real Socket.IO clients', () => {
     tutor.emit('room:lower-hand', { id: student.id! });
     expect(await loweredOnStudent).toEqual({ id: student.id, raised: false });
     expect(await loweredOnTutor).toEqual({ id: student.id, raised: false });
+  });
+
+  function makeElement(id: string, overrides: Partial<BoardElement> = {}): BoardElement {
+    return { id, version: 1, versionNonce: 1, type: 'rectangle', x: 0, y: 0, ...overrides };
+  }
+
+  it('a tutor draws and every student receives the update, keyed to the right page', async () => {
+    const tutor = await connect();
+    const joined = await joinTutor(tutor, 'Alice');
+    const pageId = joined.board.activePageId;
+    const studentA = await connect();
+    await admit(tutor, studentA, 'Bob');
+    const studentB = await connect();
+    await admit(tutor, studentB, 'Cate');
+
+    const onA = new Promise((resolve) => studentA.once('board:update', resolve));
+    const onB = new Promise((resolve) => studentB.once('board:update', resolve));
+    const element = makeElement('el-1');
+    tutor.emit('board:update', { pageId, elements: [element] });
+    expect(await onA).toEqual({ pageId, elements: [element] });
+    expect(await onB).toEqual({ pageId, elements: [element] });
+  });
+
+  it('a student draws when permitted, and is blocked once the tutor disables student drawing', async () => {
+    const tutor = await connect();
+    const joined = await joinTutor(tutor, 'Alice');
+    const pageId = joined.board.activePageId;
+    const student = await connect();
+    await admit(tutor, student);
+
+    const onTutor = new Promise((resolve) => tutor.once('board:update', resolve));
+    const element = makeElement('el-1');
+    student.emit('board:update', { pageId, elements: [element] });
+    expect(await onTutor).toEqual({ pageId, elements: [element] });
+
+    const permissionUpdate = new Promise((resolve) => student.once('board:permission-update', resolve));
+    tutor.emit('board:permission', { studentsCanDraw: false });
+    expect(await permissionUpdate).toEqual({ studentsCanDraw: false });
+
+    const blocked = new Promise((resolve) => student.once('room:error', resolve));
+    student.emit('board:update', { pageId, elements: [makeElement('el-2')] });
+    expect(await blocked).toEqual({ message: 'The tutor has turned off drawing for students.' });
+    // The tutor themselves is never subject to the students-only permission gate.
+    const onStudent = new Promise((resolve) => student.once('board:update', resolve));
+    tutor.emit('board:update', { pageId, elements: [makeElement('el-3')] });
+    await onStudent;
+  });
+
+  it('a new join and a reconnecting participant both receive the current board snapshot', async () => {
+    const tutor = await connect();
+    const joined = await joinTutor(tutor, 'Alice');
+    const pageId = joined.board.activePageId;
+    tutor.emit('board:update', { pageId, elements: [makeElement('el-1')] });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    const student = await connectRecoverable();
+    const studentJoined = await admit(tutor, student);
+    expect(studentJoined.board.elementsByPage[pageId]).toEqual([makeElement('el-1')]);
+
+    const resynced = new Promise<JoinedRoom>((resolve) => student.once('room:joined', resolve));
+    const reconnecting = new Promise<void>((resolve) => tutor.once('room:participant-reconnecting', () => resolve()));
+    student.io.engine.close();
+    await reconnecting;
+    tutor.emit('board:update', { pageId, elements: [makeElement('el-2')] });
+
+    await expect.poll(() => student.connected, { timeout: 2000 }).toBe(true);
+    const payload = await resynced;
+    expect(payload.board.elementsByPage[pageId]).toEqual(
+      expect.arrayContaining([makeElement('el-1'), makeElement('el-2')]),
+    );
+  });
+
+  it('creates, renames, and switches the active whiteboard page', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const student = await connect();
+    await admit(tutor, student);
+
+    const created = new Promise<{ pages: { id: string; name: string; background: string }[]; activePageId: string }>(
+      (resolve) => student.once('board:pages-update', resolve),
+    );
+    tutor.emit('board:page-create');
+    const afterCreate = await created;
+    expect(afterCreate.pages).toHaveLength(2);
+    const newPageId = afterCreate.activePageId;
+    expect(newPageId).not.toBe(afterCreate.pages[0].id);
+
+    const renamed = new Promise((resolve) => student.once('board:pages-update', resolve));
+    tutor.emit('board:page-rename', { pageId: newPageId, name: 'Warm-up' });
+    expect(await renamed).toEqual({
+      pages: [expect.objectContaining({ name: 'Board 1' }), { id: newPageId, name: 'Warm-up', background: 'blank' }],
+      activePageId: newPageId,
+    });
+
+    const firstPageId = afterCreate.pages[0].id;
+    const switched = new Promise((resolve) => student.once('board:pages-update', resolve));
+    tutor.emit('board:page-switch', { pageId: firstPageId });
+    expect(await switched).toMatchObject({ activePageId: firstPageId });
+  });
+
+  it('rejects a stale element update (equal or older version/versionNonce) but accepts a newer one', async () => {
+    const tutor = await connect();
+    const joined = await joinTutor(tutor, 'Alice');
+    const pageId = joined.board.activePageId;
+    const student = await connect();
+    await admit(tutor, student);
+
+    const v2 = makeElement('el-1', { version: 2, versionNonce: 5, x: 10 });
+    await new Promise<void>((resolve) => { student.once('board:update', () => resolve()); tutor.emit('board:update', { pageId, elements: [v2] }); });
+
+    // Same version, lower versionNonce — must be rejected, never broadcast.
+    const staleEvents: unknown[] = [];
+    student.on('board:update', (payload) => staleEvents.push(payload));
+    tutor.emit('board:update', { pageId, elements: [makeElement('el-1', { version: 2, versionNonce: 1, x: 99 })] });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(staleEvents).toEqual([]);
+    expect(server.rooms.get('room-one')?.board.pages[0].elements.get('el-1')).toEqual(v2);
+
+    // A genuinely newer version is accepted.
+    const v3 = makeElement('el-1', { version: 3, versionNonce: 1, x: 20 });
+    const accepted = new Promise((resolve) => student.once('board:update', resolve));
+    tutor.emit('board:update', { pageId, elements: [v3] });
+    expect(await accepted).toEqual({ pageId, elements: [v3] });
+  });
+
+  it('clears a whiteboard page tutor-only, wiping it for everyone', async () => {
+    const tutor = await connect();
+    const joined = await joinTutor(tutor, 'Alice');
+    const pageId = joined.board.activePageId;
+    const student = await connect();
+    await admit(tutor, student);
+    tutor.emit('board:update', { pageId, elements: [makeElement('el-1')] });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    const rejected = new Promise((resolve) => student.once('room:error', resolve));
+    student.emit('board:clear', { pageId });
+    expect(await rejected).toEqual({ message: 'Only the tutor can clear a whiteboard page.' });
+    expect(server.rooms.get('room-one')?.board.pages[0].elements.size).toBe(1);
+
+    const clearedOnStudent = new Promise((resolve) => student.once('board:cleared', resolve));
+    tutor.emit('board:clear', { pageId });
+    expect(await clearedOnStudent).toEqual({ pageId });
+    expect(server.rooms.get('room-one')?.board.pages[0].elements.size).toBe(0);
+  });
+
+  it('changes a page background, tutor-only', async () => {
+    const tutor = await connect();
+    const joined = await joinTutor(tutor, 'Alice');
+    const pageId = joined.board.activePageId;
+    const student = await connect();
+    await admit(tutor, student);
+
+    const updated = new Promise((resolve) => student.once('board:pages-update', resolve));
+    tutor.emit('board:background', { pageId, background: 'grid' });
+    expect(await updated).toEqual({ pages: [{ id: pageId, name: 'Board 1', background: 'grid' }], activePageId: pageId });
+  });
+
+  it("relays a tutor's Follow Me nudge and cursor/laser pointer positions to everyone else, but not back to the sender", async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const student = await connect();
+    await admit(tutor, student);
+
+    const followed = new Promise<void>((resolve) => student.once('board:follow-me', () => resolve()));
+    const tutorNeverGetsItsOwn = new Promise((resolve) => { tutor.once('board:follow-me', () => resolve('got-own')); setTimeout(() => resolve('none'), 100); });
+    tutor.emit('board:follow-me');
+    await followed;
+    expect(await tutorNeverGetsItsOwn).toBe('none');
+
+    const cursorSeen = new Promise((resolve) => student.once('board:cursor', resolve));
+    tutor.emit('board:cursor', { x: 12, y: 34 });
+    expect(await cursorSeen).toEqual({ id: tutor.id, name: 'Alice', x: 12, y: 34 });
+
+    const laserSeen = new Promise((resolve) => student.once('board:laser', resolve));
+    tutor.emit('board:laser', { x: 5, y: 6 });
+    expect(await laserSeen).toEqual({ id: tutor.id, x: 5, y: 6 });
+  });
+
+  it('rejects whiteboard moderation actions from a non-tutor', async () => {
+    const tutor = await connect();
+    const joined = await joinTutor(tutor, 'Alice');
+    const pageId = joined.board.activePageId;
+    const student = await connect();
+    await admit(tutor, student);
+
+    const actions: Array<() => void> = [
+      () => student.emit('board:page-create'),
+      () => student.emit('board:page-rename', { pageId, name: 'x' }),
+      () => student.emit('board:page-delete', { pageId }),
+      () => student.emit('board:page-reorder', { pageIds: [pageId] }),
+      () => student.emit('board:page-switch', { pageId }),
+      () => student.emit('board:background', { pageId, background: 'grid' }),
+      () => student.emit('board:permission', { studentsCanDraw: false }),
+      () => student.emit('board:clear', { pageId }),
+      () => student.emit('board:follow-me'),
+      () => student.emit('board:import', { pageId, elements: [] }),
+    ];
+    for (const act of actions) {
+      const error = new Promise((resolve) => student.once('room:error', resolve));
+      act();
+      expect(await error).toHaveProperty('message');
+    }
+  });
+
+  it('deletes a page (falling back to a sensible active page) but refuses to delete the last remaining page', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+
+    const created = new Promise<{ pages: { id: string }[]; activePageId: string }>((resolve) => tutor.once('board:pages-update', resolve));
+    tutor.emit('board:page-create');
+    const { pages, activePageId: secondPageId } = await created;
+    const firstPageId = pages[0].id;
+
+    const afterDelete = new Promise<{ pages: unknown[]; activePageId: string }>((resolve) => tutor.once('board:pages-update', resolve));
+    tutor.emit('board:page-delete', { pageId: secondPageId });
+    expect(await afterDelete).toEqual({ pages: [expect.objectContaining({ id: firstPageId })], activePageId: firstPageId });
+
+    const refused = new Promise((resolve) => tutor.once('room:error', resolve));
+    tutor.emit('board:page-delete', { pageId: firstPageId });
+    expect(await refused).toEqual({ message: 'A class must always have at least one whiteboard page.' });
+  });
+
+  it('imports a whiteboard file, replacing the page outright rather than merging', async () => {
+    const tutor = await connect();
+    const joined = await joinTutor(tutor, 'Alice');
+    const pageId = joined.board.activePageId;
+    const student = await connect();
+    await admit(tutor, student);
+    tutor.emit('board:update', { pageId, elements: [makeElement('old-el')] });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    const clearedOnStudent = new Promise((resolve) => student.once('board:cleared', resolve));
+    const updateOnStudent = new Promise((resolve) => student.once('board:update', resolve));
+    const imported = [makeElement('imported-1'), makeElement('imported-2')];
+    tutor.emit('board:import', { pageId, elements: imported });
+    await clearedOnStudent;
+    expect(await updateOnStudent).toEqual({ pageId, elements: imported });
+
+    const page = server.rooms.get('room-one')?.board.pages.find((candidate) => candidate.id === pageId);
+    expect([...page!.elements.keys()].sort()).toEqual(['imported-1', 'imported-2']);
+  });
+
+  it('a 4-participant board (1 tutor + 3 students) all converge on the same drawn element', async () => {
+    const tutor = await connect();
+    const joined = await joinTutor(tutor, 'Alice');
+    const pageId = joined.board.activePageId;
+    const students = await Promise.all(['Bob', 'Cate', 'Dee'].map(async (name) => {
+      const client = await connect();
+      await admit(tutor, client, name);
+      return client;
+    }));
+
+    const element = makeElement('shared-el');
+    const receipts = Promise.all(students.map((student) => new Promise((resolve) => student.once('board:update', resolve))));
+    tutor.emit('board:update', { pageId, elements: [element] });
+    for (const receipt of await receipts) expect(receipt).toEqual({ pageId, elements: [element] });
   });
 });
