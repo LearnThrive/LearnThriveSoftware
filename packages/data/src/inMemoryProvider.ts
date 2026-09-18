@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type {
-  Client, ClientStudentLink, Lesson, LessonActivityEvent, LessonAttendanceRecord, LessonReport, PlatformSettings, Student, TuitionAssignment,
-  Tutor, TutorAvailabilityBlock,
+  Client, ClientStudentLink, Lesson, LessonActivityEvent, LessonAttendanceRecord, LessonReport, Notification, PlatformSettings, Student,
+  TuitionAssignment, Tutor, TutorAvailabilityBlock,
 } from "./domain";
 import type {
   ActivityRepository, AssignmentRepository, AttendanceRepository, AvailabilityRepository, ClientRepository, DataProvider, LessonRepository,
-  ReportRepository, SettingsRepository, StudentRepository, TutorRepository,
+  NotificationRepository, ReportRepository, SettingsRepository, StudentRepository, TutorRepository,
 } from "./repositories";
 
 // Fixed, well-known ids for the seeded demo people (plan section 89's scenario) — not random,
@@ -209,6 +209,28 @@ class InMemoryActivityRepository implements ActivityRepository {
     this.store.set(full.id, full);
     return full;
   }
+  async recent(limit: number) {
+    return [...this.store.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
+  }
+}
+
+class InMemoryNotificationRepository implements NotificationRepository {
+  constructor(private readonly store: Map<string, Notification>) {}
+  async forUser(userId: string) {
+    return [...this.store.values()].filter((n) => n.userId === userId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+  async unreadCountForUser(userId: string) {
+    return [...this.store.values()].filter((n) => n.userId === userId && !n.read).length;
+  }
+  async create(input: Omit<Notification, "id" | "createdAt" | "read">) {
+    const notification: Notification = { ...input, id: randomUUID(), read: false, createdAt: now() };
+    this.store.set(notification.id, notification);
+    return notification;
+  }
+  async markRead(id: string) {
+    const existing = this.store.get(id);
+    if (existing) this.store.set(id, { ...existing, read: true });
+  }
 }
 
 class InMemoryReportRepository implements ReportRepository {
@@ -255,6 +277,7 @@ function seedProvider(): DataProvider {
   const attendanceStore = new Map<string, LessonAttendanceRecord>();
   const activityStore = new Map<string, LessonActivityEvent>();
   const reportStore = new Map<string, LessonReport>();
+  const notificationStore = new Map<string, Notification>();
   const links: ClientStudentLink[] = [];
 
   tutorStore.set(SEED_IDS.tutorJamiePatel, {
@@ -336,6 +359,7 @@ function seedProvider(): DataProvider {
     activity: new InMemoryActivityRepository(activityStore),
     reports: new InMemoryReportRepository(reportStore, lessonStore),
     settings: new InMemorySettingsRepository({ requireReportApproval: true }),
+    notifications: new InMemoryNotificationRepository(notificationStore),
   };
 }
 

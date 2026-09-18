@@ -197,3 +197,20 @@ export interface LessonReport {
 export interface PlatformSettings {
   requireReportApproval: boolean;
 }
+
+// Plan sections 54-55. Type names match the plan's own "future providers can consume" event
+// list (LESSON_REMINDER, LESSON_RESCHEDULED, REPORT_AVAILABLE) plus the Admin/Tutor-facing ones
+// named in section 54's own examples.
+export type NotificationType =
+  | "LESSON_REMINDER" | "LESSON_RESCHEDULED" | "REPORT_AVAILABLE"
+  | "REPORT_REQUIRED" | "REPORT_AWAITING_APPROVAL" | "SCHEDULING_CONFLICT";
+
+export interface Notification {
+  id: string;
+  userId: string; // AuthenticatedUser.id — the recipient, resolved in apps/web (see devProvider.ts)
+  type: NotificationType;
+  message: string;
+  link?: string; // e.g. /dashboard/lessons/{id}
+  read: boolean;
+  createdAt: string;
+}

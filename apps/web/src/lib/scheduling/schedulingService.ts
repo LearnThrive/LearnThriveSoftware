@@ -3,6 +3,7 @@ import type { Lesson, LocationType, RecurrenceInput, TuitionAssignment } from "@
 import { generateRecurrenceOccurrences } from "./recurrence";
 import { formatInTimeZone, LEARNTHRIVE_DEFAULT_TIMEZONE } from "./timezone";
 import { logActivity } from "@/lib/activity/activityService";
+import { notifyProfiles } from "@/lib/notifications/notificationService";
 
 export interface ConflictWarning {
   kind: "TUTOR" | "STUDENT";
@@ -112,6 +113,7 @@ export async function rescheduleLesson(
   if (scope === "THIS_ONLY" || !lesson.recurrenceId) {
     const updated = await data.lessons.update(lessonId, { startAt: newStartAt });
     await logActivity(data, lessonId, "RESCHEDULED", changeMessage, actorId);
+    await notifyProfiles(data, lesson.clientIds, "LESSON_RESCHEDULED", `${lesson.title}: ${changeMessage}`, `/dashboard/lessons/${lessonId}`);
     return [updated];
   }
 
@@ -125,6 +127,7 @@ export async function rescheduleLesson(
     updated.push(await data.lessons.update(target.id, { startAt: shifted }));
   }
   await logActivity(data, lessonId, "RESCHEDULED", `${changeMessage} (${scope === "ENTIRE_SERIES" ? "entire series" : "this and future lessons"})`, actorId);
+  await notifyProfiles(data, lesson.clientIds, "LESSON_RESCHEDULED", `${lesson.title}: ${changeMessage} (${scope === "ENTIRE_SERIES" ? "entire series" : "this and future lessons"})`, `/dashboard/lessons/${lessonId}`);
   return updated;
 }
 

@@ -6,6 +6,7 @@ import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
 import { requireRole } from "@/lib/auth/guard";
 import { cancelLesson, createLessonOrSeries, detectConflicts, rescheduleLesson, type RescheduleScope } from "@/lib/scheduling/schedulingService";
 import { zonedTimeToUtc } from "@/lib/scheduling/timezone";
+import { notifyRole } from "@/lib/notifications/notificationService";
 import type { RecurrenceFrequency } from "@learnthrive/data/domain";
 
 function text(formData: FormData, key: string): string {
@@ -75,16 +76,19 @@ export async function createLessonAction(_prevState: CreateLessonState, formData
       }
     : undefined;
 
-  if (!confirmOverride) {
-    const conflicts = await detectConflicts(data, {
-      tutorId: assignment.tutorId, studentIds: assignment.studentIds, startAt, durationMinutes,
-    });
-    if (conflicts.length > 0) {
+  const conflicts = await detectConflicts(data, {
+    tutorId: assignment.tutorId, studentIds: assignment.studentIds, startAt, durationMinutes,
+  });
+  if (conflicts.length > 0) {
+    if (!confirmOverride) {
       return {
         conflicts: conflicts.map((c) => ({ kind: c.kind, lessonTitle: c.lesson.title, startAt: c.lesson.startAt })),
         values,
       };
     }
+    // Plan section 54: Admin gets notified whenever a scheduling conflict was knowingly
+    // overridden, so it's visible somewhere other than the moment of the click itself.
+    await notifyRole(data, "ADMIN", "SCHEDULING_CONFLICT", `"${title}" was scheduled despite a conflict with ${conflicts.length} other lesson${conflicts.length > 1 ? "s" : ""}.`, "/dashboard/calendar");
   }
 
   await createLessonOrSeries(data, {

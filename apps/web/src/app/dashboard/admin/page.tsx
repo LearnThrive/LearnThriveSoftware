@@ -3,6 +3,7 @@ import Link from "next/link";
 import { requireRole } from "@/lib/auth/guard";
 import { createMetadata } from "@/lib/metadata";
 import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
+import { formatInTimeZone } from "@/lib/scheduling/timezone";
 
 export const metadata: Metadata = createMetadata({
   title: "Admin",
@@ -17,8 +18,9 @@ export const metadata: Metadata = createMetadata({
 export default async function AdminPage() {
   const user = await requireRole(["ADMIN"]);
   const data = getDataProvider();
-  const [tutors, clients, students, assignments] = await Promise.all([
+  const [tutors, clients, students, assignments, recentActivity] = await Promise.all([
     data.tutors.list(), data.clients.list(), data.students.list(), data.assignments.list(),
+    data.activity.recent(10),
   ]);
   const activeAssignments = assignments.filter((a) => a.status === "ACTIVE").length;
 
@@ -39,9 +41,16 @@ export default async function AdminPage() {
         <Link href="/dashboard/admin/assignments" className="button button--secondary"><span>Tuition Assignments</span></Link>
       </div>
 
-      <p className="dashboard-page__note">
-        Scheduling, lessons, attendance, reports, and notifications arrive in later phases of this platform.
-      </p>
+      <h2>Recent activity</h2>
+      <ul className="people-list">
+        {recentActivity.length === 0 && <li className="people-list__empty">No activity recorded yet.</li>}
+        {recentActivity.map((event) => (
+          <li key={event.id}>
+            <Link href={`/dashboard/lessons/${event.lessonId}`}>{event.message}</Link>
+            <span className="people-list__meta">{formatInTimeZone(event.createdAt, "Europe/London", { dateStyle: "medium", timeStyle: "short" })}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

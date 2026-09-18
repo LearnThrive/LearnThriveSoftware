@@ -12,7 +12,7 @@ const ROLE_LABELS: Record<AuthenticatedUser["role"], string> = {
   STUDENT: "Student",
 };
 
-export function DashboardShell({ user, children }: { user: AuthenticatedUser; children: ReactNode }) {
+export function DashboardShell({ user, children, unreadCount = 0 }: { user: AuthenticatedUser; children: ReactNode; unreadCount?: number }) {
   const router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
 
@@ -33,6 +33,9 @@ export function DashboardShell({ user, children }: { user: AuthenticatedUser; ch
           LearnThrive
         </Link>
         <div className="dashboard-shell__user">
+          <Link href="/dashboard/notifications" className="button button--text">
+            <span>Notifications{unreadCount > 0 ? ` (${unreadCount})` : ""}</span>
+          </Link>
           <span className="dashboard-shell__role-badge">{ROLE_LABELS[user.role]}</span>
           <span className="dashboard-shell__name">{user.name}</span>
           <button type="button" className="button button--text" onClick={handleLogout} disabled={signingOut}>
