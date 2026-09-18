@@ -74,11 +74,11 @@ test("removed tutor directory routes redirect permanently without public links",
     .map((file) => readFileSync(file, "utf8"))
     .join("\n");
   assert.doesNotMatch(source, /["'`]\/our(?:-tutors|Tutors)(?:["'`#?])/);
-  assert.doesNotMatch(source, /TutorDirectory|window\.socket|cdn\.tutorcruncher\.com|\.tcs-/);
+  assert.doesNotMatch(source, /TutorDirectory|window\.socket|cdn\.tutorcruncher\.com|secure\.tutorcruncher\.com|\.tcs-/);
   assert.doesNotMatch(sitemapSource, /["']\/our-tutors["']/);
   assert.match(
     siteSource,
-    /tutorLoginUrl:\s*"https:\/\/secure\.tutorcruncher\.com\/learnthrive-tuition\/login\/"/,
+    /tutorLoginUrl:\s*"\/login"/,
   );
 });
 

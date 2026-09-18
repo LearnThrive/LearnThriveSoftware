@@ -15,7 +15,9 @@ export default defineConfig({
   webServer: {
     // Runs from the repo root so both the realtime server and this app's Vite dev server start
     // together (they're separate workspaces now — see apps/realtime and this app's own package.json).
-    command: 'npm run dev --prefix ../..',
+    // "dev:standalone", not "dev" — the root "dev" script now starts the unified apps/web server
+    // (plan6.md's single-dev-server convergence), a different thing entirely on a different port.
+    command: 'npm run dev:standalone --prefix ../..',
     url: 'http://127.0.0.1:5173',
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,

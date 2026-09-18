@@ -1,42 +1,42 @@
 # LearnThrive
 
-This repository is the beginning of the unified LearnThrive Tuition platform: the public marketing website, the authenticated tutoring platform (accounts, calendar, lessons, reports), and the real-time classroom, converging into one product.
+The unified LearnThrive Tuition platform: the public marketing website, the authenticated tutoring platform (accounts, calendar, lessons, attendance, reports, notifications), and the real-time classroom — one product, one dev server, one origin.
 
 It is an npm workspace monorepo with four members:
 
 ```
 apps/
-  web/         Next.js — public marketing site + (from Phase B onward) the authenticated platform
-  classroom/   Vite + React — the existing real-time classroom (Call/Board/Present, whiteboard, moderation)
-  realtime/    Express + Socket.IO — the classroom's signalling/TURN backend
+  web/         Next.js — public marketing site, the authenticated platform, AND the classroom UI
+               (apps/web/src/features/classroom — see "Single dev server" below), all served
+               from one custom Node server (apps/web/server.ts) that also hosts Socket.IO
+  classroom/   Vite + React — the ORIGINAL standalone classroom, kept only for its own existing
+               test suite during the transition (see "The retired standalone classroom" below)
+  realtime/    Express + Socket.IO — the classroom's signalling/TURN backend, now a library
+               (`createSignallingServer()`) that apps/web's server.ts attaches to its own HTTP
+               server; still runnable standalone too (apps/realtime/server/index.ts)
 packages/
-  shared/      Protocol types and constants shared by apps/classroom and apps/realtime
+  data/        The domain/repository layer (Tutors, Clients, Students, Lessons, Reports, ...)
+  shared/      Protocol types, the classroom join-token contract, and constants shared across apps
 ```
 
-`apps/classroom` and `apps/realtime` are the pre-existing classroom prototype, moved here largely unchanged (see [apps/classroom/README.md](apps/classroom/README.md) for everything classroom-specific — features, testing, TURN, browser support). `apps/web` is the marketing site migrated from the separate `D:\LearnThrive` repository (kept as read-only source material during that migration — never modified).
+`apps/web` is the marketing site migrated from the separate `D:\LearnThrive` repository (kept as read-only source material during that migration — never modified), now grown into the full platform.
 
-## Why this structure
-
-The plan behind this migration ([plan5.md](plan5.md), private/gitignored) requires four boundaries to be real, not just conventions: the web application, the realtime/classroom service, the domain/data access layer, and shared models/permissions must all be genuinely separable. This workspace layout is that separation — each `apps/*` directory is an independently runnable, independently testable unit with its own `package.json`, and `packages/shared` is the only thing more than one app is allowed to import from.
-
-The classroom was **not** rewritten into Next.js this pass. It's a substantial, well-tested real-time application (WebRTC mesh, a collaborative whiteboard, extensive Playwright coverage); moving it wholesale into a different framework in the same pass as a large structural migration would be exactly the kind of destabilising rewrite this plan explicitly warns against. It's kept as `apps/classroom`, an independent Vite app, with a documented integration boundary — future phases mount authenticated lessons into it rather than reimplementing it.
-
-## Local development
+## Single dev server
 
 ```bash
 npm install
 npm run dev
 ```
 
-This starts both `apps/realtime` (the signalling/TURN server, port 3001) and `apps/classroom` (the Vite dev server, port 5173) together. Open `http://127.0.0.1:5173/meeting` for the classroom directly during development.
+Open **`http://localhost:3000`** — that one origin serves the public site, the authenticated dashboard, the API routes, the classroom UI, and Socket.IO together. Log in at `/login` with one of the development accounts in [docs/DEVELOPMENT_ACCOUNTS.md](docs/DEVELOPMENT_ACCOUNTS.md) to reach `/dashboard`. **Must run in dev mode** — the development auth provider deliberately refuses to run under `NODE_ENV=production`; see [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md).
 
-To run the marketing/platform web app instead (or alongside):
+Under the hood, `npm run dev` runs `apps/web`'s own `dev` script, `tsx server.ts` — a custom Node HTTP server that hosts Next.js's request handler and an attached Socket.IO server side by side (see `docs/ARCHITECTURE.md`). There is no second process, no second port, and nothing else to start manually: the classroom's real-time signalling logic (`apps/realtime/server/signalling.ts`, unchanged) is imported as a library and wired to that same server, and its React UI (`apps/web/src/features/classroom/`, ported from the original `apps/classroom`) is lazy-loaded only when a Lesson's classroom route is actually opened.
 
-```bash
-npm run dev:web
-```
+Joining a classroom happens from a Lesson — `/dashboard/lessons/:id` → **Join Classroom** → `/dashboard/lessons/:id/classroom` — never a separate site. A `/dev/classroom` route (hidden from all navigation, 404s outside development) retains the original manual name/room-code entry form for local debugging and is what `apps/classroom`'s own Playwright suite still drives.
 
-Open `http://localhost:3000`. Log in at `/login` with one of the five development accounts in [docs/DEVELOPMENT_ACCOUNTS.md](docs/DEVELOPMENT_ACCOUNTS.md) to reach `/dashboard`. **Must run in dev mode** (`next dev`, not `next start`) — the development auth provider deliberately refuses to run under `NODE_ENV=production`; see [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md).
+## The retired standalone classroom
+
+`apps/classroom` (the original Vite app) and running it directly (`npm run dev:standalone`, or `npm run dev --workspace=apps/classroom`) still work — kept specifically so `apps/classroom`'s own pre-existing test suite keeps running unmodified during the transition (see [apps/classroom/README.md](apps/classroom/README.md)) — but no normal development workflow needs it anymore. New classroom work happens in `apps/web/src/features/classroom/`.
 
 ### Environment variables
 
@@ -49,37 +49,37 @@ Each app owns its own `.env` (never committed) — see that app's own `.env.exam
 
 ## Quality checks
 
-Run per app (each is independently testable):
+Run per workspace (each is independently testable):
 
 ```bash
-npm run lint --workspace=apps/classroom
-npm run typecheck --workspace=apps/classroom
-npm run test --workspace=apps/classroom
-npm run test:browser --workspace=apps/classroom   # Playwright — starts both apps/realtime and apps/classroom
+npm run lint --workspace=apps/web
+npm run typecheck --workspace=apps/web
+npm run test --workspace=apps/web
+npx playwright test --workspace=apps/web   # apps/web's own Playwright suite (single-origin, auth, role journeys)
 ```
 
-Swap `apps/classroom` for `apps/realtime` or `apps/web` for that app's checks. Or run everything at once from the root:
+Swap `apps/web` for `apps/classroom`, `apps/realtime`, or `packages/data` for that workspace's checks (`apps/classroom` additionally has `npm run test:browser`, its own Playwright suite, driven via `/dev/classroom`). Or run everything at once from the root:
 
 ```bash
 npm run lint         # all workspaces
-npm run typecheck     # all workspaces
-npm run test          # all workspaces (vitest for classroom/realtime, node --test for web)
+npm run typecheck    # all workspaces
+npm run test          # all workspaces (vitest for classroom/realtime, node --test for web/data)
 npm run build          # classroom build, realtime typecheck, web build
 ```
 
 ## Documentation
 
-- [apps/classroom/README.md](apps/classroom/README.md) — the classroom app: features, architecture, testing, TURN, browser support, production gaps (classroom-specific).
-- [apps/web/README.md](apps/web/README.md) — the marketing site: local development, quality checks, enquiry form.
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — this repository's overall structure and the reasoning behind it.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — the single-server architecture, the web/realtime/shared/data boundaries, and the phase-by-phase history of this platform.
 - [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md) — the development auth provider, password hashing, sessions, production safety.
 - [docs/ROLE_PERMISSIONS.md](docs/ROLE_PERMISSIONS.md) — roles and what's actually enforced where.
-- [docs/DEVELOPMENT_ACCOUNTS.md](docs/DEVELOPMENT_ACCOUNTS.md) — the five seeded dev accounts and their credentials.
-- [docs/DOMAIN_MODEL.md](docs/DOMAIN_MODEL.md) — Tutors, Clients, Students, Tuition Assignments, and the repository layer.
-- [docs/SCHEDULING.md](docs/SCHEDULING.md) — the calendar, lessons, recurrence, timezones/DST, rescheduling, cancellation, availability, and conflict detection.
-
-Further platform-level docs (lesson reports, Supabase migration plan, platform-wide production gaps) land as the corresponding phases of this migration are implemented — see `docs/` as it grows.
+- [docs/DEVELOPMENT_ACCOUNTS.md](docs/DEVELOPMENT_ACCOUNTS.md) — the seeded dev accounts, their credentials, and resetting demo data.
+- [docs/DOMAIN_MODEL.md](docs/DOMAIN_MODEL.md), [docs/SCHEDULING.md](docs/SCHEDULING.md), [docs/ATTENDANCE.md](docs/ATTENDANCE.md), [docs/LESSON_REPORTS.md](docs/LESSON_REPORTS.md), [docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md) — the domain model, calendar/lessons, attendance, reports, and notifications.
+- [docs/CLASSROOM_INTEGRATION.md](docs/CLASSROOM_INTEGRATION.md) — the signed join-token boundary between a Lesson and the classroom.
+- [docs/HARDENING.md](docs/HARDENING.md) — the IDOR/access-control adversarial test checklist.
+- [docs/SUPABASE_MIGRATION.md](docs/SUPABASE_MIGRATION.md) — the (unimplemented) future database schema map.
+- [docs/PRODUCTION_GAPS.md](docs/PRODUCTION_GAPS.md) — everything genuinely standing between this and a real production deployment.
+- [apps/classroom/README.md](apps/classroom/README.md) — the original standalone classroom app, kept for its own test suite (see "The retired standalone classroom" above).
 
 ## Status
 
-This is a **development platform**, not production-ready. As of this migration (Phase A — repository convergence, Phase B — auth foundation, Phase C — people and tuition assignments, Phase D — calendar and lessons), there is real login/logout/sessions/role guards, a real (in-memory) domain model for Tutors/Clients/Students/Tuition Assignments/Lessons with Admin CRUD pages, and a real calendar (Month/Week/Day/List, recurrence, drag-to-reschedule, conflict detection, DST-correct timezone handling) — but no accounts beyond five fictional dev users, no classroom integration yet (lessons don't launch a real classroom session), and nothing survives a server restart. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for what exists today versus what's planned.
+This is a **development platform**, not production-ready — see [docs/PRODUCTION_GAPS.md](docs/PRODUCTION_GAPS.md) for the full, honest list. What's real today: login/logout/sessions/role guards; people management and tuition assignments; a full calendar (recurrence, drag-to-reschedule, conflict detection, DST-correct timezones); a signed-token classroom integration launched directly from a Lesson, in the same origin as everything else; attendance and a completion-gated lesson report workflow (draft/submit/approve, with a strict Parent-visible/internal-notes boundary); in-app notifications and an Admin activity feed. Nothing persists across a server restart, and there are no accounts beyond the seeded development ones.
