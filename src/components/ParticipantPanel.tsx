@@ -3,6 +3,7 @@ import { MAX_PARTICIPANTS, type ParticipantRole } from '../../shared/protocol';
 import type { RemotePeer } from '../meeting';
 import { usePopoverDismiss } from '../usePopoverDismiss';
 import { Icon } from './Icon';
+import { RoleBadge } from './RoleBadge';
 
 interface ParticipantPanelProps {
   open: boolean;
@@ -14,18 +15,20 @@ interface ParticipantPanelProps {
   selfVideo: boolean;
   selfHandRaised: boolean;
   peers: RemotePeer[];
-}
-
-function RoleBadge({ role }: { role: ParticipantRole | null }) {
-  if (!role) return null;
-  return <span className={`role-badge role-badge-${role}`}>{role === 'tutor' ? 'Tutor' : 'Student'}</span>;
+  onMuteParticipant: (id: string) => void;
+  onAllowUnmute: (id: string) => void;
+  onRemoveParticipant: (id: string) => void;
+  onLowerHand: (id: string) => void;
+  onStopShare: (id: string) => void;
 }
 
 export function ParticipantPanel({
   open, onClose, triggerRef, selfName, selfRole, selfAudio, selfVideo, selfHandRaised, peers,
+  onMuteParticipant, onAllowUnmute, onRemoveParticipant, onLowerHand, onStopShare,
 }: ParticipantPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   usePopoverDismiss(open, onClose, panelRef, triggerRef);
+  const isTutor = selfRole === 'tutor';
 
   if (!open) return null;
 
@@ -50,6 +53,32 @@ export function ParticipantPanel({
               <Icon name={participant.media.audio ? 'microphone' : 'microphone-off'} size={14} />
               <Icon name={participant.media.video ? 'camera' : 'camera-off'} size={14} />
             </span>
+            {isTutor && participant.role === 'student' && (
+              <span className="participant-row-actions">
+                {participant.screenSharing && (
+                  <button type="button" className="participant-row-action" onClick={() => onStopShare(participant.id)} aria-label={`Stop ${participant.name}'s screen share`} title="Stop share">
+                    <Icon name="screen-off" size={13} />
+                  </button>
+                )}
+                {participant.handRaised && (
+                  <button type="button" className="participant-row-action" onClick={() => onLowerHand(participant.id)} aria-label={`Lower ${participant.name}'s hand`} title="Lower hand">
+                    <Icon name="hand" size={13} />
+                  </button>
+                )}
+                {participant.forceMuted ? (
+                  <button type="button" className="participant-row-action" onClick={() => onAllowUnmute(participant.id)} aria-label={`Allow ${participant.name} to unmute`} title="Allow to unmute">
+                    <Icon name="microphone" size={13} />
+                  </button>
+                ) : (
+                  <button type="button" className="participant-row-action" onClick={() => onMuteParticipant(participant.id)} aria-label={`Mute ${participant.name}`} title="Mute">
+                    <Icon name="microphone-off" size={13} />
+                  </button>
+                )}
+                <button type="button" className="participant-row-action participant-row-action-danger" onClick={() => onRemoveParticipant(participant.id)} aria-label={`Remove ${participant.name} from class`} title="Remove">
+                  <Icon name="user-x" size={13} />
+                </button>
+              </span>
+            )}
           </li>
         ))}
       </ul>

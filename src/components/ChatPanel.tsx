@@ -9,13 +9,19 @@ interface ChatPanelProps {
   onClose: () => void;
   onSend: (text: string) => void;
   triggerRef: RefObject<HTMLButtonElement | null>;
+  isTutor?: boolean;
+  onDeleteMessage?: (id: string) => void;
+  onClearChat?: () => void;
+  canChat?: boolean;
 }
 
 function formatTime(timestamp: number) {
   return new Date(timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-export function ChatPanel({ messages, open, onClose, onSend, triggerRef }: ChatPanelProps) {
+export function ChatPanel({
+  messages, open, onClose, onSend, triggerRef, isTutor = false, onDeleteMessage, onClearChat, canChat = true,
+}: ChatPanelProps) {
   const [draft, setDraft] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -50,13 +56,27 @@ export function ChatPanel({ messages, open, onClose, onSend, triggerRef }: ChatP
     <aside className="chat-panel" aria-label="Meeting chat">
       <div className="chat-panel-header">
         <h2>Chat</h2>
-        <button type="button" className="chat-close" onClick={closeAndReturnFocus} aria-label="Close chat"><Icon name="close" size={18} /></button>
+        <div className="chat-panel-header-actions">
+          {isTutor && messages.length > 0 && onClearChat && (
+            <button type="button" className="chat-clear" onClick={onClearChat} aria-label="Clear chat for everyone" title="Clear chat">
+              <Icon name="user-x" size={15} />
+            </button>
+          )}
+          <button type="button" className="chat-close" onClick={closeAndReturnFocus} aria-label="Close chat"><Icon name="close" size={18} /></button>
+        </div>
       </div>
       <div className="chat-messages" ref={listRef} role="log" aria-live="polite">
         {messages.length === 0 && <p className="chat-empty">Messages are only visible during this meeting.</p>}
         {messages.map((message) => (
           <div key={message.id} className={`chat-message ${message.own ? 'own' : ''}`}>
-            <div className="chat-message-meta"><span>{message.own ? 'You' : message.name}</span><span>{formatTime(message.timestamp)}</span></div>
+            <div className="chat-message-meta">
+              <span>{message.own ? 'You' : message.name}</span><span>{formatTime(message.timestamp)}</span>
+              {isTutor && onDeleteMessage && (
+                <button type="button" className="chat-message-delete" onClick={() => onDeleteMessage(message.id)} aria-label="Delete message" title="Delete message">
+                  <Icon name="close" size={11} />
+                </button>
+              )}
+            </div>
             <p>{message.text}</p>
           </div>
         ))}
@@ -64,10 +84,10 @@ export function ChatPanel({ messages, open, onClose, onSend, triggerRef }: ChatP
       <form className="chat-form" onSubmit={submit}>
         <label className="sr-only" htmlFor="chat-input">Type a message</label>
         <input
-          id="chat-input" ref={inputRef} value={draft} maxLength={MAX_CHAT_LENGTH} autoComplete="off"
-          placeholder="Type a message…" onChange={(event) => setDraft(event.target.value)}
+          id="chat-input" ref={inputRef} value={draft} maxLength={MAX_CHAT_LENGTH} autoComplete="off" disabled={!canChat}
+          placeholder={canChat ? 'Type a message…' : 'The tutor has turned off chat for students'} onChange={(event) => setDraft(event.target.value)}
         />
-        <button type="submit" className="chat-send" disabled={!draft.trim()} aria-label="Send message"><Icon name="send" size={17} /></button>
+        <button type="submit" className="chat-send" disabled={!draft.trim() || !canChat} aria-label="Send message"><Icon name="send" size={17} /></button>
       </form>
     </aside>
   );

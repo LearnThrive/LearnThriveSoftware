@@ -38,9 +38,9 @@ function mainViewControl(page: Page, participantName: string) {
   return page.getByRole('button', { name: `Make ${participantName}'s view the main view` });
 }
 
-async function leaveMeeting(page: Page) {
-  await page.getByRole('button', { name: 'Leave meeting' }).click();
-  await page.getByRole('button', { name: 'Yes, leave' }).click();
+async function leaveMeeting(page: Page, isTutor = false) {
+  await page.getByRole('button', { name: isTutor ? 'End class' : 'Leave meeting' }).click();
+  await page.getByRole('button', { name: isTutor ? 'Yes, end class' : 'Yes, leave' }).click();
 }
 
 async function connectTutorAndOneStudent(browser: Browser, tutorName = 'Tutor', studentName = 'Student') {
@@ -118,16 +118,11 @@ test('a tutor and one student connect over WebRTC, exchange media state, and a t
     await contextC.close();
   });
 
-  await test.step('leaving ends the call for one side and returns the other to waiting', async () => {
-    await leaveMeeting(pageA);
+  await test.step('the tutor ending the class ends it for the student too, not just a peer-left notice', async () => {
+    await leaveMeeting(pageA, true);
     await expect(pageA.getByRole('heading', { name: /left the meeting/i })).toBeVisible();
-    // "X left" is a transient toast, not baked into the persistent connection pill — with up to
-    // 3 other participants possible, one leaving shouldn't make the whole headline status say
-    // "left" while others might still be connected. The pill instead reflects the aggregate
-    // state, which correctly becomes "Waiting…" once the student has no peers left at all.
-    await expect(pageB.locator('.participant-toast')).toContainText('Tutor left the meeting');
-    await expect(pageB.locator('.connection-pill')).toContainText('Waiting');
-    await expect(pageB.getByRole('region', { name: 'Waiting for other participants' })).toBeVisible();
+    await expect(pageB.getByRole('heading', { name: /tutor ended the class/i })).toBeVisible();
+    await expect(pageB.getByRole('button', { name: /rejoin/i })).toHaveCount(0);
   });
 
   await contextA.close();
@@ -196,7 +191,7 @@ test('the tutor can leave and rejoin the same room cleanly, as the tutor', async
   await expect(pageA.getByRole('region', { name: 'Waiting for other participants' })).toBeVisible();
 
   await test.step('leaving reaches the ended screen', async () => {
-    await leaveMeeting(pageA);
+    await leaveMeeting(pageA, true);
     await expect(pageA.getByRole('heading', { name: /left the meeting/i })).toBeVisible();
   });
 
@@ -315,4 +310,204 @@ test('the copied invite link uses the page\'s current origin, with no build-time
   expect(clipboardText).toContain(`/meeting?room=${roomId}`);
 
   await context.close();
+});
+
+test('the tutor can deny a waiting student and lock the room against new joins', async ({ browser }) => {
+  const { context: contextA, page: pageA } = await openParticipant(browser, 'Tutor');
+  await pageA.getByRole('button', { name: 'Create meeting' }).click();
+  const roomId = await pageA.getByLabel('Room code').inputValue();
+  await pageA.getByRole('button', { name: 'Start class' }).click();
+
+  const { context: contextB, page: pageB } = await openParticipant(browser, 'Student', roomId);
+  await joinAsStudent(pageB);
+
+  await test.step('denying the waiting student sends them back with an explanation', async () => {
+    await pageA.getByRole('button', { name: 'Waiting room' }).click();
+    await pageA.getByRole('button', { name: 'Deny Student' }).click();
+    await expect(pageB.getByText(/tutor declined to admit you/i)).toBeVisible();
+  });
+
+  await test.step('locking the room rejects a new joiner', async () => {
+    await pageA.getByRole('button', { name: 'Class controls' }).click();
+    await pageA.getByRole('button', { name: 'Lock room' }).click();
+    await pageA.keyboard.press('Escape');
+
+    const { context: contextC, page: pageC } = await openParticipant(browser, 'Mallory', roomId);
+    await pageC.getByRole('button', { name: 'Join meeting' }).click();
+    await expect(pageC.getByText(/currently locked/i)).toBeVisible();
+    await contextC.close();
+  });
+
+  await contextA.close();
+  await contextB.close();
+});
+
+test('the tutor can force-mute a student, who cannot self-unmute until allowed again', async ({ browser }) => {
+  const { pageA, pageB, contextA, contextB } = await connectTutorAndOneStudent(browser);
+
+  await test.step('force-muting turns off the mic and blocks the student\'s own unmute attempt', async () => {
+    await pageA.getByRole('button', { name: 'Participants' }).click();
+    await pageA.getByRole('button', { name: 'Mute Student' }).click();
+    await pageA.keyboard.press('Escape');
+
+    await expect(pageB.getByRole('button', { name: 'Muted by the tutor' })).toBeVisible();
+    await pageB.getByRole('button', { name: 'Muted by the tutor' }).click();
+    await expect(pageB.getByText(/tutor has muted you/i)).toBeVisible();
+  });
+
+  await test.step('allowing unmute lets the student turn their mic back on', async () => {
+    await pageA.getByRole('button', { name: 'Participants' }).click();
+    await pageA.getByRole('button', { name: 'Allow Student to unmute' }).click();
+    await pageA.keyboard.press('Escape');
+
+    await pageB.getByRole('button', { name: 'Turn microphone on' }).click();
+    await expect(pageA.locator('.remote-tile .participant-media')).toHaveAttribute('aria-label', 'Microphone on');
+  });
+
+  await contextA.close();
+  await contextB.close();
+});
+
+test('the tutor can remove a student, who is immediately disconnected with no rejoin option', async ({ browser }) => {
+  const { pageA, pageB, contextA, contextB } = await connectTutorAndOneStudent(browser);
+
+  await pageA.getByRole('button', { name: 'Participants' }).click();
+  await pageA.getByRole('button', { name: 'Remove Student from class' }).click();
+  await pageA.keyboard.press('Escape');
+
+  await expect(pageB.getByRole('heading', { name: /removed from the class/i })).toBeVisible();
+  await expect(pageB.getByRole('button', { name: /rejoin/i })).toHaveCount(0);
+
+  await contextA.close();
+  await contextB.close();
+});
+
+test('the tutor can delete a single chat message and clear the whole chat', async ({ browser }) => {
+  const { pageA, pageB, contextA, contextB } = await connectTutorAndOneStudent(browser);
+
+  await pageA.getByRole('button', { name: 'Toggle chat' }).click();
+  await pageA.getByPlaceholder('Type a message…').fill('hello everyone');
+  await pageA.getByRole('button', { name: 'Send message' }).click();
+  await pageB.getByRole('button', { name: 'Toggle chat' }).click();
+  await expect(pageB.locator('.chat-message p')).toHaveText('hello everyone');
+
+  await test.step('deleting the message removes it for both sides', async () => {
+    await pageA.getByRole('button', { name: 'Delete message' }).click();
+    await expect(pageA.locator('.chat-message')).toHaveCount(0);
+    await expect(pageB.locator('.chat-message')).toHaveCount(0);
+  });
+
+  await test.step('clearing the chat removes every message for both sides', async () => {
+    await pageA.getByPlaceholder('Type a message…').fill('second message');
+    await pageA.getByRole('button', { name: 'Send message' }).click();
+    await expect(pageB.locator('.chat-message')).toHaveCount(1);
+
+    await pageA.getByRole('button', { name: 'Clear chat for everyone' }).click();
+    await expect(pageA.locator('.chat-message')).toHaveCount(0);
+    await expect(pageB.locator('.chat-message')).toHaveCount(0);
+  });
+
+  await contextA.close();
+  await contextB.close();
+});
+
+test('the tutor can run a poll end to end and both sides see live results', async ({ browser }) => {
+  const { pageA, pageB, contextA, contextB } = await connectTutorAndOneStudent(browser);
+
+  await test.step('the tutor creates a two-option poll', async () => {
+    await pageA.getByRole('button', { name: 'Class controls' }).click();
+    await pageA.getByRole('button', { name: 'Start a poll' }).click();
+    await pageA.getByLabel('Question').fill('Ready for a quiz?');
+    const options = pageA.locator('.poll-creator-option input');
+    await options.nth(0).fill('Yes');
+    await options.nth(1).fill('No');
+    await pageA.getByRole('button', { name: 'Start poll' }).click();
+  });
+
+  await test.step('both sides see the poll; the student votes and the tutor sees the tally update', async () => {
+    await expect(pageA.locator('.poll-panel')).toContainText('Ready for a quiz?');
+    await expect(pageB.locator('.poll-panel')).toContainText('Ready for a quiz?');
+    await pageB.getByRole('button', { name: 'Yes' }).click();
+    await expect(pageA.locator('.poll-panel')).toContainText('1 vote');
+  });
+
+  await test.step('closing the poll freezes it for everyone', async () => {
+    await pageA.getByRole('button', { name: 'Close poll' }).click();
+    await expect(pageA.locator('.poll-panel')).toContainText('Poll closed');
+    await expect(pageB.locator('.poll-panel')).toContainText('Poll closed');
+  });
+
+  await contextA.close();
+  await contextB.close();
+});
+
+test('the tutor can run an understanding check and see live per-student responses', async ({ browser }) => {
+  const { pageA, pageB, contextA, contextB } = await connectTutorAndOneStudent(browser);
+
+  await test.step('the tutor starts a check; the student responds and only the tutor sees the aggregate', async () => {
+    await pageA.getByRole('button', { name: 'Class controls' }).click();
+    await pageA.getByRole('button', { name: 'Start understanding check' }).click();
+    await expect(pageB.locator('.understanding-panel')).toBeVisible();
+
+    await pageB.getByRole('button', { name: 'Got it' }).click();
+    await expect(pageA.locator('.understanding-panel')).toContainText('1 got it');
+    await expect(pageA.locator('.understanding-responses')).toContainText('Student');
+  });
+
+  await test.step('ending the check hides it for both sides', async () => {
+    await pageA.getByRole('button', { name: 'End check' }).click();
+    await expect(pageA.locator('.understanding-panel')).toHaveCount(0);
+    await expect(pageB.locator('.understanding-panel')).toHaveCount(0);
+  });
+
+  await contextA.close();
+  await contextB.close();
+});
+
+test('the tutor can start, pause, resume, and stop a class timer that both sides see', async ({ browser }) => {
+  const { pageA, pageB, contextA, contextB } = await connectTutorAndOneStudent(browser);
+
+  await test.step('starting a stopwatch shows a ticking timer to both sides', async () => {
+    await pageA.getByRole('button', { name: 'Class controls' }).click();
+    await pageA.getByRole('button', { name: 'Start a timer' }).click();
+    await pageA.getByRole('button', { name: 'Start timer' }).click();
+    await expect(pageA.locator('.class-timer')).toBeVisible();
+    await expect(pageB.locator('.class-timer')).toBeVisible();
+  });
+
+  await test.step('pausing and stopping are both reflected for the student, who has no controls of their own', async () => {
+    await expect(pageB.locator('.class-timer-controls')).toHaveCount(0);
+    await pageA.getByRole('button', { name: 'Pause timer' }).click();
+    await pageA.getByRole('button', { name: 'Stop timer' }).click();
+    await expect(pageA.locator('.class-timer')).toHaveCount(0);
+    await expect(pageB.locator('.class-timer')).toHaveCount(0);
+  });
+
+  await contextA.close();
+  await contextB.close();
+});
+
+test('the H key toggles raising and lowering a hand', async ({ browser }) => {
+  const { pageA, pageB, contextA, contextB } = await connectTutorAndOneStudent(browser);
+
+  await pageB.locator('body').press('h');
+  await expect(pageB.getByRole('button', { name: 'Lower your hand' })).toBeVisible();
+  await pageA.getByRole('button', { name: 'Participants' }).click();
+  await expect(pageA.locator('.participant-panel [aria-label="Hand raised"]')).toBeVisible();
+
+  await pageB.locator('body').press('h');
+  await expect(pageB.getByRole('button', { name: 'Raise your hand' })).toBeVisible();
+
+  await contextA.close();
+  await contextB.close();
+});
+
+test('a role badge appears on the camera-off avatar placeholder', async ({ browser }) => {
+  const { pageA, pageB, contextA, contextB } = await connectTutorAndOneStudent(browser);
+
+  await pageA.getByRole('button', { name: 'Turn camera off' }).click();
+  await expect(pageB.locator('.remote-tile .role-badge-tutor')).toBeVisible();
+
+  await contextA.close();
+  await contextB.close();
 });
