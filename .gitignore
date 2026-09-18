@@ -8,3 +8,14 @@ playwright-report/
 .local/
 *.log
 .claude-flow/
+plan2.md
+plan3.md
+plan4.md
+plan5.md
+.next/
+out/
+build/
+artifacts/
+coverage/
+*.tsbuildinfo
+next-env.d.ts

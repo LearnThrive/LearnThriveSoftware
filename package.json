@@ -1,37 +1,33 @@
 {
-  "name": "learnthrive-meeting-prototype",
+  "name": "learnthrive-platform",
   "private": true,
   "version": "0.1.0",
   "type": "module",
   "engines": {
     "node": ">=22.12.0"
   },
-  "scripts": {
-    "dev": "concurrently --kill-others --names signalling,web --prefix-colors green,cyan \"npm:dev:server\" \"npm:dev:web\"",
-    "dev:web": "vite",
-    "dev:server": "tsx watch --env-file-if-exists=.env server/index.ts",
-    "build": "tsc --noEmit && vite build",
-    "typecheck": "tsc --noEmit",
-    "lint": "eslint .",
-    "test": "vitest run",
-    "test:browser": "playwright test"
-  },
-  "dependencies": {
-    "@excalidraw/excalidraw": "^0.18.1",
-    "express": "^5.2.1",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "overrides": {
     "react": "^19.3.0",
-    "react-dom": "^19.3.0",
-    "socket.io": "^4.8.3",
-    "socket.io-client": "^4.8.3"
+    "react-dom": "^19.3.0"
+  },
+  "scripts": {
+    "dev": "concurrently --kill-others --names realtime,classroom --prefix-colors green,cyan \"npm run dev --workspace=apps/realtime\" \"npm run dev --workspace=apps/classroom\"",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "build": "npm run build --workspace=apps/classroom && npm run typecheck --workspace=apps/realtime && npm run build --workspace=apps/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:browser": "npm run test:browser --workspace=apps/classroom",
+    "check": "npm run lint && npm run typecheck && npm run test && npm run build"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
     "@playwright/test": "^1.63.0",
-    "@types/express": "^5.0.6",
     "@types/node": "^22.20.3",
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^5.2.0",
     "concurrently": "^10.0.5",
     "eslint": "^9.39.5",
     "eslint-plugin-react-hooks": "^7.1.1",
@@ -39,7 +35,6 @@
     "tsx": "^4.23.13",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.70.0",
-    "vite": "^7.3.6",
     "vitest": "^3.2.7"
   }
 }

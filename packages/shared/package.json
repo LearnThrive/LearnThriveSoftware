@@ -1,0 +1,10 @@
+{
+  "name": "@learnthrive/shared",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    "./protocol": "./protocol.ts",
+    "./allowedHosts": "./allowedHosts.ts"
+  }
+}
