@@ -64,6 +64,7 @@ export function useMeeting() {
     duplicateBoardPage: controller.duplicateBoardPage,
     commitLocalPageElements: controller.commitLocalPageElements,
     sendAnnouncement: controller.sendAnnouncement,
+    setDataSaver: controller.setDataSaver,
     join: controller.join,
     leave: controller.leave,
     reset: controller.reset,

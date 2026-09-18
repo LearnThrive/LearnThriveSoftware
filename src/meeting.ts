@@ -98,6 +98,7 @@ export interface MeetingSnapshot {
   // persistent room-state field, so it can't be represented as a plain snapshot value change.
   boardFollowMeSeq: number;
   announcement: Announcement | null;
+  dataSaver: boolean;
 }
 
 // "own" is resolved once, at the moment each message arrives, against the socket id live at
@@ -121,7 +122,7 @@ export class MeetingController {
     cameras: [], microphones: [], selectedCamera: undefined, selectedMicrophone: undefined, notice: null,
     chatOpen: false, messages: [], unreadCount: 0, handRaised: false, reactions: [],
     forceMuted: false, roomSettings: DEFAULT_ROOM_SETTINGS, poll: null, understandingCheck: null, timer: null, endedReason: null,
-    board: DEFAULT_BOARD_STATE, boardPointers: {}, boardFollowMeSeq: 0, announcement: null,
+    board: DEFAULT_BOARD_STATE, boardPointers: {}, boardFollowMeSeq: 0, announcement: null, dataSaver: false,
   };
   // Set by duplicateBoardPage() while waiting for board:page-create's own pages-update echo to
   // learn the new page's id (the server doesn't otherwise report it) — see duplicateBoardPage.
@@ -157,7 +158,29 @@ export class MeetingController {
 
   private setPeers(peers: RemotePeer[]) {
     this.update({ peers, status: aggregateConnectionStatus(peers) });
+    this.applyVideoBandwidthPolicy();
   }
+
+  // Every camera upload in this P2P mesh fans out directly to every other peer, so the more
+  // peers there are, the more total upload bandwidth one person's camera costs — cap it more
+  // conservatively as the mesh grows. Never caps while actively screen sharing (that sender's
+  // track is the shared screen, not the camera, and legibility matters more there); Data Saver
+  // overrides the mesh-size heuristic with a single conservative cap regardless of peer count.
+  private applyVideoBandwidthPolicy() {
+    const peerCount = this.snapshot.peers.length;
+    const kbps = this.snapshot.screenSharing ? null
+      : this.snapshot.dataSaver ? 250
+        : peerCount >= 3 ? 500
+          : peerCount === 2 ? 700
+            : null;
+    for (const session of this.peers.values()) void session.setVideoSendBitrate(kbps);
+  }
+
+  setDataSaver = (enabled: boolean) => {
+    this.update({ dataSaver: enabled });
+    void this.media.setDataSaver(enabled);
+    this.applyVideoBandwidthPolicy();
+  };
 
   private updatePeer(peerId: string, patch: Partial<RemotePeer>) {
     if (!this.snapshot.peers.some((peer) => peer.participant.id === peerId)) return;
@@ -283,6 +306,7 @@ export class MeetingController {
       }
       for (const session of this.peers.values()) { session.setVideoOverride(video); session.setAudioOverride(audio); }
       this.update({ screenSharing: true, screenShareAudio: this.screenShare.hasAudio, error: null });
+      this.applyVideoBandwidthPolicy();
       this.emitScreenShare(true);
     } catch (error) {
       mediaLog.warn('Screen share failed', error);
@@ -296,6 +320,7 @@ export class MeetingController {
     this.screenShare.stop();
     for (const session of this.peers.values()) { session.setVideoOverride(null); session.setAudioOverride(null); }
     this.update({ screenSharing: false, screenShareAudio: false });
+    this.applyVideoBandwidthPolicy();
     this.emitScreenShare(false);
   }
 

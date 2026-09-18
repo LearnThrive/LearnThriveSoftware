@@ -50,8 +50,25 @@ export class LocalMedia {
   // enabled snapshot captured before the await — otherwise a mute click during an in-flight
   // switch could be silently overwritten, re-enabling the mic/camera on the new device.
   private desiredEnabled: { audio: boolean; video: boolean } = { audio: false, video: false };
+  private dataSaverEnabled = false;
 
   constructor(private readonly changed: () => void) {}
+
+  private videoFrameRateIdeal() {
+    return this.dataSaverEnabled ? 15 : 30;
+  }
+
+  /** Reduces outgoing camera frame rate on the current track (via applyConstraints, no
+   * re-acquire/permission-prompt) and on any future acquire() while enabled. Never touches
+   * resolution — a lower frame rate costs less bandwidth/CPU without making the picture blurrier,
+   * and never touches audio, since Data Saver explicitly prioritises audio reliability. */
+  async setDataSaver(enabled: boolean) {
+    this.dataSaverEnabled = enabled;
+    const track = this.track('video');
+    if (!track) return;
+    try { await track.applyConstraints({ frameRate: { ideal: this.videoFrameRateIdeal() } }); }
+    catch { /* best-effort — the call still works fine at whatever frame rate the camera already gives */ }
+  }
 
   track(kind: 'audio' | 'video') {
     return this.stream?.getTracks().find((track) => track.kind === kind && track.readyState === 'live');
@@ -93,7 +110,7 @@ export class LocalMedia {
     const preferred = this.selectedDevice[kind];
     await this.acquire(kind, kind === 'audio'
       ? { ...(preferred ? { deviceId: { exact: preferred } } : {}), echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-      : { ...(preferred ? { deviceId: { exact: preferred } } : { facingMode: this.facing }), width: { ideal: 1280 }, height: { ideal: 720 } });
+      : { ...(preferred ? { deviceId: { exact: preferred } } : { facingMode: this.facing }), width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: this.videoFrameRateIdeal() } });
   }
 
   /** Switches to a specific device. Only touches hardware if that kind is currently on. */
@@ -104,7 +121,7 @@ export class LocalMedia {
     if (support) throw new Error(support);
     await this.acquire(kind, kind === 'audio'
       ? { deviceId: { exact: deviceId }, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-      : { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } });
+      : { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: this.videoFrameRateIdeal() } });
   }
 
   /** Flips between front/rear camera by facingMode. Only touches hardware if video is currently on. */
@@ -114,7 +131,7 @@ export class LocalMedia {
     if (!this.track('video')?.enabled) return;
     const support = browserSupportError();
     if (support) throw new Error(support);
-    await this.acquire('video', { facingMode: { exact: this.facing }, width: { ideal: 1280 }, height: { ideal: 720 } });
+    await this.acquire('video', { facingMode: { exact: this.facing }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: this.videoFrameRateIdeal() } });
   }
 
   disable(kind: 'audio' | 'video') {

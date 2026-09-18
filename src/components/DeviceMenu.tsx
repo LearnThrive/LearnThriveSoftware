@@ -20,11 +20,13 @@ interface DeviceMenuProps {
   // Side by side only makes sense for exactly one other participant — at 2+ others, Gallery
   // takes over as the "everyone roughly equal" option instead.
   sideBySideAvailable?: boolean;
+  dataSaver: boolean;
+  onDataSaver: (enabled: boolean) => void;
 }
 
 export function DeviceMenu({
   open, onClose, cameras, microphones, selectedCamera, selectedMicrophone, onSelectCamera, onSelectMicrophone, canFlip, onFlip,
-  triggerRef, layoutMode, onLayoutMode, sideBySideAvailable,
+  triggerRef, layoutMode, onLayoutMode, sideBySideAvailable, dataSaver, onDataSaver,
 }: DeviceMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   usePopoverDismiss(open, onClose, menuRef, triggerRef);
@@ -48,6 +50,12 @@ export function DeviceMenu({
         </select>
       </div>
       {canFlip && <button type="button" className="device-menu-flip" onClick={onFlip}><Icon name="flip" size={16} />Switch front/rear camera</button>}
+      <div className="device-menu-group">
+        <button type="button" className="device-menu-flip" aria-pressed={dataSaver} onClick={() => onDataSaver(!dataSaver)}>
+          {dataSaver ? 'Data Saver on' : 'Data Saver off'}
+        </button>
+        <p className="device-menu-hint">Reduces your outgoing camera quality to use less data. Audio and the whiteboard are unaffected.</p>
+      </div>
       {layoutMode && onLayoutMode && <div className="device-menu-group">
         <label id="layout-label">Layout</label>
         <div className="device-menu-layout" role="group" aria-labelledby="layout-label">

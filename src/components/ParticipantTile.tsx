@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { ParticipantRole } from '../../shared/protocol';
+import { qualityLabel, type ConnectionQuality } from '../stats';
 import { Icon } from './Icon';
 import { RoleBadge } from './RoleBadge';
 
@@ -15,6 +16,8 @@ interface ParticipantTileProps {
   focused?: boolean;
   onFocus?: () => void;
   role?: ParticipantRole | null;
+  // Only ever passed for remote peers — a local tile has no connection to rate.
+  quality?: ConnectionQuality;
 }
 
 function initials(name: string) {
@@ -23,6 +26,7 @@ function initials(name: string) {
 
 export function ParticipantTile({
   stream, name, audio, video, screenSharing = false, local = false, compact = false, preview = false, focused, onFocus, role = null,
+  quality,
 }: ParticipantTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [needsPlayback, setNeedsPlayback] = useState(false);
@@ -83,6 +87,11 @@ export function ParticipantTile({
       </div>}
       {preview && <div className="preview-tag"><span /> Camera preview</div>}
       {screenSharing && <div className="screen-share-badge"><Icon name="screen" size={14} />{local ? 'You are presenting' : `${name} is presenting`}</div>}
+      {(quality === 'poor' || quality === 'fair') && (
+        <div className={`connection-quality-badge connection-quality-${quality}`} role="status">
+          <Icon name="info" size={13} />{qualityLabel(quality)} connection
+        </div>
+      )}
       {clickable && <span className="focus-affordance"><Icon name="expand" size={14} />Make main view</span>}
       <div className="participant-caption">
         <span className="participant-name">{name || 'You'}{local && name !== 'You' ? ' (You)' : ''}</span>
