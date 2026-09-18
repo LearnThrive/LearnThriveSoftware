@@ -193,7 +193,7 @@ function App() {
     stream={peer.stream} name={peer.participant.name} audio={peer.participant.media.audio}
     video={peer.participant.media.video} screenSharing={peer.participant.screenSharing} compact={compact} role={peer.participant.role}
     focused={canFocusToggle && effectiveFocus === peer.participant.id} onFocus={canFocusToggle ? () => setFocusTarget(peer.participant.id) : undefined}
-    quality={peer.quality}
+    quality={peer.quality} forceMuted={peer.participant.forceMuted}
   />;
   const selfTile = (compact: boolean) => <ParticipantTile
     key="local"
