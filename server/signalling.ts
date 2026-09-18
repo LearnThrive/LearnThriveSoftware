@@ -195,11 +195,46 @@ function parsePollCreate(value: unknown): { question: string; options: string[];
   return { question, options, anonymous: value.anonymous, resultsVisible: value.resultsVisible };
 }
 
+// Cloudflare's temporary-ICE-credential endpoint — https://developers.cloudflare.com/realtime/turn/.
+// A 4-hour TTL comfortably covers one lesson plus reconnects; the client refetches proactively
+// before a credential set goes stale rather than waiting for it to fail (see src/ice.ts).
+const TURN_CREDENTIAL_TTL_SECONDS = 4 * 60 * 60;
+const TURN_RATE_WINDOW_MS = 60_000;
+const TURN_RATE_MAX = 20;
+
+async function fetchCloudflareTurnCredentials(keyId: string, apiToken: string): Promise<unknown> {
+  const response = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${keyId}/credentials/generate-ice-servers`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ttl: TURN_CREDENTIAL_TTL_SECONDS }),
+  });
+  if (!response.ok) throw new Error(`Cloudflare TURN credential request failed with status ${response.status}`);
+  return response.json();
+}
+
 export function createSignallingServer(options?: { disconnectGraceMs?: number }) {
   const disconnectGraceMs = options?.disconnectGraceMs ?? 10_000;
   const app = express();
   app.disable('x-powered-by');
   app.get('/health', (_request, response) => response.json({ status: 'ok' }));
+  const turnRateLimiter = createRateLimiter(TURN_RATE_WINDOW_MS, TURN_RATE_MAX);
+  // Temporary Cloudflare Realtime TURN credentials, generated server-side so the long-lived
+  // CLOUDFLARE_TURN_KEY_ID/CLOUDFLARE_TURN_API_TOKEN pair is never exposed to a browser — only
+  // the short-lived iceServers this endpoint returns are. See README.md's TURN section and
+  // TURN_TESTING.md. Falls back gracefully (a 503) when the two env vars aren't configured, which
+  // the client treats as "use STUN-only" rather than a hard failure — see src/ice.ts.
+  app.get('/api/turn-credentials', (request, response) => {
+    const keyId = process.env.CLOUDFLARE_TURN_KEY_ID?.trim();
+    const apiToken = process.env.CLOUDFLARE_TURN_API_TOKEN?.trim();
+    if (!keyId || !apiToken) { response.status(503).json({ error: 'TURN is not configured on this server.' }); return; }
+    if (!turnRateLimiter.allow(request.ip ?? 'unknown')) { response.status(429).json({ error: 'Too many TURN credential requests. Please slow down.' }); return; }
+    fetchCloudflareTurnCredentials(keyId, apiToken)
+      .then((data) => { response.json({ ...(isRecord(data) ? data : {}), ttlSeconds: TURN_CREDENTIAL_TTL_SECONDS }); })
+      .catch((error: unknown) => {
+        console.error('Cloudflare TURN credential request failed:', error);
+        response.status(502).json({ error: 'Could not generate temporary TURN credentials.' });
+      });
+  });
   const httpServer = createServer(app);
   const allowedOrigins = new Set(['http://localhost:5173', 'http://127.0.0.1:5173']);
   const tunnelHost = process.env.TUNNEL_HOST?.trim();

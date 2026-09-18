@@ -95,9 +95,9 @@ The client also exposes explicit states beyond connected/disconnected: **Reconne
 
 ## Screen sharing
 
-Uses `navigator.mediaDevices.getDisplayMedia()` and replaces the existing outgoing video sender's track via `RTCRtpSender.replaceTrack()` — no second `RTCPeerConnection`, no renegotiation. The camera track keeps running underneath (never torn down), so stopping a share restores exactly the state it was in before: still on if it was on, still off if it was off. The browser's native "Stop sharing" bar is handled via the display track's `ended` event, the same as the in-app Stop button. On the receiving side, the remote tile switches to `object-fit: contain` (so a screen isn't cropped the way a face is) with a "presenting" badge; this is driven by an explicit `participant:screen-share` signal, not inferred from the video track itself, so a peer sharing with their camera off still displays correctly.
+Uses `navigator.mediaDevices.getDisplayMedia()` and replaces the existing outgoing video sender's track via `RTCRtpSender.replaceTrack()` — no second `RTCPeerConnection`, no renegotiation. The camera track keeps running underneath (never torn down), so stopping a share restores exactly the state it was in before: still on if it was on, still off if it was off. The browser's native "Stop sharing" bar is handled via the display track's `ended` event, the same as the in-app Stop button. On the receiving side, the remote tile switches to `object-fit: contain` (so a screen isn't cropped the way a face is) with a "presenting" badge; this is driven by an explicit `participant:screen-share` signal, not inferred from the video track itself, so a peer sharing with their camera off still displays correctly. Both the tutor and students may share, subject to the room's screen-share policy (see [Classroom moderation](#classroom-moderation-polls-understanding-checks-and-the-class-timer) above); ownership is arbitrated server-side so only one participant can share at a time, and it's released reliably on an explicit stop, a disconnect, a removal, or the tutor ending the class — never left permanently stuck.
 
-Feature-detected: the control is hidden entirely where `getDisplayMedia` doesn't exist (this includes essentially all mobile browsers, which is expected — receiving another participant's share works fine on mobile, only *initiating* one requires desktop display capture). Picker cancellation and permission denial both show a calm "Screen sharing was cancelled or blocked by your browser." message rather than a raw exception. A reentrancy guard prevents a double-click (or the `S` keyboard shortcut landing alongside a click) from starting two captures at once and leaking one.
+The browser's own picker remains authoritative over tab/window/screen choice — this app never enumerates or selects a source itself. On Chromium, three hint properties are passed to `getDisplayMedia` (silently ignored by browsers that don't support them): `selfBrowserSurface: 'exclude'` (don't offer this app's own tab, avoiding an infinite-mirror pick), `surfaceSwitching: 'include'` (let the presenter switch which tab/window/screen is shared without restarting the capture), and `systemAudio: 'include'` (surface a "share tab/system audio" checkbox). When the browser supplies a screen-audio track, it's mixed with the microphone via Web Audio (`AudioContext` + `MediaStreamAudioSourceNode`/`MediaStreamAudioDestinationNode`) rather than replacing it, so peers hear both at once; the Share screen control shows "Sharing audio" once that's active. Feature-detected: the control is hidden entirely where `getDisplayMedia` doesn't exist (this includes essentially all mobile browsers, which is expected — receiving another participant's share works fine on mobile, only *initiating* one requires desktop display capture). Picker cancellation and permission denial both show a calm "Screen sharing was cancelled or blocked by your browser." message rather than a raw exception. A reentrancy guard prevents a double-click (or the `S` keyboard shortcut landing alongside a click) from starting two captures at once and leaking one.
 
 ## Chat
 
@@ -133,11 +133,13 @@ See **[CLASSROOM_FEATURES.md](CLASSROOM_FEATURES.md)** for the full feature-by-f
 
 ## ICE and optional TURN
 
-ICE configuration is centralised in `src/ice.ts`. The default is Google's public STUN endpoint, `stun:stun.l.google.com:19302`.
+ICE configuration is centralised in `src/ice.ts`. The base entry is Cloudflare's public STUN endpoint, `stun:stun.cloudflare.com:3478`.
 
-**STUN-only calling works on many networks, but not all.** Some NAT/firewall combinations require a TURN relay. A working HTTPS tunnel provides application/signalling access; it does not solve WebRTC media traversal. Production LearnThrive calling needs a reliable TURN service. See the [WebRTC project's TURN guide](https://webrtc.org/getting-started/turn-server).
+**STUN-only calling works on many networks, but not all.** Some NAT/firewall combinations require a TURN relay. A working HTTPS tunnel provides application/signalling access; it does not solve WebRTC media traversal. See the [WebRTC project's TURN guide](https://webrtc.org/getting-started/turn-server).
 
-To test an existing TURN service, create `.env` from `.env.example` if you do not already have one:
+**Temporary Cloudflare Realtime TURN credentials (server-generated, not build-time).** The signalling server exposes `GET /api/turn-credentials` (proxied through Vite the same way `/socket.io` is, so one HTTPS tunnel covers both): when `CLOUDFLARE_TURN_KEY_ID` and `CLOUDFLARE_TURN_API_TOKEN` are set (server-only — never `VITE_`-prefixed, so never bundled into the browser build), it calls Cloudflare's [`generate-ice-servers`](https://developers.cloudflare.com/realtime/turn/) endpoint for a short-lived credential set and returns just the resulting `iceServers` to the browser. The browser never sees the long-lived key/token pair. `src/ice.ts` fetches this once a session starts and again for a later peer connection if the cached set has gone stale, and falls back silently to STUN-only (logged only in development) if the endpoint isn't configured or the request fails — a missing/failed TURN fetch never blocks a meeting, since direct P2P may still work anyway. See **[TURN_TESTING.md](TURN_TESTING.md)** for how to configure a real Cloudflare account and prove the relay path actually works with `?forceTurn=1`.
+
+A manual/self-hosted TURN override remains available independently of the above, useful for testing against a specific known service. Create `.env` from `.env.example` if you do not already have one:
 
 ```powershell
 Copy-Item .env.example .env
@@ -151,7 +153,7 @@ VITE_TURN_USERNAME=temporary-test-username
 VITE_TURN_CREDENTIAL=temporary-test-credential
 ```
 
-Multiple TURN URLs (comma-separated) are supported as alternative addresses for the same relay/credential pair. These are placeholders, not an operational relay. Leave all three blank for STUN-only operation. `VITE_` values are exposed to browsers and included in frontend builds: they are **not server secrets**. Use short-lived, limited TURN credentials, keep actual credentials out of source control and do not place them in public assets. A production service should issue temporary credentials to authorised participants. This project does not provision, purchase or deploy TURN infrastructure. In `?debug=1` mode, the candidate-type readout lets you confirm whether an active call actually used TURN (relay) or connected directly (host/srflx).
+Multiple TURN URLs (comma-separated) are supported as alternative addresses for the same relay/credential pair. These are placeholders, not an operational relay. Leave all three blank to rely on Cloudflare's temporary credentials (or STUN-only, if those aren't configured either) — this override is additive, not exclusive. `VITE_` values are exposed to browsers and included in frontend builds: they are **not server secrets**, unlike the Cloudflare key/token pair above. Use short-lived, limited TURN credentials, keep actual credentials out of source control and do not place them in public assets. In `?debug=1` mode, the candidate-type readout lets you confirm whether an active call actually used TURN (relay) or connected directly (host/srflx); `?forceTurn=1` forces every connection through a relay so you can prove TURN actually works rather than just being configured — see TURN_TESTING.md.
 
 ## Environment variables
 
@@ -160,9 +162,11 @@ All optional; all read from `.env` (never committed — see `.env.example`), or 
 | Variable | Used by | Purpose |
 | --- | --- | --- |
 | `TUNNEL_HOST` | server + Vite | Adds one exact extra hostname to the allowed origins/hosts, for a **fixed custom domain** (e.g. a future named Cloudflare Tunnel). Not needed for Cloudflare Quick Tunnel or Tailscale — those are already covered automatically by their `.trycloudflare.com`/`.ts.net` suffixes in `shared/allowedHosts.ts`. See [TAILSCALE_TESTING.md](TAILSCALE_TESTING.md) and [LAPTOP_PHONE_TEST.md](LAPTOP_PHONE_TEST.md). |
-| `VITE_TURN_URL` | browser | Comma-separated TURN/TURNS URL(s). STUN-only if unset. |
-| `VITE_TURN_USERNAME` | browser | TURN username. Required alongside the two above for TURN to activate. |
-| `VITE_TURN_CREDENTIAL` | browser | TURN credential. Same as above — browser-exposed, not a server secret. |
+| `CLOUDFLARE_TURN_KEY_ID` | server only | Cloudflare Realtime TURN key ID. Server-only — never sent to the browser. See [TURN_TESTING.md](TURN_TESTING.md). |
+| `CLOUDFLARE_TURN_API_TOKEN` | server only | Cloudflare Realtime TURN API token, paired with the key ID above. Server-only. `GET /api/turn-credentials` returns 503 (treated as "use STUN-only") if either is missing. |
+| `VITE_TURN_URL` | browser | Comma-separated TURN/TURNS URL(s) for the manual override. Additive to the Cloudflare temporary credentials above, not a replacement for them. |
+| `VITE_TURN_USERNAME` | browser | TURN username for the manual override. Required alongside the two above for it to activate. |
+| `VITE_TURN_CREDENTIAL` | browser | TURN credential for the manual override. Same as above — browser-exposed, not a server secret. |
 | `DISCONNECT_GRACE_MS` | server | Overrides the default 10-second disconnect grace period. Mainly useful for tests (Playwright's config sets it to 3000ms so the network-drop test isn't slow); production behaviour is the default. |
 
 ## Debug mode
