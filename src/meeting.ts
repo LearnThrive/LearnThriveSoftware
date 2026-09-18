@@ -1,11 +1,13 @@
 import { io, type Socket } from 'socket.io-client';
 import {
   MAX_CHAT_LENGTH, MAX_NAME_LENGTH, ROOM_PATTERN,
-  type ChatMessage, type ClientToServerEvents, type Participant, type ParticipantRole, type PollState,
-  type PollVisibility, type ReactionEmoji, type RoomSettings, type RoomTimerState, type ServerToClientEvents,
-  type TimerMode, type UnderstandingCheckState, type UnderstandingStatus, type WaitingParticipant,
+  type BoardBackground, type BoardElement, type BoardState, type ChatMessage, type ClientToServerEvents,
+  type Participant, type ParticipantRole, type PollState, type PollVisibility, type ReactionEmoji,
+  type RoomSettings, type RoomTimerState, type ServerToClientEvents, type TimerMode, type UnderstandingCheckState,
+  type UnderstandingStatus, type WaitingParticipant,
 } from '../shared/protocol';
 import { aggregateConnectionStatus } from './callStatus';
+import { reconcileBoardElements } from './board';
 import { createLogger } from './log';
 import { browserSupportError, listDevices, LocalMedia, mediaErrorMessage, type DeviceOption } from './media';
 import { PeerSession, type DirectionDiagnostics } from './peer';
@@ -30,6 +32,12 @@ export interface DisplayReaction { id: number; emoji: string; mine: boolean }
 export type EndedReason = 'left' | 'removed' | 'classEnded';
 
 const DEFAULT_ROOM_SETTINGS: RoomSettings = { locked: false, studentsCanShareScreen: true, studentsCanChat: true };
+const DEFAULT_BOARD_STATE: BoardState = { pages: [], activePageId: '', elementsByPage: {}, studentsCanDraw: true };
+
+/** A remote participant's live whiteboard pointer — a regular cursor or an ephemeral laser trail,
+ * distinguished by `tool`. Never persisted; the last known position just stays put once the
+ * remote participant stops moving, same as any other live-cursor UI. */
+export interface BoardPointer { id: string; name: string; x: number; y: number; tool: 'pointer' | 'laser'; updatedAt: number }
 
 /** Display + connection state for one other admitted participant. A room holds up to 3 of these
  * (1 tutor + 3 students, minus yourself), each backed by its own independent PeerSession. */
@@ -81,6 +89,12 @@ export interface MeetingSnapshot {
   understandingCheck: UnderstandingCheckState | null;
   timer: RoomTimerState | null;
   endedReason: EndedReason | null;
+  board: BoardState;
+  boardPointers: Record<string, BoardPointer>;
+  // Bumped on every incoming 'board:follow-me' nudge; the Whiteboard component watches it to
+  // re-enable local follow-mode and jump to the tutor's current page — a one-shot signal, not a
+  // persistent room-state field, so it can't be represented as a plain snapshot value change.
+  boardFollowMeSeq: number;
 }
 
 // "own" is resolved once, at the moment each message arrives, against the socket id live at
@@ -104,7 +118,11 @@ export class MeetingController {
     cameras: [], microphones: [], selectedCamera: undefined, selectedMicrophone: undefined, notice: null,
     chatOpen: false, messages: [], unreadCount: 0, handRaised: false, reactions: [],
     forceMuted: false, roomSettings: DEFAULT_ROOM_SETTINGS, poll: null, understandingCheck: null, timer: null, endedReason: null,
+    board: DEFAULT_BOARD_STATE, boardPointers: {}, boardFollowMeSeq: 0,
   };
+  // Set by duplicateBoardPage() while waiting for board:page-create's own pages-update echo to
+  // learn the new page's id (the server doesn't otherwise report it) — see duplicateBoardPage.
+  private pendingDuplicate: { name: string; elements: BoardElement[] } | null = null;
   private listeners = new Set<() => void>();
   private readonly media = new LocalMedia(() => this.mediaChanged());
   private readonly screenShare = new ScreenShare(() => this.endScreenShare());
@@ -368,6 +386,48 @@ export class MeetingController {
   resumeTimer = () => this.tutorEmit('timer:resume');
   stopTimer = () => this.tutorEmit('timer:stop');
 
+  sendBoardUpdate = (pageId: string, elements: BoardElement[]) => {
+    if (!this.active || !this.socket?.connected || elements.length === 0) return;
+    this.socket.emit('board:update', { pageId, elements });
+  };
+  sendBoardCursor = (x: number, y: number) => {
+    if (!this.active || !this.socket?.connected) return;
+    this.socket.emit('board:cursor', { x, y });
+  };
+  sendBoardLaser = (x: number, y: number) => {
+    if (!this.active || !this.socket?.connected) return;
+    this.socket.emit('board:laser', { x, y });
+  };
+  createBoardPage = () => this.tutorEmit('board:page-create');
+  renameBoardPage = (pageId: string, name: string) => this.tutorEmit('board:page-rename', { pageId, name });
+  deleteBoardPage = (pageId: string) => this.tutorEmit('board:page-delete', { pageId });
+  reorderBoardPages = (pageIds: string[]) => this.tutorEmit('board:page-reorder', { pageIds });
+  switchBoardPage = (pageId: string) => this.tutorEmit('board:page-switch', { pageId });
+  setBoardBackground = (pageId: string, background: BoardBackground) => this.tutorEmit('board:background', { pageId, background });
+  setStudentsCanDraw = (value: boolean) => this.tutorEmit('board:permission', { studentsCanDraw: value });
+  clearBoardPage = (pageId: string) => this.tutorEmit('board:clear', { pageId });
+  followMe = () => this.tutorEmit('board:follow-me');
+  importBoard = (pageId: string, elements: BoardElement[]) => this.tutorEmit('board:import', { pageId, elements });
+
+  // Composed client-side from create+rename+update rather than a dedicated wire event — the
+  // client already holds the source page's elements locally (every page's elements are always
+  // mirrored, not just the active one), so the server needs no new duplication logic at all.
+  duplicateBoardPage = (pageId: string) => {
+    if (!this.active || !this.socket?.connected || this.snapshot.role !== 'tutor') return;
+    const source = this.snapshot.board.pages.find((page) => page.id === pageId);
+    if (!source) return;
+    const elements = (this.snapshot.board.elementsByPage[pageId] ?? []).map((element) => ({ ...element, id: crypto.randomUUID() }));
+    this.pendingDuplicate = { name: `${source.name} copy`, elements };
+    this.socket.emit('board:page-create');
+  };
+
+  // Cache-only, no network call: lets the Whiteboard component commit whatever's currently in the
+  // live Excalidraw scene into the at-rest cache right before switching pages, so the very latest
+  // local edits aren't briefly lost from view if the switch happens faster than the server round-trip.
+  commitLocalPageElements = (pageId: string, elements: BoardElement[]) => {
+    this.update({ board: { ...this.snapshot.board, elementsByPage: { ...this.snapshot.board.elementsByPage, [pageId]: elements } } });
+  };
+
   join = (name: string, roomId: string, role: ParticipantRole) => {
     if (this.active) return;
     name = name.trim();
@@ -383,6 +443,7 @@ export class MeetingController {
       phase: 'joining', status: 'Connecting…', error: null, roomId, name, role: null, waiting: [],
       messages: [], unreadCount: 0, chatOpen: false, handRaised: false, reactions: [],
       forceMuted: false, roomSettings: DEFAULT_ROOM_SETTINGS, poll: null, understandingCheck: null, timer: null, endedReason: null,
+      board: DEFAULT_BOARD_STATE, boardPointers: {},
     });
     const url = new URL(window.location.href);
     url.pathname = '/meeting';
@@ -425,6 +486,7 @@ export class MeetingController {
         phase: 'meeting', role: payload.self.role, waiting: payload.waiting, error: null,
         forceMuted: payload.self.forceMuted, roomSettings: payload.settings,
         poll: payload.poll, understandingCheck: payload.understandingCheck, timer: payload.timer,
+        board: payload.board,
       });
       // Comply immediately if a force-mute directive was missed while offline (a resync via this
       // same event) and the mic is still enabled from before the disconnect.
@@ -506,6 +568,31 @@ export class MeetingController {
     socket.on('poll:update', (poll) => this.update({ poll }));
     socket.on('understanding:update', (understandingCheck) => this.update({ understandingCheck }));
     socket.on('timer:update', (timer) => this.update({ timer }));
+    socket.on('board:update', ({ pageId, elements }) => {
+      const merged = reconcileBoardElements(this.snapshot.board.elementsByPage[pageId] ?? [], elements);
+      this.update({ board: { ...this.snapshot.board, elementsByPage: { ...this.snapshot.board.elementsByPage, [pageId]: merged } } });
+    });
+    socket.on('board:pages-update', ({ pages, activePageId }) => {
+      this.update({ board: { ...this.snapshot.board, pages, activePageId } });
+      if (this.pendingDuplicate) {
+        const { name, elements } = this.pendingDuplicate;
+        this.pendingDuplicate = null;
+        this.socket?.emit('board:page-rename', { pageId: activePageId, name });
+        if (elements.length) this.socket?.emit('board:update', { pageId: activePageId, elements });
+      }
+    });
+    socket.on('board:permission-update', ({ studentsCanDraw }) => this.update({ board: { ...this.snapshot.board, studentsCanDraw } }));
+    socket.on('board:cleared', ({ pageId }) => {
+      this.update({ board: { ...this.snapshot.board, elementsByPage: { ...this.snapshot.board.elementsByPage, [pageId]: [] } } });
+    });
+    socket.on('board:cursor', ({ id, name, x, y }) => {
+      this.update({ boardPointers: { ...this.snapshot.boardPointers, [id]: { id, name, x, y, tool: 'pointer', updatedAt: Date.now() } } });
+    });
+    socket.on('board:laser', ({ id, x, y }) => {
+      const name = this.snapshot.boardPointers[id]?.name ?? this.snapshot.peers.find((peer) => peer.participant.id === id)?.participant.name ?? '';
+      this.update({ boardPointers: { ...this.snapshot.boardPointers, [id]: { id, name, x, y, tool: 'laser', updatedAt: Date.now() } } });
+    });
+    socket.on('board:follow-me', () => this.update({ boardFollowMeSeq: this.snapshot.boardFollowMeSeq + 1 }));
     socket.on('room:removed', () => this.endMeeting('removed', 'Removed from class'));
     socket.on('room:ended', () => this.endMeeting('classEnded', 'Class ended'));
     socket.on('room:full', ({ message }) => this.rejectJoin(message));
@@ -630,7 +717,7 @@ export class MeetingController {
       phase: 'ended', status, signalling: 'disconnected', preparing: false, error: null, mediaError: null,
       reconnectFailed: false, screenSharing: false, waiting: [],
       chatOpen: false, messages: [], unreadCount: 0, notice: null, handRaised: false, reactions: [],
-      endedReason: reason,
+      endedReason: reason, board: DEFAULT_BOARD_STATE, boardPointers: {},
     });
   }
 

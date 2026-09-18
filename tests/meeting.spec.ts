@@ -62,6 +62,37 @@ async function connectTutorAndOneStudent(browser: Browser, tutorName = 'Tutor', 
   return { contextA, pageA, contextB, pageB, roomId };
 }
 
+// Same as connectTutorAndOneStudent, but with `?debug=1` on both pages so the development
+// diagnostics panel (including whiteboard page/element counts) is available for assertions —
+// whiteboard content lands on canvas, which isn't otherwise assertable via accessible roles/text.
+async function connectTutorAndOneStudentWithDebug(browser: Browser, tutorName = 'Tutor', studentName = 'Student') {
+  const isChromium = browser.browserType().name() === 'chromium';
+  const contextA = await browser.newContext(isChromium ? { permissions: ['camera', 'microphone'] } : {});
+  const pageA = await contextA.newPage();
+  await pageA.goto('/meeting?debug=1');
+  await pageA.getByLabel('Your name').fill(tutorName);
+  await pageA.getByRole('button', { name: 'Create meeting' }).click();
+  await enableDevices(pageA);
+  const roomId = await pageA.getByLabel('Room code').inputValue();
+  await pageA.getByRole('button', { name: 'Start class' }).click();
+
+  const contextB = await browser.newContext(isChromium ? { permissions: ['camera', 'microphone'] } : {});
+  const pageB = await contextB.newPage();
+  await pageB.goto(`/meeting?debug=1&room=${roomId}`);
+  await pageB.getByLabel('Your name').fill(studentName);
+  await enableDevices(pageB);
+  await joinAsStudent(pageB);
+  await admit(pageA, studentName);
+
+  await expect(pageA.locator('.connection-pill')).toHaveClass(/connected/, { timeout: 20_000 });
+  await expect(pageB.locator('.connection-pill')).toHaveClass(/connected/, { timeout: 20_000 });
+  return { contextA, pageA, contextB, pageB, roomId };
+}
+
+function boardElementCount(page: Page) {
+  return page.locator('dt', { hasText: 'Whiteboard elements' }).locator('xpath=following-sibling::dd[1]');
+}
+
 test('a tutor and one student connect over WebRTC, exchange media state, and a third joiner waits undisturbed', async ({ browser }) => {
   const { context: contextA, page: pageA } = await openParticipant(browser, 'Tutor');
   await test.step('the tutor creates a class and enables devices', async () => {
@@ -507,6 +538,53 @@ test('a role badge appears on the camera-off avatar placeholder', async ({ brows
 
   await pageA.getByRole('button', { name: 'Turn camera off' }).click();
   await expect(pageB.locator('.remote-tile .role-badge-tutor')).toBeVisible();
+
+  await contextA.close();
+  await contextB.close();
+});
+
+test('the collaborative whiteboard syncs a drawn element to the student, gates drawing behind permission, and syncs a new page', async ({ browser }) => {
+  const { pageA, pageB, contextA, contextB } = await connectTutorAndOneStudentWithDebug(browser);
+  await pageA.getByText('Development diagnostics').click();
+  await pageB.getByText('Development diagnostics').click();
+
+  await test.step('both sides switch to Board mode', async () => {
+    await pageA.getByRole('tab', { name: 'Board' }).click();
+    await pageB.getByRole('tab', { name: 'Board' }).click();
+    await expect(pageA.locator('.whiteboard-canvas canvas').first()).toBeVisible();
+    await expect(pageB.locator('.whiteboard-canvas canvas').first()).toBeVisible();
+  });
+
+  await test.step('the tutor draws a rectangle; the student receives it', async () => {
+    const canvas = pageA.locator('.whiteboard-canvas canvas').first();
+    const box = (await canvas.boundingBox())!;
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    await pageA.locator('[data-testid="toolbar-rectangle"]').click({ force: true });
+    await pageA.mouse.move(cx - 60, cy - 60);
+    await pageA.mouse.down();
+    await pageA.mouse.move(cx + 60, cy + 60, { steps: 5 });
+    await pageA.mouse.up();
+
+    // The drawn rectangle is confirmed via the STUDENT's count — a genuine cross-participant sync
+    // check. The tutor's own debug count isn't asserted here: the local cache this diagnostics
+    // row reads is only updated from remote-originated updates or on switching away from a page
+    // (see Whiteboard.tsx), not from the live, not-yet-broadcast local Excalidraw scene, so it
+    // would still read 0 immediately after drawing even though the tutor's own canvas already
+    // shows the shape (confirmed visually while building this test).
+    await expect(boardElementCount(pageB)).toHaveText('1', { timeout: 10_000 });
+  });
+
+  await test.step('the tutor disables student drawing; the student sees a view-only board', async () => {
+    await pageA.getByRole('button', { name: 'Students can draw' }).click();
+    await expect(pageB.locator('.whiteboard-view-only-badge')).toBeVisible();
+  });
+
+  await test.step('the tutor adds a page; both sides see it', async () => {
+    await pageA.getByRole('button', { name: 'Add whiteboard page' }).click();
+    await expect(pageA.locator('.board-page-tabs .board-page-tab')).toHaveCount(2);
+    await expect(pageB.locator('.board-page-tabs .board-page-tab')).toHaveCount(2);
+  });
 
   await contextA.close();
   await contextB.close();
