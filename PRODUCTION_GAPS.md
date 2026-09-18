@@ -21,7 +21,8 @@ This document lists what stands between this prototype and real use with LearnTh
 
 ## Abuse and safety
 
-- **Abuse controls.** Beyond input validation and room-membership scoping, there are no controls against a participant behaving badly once inside a room (no reporting, no blocking, no moderation).
+- **Abuse controls.** Beyond input validation and room-membership scoping, there are no controls against a participant behaving badly once inside a room (no reporting, no blocking, no moderation beyond the tutor moderation tools described in [CLASSROOM_FEATURES.md](CLASSROOM_FEATURES.md)).
+- **Force-mute and stop-share are directives, not real enforcement.** The architecture is a pure P2P mesh — the signalling server never touches media, so it has no way to actually silence a track. "The tutor muted you" and "the tutor stopped your share" are instructions the target's own client complies with voluntarily (the same code path its own mute/stop-share button uses). A modified or hostile client could ignore either directive entirely and keep transmitting. Real enforcement would need an SFU or media relay the server controls, which is exactly the migration described below.
 - **Production rate limits.** The chat rate limiter is a lightweight, per-connection anti-spam measure (documented in README.md's Current Limitations), not a production-grade control — it resets on reconnect and isn't tied to any durable identity. Signalling events (offers/answers/ICE/media/screen-share) have no rate limiting at all beyond the transport-level message size cap. Production needs abuse-resistant limits tied to authenticated identity, not just a live socket id.
 - **Safeguarding integration.** For a platform used by students (potentially minors), there is no safeguarding policy integration: no recording-for-safety option, no supervisory visibility, no incident reporting path. This is a policy and product decision, not just an engineering one, and needs to happen before real lessons run through this or any successor system.
 - **Data protection review.** No formal review of what data is collected (currently: transient display names and ephemeral chat text, nothing persisted) against applicable data protection requirements (e.g., UK GDPR, given the target audience).
@@ -46,16 +47,14 @@ None of these block real use of the prototype as it stands; they're straightforw
 
 ## Classroom V2 — deferred to future initiatives
 
-The capacity/roles/waiting-room work in this pass was deliberately scoped to *only* what had a concrete specification. A number of named features were mentioned as future direction but have **no design of any kind yet** — not even the high-level decisions this document normally records — so building them now would mean inventing their behaviour with no real requirements to build against. Each needs its own dedicated spec and planning pass before implementation:
+Capacity stays at 1 tutor + up to 3 students (4 total) for now — a corrected, deliberately smaller target than an earlier draft spec that assumed 10 students behind a Cloudflare Realtime SFU. At 4 participants a full P2P mesh is entirely reasonable (up to 6 edges), which is why the SFU migration below is still not attempted: its stated justification doesn't hold at this size. Room lock, waiting-room deny, tutor moderation (force-mute, mute-all, remove, lower-hand, screen-share/chat policy, screen-share ownership arbitration), chat moderation, quick polls, and Understanding Check are now implemented — see [CLASSROOM_FEATURES.md](CLASSROOM_FEATURES.md) for the full feature matrix. What remains deferred, each needing its own dedicated spec and planning pass:
 
 - **Cloudflare Realtime SFU migration** (see the Infrastructure section above for why it wasn't attempted this pass).
 - **Collaborative whiteboard** (Excalidraw or similar) — pages, permissions, backgrounds, follow-tutor mode, laser pointer, export/import.
-- **Polls and "Understanding Check."**
-- **Tutor moderation** — mute-all, remove participant, end class for everyone, per-student camera/microphone permissions.
-- **Room lock.**
 - **Additional layout modes named in passing** — Speaker, Present, Board — beyond the Focus/Side-by-side/Gallery modes actually built this pass.
 - **Pin / Spotlight** as distinct concepts from the click-to-focus already built.
 - **Data Saver / audio-only mode, and simulcast** beyond what a future SFU migration would need anyway.
+- **Attendance tracking / class analytics.**
 
 ## What this prototype does establish
 
