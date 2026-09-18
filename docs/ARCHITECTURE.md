@@ -132,6 +132,12 @@ Adds `Notification` to the domain model and `apps/web/src/lib/notifications/noti
 
 Verification: 5 new `apps/web` unit tests (`notificationService.test.mjs` — profileId resolution against the seeded accounts, the silent-no-op case for an unresolvable profileId, batch notify, role-based notify, mark-read) and the existing Phase G report-lifecycle Playwright scenario extended with real notification assertions (Admin sees "awaiting approval," Client sees "new report is available" plus the unread badge, marks it read) rather than a separate test — 31/31 across all three `apps/web` Playwright spec files. `packages/data`'s 6 tests unaffected. Full workspace lint/typecheck/test/build pass.
 
+## Phase I — Hardening
+
+A consolidation and gap-filling pass against plan section 85's IDOR/access-control checklist, rather than new feature work. Three of its seven named attacks ("Parent accesses unrelated Student URL," "Tutor accesses unassigned Student," "Student accesses another Student") turn out to be structurally impossible, not just blocked — no route reachable by those roles exists at all for the relevant profile pages, which section 85's own "do not rely on obscurity of IDs" instruction treats as a *stronger* guarantee than a route that exists and rejects the request. The remaining four ("Tutor edits someone else's Lesson," "Student joins unrelated classroom," "Parent views internal Tutor notes," "Tutor approves own report") were either already proven in earlier phases or newly proven in a new `apps/web/tests-e2e/hardening.spec.ts` (an unrelated-Tutor lesson IDOR test mirroring Phase D's Student one, plus proof that the Cancel and Approve-report controls are genuinely absent — not just non-functional — for a Tutor). See `docs/HARDENING.md` for the full checklist and an honest status of validation, timezone/DST, calendar-view, accessibility, and responsive coverage — including what's a real, named gap (no shared validation schema library, no automated accessibility audit tool run) rather than claimed as done.
+
+Verification: 3 new Playwright scenarios in `hardening.spec.ts` — 34/34 across all four `apps/web` Playwright spec files. Full workspace lint/typecheck/test/build pass.
+
 ## What's next
 
-Phase I (Hardening — IDOR/access-control adversarial tests, validation, timezone/DST edge cases, responsive/mobile, accessibility) is next in the plan's own sequence — see `plan5.md` (private) for the full phase sequence.
+Phase J (Documentation — remaining docs, `docs/PRODUCTION_GAPS.md`, final role-permission/test-account updates) is next in the plan's own sequence — see `plan5.md` (private) for the full phase sequence.
