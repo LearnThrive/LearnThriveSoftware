@@ -64,14 +64,19 @@ export async function createLessonOrSeries(data: DataProvider, input: CreateLess
     status: "PLANNED" as const,
   };
 
+  // A fresh, unguessable room per lesson occurrence — never derived from or shared with the
+  // lesson id, and never reused across occurrences of the same series, so one lesson's link
+  // can't be replayed into a different lesson's classroom.
+  const classroomFields = () => (input.locationType === "ONLINE" ? { classroomRoomId: crypto.randomUUID() } : {});
+
   if (!input.recurrence) {
-    return [await data.lessons.create({ ...base, startAt: input.startAt })];
+    return [await data.lessons.create({ ...base, ...classroomFields(), startAt: input.startAt })];
   }
 
   const recurrenceId = crypto.randomUUID();
   const occurrences = generateRecurrenceOccurrences(new Date(input.startAt), input.recurrence, LEARNTHRIVE_DEFAULT_TIMEZONE);
   return data.lessons.createMany(
-    occurrences.map((occurrence) => ({ ...base, startAt: occurrence.toISOString(), recurrenceId })),
+    occurrences.map((occurrence) => ({ ...base, ...classroomFields(), startAt: occurrence.toISOString(), recurrenceId })),
   );
 }
 

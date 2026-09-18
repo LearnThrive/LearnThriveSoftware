@@ -4,7 +4,9 @@ import { requireSession } from "@/lib/auth/guard";
 import { createMetadata } from "@/lib/metadata";
 import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
 import { cancelLessonAction } from "@/lib/actions/lessons";
+import { joinClassroomAction } from "@/lib/actions/classroom";
 import { formatInTimeZone } from "@/lib/scheduling/timezone";
+import { isWithinJoinWindow } from "@/lib/scheduling/joinWindow";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -24,9 +26,15 @@ function canView(user: { role: string; profileId?: string }, lesson: { tutorId: 
   return false;
 }
 
-export default async function LessonDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function LessonDetailPage({
+  params, searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ joinError?: string }>;
+}) {
   const user = await requireSession();
   const { id } = await params;
+  const { joinError } = await searchParams;
   const data = getDataProvider();
   const lesson = await data.lessons.get(id);
   if (!lesson) notFound();
@@ -40,9 +48,8 @@ export default async function LessonDetailPage({ params }: { params: Promise<{ i
   const startFormatted = formatInTimeZone(lesson.startAt, "Europe/London", { dateStyle: "full", timeStyle: "short" });
   const isAdmin = user.role === "ADMIN";
   const canCancel = isAdmin && lesson.status === "PLANNED";
-  // Plan section 34's join-window check lands with Phase E's real classroom integration — this
-  // is a placeholder that shows the *idea* of the control without claiming it's wired up yet.
-  const showJoinPlaceholder = lesson.locationType === "ONLINE" && lesson.status !== "CANCELLED" && (user.role === "TUTOR" || user.role === "STUDENT");
+  const canJoin = lesson.locationType === "ONLINE" && lesson.status !== "CANCELLED" && (user.role === "TUTOR" || user.role === "STUDENT");
+  const joinWindowOpen = canJoin && isWithinJoinWindow(lesson, user.role as "TUTOR" | "STUDENT");
 
   return (
     <div className="dashboard-page">
@@ -67,10 +74,15 @@ export default async function LessonDetailPage({ params }: { params: Promise<{ i
         </>
       )}
 
-      {showJoinPlaceholder && (
-        <button type="button" className="button button--primary" disabled title="Classroom integration arrives in a later phase of this platform">
-          <span>Join Classroom (coming soon)</span>
-        </button>
+      {joinError && <p className="dashboard-page__note" role="alert">{joinError}</p>}
+
+      {canJoin && (
+        <form action={joinClassroomAction} style={{ marginTop: "1rem" }}>
+          <input type="hidden" name="lessonId" value={lesson.id} />
+          <button type="submit" className="button button--primary" disabled={!joinWindowOpen}>
+            <span>{joinWindowOpen ? "Join Classroom" : "Classroom opens closer to the start time"}</span>
+          </button>
+        </form>
       )}
 
       {canCancel && (

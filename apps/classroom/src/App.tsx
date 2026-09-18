@@ -63,6 +63,12 @@ function App() {
   const [name, setName] = useState('');
   const [room, setRoom] = useState(() => new URLSearchParams(window.location.search).get('room')?.trim().toLowerCase() || '');
   const [created, setCreated] = useState(false);
+  // A platform-issued classroom link (LearnThrive Tuition's dashboard → "Join Classroom") carries
+  // a signed one-time token instead of a manually-typed name/room code — see meeting.ts's join()
+  // and docs/CLASSROOM_INTEGRATION.md. Read once: the token is stripped from the URL as soon as
+  // join() uses it, so a later re-render must not pick a fresh (now-absent) value back up.
+  const [autoJoinToken] = useState(() => new URLSearchParams(window.location.search).get('token'));
+  const autoJoinStarted = useRef(false);
   const [deviceMenuOpen, setDeviceMenuOpen] = useState(false);
   const [participantPanelOpen, setParticipantPanelOpen] = useState(false);
   const [waitingRoomPanelOpen, setWaitingRoomPanelOpen] = useState(false);
@@ -123,6 +129,13 @@ function App() {
   }, [fullscreenSupported]);
 
   useEffect(() => { focusTargetRef.current = focusTarget; }, [focusTarget]);
+
+  useEffect(() => {
+    if (!autoJoinToken || autoJoinStarted.current) return;
+    autoJoinStarted.current = true;
+    void join('', '', 'student', autoJoinToken);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoJoinToken]);
 
   // If the currently-focused peer leaves, fall back to auto-pick rather than pointing at nobody.
   useEffect(() => {
@@ -229,7 +242,13 @@ function App() {
     </header>
 
     <main id="main-content" className={inCall || waitingForAdmission ? 'call-main' : 'prejoin-main'}>
-      {ended ? <section className="ended-panel">
+      {autoJoinToken && snapshot.phase === 'joining' && !snapshot.error ? <section className="waiting-admission-panel">
+        <div className="waiting-admission-status" role="status">
+          <div className="waiting-orbit"><div className="waiting-icon"><Icon name="people" size={30} /></div></div>
+          <h2>Joining your classroom…</h2>
+          <p>You were sent here from your LearnThrive Tuition dashboard — no need to enter a name or room code.</p>
+        </div>
+      </section> : ended ? <section className="ended-panel">
         <div className="ended-icon"><Icon name={snapshot.endedReason === 'removed' ? 'info' : 'check'} size={34} /></div>
         <p className="eyebrow">{snapshot.endedReason === 'classEnded' ? 'CLASS ENDED' : snapshot.endedReason === 'removed' ? 'REMOVED' : 'UNTIL NEXT TIME'}</p>
         <h1>{snapshot.endedReason === 'classEnded' ? 'The tutor ended the class.' : snapshot.endedReason === 'removed' ? 'You were removed from the class.' : 'You’ve left the meeting.'}</h1>

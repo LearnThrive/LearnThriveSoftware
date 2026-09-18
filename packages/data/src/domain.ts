@@ -99,6 +99,10 @@ export interface Lesson {
   durationMinutes: number;
   locationType: LocationType;
   location?: string; // required in practice for IN_PERSON, enforced by the scheduling service
+  // Present only when locationType is ONLINE — the classroom room this lesson joins into. Set
+  // once at creation and never reused across lessons, so a stale/shared link can't leak access
+  // to a different lesson's classroom. See docs/CLASSROOM_INTEGRATION.md.
+  classroomRoomId?: string;
   notes?: string;
   reportRequired: boolean;
   status: LessonStatus;

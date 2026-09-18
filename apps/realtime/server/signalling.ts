@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import express from 'express';
 import { Server, type Socket } from 'socket.io';
 import { isDevTunnelHost } from '@learnthrive/shared/allowedHosts';
+import { verifyClassroomJoinToken } from '@learnthrive/shared/classroomToken';
 import {
   ANNOUNCEMENT_TTL_MS, MAX_ANNOUNCEMENT_LENGTH, MAX_BOARD_ELEMENT_BYTES, MAX_BOARD_ELEMENTS_PER_PAGE,
   MAX_BOARD_IMPORT_BYTES, MAX_BOARD_PAGE_NAME_LENGTH, MAX_BOARD_PAGES, MAX_BOARD_UPDATE_BATCH, MAX_CHAT_LENGTH,
@@ -470,6 +471,60 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
     if (self.role === 'tutor') socket.emit('room:removed-list-update', { names: [...room.removedNames.values()] });
   }
 
+  // Shared tail of room:join for both the token-authenticated and manual-entry paths (see the
+  // room:join handler below) — everything from here on treats a verified-token identity and a
+  // manually-entered one identically, since by this point both have already been validated as
+  // trustworthy by their own respective path.
+  function proceedWithJoin(socket: MeetingSocket, roomId: string, name: string, role: ParticipantRole, media: MediaState) {
+    if (socket.data.roomId) {
+      if (socket.data.roomId !== roomId) return fail(socket, 'Leave your current meeting before joining another.');
+      const existing = rooms.get(roomId);
+      if (existing?.participants.has(socket.id)) resendJoinedState(socket, roomId, existing);
+      else if (existing?.waiting.has(socket.id)) socket.emit('room:waiting', { roomId });
+      return;
+    }
+
+    const room = rooms.get(roomId) ?? createRoom();
+
+    if (role === 'tutor') {
+      const existingTutor = tutorOf(room);
+      if (existingTutor) {
+        if (!pendingDisconnects.has(existingTutor.id)) {
+          socket.emit('room:full', { message: 'This class already has a tutor.' });
+          return;
+        }
+        evictStale(room, existingTutor.id);
+      }
+      const self: Participant = { id: socket.id, name, media, screenSharing: false, handRaised: false, handRaisedAt: null, role, forceMuted: false };
+      rooms.set(roomId, room);
+      admitParticipant(socket, roomId, room, self);
+      return;
+    }
+
+    if (room.settings.locked) {
+      socket.emit('room:full', { message: 'This class is currently locked. Please try again shortly.' });
+      return;
+    }
+
+    if (room.removedNames.has(name.toLowerCase())) {
+      socket.emit('room:full', { message: 'You were removed from this class by the tutor.' });
+      return;
+    }
+
+    // Students always wait for the tutor to admit them, even if a seat is already free —
+    // capacity is enforced at admission time (room:admit/room:admit-all), not here.
+    if (room.waiting.size >= WAITING_ROOM_CAP) {
+      socket.emit('room:full', { message: 'The waiting room is full right now. Please try again shortly.' });
+      return;
+    }
+    room.waiting.set(socket.id, { name, media });
+    rooms.set(roomId, room);
+    socket.data.roomId = roomId;
+    void socket.join(`meeting:${roomId}`);
+    socket.emit('room:waiting', { roomId });
+    broadcastWaiting(room);
+  }
+
   // Silently drops a stale (mid-grace-period) participant so a same-role newcomer can take their
   // slot instead of being told the room/seat is full. No departure notice is sent — the
   // newcomer's own admission (which immediately follows) is what the remaining participants see.
@@ -598,6 +653,23 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
     }
 
     socket.on('room:join', (payload: unknown) => {
+      // Platform-authenticated join (plan sections 33-37, docs/CLASSROOM_INTEGRATION.md):
+      // apps/web has already checked the requester is logged in, assigned to the Lesson, the
+      // Lesson is online/not cancelled, and within its join window, then signed this token.
+      // Identity comes ONLY from the verified token here — a client can't also smuggle in a
+      // different name/role alongside a valid token, since this branch never reads those fields.
+      if (isRecord(payload) && typeof payload.token === 'string' && payload.token) {
+        const verified = verifyClassroomJoinToken(payload.token);
+        if (!verified || !ROOM_PATTERN.test(verified.roomId)) {
+          return fail(socket, 'Your classroom link has expired or is invalid. Return to your lesson and try again.');
+        }
+        const media = parseMedia(payload.media);
+        if (!media) return fail(socket, 'Invalid microphone or camera status.');
+        proceedWithJoin(socket, verified.roomId, verified.name.trim().slice(0, MAX_NAME_LENGTH) || 'Participant', verified.role, media);
+        return;
+      }
+      // The pre-existing manual name/role entry path — kept working unchanged for direct
+      // classroom testing (plan section 36: the dev role-picker stays available for that).
       if (!isRecord(payload) || typeof payload.roomId !== 'string' || !ROOM_PATTERN.test(payload.roomId)
         || typeof payload.name !== 'string' || payload.name.length > 256
         || !payload.name.trim() || payload.name.trim().length > MAX_NAME_LENGTH
@@ -609,56 +681,7 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
       if (!media) return fail(socket, 'Invalid microphone or camera status.');
       const role = parseRole(payload.role);
       if (!role) return fail(socket, 'Invalid role.');
-      const roomId = payload.roomId;
-      const name = payload.name.trim();
-
-      if (socket.data.roomId) {
-        if (socket.data.roomId !== roomId) return fail(socket, 'Leave your current meeting before joining another.');
-        const existing = rooms.get(roomId);
-        if (existing?.participants.has(socket.id)) resendJoinedState(socket, roomId, existing);
-        else if (existing?.waiting.has(socket.id)) socket.emit('room:waiting', { roomId });
-        return;
-      }
-
-      const room = rooms.get(roomId) ?? createRoom();
-
-      if (role === 'tutor') {
-        const existingTutor = tutorOf(room);
-        if (existingTutor) {
-          if (!pendingDisconnects.has(existingTutor.id)) {
-            socket.emit('room:full', { message: 'This class already has a tutor.' });
-            return;
-          }
-          evictStale(room, existingTutor.id);
-        }
-        const self: Participant = { id: socket.id, name, media, screenSharing: false, handRaised: false, handRaisedAt: null, role, forceMuted: false };
-        rooms.set(roomId, room);
-        admitParticipant(socket, roomId, room, self);
-        return;
-      }
-
-      if (room.settings.locked) {
-        socket.emit('room:full', { message: 'This class is currently locked. Please try again shortly.' });
-        return;
-      }
-
-      if (room.removedNames.has(name.toLowerCase())) {
-        socket.emit('room:full', { message: 'You were removed from this class by the tutor.' });
-        return;
-      }
-
-      // Students always wait for the tutor to admit them, even if a seat is already free —
-      // capacity is enforced at admission time (room:admit/room:admit-all), not here.
-      if (room.waiting.size >= WAITING_ROOM_CAP) {
-        socket.emit('room:full', { message: 'The waiting room is full right now. Please try again shortly.' });
-        return;
-      }
-      room.waiting.set(socket.id, { name, media });
-      rooms.set(roomId, room);
-      socket.data.roomId = roomId;
-      void socket.join(`meeting:${roomId}`);
-      socket.emit('room:waiting', { roomId });
-      broadcastWaiting(room);
+      proceedWithJoin(socket, payload.roomId, payload.name.trim(), role, media);
     });
 
     socket.on('room:admit', (payload: unknown) => {

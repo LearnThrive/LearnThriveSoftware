@@ -463,13 +463,16 @@ export class MeetingController {
     this.update({ board: { ...this.snapshot.board, elementsByPage: { ...this.snapshot.board.elementsByPage, [pageId]: elements } } });
   };
 
-  join = (name: string, roomId: string, role: ParticipantRole) => {
+  // A platform-issued token (see @learnthrive/shared/classroomToken) carries its own roomId,
+  // name and role, verified server-side — the client never needs to know or validate them itself,
+  // so the usual name/room-code checks are skipped entirely for a token join.
+  join = (name: string, roomId: string, role: ParticipantRole, token?: string) => {
     if (this.active) return;
     name = name.trim();
     roomId = roomId.trim().toLowerCase();
     const support = browserSupportError();
     if (support) { this.update({ error: support }); return; }
-    if (!name || name.length > MAX_NAME_LENGTH || !ROOM_PATTERN.test(roomId)) {
+    if (!token && (!name || name.length > MAX_NAME_LENGTH || !ROOM_PATTERN.test(roomId))) {
       this.update({ error: 'Enter your name (up to 40 characters) and a room code of 8–48 letters, numbers or hyphens.' });
       return;
     }
@@ -491,7 +494,10 @@ export class MeetingController {
     });
     const url = new URL(window.location.href);
     url.pathname = '/meeting';
-    url.searchParams.set('room', roomId);
+    // A token join doesn't know its roomId until the server confirms it (the token is the only
+    // thing that names the room), so there's nothing meaningful to put in the URL yet.
+    if (roomId) url.searchParams.set('room', roomId);
+    if (token) url.searchParams.delete('token'); // never leave a one-time join token sitting in the address bar
     window.history.replaceState(null, '', url);
     // Intentionally no URL: HTTPS tunnels and localhost use the current origin.
     const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io({
@@ -501,7 +507,7 @@ export class MeetingController {
     socket.on('connect', () => {
       if (!this.active) return;
       this.update({ signalling: 'connected', error: null, reconnectFailed: false });
-      socket.emit('room:join', { roomId, name, media: this.media.state(), role });
+      socket.emit('room:join', { roomId, name, media: this.media.state(), role, ...(token ? { token } : {}) });
     });
     socket.on('disconnect', () => {
       // The signalling channel dropping doesn't mean the WebRTC media connections have: leave
@@ -527,7 +533,7 @@ export class MeetingController {
     socket.io.on('reconnect_failed', this.reconnectFailedHandler);
     socket.on('room:joined', (payload) => {
       this.update({
-        phase: 'meeting', role: payload.self.role, waiting: payload.waiting, error: null,
+        phase: 'meeting', roomId: payload.roomId, name: payload.self.name, role: payload.self.role, waiting: payload.waiting, error: null,
         forceMuted: payload.self.forceMuted, roomSettings: payload.settings,
         poll: payload.poll, understandingCheck: payload.understandingCheck, timer: payload.timer,
         board: payload.board, announcement: payload.announcement,
