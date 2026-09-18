@@ -675,6 +675,33 @@ describe('signalling through real Socket.IO clients', () => {
     expect(await sharingOnTutor).toEqual({ id: studentB.id, sharing: true });
   });
 
+  it('releases screen-share ownership when the sharer disconnects unexpectedly (grace period expiry), not just an explicit leave', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const student = await connect();
+    await admit(tutor, student);
+
+    await new Promise<void>((resolve) => { tutor.once('participant:screen-share', () => resolve()); student.emit('participant:screen-share', { sharing: true }); });
+    expect(server.rooms.get('room-one')?.activeScreenShareId).toBe(student.id);
+
+    student.disconnect();
+    await expect.poll(() => server.rooms.get('room-one')?.activeScreenShareId, { timeout: 2000 }).toBeNull();
+  });
+
+  it('releases screen-share ownership immediately when the sharer is removed by the tutor', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const student = await connect();
+    await admit(tutor, student);
+
+    await new Promise<void>((resolve) => { tutor.once('participant:screen-share', () => resolve()); student.emit('participant:screen-share', { sharing: true }); });
+    expect(server.rooms.get('room-one')?.activeScreenShareId).toBe(student.id);
+
+    tutor.emit('room:remove-participant', { id: student.id! });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(server.rooms.get('room-one')?.activeScreenShareId).toBeNull();
+  });
+
   it('gates student screen-share and chat behind room settings, without restricting the tutor', async () => {
     const tutor = await connect();
     await joinTutor(tutor, 'Alice');
