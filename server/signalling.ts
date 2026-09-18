@@ -27,6 +27,11 @@ const UNDERSTANDING_RATE_MAX = 10;
 // server-side backstop against a misbehaving client, generous enough to never bite a real one.
 const BOARD_POINTER_RATE_WINDOW_MS = 1000;
 const BOARD_POINTER_RATE_MAX = 30;
+// The client already throttles element-batch sends to ~120ms (src/board.ts's trailingThrottle,
+// ~8/s) — this is a server-side backstop against a client that bypasses its own throttle, set
+// with real headroom above that legitimate rate rather than tuned tight against it.
+const BOARD_UPDATE_RATE_WINDOW_MS = 1000;
+const BOARD_UPDATE_RATE_MAX = 20;
 const MAX_TIMER_DURATION_MS = 4 * 60 * 60 * 1000;
 const BACKGROUNDS: readonly BoardBackground[] = ['blank', 'lined', 'grid', 'dotted', 'coordinate'];
 
@@ -285,6 +290,7 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
   const pollVoteRateLimiter = createRateLimiter(POLL_VOTE_RATE_WINDOW_MS, POLL_VOTE_RATE_MAX);
   const understandingRateLimiter = createRateLimiter(UNDERSTANDING_RATE_WINDOW_MS, UNDERSTANDING_RATE_MAX);
   const boardPointerRateLimiter = createRateLimiter(BOARD_POINTER_RATE_WINDOW_MS, BOARD_POINTER_RATE_MAX);
+  const boardUpdateRateLimiter = createRateLimiter(BOARD_UPDATE_RATE_WINDOW_MS, BOARD_UPDATE_RATE_MAX);
 
   function fail(socket: MeetingSocket, message: string) {
     socket.emit('room:error', { message });
@@ -475,6 +481,7 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
     pollVoteRateLimiter.clear(staleId);
     understandingRateLimiter.clear(staleId);
     boardPointerRateLimiter.clear(staleId);
+    boardUpdateRateLimiter.clear(staleId);
     if (room.activeScreenShareId === staleId) room.activeScreenShareId = null;
     for (const [sessionId, edge] of room.edges) {
       if (edge.participantIds.includes(staleId)) room.edges.delete(sessionId);
@@ -514,6 +521,7 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
     pollVoteRateLimiter.clear(socket.id);
     understandingRateLimiter.clear(socket.id);
     boardPointerRateLimiter.clear(socket.id);
+    boardUpdateRateLimiter.clear(socket.id);
     if (room.activeScreenShareId === socket.id) room.activeScreenShareId = null;
     const departing = room.participants.get(socket.id) ?? null;
     if (!room.participants.delete(socket.id)) return;
@@ -962,6 +970,7 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
       const self = room?.participants.get(socket.id);
       if (!room || !self) return fail(socket, 'You are not currently in a class.');
       if (self.role === 'student' && !room.board.studentsCanDraw) return fail(socket, 'The tutor has turned off drawing for students.');
+      if (!boardUpdateRateLimiter.allow(socket.id)) return fail(socket, 'You are drawing too fast — please slow down.');
       const parsed = parseBoardUpdateBatch(payload);
       if (!parsed) return fail(socket, 'Invalid whiteboard update.');
       const page = room.board.pages.find((candidate) => candidate.id === parsed.pageId);

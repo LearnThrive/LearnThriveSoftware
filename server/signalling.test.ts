@@ -1361,6 +1361,30 @@ describe('signalling through real Socket.IO clients', () => {
     expect(await acceptedOnStudent).toEqual({ pageId, elements: [makeElement('el-ok')] });
   });
 
+  it('rate-limits a client that bypasses its own throttle and floods board:update', async () => {
+    const tutor = await connect();
+    const joined = await joinTutor(tutor, 'Alice');
+    const pageId = joined.board.activePageId;
+
+    const received: unknown[] = [];
+    const student = await connect();
+    await admit(tutor, student);
+    student.on('board:update', (payload) => received.push(payload));
+
+    // BOARD_UPDATE_RATE_MAX is 20/s in server/signalling.ts — send 21 rapidly to tip over it.
+    for (let i = 0; i < 20; i += 1) tutor.emit('board:update', { pageId, elements: [makeElement(`flood-${i}`)] });
+    const limited = new Promise((resolve) => tutor.once('room:error', resolve));
+    tutor.emit('board:update', { pageId, elements: [makeElement('flood-20')] });
+    expect(await limited).toEqual({ message: 'You are drawing too fast — please slow down.' });
+    await expect.poll(() => received.length, { timeout: 500 }).toBe(20);
+
+    // The room survives it — a normal update still works once the window clears.
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const acceptedAfter = new Promise((resolve) => student.once('board:update', resolve));
+    tutor.emit('board:update', { pageId, elements: [makeElement('after-flood')] });
+    expect(await acceptedAfter).toEqual({ pageId, elements: [makeElement('after-flood')] });
+  });
+
   it('reports TURN as unconfigured (503) rather than crashing when no Cloudflare credentials are set', async () => {
     const previousKeyId = process.env.CLOUDFLARE_TURN_KEY_ID;
     const previousApiToken = process.env.CLOUDFLARE_TURN_API_TOKEN;
