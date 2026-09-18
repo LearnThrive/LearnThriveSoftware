@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  CaptureUpdateAction, Excalidraw, convertToExcalidrawElements, reconcileElements, restoreElements,
+  CaptureUpdateAction, Excalidraw, convertToExcalidrawElements, exportToBlob, reconcileElements, restoreElements,
 } from '@excalidraw/excalidraw';
 import type { ExcalidrawImperativeAPI, Collaborator, SocketId } from '@excalidraw/excalidraw/types';
 import type { OrderedExcalidrawElement } from '@excalidraw/excalidraw/element/types';
@@ -170,7 +170,6 @@ export function Whiteboard({
   const exportPng = async () => {
     const api = apiRef.current;
     if (!api) return;
-    const { exportToBlob } = await import('@excalidraw/excalidraw');
     const blob = await exportToBlob({ elements: api.getSceneElements(), appState: api.getAppState(), files: api.getFiles(), mimeType: 'image/png' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');

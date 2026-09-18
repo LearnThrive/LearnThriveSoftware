@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactElement } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type FormEvent, type ReactElement } from 'react';
 import { MAX_NAME_LENGTH, MAX_PARTICIPANTS, ROOM_PATTERN, type ReactionEmoji } from '../shared/protocol';
 import { useMeeting } from './useMeeting';
 import type { RemotePeer } from './meeting';
@@ -21,7 +21,10 @@ import { ClassControlsMenu } from './components/ClassControlsMenu';
 import { PollPanel } from './components/PollPanel';
 import { UnderstandingCheckPanel } from './components/UnderstandingCheckPanel';
 import { ClassTimer } from './components/ClassTimer';
-import { Whiteboard } from './components/Whiteboard';
+// Excalidraw pulls in a large dependency tree (diagram/math-rendering support this app never
+// uses); lazy-loading it means opening the ordinary Call workspace never pays that cost —
+// see PRODUCTION_GAPS.md's bundle-size note and the before/after sizes recorded there.
+const Whiteboard = lazy(() => import('./components/Whiteboard').then((module) => ({ default: module.Whiteboard })));
 import { AnnouncementBanner } from './components/AnnouncementBanner';
 import { HelpQueuePanel } from './components/HelpQueuePanel';
 
@@ -274,16 +277,18 @@ function App() {
         {snapshot.role === 'tutor' && helpQueueEntries.length > 0 && <HelpQueuePanel entries={helpQueueEntries} onMarkHelped={lowerHand} />}
         <div className="call-body">
           {workspaceMode === 'board' ? (
-            <Whiteboard
-              role={snapshot.role ?? 'student'} pages={snapshot.board.pages} activePageId={snapshot.board.activePageId}
-              elementsByPage={snapshot.board.elementsByPage} studentsCanDraw={snapshot.board.studentsCanDraw}
-              pointers={snapshot.boardPointers} followMeSeq={snapshot.boardFollowMeSeq}
-              onUpdate={sendBoardUpdate} onCursor={sendBoardCursor} onLaser={sendBoardLaser} onCommitLocal={commitLocalPageElements}
-              onSwitchPage={switchBoardPage} onCreatePage={createBoardPage} onRenamePage={renameBoardPage}
-              onDuplicatePage={duplicateBoardPage} onDeletePage={deleteBoardPage} onReorderPages={reorderBoardPages}
-              onBackground={setBoardBackground} onSetStudentsCanDraw={setStudentsCanDraw} onClearPage={clearBoardPage}
-              onFollowMe={followMe} onImport={importBoard}
-            />
+            <Suspense fallback={<div className="whiteboard-loading" role="status"><Icon name="poll" size={20} />Loading whiteboard…</div>}>
+              <Whiteboard
+                role={snapshot.role ?? 'student'} pages={snapshot.board.pages} activePageId={snapshot.board.activePageId}
+                elementsByPage={snapshot.board.elementsByPage} studentsCanDraw={snapshot.board.studentsCanDraw}
+                pointers={snapshot.boardPointers} followMeSeq={snapshot.boardFollowMeSeq}
+                onUpdate={sendBoardUpdate} onCursor={sendBoardCursor} onLaser={sendBoardLaser} onCommitLocal={commitLocalPageElements}
+                onSwitchPage={switchBoardPage} onCreatePage={createBoardPage} onRenamePage={renameBoardPage}
+                onDuplicatePage={duplicateBoardPage} onDeletePage={deleteBoardPage} onReorderPages={reorderBoardPages}
+                onBackground={setBoardBackground} onSetStudentsCanDraw={setStudentsCanDraw} onClearPage={clearBoardPage}
+                onFollowMe={followMe} onImport={importBoard}
+              />
+            </Suspense>
           ) : (
             <div className="meeting-stage" ref={stageRef}>
               {layoutMode === 'gallery' && snapshot.peers.length > 0 ? (
