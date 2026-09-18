@@ -91,3 +91,20 @@ export function getAuthProvider(): AuthProvider {
   if (!provider) provider = new DevelopmentAuthProvider();
   return provider;
 }
+
+// Notifications (Phase H) are addressed to an AuthenticatedUser.id, but the services that raise
+// them (scheduling, reports) only know a domain profileId — the reverse of the lookup
+// AuthenticatedUser.profileId already gives everywhere else. Many domain records created via
+// Admin's "Add Tutor/Client/Student" forms have no login account at all (only the four seed
+// accounts do), so this legitimately returns nothing for most of them — a notification with no
+// resolvable recipient is simply not created, not an error. See docs/NOTIFICATIONS.md.
+export async function findUserIdByProfileId(profileId: string): Promise<string | null> {
+  await ensureSeeded();
+  const match = [...usersStore().values()].find((u) => u.profileId === profileId && u.active);
+  return match?.id ?? null;
+}
+
+export async function findUserIdsByRole(role: DevelopmentUser["role"]): Promise<string[]> {
+  await ensureSeeded();
+  return [...usersStore().values()].filter((u) => u.role === role && u.active).map((u) => u.id);
+}

@@ -299,12 +299,19 @@ test('a required lesson report blocks completion until submitted, and internal T
   await expect(page.locator('.dashboard-page')).toContainText('COMPLETED');
 
   await login(page, ADMIN.email, ADMIN.password);
+  await page.goto('/dashboard/notifications');
+  await expect(page.locator('.people-list')).toContainText('is awaiting approval');
   await page.goto(lessonUrl);
   await expect(page.locator('.dashboard-page')).toContainText('SUBMITTED');
   await page.getByRole('button', { name: 'Approve report' }).click();
   await expect(page.locator('.dashboard-page')).toContainText('APPROVED');
 
   await login(page, CLIENT.email, CLIENT.password);
+  await expect(page.getByRole('link', { name: /Notifications \(\d/ })).toBeVisible();
+  await page.goto('/dashboard/notifications');
+  await expect(page.locator('.people-list')).toContainText('A new report is available');
+  await page.getByRole('button', { name: 'Mark read' }).first().click();
+
   await page.goto(lessonUrl);
   await expect(page.locator('.dashboard-page')).toContainText('Covered quadratic equations.');
   await expect(page.locator('.dashboard-page')).not.toContainText('CONFIDENTIAL');

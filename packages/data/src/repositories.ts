@@ -1,6 +1,6 @@
 import type {
-  Client, ClientStudentLink, Lesson, LessonActivityEvent, LessonAttendanceRecord, LessonReport, PlatformSettings, Student, TuitionAssignment,
-  Tutor, TutorAvailabilityBlock,
+  Client, ClientStudentLink, Lesson, LessonActivityEvent, LessonAttendanceRecord, LessonReport, Notification, PlatformSettings, Student,
+  TuitionAssignment, Tutor, TutorAvailabilityBlock,
 } from "./domain";
 
 // Every repository interface follows the same shape deliberately — a future
@@ -79,6 +79,18 @@ export interface AttendanceRepository {
 export interface ActivityRepository {
   forLesson(lessonId: string): Promise<LessonActivityEvent[]>;
   append(event: Omit<LessonActivityEvent, "id" | "createdAt">): Promise<LessonActivityEvent>;
+  // Platform-wide, newest first — plan section 53's Admin "recent activity" feed. Deliberately
+  // separate from forLesson() rather than one method with an optional lessonId, since the two
+  // callers (a single lesson's timeline vs. the whole platform's feed) want different shapes of
+  // "all of it" (unbounded vs. capped) for different reasons.
+  recent(limit: number): Promise<LessonActivityEvent[]>;
+}
+
+export interface NotificationRepository {
+  forUser(userId: string): Promise<Notification[]>; // newest first
+  unreadCountForUser(userId: string): Promise<number>;
+  create(input: Omit<Notification, "id" | "createdAt" | "read">): Promise<Notification>;
+  markRead(id: string): Promise<void>;
 }
 
 export interface ReportRepository {
@@ -105,4 +117,5 @@ export interface DataProvider {
   activity: ActivityRepository;
   reports: ReportRepository;
   settings: SettingsRepository;
+  notifications: NotificationRepository;
 }

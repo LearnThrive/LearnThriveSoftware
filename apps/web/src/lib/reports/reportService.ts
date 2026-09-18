@@ -1,6 +1,7 @@
 import type { DataProvider } from "@learnthrive/data/repositories";
 import type { LessonReport, ReportAssessmentLevel } from "@learnthrive/data/domain";
 import { logActivity } from "@/lib/activity/activityService";
+import { notifyProfiles, notifyRole } from "@/lib/notifications/notificationService";
 
 export class ReportError extends Error {}
 
@@ -59,7 +60,12 @@ export async function submitReport(data: DataProvider, reportId: string, actorId
     : await data.reports.update(reportId, { status: "APPROVED", submittedAt, approvedAt: submittedAt });
 
   await logActivity(data, report.lessonId, "REPORT_SUBMITTED", "Lesson report submitted", actorId);
-  if (!needsApproval) await logActivity(data, report.lessonId, "REPORT_APPROVED", "Lesson report auto-approved (approval not required for this assignment)", actorId);
+  if (needsApproval) {
+    await notifyRole(data, "ADMIN", "REPORT_AWAITING_APPROVAL", `A report for "${lesson.title}" is awaiting approval.`, `/dashboard/lessons/${lesson.id}`);
+  } else {
+    await logActivity(data, report.lessonId, "REPORT_APPROVED", "Lesson report auto-approved (approval not required for this assignment)", actorId);
+    await notifyProfiles(data, lesson.clientIds, "REPORT_AVAILABLE", `A new report is available for "${lesson.title}".`, `/dashboard/lessons/${lesson.id}`);
+  }
   return updated;
 }
 
@@ -69,9 +75,11 @@ export async function approveReport(data: DataProvider, reportId: string, actorI
   if (!report) throw new ReportError("Report not found.");
   if (report.status !== "SUBMITTED") throw new ReportError("Only a submitted report can be approved.");
 
+  const lesson = await data.lessons.get(report.lessonId);
   const approvedAt = new Date().toISOString();
   const updated = await data.reports.update(reportId, { status: "APPROVED", approvedAt, approvedBy: actorId });
   await logActivity(data, report.lessonId, "REPORT_APPROVED", "Lesson report approved", actorId);
+  if (lesson) await notifyProfiles(data, lesson.clientIds, "REPORT_AVAILABLE", `A new report is available for "${lesson.title}".`, `/dashboard/lessons/${lesson.id}`);
   return updated;
 }
 
