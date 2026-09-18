@@ -91,8 +91,14 @@ If the laptop and phone are already on the same Wi-Fi network, you can try `http
 23. **Temporarily disable Wi-Fi** on the phone (or laptop) for 5-10 seconds, then restore it — confirm "reconnecting..." then automatic recovery, not a false "participant left".
 24. **Refresh the phone's page** during the active call and confirm it can rejoin cleanly, no ghost participant.
 25. **Open a third browser session as another student** (join with the same room code — don't use "Create meeting", which would start a separate class) and confirm it lands in the waiting room, the tutor sees a live waiting-room badge and can admit it from the Waiting room panel, and the existing call is undisturbed until then.
-26. **Leave the call** from one side using the Leave button, confirm the in-app confirmation prompt (not a native browser popup), and confirm the ended screen offers Rejoin / Return to meeting setup / Copy meeting link.
-27. **Rejoin** using the same invite link/room code and confirm no ghost participant remains.
+26. **Test room lock**: on the laptop, open **Class controls** and lock the room; from a third device (or a third browser session), try to join with the same room code and confirm it's rejected with a "currently locked" message; unlock it and confirm a new joiner can get in again.
+27. **Test force-mute**: from the laptop's People panel, mute the phone's microphone; confirm the phone's mic turns off, its mute button now reads "Muted by tutor", and clicking it shows an explanation rather than turning the mic back on. Allow it to unmute again from the People panel and confirm the phone can now turn its own mic back on.
+28. **Test a quick poll**: create a two-option poll from the laptop's Class controls; confirm the phone sees it immediately as a banner (not tucked in a menu), can vote, and the laptop sees the tally update live; close the poll and confirm both sides show it as closed with frozen results.
+29. **Test the Understanding Check**: start one from the laptop; confirm the phone can respond (Got it / Confused / Lost) and sees only its own status, while the laptop sees a live per-student breakdown and aggregate; end the check and confirm the banner disappears on both sides.
+30. **Test the class timer**: start a stopwatch from the laptop; confirm the phone sees the same running time next to the meeting duration clock; pause, resume, and stop from the laptop and confirm the phone reflects each change with no controls of its own.
+31. **Leave the call** from one side using the Leave button, confirm the in-app confirmation prompt (not a native browser popup), and confirm the ended screen offers Rejoin / Return to meeting setup / Copy meeting link.
+32. **Rejoin** using the same invite link/room code and confirm no ghost participant remains.
+33. **Test "End class"**: with both devices back in a call, end the class from the laptop (tutor) side; confirm the laptop's own confirmation prompt reads "End class for everyone?" (not the ordinary "Leave the meeting?"), and confirm the phone lands on a distinct "The tutor ended the class" screen with no Rejoin option, not the ordinary "you've left" screen.
 
 ## Per-browser results
 
