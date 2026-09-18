@@ -36,7 +36,7 @@ To run the marketing/platform web app instead (or alongside):
 npm run dev:web
 ```
 
-Open `http://localhost:3000`.
+Open `http://localhost:3000`. Log in at `/login` with one of the five development accounts in [docs/DEVELOPMENT_ACCOUNTS.md](docs/DEVELOPMENT_ACCOUNTS.md) to reach `/dashboard`. **Must run in dev mode** (`next dev`, not `next start`) — the development auth provider deliberately refuses to run under `NODE_ENV=production`; see [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md).
 
 ### Environment variables
 
@@ -72,9 +72,12 @@ npm run build          # classroom build, realtime typecheck, web build
 - [apps/classroom/README.md](apps/classroom/README.md) — the classroom app: features, architecture, testing, TURN, browser support, production gaps (classroom-specific).
 - [apps/web/README.md](apps/web/README.md) — the marketing site: local development, quality checks, enquiry form.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — this repository's overall structure and the reasoning behind it.
+- [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md) — the development auth provider, password hashing, sessions, production safety.
+- [docs/ROLE_PERMISSIONS.md](docs/ROLE_PERMISSIONS.md) — roles and what's actually enforced where.
+- [docs/DEVELOPMENT_ACCOUNTS.md](docs/DEVELOPMENT_ACCOUNTS.md) — the five seeded dev accounts and their credentials.
 
-Further platform-level docs (authentication, role permissions, domain model, scheduling, lesson reports, Supabase migration plan, development accounts, platform-wide production gaps) land as the corresponding phases of this migration are implemented — see `docs/` as it grows.
+Further platform-level docs (domain model, scheduling, lesson reports, Supabase migration plan, platform-wide production gaps) land as the corresponding phases of this migration are implemented — see `docs/` as it grows.
 
 ## Status
 
-This is a **development platform**, not production-ready. As of this migration (Phase A — repository convergence), there is no authentication, no accounts, and no domain model beyond the classroom's own ephemeral, in-memory room state — those are later phases of the same plan. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for what exists today versus what's planned.
+This is a **development platform**, not production-ready. As of this migration (Phase A — repository convergence, Phase B — auth foundation), there is real login/logout/sessions/role guards, but no accounts beyond five fictional in-memory dev users, and no domain model beyond the classroom's own ephemeral, in-memory room state — those are later phases of the same plan. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for what exists today versus what's planned.

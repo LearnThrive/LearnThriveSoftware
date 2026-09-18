@@ -68,6 +68,14 @@ export function SiteHeader() {
               </Link>
             ))}
           </nav>
+          <Link
+            href="/login"
+            className="header-login"
+            aria-current={isCurrent("/login") ? "page" : undefined}
+            onClick={() => setOpen(false)}
+          >
+            Login
+          </Link>
           <ButtonLink href="/book" className="header-cta">
             Book a free consultation
           </ButtonLink>

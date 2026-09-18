@@ -54,6 +54,17 @@ None of these change what a visitor or a classroom participant sees or experienc
 - `apps/web`: lint, typecheck, 12/12 content/link tests, production build (all 18 routes render).
 - Root aggregate `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build` all pass across every workspace.
 
+## Phase B — auth foundation
+
+Adds `apps/web`'s `/login`, a development-only in-memory credential store (five fictional seed accounts, scrypt-hashed passwords), server-issued sessions (HTTP-only cookie, validated server-side against an in-memory session store, never trusting the cookie's mere presence), and role guards (`requireSession`/`requireRole`/`requireRoleForApi`). A minimal `/dashboard` shell renders role-differentiated placeholder copy; `/dashboard/admin` is the first real role-restricted route, proving the guard mechanism end to end. See `docs/AUTHENTICATION.md`, `docs/ROLE_PERMISSIONS.md`, and `docs/DEVELOPMENT_ACCOUNTS.md`.
+
+Two real bugs found and fixed while building this phase's own test coverage (both in the *tests*, not the app, caught by the tests failing loudly rather than passing on a false premise):
+
+- Next.js 16's dev server treats `127.0.0.1` and `localhost` as different origins and silently returns 403 for `/_next/static` chunk requests from `127.0.0.1` — which meant zero client JS loaded and every button/form on the page was inert, with no visible error banner. The Playwright config's `baseURL`/`webServer.url` needed to be `localhost`, not `127.0.0.1`.
+- The login E2E test helper's `.click()` on the sign-in button only waits for the click event to dispatch, not for the async fetch-then-`router.push()` chain it triggers — a caller's next `page.goto()` could race ahead of the actual login completing. Fixed by waiting for the resulting URL change alongside the click.
+
+Verification: 21/21 Node `--test` unit tests (password hashing, dev credential store — valid/invalid/unknown/disabled login, case-insensitive email) + 12/12 Playwright E2E scenarios (login, logout, session persistence across reload, role-gated route access proven for Tutor/Client/Admin, already-authenticated redirect, password show/hide, empty-submission validation) — all against a real running `next dev` server (not `next start`; see `docs/AUTHENTICATION.md`'s production-safety note for why). Full workspace lint/typecheck/build still pass, and all 18 original marketing routes remain statically prerendered — the new auth-aware routes (`/login`, `/dashboard`, `/dashboard/admin`, the two `/api/auth/*` routes) are the only ones now server-rendered on demand, exactly as expected.
+
 ## What's next
 
-Phase B (auth foundation) introduces `apps/web`'s `/login`, a development-only in-memory credential store, hashed passwords, server-issued sessions, and role guards — see `plan5.md` (private) for the full phase sequence. `packages/data` (domain/data-access layer) and the domain model itself (`User`, `Tutor`, `Client`, `Student`, `TuitionAssignment`, `Lesson`, …) arrive in Phase C.
+`packages/data` (domain/data-access layer) and the domain model itself (`User`, `Tutor`, `Client`, `Student`, `TuitionAssignment`, `Lesson`, …) arrive in Phase C — see `plan5.md` (private) for the full phase sequence.
