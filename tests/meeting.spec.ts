@@ -642,3 +642,123 @@ test('the tutor can send a prominent announcement, and the Help Queue lists rais
   await contextA.close();
   await contextB.close();
 });
+
+// The full 1-tutor + 3-student room — the maximum this app supports. Every other test in this
+// file deliberately uses 1-2 peers (fast, focused); this one specifically exercises the real
+// 6-edge mesh, since some things (2x2 gallery, capacity rejection, the per-peer bandwidth policy
+// at its most conservative tier) only happen at exactly this size. See plan4.md section 9.
+test('a full 4-participant room (1 tutor + 3 students) stays stable across whiteboard, chat, Help Queue, a departure/rejoin, and a capacity-rejected 4th student', async ({ browser }) => {
+  // A real 6-edge mesh (4 participants) with several sequential steps is inherently heavier than
+  // the rest of this suite's 1-2 peer tests; give it real headroom rather than racing the default
+  // per-test timeout, especially when running alongside other tests under worker contention.
+  test.setTimeout(120_000);
+  const isChromium = browser.browserType().name() === 'chromium';
+  const newPage = async () => {
+    const context = await browser.newContext(isChromium ? { permissions: ['camera', 'microphone'] } : {});
+    return { context, page: await context.newPage() };
+  };
+
+  const { context: contextA, page: pageA } = await newPage();
+  await pageA.goto('/meeting?debug=1');
+  await pageA.getByLabel('Your name').fill('Tutor');
+  await pageA.getByRole('button', { name: 'Create meeting' }).click();
+  await enableDevices(pageA);
+  const roomId = await pageA.getByLabel('Room code').inputValue();
+  await pageA.getByRole('button', { name: 'Start class' }).click();
+
+  const students: { context: Awaited<ReturnType<typeof newPage>>['context']; page: Page; name: string }[] = [];
+  for (const name of ['Alice', 'Bob', 'Cara']) {
+    const { context, page } = await newPage();
+    await page.goto(`/meeting?debug=1&room=${roomId}`);
+    await page.getByLabel('Your name').fill(name);
+    await enableDevices(page);
+    await page.getByRole('button', { name: 'Join meeting' }).click();
+    await expect(page.locator('.waiting-admission-panel')).toBeVisible();
+    await admit(pageA, name);
+    await expect(page.locator('.connection-pill')).toHaveClass(/connected/, { timeout: 30_000 });
+    students.push({ context, page, name });
+  }
+  await expect(pageA.locator('.connection-pill')).toHaveClass(/connected/, { timeout: 30_000 });
+
+  await test.step('all 4 participants see a stable 2x2 gallery with 4 tiles', async () => {
+    for (const p of [pageA, ...students.map((s) => s.page)]) {
+      await p.getByRole('button', { name: 'Meeting settings' }).click();
+      await p.getByRole('button', { name: 'Gallery' }).click();
+      await p.keyboard.press('Escape');
+    }
+    await expect(pageA.locator('.stage-gallery .participant-tile')).toHaveCount(4);
+    for (const student of students) await expect(student.page.locator('.stage-gallery .participant-tile')).toHaveCount(4);
+  });
+
+  await test.step('the tutor draws on the whiteboard; all 3 students receive it', async () => {
+    await pageA.getByRole('tab', { name: 'Board' }).click();
+    for (const student of students) await student.page.getByRole('tab', { name: 'Board' }).click();
+    const canvas = pageA.locator('.whiteboard-canvas canvas').first();
+    const box = (await canvas.boundingBox())!;
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    await pageA.locator('[data-testid="toolbar-rectangle"]').click({ force: true });
+    await pageA.mouse.move(cx - 40, cy - 40);
+    await pageA.mouse.down();
+    await pageA.mouse.move(cx + 40, cy + 40, { steps: 5 });
+    await pageA.mouse.up();
+    for (const student of students) await expect(boardElementCount(student.page)).toHaveText('1', { timeout: 10_000 });
+    await pageA.getByRole('tab', { name: 'Call' }).click();
+    for (const student of students) await student.page.getByRole('tab', { name: 'Call' }).click();
+  });
+
+  await test.step('chat reaches all 3 students', async () => {
+    await pageA.getByRole('button', { name: 'Chat' }).click();
+    await pageA.getByPlaceholder('Type a message…').fill('Welcome, everyone!');
+    await pageA.getByRole('button', { name: 'Send message' }).click();
+    for (const student of students) {
+      await student.page.getByRole('button', { name: 'Chat' }).click();
+      await expect(student.page.locator('.chat-message')).toContainText('Welcome, everyone!');
+    }
+  });
+
+  await test.step('two students raise hands; the Help Queue lists both, in order, for the tutor only', async () => {
+    await students[0].page.getByRole('button', { name: 'Raise your hand' }).click();
+    await students[1].page.getByRole('button', { name: 'Raise your hand' }).click();
+    const queueText = await pageA.locator('.help-queue-panel').innerText();
+    expect(queueText.indexOf('Alice')).toBeGreaterThanOrEqual(0);
+    expect(queueText.indexOf('Bob')).toBeGreaterThan(queueText.indexOf('Alice'));
+    await expect(students[0].page.locator('.help-queue-panel')).toHaveCount(0);
+  });
+
+  await test.step('a student leaves; the room drops to 3 tiles with no ghost, then they rejoin cleanly', async () => {
+    await students[2].page.getByRole('button', { name: 'Leave meeting' }).click();
+    await students[2].page.getByRole('button', { name: 'Yes, leave' }).click();
+    await expect(pageA.locator('.stage-gallery .participant-tile')).toHaveCount(3, { timeout: 10_000 });
+
+    await students[2].page.goto(`/meeting?debug=1&room=${roomId}`);
+    await students[2].page.getByLabel('Your name').fill('Cara');
+    await enableDevices(students[2].page);
+    await students[2].page.getByRole('button', { name: 'Join meeting' }).click();
+    await admit(pageA, 'Cara');
+    await expect(students[2].page.locator('.connection-pill')).toHaveClass(/connected/, { timeout: 30_000 });
+    await expect(pageA.locator('.stage-gallery .participant-tile')).toHaveCount(4, { timeout: 10_000 });
+  });
+
+  await test.step('a 4th student cannot be admitted once 3 are already in — capacity is enforced, not just suggested', async () => {
+    const { context: contextD, page: pageD } = await newPage();
+    await pageD.goto(`/meeting?room=${roomId}`);
+    await pageD.getByLabel('Your name').fill('Dev');
+    await enableDevices(pageD);
+    await pageD.getByRole('button', { name: 'Join meeting' }).click();
+    await expect(pageD.locator('.waiting-admission-panel')).toBeVisible();
+
+    const trigger = pageA.getByRole('button', { name: 'Waiting room' });
+    const panel = pageA.locator('.waiting-room-panel');
+    if (!(await panel.isVisible())) await trigger.click();
+    await pageA.getByRole('button', { name: 'Admit Dev' }).click();
+
+    await expect(pageA.locator('.participant-toast')).toContainText('could not be admitted', { timeout: 10_000 });
+    await expect(pageD.locator('.waiting-admission-panel')).toBeVisible();
+    await expect(pageA.locator('.stage-gallery .participant-tile')).toHaveCount(4);
+    await contextD.close();
+  });
+
+  await contextA.close();
+  for (const student of students) await student.context.close();
+});
