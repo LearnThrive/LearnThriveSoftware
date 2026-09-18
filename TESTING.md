@@ -23,7 +23,7 @@ npm run test:browser
 | --- | --- |
 | ESLint | Pass |
 | TypeScript | Pass |
-| Unit/integration tests (Vitest) | Pass — 87/87 (server room/session/chat/screen-share/hand-raise/reaction/roles/waiting-room/mesh-edge/room-lock/moderation/poll/understanding-check/timer/whiteboard/announcement/TURN-endpoint logic including two new failure-path tests (502 configured-but-rejected, 429 rate-limited) against a real Cloudflare Realtime TURN key, cross-room isolation, and dev-tunnel origin handling; client media-device races, connection-status/quality classifiers, ICE config including `?forceTurn=1`, media error messages, stats parsing) |
+| Unit/integration tests (Vitest) | Pass — 89/89 (server room/session/chat/screen-share/hand-raise/reaction/roles/waiting-room/mesh-edge/room-lock/moderation/poll/understanding-check/timer/whiteboard/announcement/TURN-endpoint logic including two new failure-path tests (502 configured-but-rejected, 429 rate-limited) against a real Cloudflare Realtime TURN key, a name-based rejoin-ban regression test, a board:update flood-limiter regression test, cross-room isolation, and dev-tunnel origin handling; client media-device races, connection-status/quality classifiers, ICE config including `?forceTurn=1`, media error messages, stats parsing) |
 | Production frontend build | Pass |
 | Browser tests (Playwright, Chromium) | Pass — 20/20 |
 | Browser tests (Playwright, Firefox) | Pass — 20/20 |

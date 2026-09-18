@@ -2,6 +2,15 @@
 
 This document lists what stands between this prototype and real use with LearnThrive students, parents and tutors. **Nothing here is implemented in this task, and nothing here should be inferred as "in progress" — these are gaps, not a roadmap commitment.**
 
+## Two separate questions
+
+This document deliberately separates two things that are easy to conflate:
+
+1. **Is the classroom feature itself (the call, whiteboard, moderation, etc.) solid?** — largely yes; see "What this prototype does establish" at the bottom, and the automated test counts in [TESTING.md](TESTING.md). A release-candidate judgement on the standalone classroom prototype is a real, defensible statement.
+2. **Is LearnThrive as a platform ready to put real students in front of it?** — no, and every section below is a reason why: identity, lesson authorisation, hosting, safeguarding, legal review, and more. None of these are classroom-engineering problems; they're product/policy/infrastructure decisions that sit *around* the classroom feature, not inside it.
+
+A strong answer to (1) does not imply a strong answer to (2). Read the rest of this document as gaps in (2), not as unfinished work on (1).
+
 ## Identity and access
 
 - **Authentication.** There is none. A display name is a self-declared string with no verification.
@@ -52,16 +61,16 @@ None of these block real use of the prototype as it stands; they're straightforw
 
 ## Classroom V2 — deferred to future initiatives
 
-Capacity stays at 1 tutor + up to 3 students (4 total) for now — a corrected, deliberately smaller target than an earlier draft spec that assumed 10 students behind a Cloudflare Realtime SFU. At 4 participants a full P2P mesh is entirely reasonable (up to 6 edges), which is why the SFU migration below is still not attempted: its stated justification doesn't hold at this size. Room lock, waiting-room deny, tutor moderation, chat moderation, quick polls, Understanding Check, the collaborative whiteboard, Call/Board/Present workspace modes, tutor announcements, and the Help Queue are now all implemented — see [CLASSROOM_FEATURES.md](CLASSROOM_FEATURES.md) for the full feature matrix. What remains deferred, each needing its own dedicated spec and planning pass:
+Capacity stays at 1 tutor + up to 3 students (4 total) for now — a corrected, deliberately smaller target than an earlier draft spec that assumed 10 students behind a Cloudflare Realtime SFU. At 4 participants a full P2P mesh is entirely reasonable (up to 6 edges), which is why the SFU migration below is still not attempted: its stated justification doesn't hold at this size. Room lock, waiting-room deny, tutor moderation (including a name-based rejoin ban after removal), chat moderation, quick polls, Understanding Check, the collaborative whiteboard, Call/Board/Present workspace modes, tutor announcements, the Help Queue, a per-user Data Saver mode, and a user-facing connection quality indicator are now all implemented — see [CLASSROOM_FEATURES.md](CLASSROOM_FEATURES.md) for the full feature matrix. What remains deferred, each needing its own dedicated spec and planning pass — named in plan4.md's own spec but explicitly not attempted this pass, in favour of prioritising TURN validation, accessibility, performance, and hardening first, per that plan's own stated priority order:
 
 - **Cloudflare Realtime SFU migration** (see the Infrastructure section above for why it wasn't attempted this pass — note this is distinct from, and unaffected by, the newly-implemented Cloudflare *TURN* credential generation, a much smaller piece of the same platform).
-- **Speaker view** as a named-in-passing layout mode beyond Focus/Side-by-side/Gallery/Present actually built.
+- **Speaker view** (automatic active-speaker staging) as a layout mode beyond Focus/Side-by-side/Gallery/Present actually built.
 - **Pin / Spotlight** as distinct concepts from the click-to-focus already built.
-- **Data Saver / audio-only mode, and simulcast** beyond what a future SFU migration would need anyway.
+- **Simulcast** beyond the static per-mesh-size bitrate cap actually built (see the Media reliability section — a real, if coarser, version of "don't send more than the network needs" already exists).
 - **Attendance tracking / class analytics.**
 - **A Class Resources panel** (tutor-shared links/notes/files) and a **tutor-only local notes scratchpad** — both named in the source spec but not built this pass; deferred rather than half-built, since a resources panel in particular raises file-handling questions (see the file-serving caution in the source spec) worth their own design pass.
 - **Persistent Student Status** (Ready/Working/Need help, beyond the existing Understanding Check and Help Queue) — the Help Queue was judged the higher-value subset of this idea and was built; the broader always-on status concept was left for later to avoid duplicating/confusing it with Understanding Check.
 
 ## What this prototype does establish
 
-To be clear about what *is* already solid, so the gaps above are read in context: room isolation, session-pairing staleness rejection, the 1-tutor/3-student capacity and waiting-room enforcement, mesh-edge isolation (a signal on one edge cannot reach a third participant), and the chat/screen-share/device surface have all been through adversarial security review with no must-fix issues found. The reliability work (reconnection, negotiation correctness, leave/rejoin, a waiting student surviving a brief disconnect) has real regression tests, not just manual spot checks. The gap is specifically the *production* concerns above — identity, hosting, abuse-resistance at scale, and safety policy — not the core WebRTC/signalling architecture itself.
+To be clear about what *is* already solid, so the gaps above are read in context: room isolation, session-pairing staleness rejection, the 1-tutor/3-student capacity and waiting-room enforcement, mesh-edge isolation (a signal on one edge cannot reach a third participant), and the chat/screen-share/device/whiteboard surface have all been through adversarial security review — including this pass's flood-testing sweep (reaction/cursor/poll/board-update flooding, cross-room isolation, oversized/malformed payloads), which found and fixed one real gap (`board:update` had no server-side frequency limit) and confirmed everything else already held. Cloudflare TURN has been proven against a real relay (not just configured — see [TURN_TESTING.md](TURN_TESTING.md)). Force-mute is now enforced at every *receiver*, not just trusted at the source. The reliability work (reconnection, negotiation correctness, leave/rejoin, a waiting student surviving a brief disconnect, a real 4-participant/6-edge mesh) has real regression tests, not just manual spot checks. The gap is specifically the *production* concerns above — identity, hosting, abuse-resistance at scale, and safety policy — not the core WebRTC/signalling architecture itself.
