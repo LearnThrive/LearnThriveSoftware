@@ -22,7 +22,7 @@ export const siteConfig = {
     instagram: "https://www.instagram.com/learnthrivetuition/",
     linkedin: "https://www.linkedin.com/company/learnthrive-tuition/",
   },
-  tutorLoginUrl: "https://secure.tutorcruncher.com/learnthrive-tuition/login/",
+  tutorLoginUrl: "/login",
 } as const;
 
 export const navigation = [

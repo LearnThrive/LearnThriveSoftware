@@ -64,14 +64,12 @@ export function SiteFooter() {
                 LinkedIn<span className="sr-only"> (opens in a new tab)</span>
               </a>
             </div>
-            <a
+            <Link
               className="footer-login"
               href={siteConfig.tutorLoginUrl}
-              target="_blank"
-              rel="noreferrer"
             >
-              Tutor login<span className="sr-only"> (opens in a new tab)</span>
-            </a>
+              Tutor login
+            </Link>
           </div>
         </div>
         <div className="footer-bottom">

@@ -1,0 +1,76 @@
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { MeetingController } from './meeting';
+
+export function useMeeting() {
+  const [controller] = useState(() => new MeetingController());
+  const snapshot = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
+  useEffect(() => {
+    const onPageHide = () => controller.dispose();
+    window.addEventListener('pagehide', onPageHide);
+    return () => { window.removeEventListener('pagehide', onPageHide); controller.dispose(); };
+  }, [controller]);
+  return {
+    snapshot,
+    prepareMedia: controller.prepareMedia,
+    toggleAudio: controller.toggleAudio,
+    toggleVideo: controller.toggleVideo,
+    toggleScreenShare: controller.toggleScreenShare,
+    toggleChat: controller.toggleChat,
+    sendChatMessage: controller.sendChatMessage,
+    switchCamera: controller.switchCamera,
+    switchMicrophone: controller.switchMicrophone,
+    flipCamera: controller.flipCamera,
+    refreshDevices: controller.refreshDevices,
+    toggleHand: controller.toggleHand,
+    sendReaction: controller.sendReaction,
+    admitOne: controller.admitOne,
+    admitAll: controller.admitAll,
+    denyOne: controller.denyOne,
+    setRoomLocked: controller.setRoomLocked,
+    setStudentsCanShareScreen: controller.setStudentsCanShareScreen,
+    setStudentsCanChat: controller.setStudentsCanChat,
+    muteParticipant: controller.muteParticipant,
+    muteAll: controller.muteAll,
+    allowUnmute: controller.allowUnmute,
+    removeParticipant: controller.removeParticipant,
+    allowRejoin: controller.allowRejoin,
+    stopShare: controller.stopShare,
+    lowerHand: controller.lowerHand,
+    deleteChatMessage: controller.deleteChatMessage,
+    clearChat: controller.clearChat,
+    createPoll: controller.createPoll,
+    closePoll: controller.closePoll,
+    clearPoll: controller.clearPoll,
+    votePoll: controller.votePoll,
+    startUnderstandingCheck: controller.startUnderstandingCheck,
+    endUnderstandingCheck: controller.endUnderstandingCheck,
+    respondUnderstanding: controller.respondUnderstanding,
+    startTimer: controller.startTimer,
+    pauseTimer: controller.pauseTimer,
+    resumeTimer: controller.resumeTimer,
+    stopTimer: controller.stopTimer,
+    sendBoardUpdate: controller.sendBoardUpdate,
+    sendBoardCursor: controller.sendBoardCursor,
+    sendBoardLaser: controller.sendBoardLaser,
+    createBoardPage: controller.createBoardPage,
+    renameBoardPage: controller.renameBoardPage,
+    deleteBoardPage: controller.deleteBoardPage,
+    reorderBoardPages: controller.reorderBoardPages,
+    switchBoardPage: controller.switchBoardPage,
+    setBoardBackground: controller.setBoardBackground,
+    setStudentsCanDraw: controller.setStudentsCanDraw,
+    clearBoardPage: controller.clearBoardPage,
+    followMe: controller.followMe,
+    importBoard: controller.importBoard,
+    duplicateBoardPage: controller.duplicateBoardPage,
+    commitLocalPageElements: controller.commitLocalPageElements,
+    sendAnnouncement: controller.sendAnnouncement,
+    setDataSaver: controller.setDataSaver,
+    join: controller.join,
+    leave: controller.leave,
+    reset: controller.reset,
+    rejoin: controller.rejoin,
+    copyInvite: controller.copyInvite,
+    retryConnection: controller.retryConnection,
+  };
+}

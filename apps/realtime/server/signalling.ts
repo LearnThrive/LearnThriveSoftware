@@ -229,7 +229,7 @@ async function fetchCloudflareTurnCredentials(keyId: string, apiToken: string): 
   return response.json();
 }
 
-export function createSignallingServer(options?: { disconnectGraceMs?: number }) {
+export function createSignallingServer(options?: { disconnectGraceMs?: number; httpServer?: import('node:http').Server }) {
   const disconnectGraceMs = options?.disconnectGraceMs ?? 10_000;
   const app = express();
   app.disable('x-powered-by');
@@ -252,8 +252,12 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
         response.status(502).json({ error: 'Could not generate temporary TURN credentials.' });
       });
   });
-  const httpServer = createServer(app);
-  const allowedOrigins = new Set(['http://localhost:5173', 'http://127.0.0.1:5173']);
+  const httpServer = options?.httpServer ?? createServer(app);
+  const allowedOrigins = new Set([
+    'http://localhost:3000', 'http://127.0.0.1:3000',
+    'http://localhost:3100', 'http://127.0.0.1:3100',
+    'http://localhost:5173', 'http://127.0.0.1:5173',
+  ]);
   const tunnelHost = process.env.TUNNEL_HOST?.trim();
   if (tunnelHost && /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/i.test(tunnelHost)) {
     allowedOrigins.add(`https://${tunnelHost.toLowerCase()}`);
@@ -1195,5 +1199,5 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
     });
   });
 
-  return { httpServer, io, rooms };
+  return { httpServer, io, rooms, app };
 }

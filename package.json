@@ -15,8 +15,8 @@
     "react-dom": "^19.3.0"
   },
   "scripts": {
-    "dev": "concurrently --kill-others --names realtime,classroom --prefix-colors green,cyan \"npm run dev --workspace=apps/realtime\" \"npm run dev --workspace=apps/classroom\"",
-    "dev:web": "npm run dev --workspace=apps/web",
+    "dev": "npm run dev --workspace=apps/web",
+    "dev:standalone": "concurrently --kill-others --names realtime,classroom --prefix-colors green,cyan \"npm run dev --workspace=apps/realtime\" \"npm run dev --workspace=apps/classroom\"",
     "build": "npm run build --workspace=apps/classroom && npm run typecheck --workspace=apps/realtime && npm run build --workspace=apps/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",

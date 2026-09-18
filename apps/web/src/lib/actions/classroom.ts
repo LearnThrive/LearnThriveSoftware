@@ -33,16 +33,20 @@ export async function joinClassroomAction(formData: FormData): Promise<void> {
   if (lesson.status === "CANCELLED") back("This lesson has been cancelled.");
   if (!isWithinJoinWindow(lesson, user.role as "TUTOR" | "STUDENT")) back("The classroom for this lesson isn't open yet. Come back closer to the start time.");
 
-  const classroomUrl = process.env.NEXT_PUBLIC_CLASSROOM_URL || "http://localhost:5173";
   const token = signClassroomJoinToken({
     roomId: lesson.classroomRoomId as string, // guaranteed above — redirect() never returns, so this line is unreachable otherwise
     lessonId: lesson.id,
     name: user.name,
     role: user.role === "TUTOR" ? "tutor" : "student",
-    // Short-lived: this token only needs to survive the redirect into apps/classroom, not the
+    // Short-lived: this token only needs to survive the redirect, not the
     // whole lesson — the join-window check above is what actually gates access over time.
     exp: Date.now() + 5 * 60_000,
   });
 
-  redirect(`${classroomUrl}/?token=${encodeURIComponent(token)}`);
+  const externalClassroomUrl = process.env.NEXT_PUBLIC_CLASSROOM_URL;
+  if (externalClassroomUrl && !externalClassroomUrl.includes("localhost:5173") && !externalClassroomUrl.includes("127.0.0.1:5173")) {
+    redirect(`${externalClassroomUrl}/?token=${encodeURIComponent(token)}`);
+  }
+
+  redirect(`/dashboard/lessons/${lesson.id}/classroom?token=${encodeURIComponent(token)}`);
 }
