@@ -18,6 +18,13 @@ interface ParticipantTileProps {
   role?: ParticipantRole | null;
   // Only ever passed for remote peers — a local tile has no connection to rate.
   quality?: ConnectionQuality;
+  // Server/tutor-authoritative directive, distinct from `audio` (that peer's own self-reported
+  // mic state). Muting playback here — not just trusting the target's own client to stop sending
+  // — means a modified/hostile client that keeps transmitting despite a force-mute still can't be
+  // heard by any *compliant* client. It cannot stop the hostile client from transmitting at all
+  // (that needs an SFU the server controls — see PRODUCTION_GAPS.md); this only raises the bar
+  // for every other participant in the mesh, which is the honest limit of a pure P2P architecture.
+  forceMuted?: boolean;
 }
 
 function initials(name: string) {
@@ -26,7 +33,7 @@ function initials(name: string) {
 
 export function ParticipantTile({
   stream, name, audio, video, screenSharing = false, local = false, compact = false, preview = false, focused, onFocus, role = null,
-  quality,
+  quality, forceMuted = false,
 }: ParticipantTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [needsPlayback, setNeedsPlayback] = useState(false);
@@ -79,7 +86,7 @@ export function ParticipantTile({
     >
       <video
         ref={videoRef} className={`${local && !screenSharing ? 'mirrored' : ''} ${hasVideo ? '' : 'video-hidden'}`}
-        autoPlay playsInline muted={local} aria-label={local ? 'Your video' : `${name}'s video stream`}
+        autoPlay playsInline muted={local || forceMuted} aria-label={local ? 'Your video' : `${name}'s video stream`}
       />
       {!hasVideo && <div className="camera-placeholder">
         <div className="avatar">{initials(name)}</div>

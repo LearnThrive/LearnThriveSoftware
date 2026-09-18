@@ -398,6 +398,11 @@ test('the tutor can force-mute a student, who cannot self-unmute until allowed a
     await expect(pageB.getByRole('button', { name: 'Muted by the tutor' })).toBeVisible();
     await pageB.getByRole('button', { name: 'Muted by the tutor' }).click();
     await expect(pageB.getByText(/tutor has muted you/i)).toBeVisible();
+
+    // Receiver-side hardening: the tutor's own tile for the student mutes local *playback*
+    // based on the server-authoritative forceMuted flag, not just trusting the student's own
+    // client to have actually stopped sending — see PRODUCTION_GAPS.md's trust-boundary note.
+    await expect(pageA.locator('.remote-tile video')).toHaveJSProperty('muted', true);
   });
 
   await test.step('allowing unmute lets the student turn their mic back on', async () => {
@@ -405,6 +410,7 @@ test('the tutor can force-mute a student, who cannot self-unmute until allowed a
     await pageA.getByRole('button', { name: 'Allow Student to unmute' }).click();
     await pageA.keyboard.press('Escape');
 
+    await expect(pageA.locator('.remote-tile video')).toHaveJSProperty('muted', false);
     await pageB.getByRole('button', { name: 'Turn microphone on' }).click();
     await expect(pageA.locator('.remote-tile .participant-media')).toHaveAttribute('aria-label', 'Microphone on');
   });
