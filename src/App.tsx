@@ -280,7 +280,7 @@ function App() {
           ) : (
             <div className="meeting-stage" ref={stageRef}>
               {layoutMode === 'gallery' && snapshot.peers.length > 0 ? (
-                <div className="stage-gallery">{selfTile(false)}{snapshot.peers.map((peer) => peerTile(peer, false))}</div>
+                <div className={`stage-gallery ${snapshot.peers.length === 2 ? 'gallery-three' : ''}`}>{selfTile(false)}{snapshot.peers.map((peer) => peerTile(peer, false))}</div>
               ) : layoutMode === 'sideBySide' && snapshot.peers.length === 1 ? (
                 <div className="stage-side-by-side">{peerTile(snapshot.peers[0], false)}{selfTile(false)}</div>
               ) : snapshot.peers.length === 0 ? (

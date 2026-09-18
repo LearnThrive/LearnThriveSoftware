@@ -442,6 +442,11 @@ export class MeetingController {
       return;
     }
     this.active = true;
+    // Invalidates any in-flight prepareMedia()/toggle() continuation from the pre-join screen —
+    // without this, a device-enable callback that resolves just after "Start class" is clicked
+    // could clobber the 'Connecting…' status this update sets below back to 'Ready to join',
+    // which (for a lone tutor with no peers yet to ever recompute status again) would then stick.
+    this.actionVersion += 1;
     // Kicked off now (fire-and-forget), not awaited — by the time the first peer's offer/answer
     // actually needs to gather ICE candidates, this has almost always already resolved. A peer
     // connection created before it resolves simply falls back to STUN-only for that connection.
@@ -504,7 +509,10 @@ export class MeetingController {
       if (payload.self.forceMuted && this.media.track('audio')?.enabled) this.media.disable('audio');
       const known = new Set(this.snapshot.peers.map((peer) => peer.participant.id));
       const additions = payload.peers.filter((edge) => !known.has(edge.peer.id)).map((edge) => defaultRemotePeer(edge.peer));
-      if (additions.length) this.setPeers([...this.snapshot.peers, ...additions]);
+      // Always recomputes status (via setPeers), not just when there happen to be new peers —
+      // otherwise a lone tutor with zero peers never gets a real status at all, just whatever
+      // 'Connecting…'/'Ready to join' was left over from the pre-join screen.
+      this.setPeers(additions.length ? [...this.snapshot.peers, ...additions] : this.snapshot.peers);
       for (const edge of payload.peers) this.startPeer(edge.peer.id, edge.sessionId, edge.initiator);
     });
     socket.on('room:denied', () => this.rejectJoin('The tutor declined to admit you to this class.'));
