@@ -1,0 +1,15 @@
+{
+  "name": "@learnthrive/data",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "tsx --test src/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "exports": {
+    "./domain": "./src/domain.ts",
+    "./repositories": "./src/repositories.ts",
+    "./inMemoryProvider": "./src/inMemoryProvider.ts"
+  }
+}

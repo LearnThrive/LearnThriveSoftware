@@ -75,9 +75,10 @@ npm run build          # classroom build, realtime typecheck, web build
 - [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md) — the development auth provider, password hashing, sessions, production safety.
 - [docs/ROLE_PERMISSIONS.md](docs/ROLE_PERMISSIONS.md) — roles and what's actually enforced where.
 - [docs/DEVELOPMENT_ACCOUNTS.md](docs/DEVELOPMENT_ACCOUNTS.md) — the five seeded dev accounts and their credentials.
+- [docs/DOMAIN_MODEL.md](docs/DOMAIN_MODEL.md) — Tutors, Clients, Students, Tuition Assignments, and the repository layer.
 
-Further platform-level docs (domain model, scheduling, lesson reports, Supabase migration plan, platform-wide production gaps) land as the corresponding phases of this migration are implemented — see `docs/` as it grows.
+Further platform-level docs (scheduling, lesson reports, Supabase migration plan, platform-wide production gaps) land as the corresponding phases of this migration are implemented — see `docs/` as it grows.
 
 ## Status
 
-This is a **development platform**, not production-ready. As of this migration (Phase A — repository convergence, Phase B — auth foundation), there is real login/logout/sessions/role guards, but no accounts beyond five fictional in-memory dev users, and no domain model beyond the classroom's own ephemeral, in-memory room state — those are later phases of the same plan. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for what exists today versus what's planned.
+This is a **development platform**, not production-ready. As of this migration (Phase A — repository convergence, Phase B — auth foundation, Phase C — people and tuition assignments), there is real login/logout/sessions/role guards and a real (in-memory) domain model for Tutors/Clients/Students/Tuition Assignments with Admin CRUD pages, but no accounts beyond five fictional dev users, no calendar or lessons yet, and nothing survives a server restart. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for what exists today versus what's planned.

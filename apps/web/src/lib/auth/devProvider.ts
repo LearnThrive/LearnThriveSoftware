@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { SEED_IDS } from "@learnthrive/data/inMemoryProvider";
 import { hashPassword, verifyPassword } from "./passwords";
 import type { AuthProvider, DevelopmentUser, LoginResult } from "./types";
 
@@ -20,9 +21,12 @@ function usersStore(): Map<string, DevelopmentUser> {
 // sensitive personal data") and docs/DEVELOPMENT_ACCOUNTS.md for the credentials and rationale.
 const SEED_ACCOUNTS: Array<Omit<DevelopmentUser, "id" | "passwordHash"> & { password: string }> = [
   { email: "admin@learnthrive.dev", password: "dev-admin-pass", role: "ADMIN", name: "Ade Okafor (Admin)", active: true },
-  { email: "tutor@learnthrive.dev", password: "dev-tutor-pass", role: "TUTOR", name: "Jamie Patel (Tutor)", active: true },
-  { email: "client@learnthrive.dev", password: "dev-client-pass", role: "CLIENT", name: "Sarah Ahmed (Client)", active: true },
-  { email: "student@learnthrive.dev", password: "dev-student-pass", role: "STUDENT", name: "Ayaan Ahmed (Student)", active: true },
+  // profileId cross-references packages/data's seeded domain records (see SEED_IDS there) — the
+  // two seed systems share these fixed ids deliberately, not by coincidence, so e.g. the Tutor
+  // dashboard can find "this logged-in user's own Tutor record" without a lookup-by-email hack.
+  { email: "tutor@learnthrive.dev", password: "dev-tutor-pass", role: "TUTOR", name: "Jamie Patel (Tutor)", active: true, profileId: SEED_IDS.tutorJamiePatel },
+  { email: "client@learnthrive.dev", password: "dev-client-pass", role: "CLIENT", name: "Sarah Ahmed (Client)", active: true, profileId: SEED_IDS.clientSarahAhmed },
+  { email: "student@learnthrive.dev", password: "dev-student-pass", role: "STUDENT", name: "Ayaan Ahmed (Student)", active: true, profileId: SEED_IDS.studentAyaanAhmed },
   // Deliberately disabled, so the "locked/disabled account" login state is exercisable without
   // extra setup — see docs/DEVELOPMENT_ACCOUNTS.md.
   { email: "disabled@learnthrive.dev", password: "dev-disabled-pass", role: "STUDENT", name: "Disabled Test Account", active: false },
@@ -38,6 +42,7 @@ async function ensureSeeded(): Promise<void> {
         const id = randomUUID();
         store.set(account.email.toLowerCase(), {
           id, email: account.email, passwordHash, role: account.role, name: account.name, active: account.active,
+          profileId: account.profileId,
         });
       }
     })();

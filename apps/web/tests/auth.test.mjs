@@ -24,6 +24,17 @@ function loadTsModule(fileUrl) {
   const nodeRequire = createRequire(fileUrl);
   const scopedRequire = (specifier) => {
     if (specifier.startsWith(".")) return loadTsModule(new URL(`${specifier}.ts`, fileUrl));
+    // @learnthrive/* workspace packages are raw TS source with no compiled JS (see their
+    // package.json `exports`) — real require() can resolve the path via node_modules, but
+    // Node's own native TS support can't handle constructor parameter properties, which
+    // packages/data's repositories use. Route these through our own transpiler too, same as
+    // relative imports, rather than real Node require. Anchored to this test file's own
+    // location (not the importing file's), since the workspace layout is fixed either way and
+    // this avoids re-deriving "how many ../ from wherever we currently are" per caller.
+    if (specifier.startsWith("@learnthrive/data/")) {
+      const subpath = specifier.slice("@learnthrive/data/".length);
+      return loadTsModule(new URL(`../../../packages/data/src/${subpath}.ts`, import.meta.url));
+    }
     return nodeRequire(specifier); // bare specifier (node:*, an npm package) — real Node resolution
   };
 
