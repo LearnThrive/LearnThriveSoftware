@@ -7,8 +7,10 @@ function report(entries: Array<[string, Record<string, unknown>]>): RTCStatsRepo
 
 const BASE_STATS: CallStats = {
   rtt: null, jitter: null, packetsLost: null, packetsReceived: null, packetsSent: null,
+  bytesSent: null, bytesReceived: null,
   inboundBitrateKbps: null, outboundBitrateKbps: null, frameRate: null, resolution: null,
   framesEncoded: null, framesDecoded: null, localCandidateType: null, remoteCandidateType: null,
+  selectedCandidateProtocol: null,
 };
 
 function makeReport(timestamp: number, bytesReceived: number, bytesSent: number) {

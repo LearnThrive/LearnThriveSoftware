@@ -1192,6 +1192,53 @@ describe('signalling through real Socket.IO clients', () => {
     for (const receipt of await receipts) expect(receipt).toEqual({ pageId, elements: [element] });
   });
 
+  it("a brief tutor network drop shows the student 'reconnecting', not an ended class, and recovers cleanly within the grace period", async () => {
+    const tutor = await connectRecoverable();
+    await joinTutor(tutor, 'Alice');
+    const student = await connect();
+    await admit(tutor, student);
+
+    const reconnecting = new Promise<void>((resolve) => student.once('room:participant-reconnecting', () => resolve()));
+    const neverEnded = () => { throw new Error('should not have ended the class for a transient tutor network drop'); };
+    student.once('room:ended', neverEnded);
+    tutor.io.engine.close();
+    await reconnecting;
+
+    const reconnected = new Promise<void>((resolve) => student.once('room:participant-reconnected', () => resolve()));
+    await expect.poll(() => tutor.connected, { timeout: 2000 }).toBe(true);
+    await reconnected;
+    student.off('room:ended', neverEnded);
+
+    // The class is still very much alive: a poll started by the "recovered" tutor still reaches the student.
+    const pollOnStudent = new Promise((resolve) => student.once('poll:update', resolve));
+    tutor.emit('poll:create', { question: 'Still here?', options: ['Yes', 'No'], anonymous: false, resultsVisible: 'always' });
+    await pollOnStudent;
+    expect(server.rooms.has('room-one')).toBe(true);
+  });
+
+  it('resyncs an active poll, understanding check, and timer — not just settings/mute — to a reconnecting participant', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const student = await connectRecoverable();
+    await admit(tutor, student);
+
+    tutor.emit('poll:create', { question: 'Ready?', options: ['Yes', 'No'], anonymous: false, resultsVisible: 'always' });
+    tutor.emit('understanding:start');
+    tutor.emit('timer:start', { mode: 'stopwatch', durationMs: null });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    const resynced = new Promise<JoinedRoom>((resolve) => student.once('room:joined', resolve));
+    const reconnecting = new Promise<void>((resolve) => tutor.once('room:participant-reconnecting', () => resolve()));
+    student.io.engine.close();
+    await reconnecting;
+
+    await expect.poll(() => student.connected, { timeout: 2000 }).toBe(true);
+    const payload = await resynced;
+    expect(payload.poll?.question).toBe('Ready?');
+    expect(payload.understandingCheck).not.toBeNull();
+    expect(payload.timer?.mode).toBe('stopwatch');
+  });
+
   it('reports TURN as unconfigured (503) rather than crashing when no Cloudflare credentials are set', async () => {
     const previousKeyId = process.env.CLOUDFLARE_TURN_KEY_ID;
     const previousApiToken = process.env.CLOUDFLARE_TURN_API_TOKEN;

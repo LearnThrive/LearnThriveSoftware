@@ -434,11 +434,14 @@ function App() {
           return <div key={peer.participant.id} className="diagnostics-peer">
             <dt>— {peer.participant.name} —</dt><dd>{peer.participant.role}</dd>
             <dt>Connection / ICE / signalling</dt><dd>{peer.connection} / {peer.ice} / {peer.rtcSignalling}</dd>
-            <dt>Candidate path</dt><dd>{candidatePathLabel(peer.stats?.localCandidateType ?? null, peer.stats?.remoteCandidateType ?? null)} (local {peer.stats?.localCandidateType ?? 'n/a'}, remote {peer.stats?.remoteCandidateType ?? 'n/a'})</dd>
+            <dt>Candidate path</dt><dd>{candidatePathLabel(peer.stats?.localCandidateType ?? null, peer.stats?.remoteCandidateType ?? null)} (local {peer.stats?.localCandidateType ?? 'n/a'}, remote {peer.stats?.remoteCandidateType ?? 'n/a'}, {peer.stats?.selectedCandidateProtocol ?? 'n/a'})</dd>
             <dt>RTT / Jitter</dt><dd>{peer.stats?.rtt != null ? `${peer.stats.rtt} ms` : 'n/a'} / {peer.stats?.jitter != null ? `${peer.stats.jitter} ms` : 'n/a'}</dd>
-            <dt>Bitrate</dt><dd>in {peer.stats?.inboundBitrateKbps ?? 'n/a'} kbps / out {peer.stats?.outboundBitrateKbps ?? 'n/a'} kbps</dd>
+            <dt>Bitrate (current)</dt><dd>in {peer.stats?.inboundBitrateKbps ?? 'n/a'} kbps / out {peer.stats?.outboundBitrateKbps ?? 'n/a'} kbps</dd>
+            <dt>Bytes sent / received</dt><dd>{peer.stats?.bytesSent ?? 'n/a'} / {peer.stats?.bytesReceived ?? 'n/a'}</dd>
+            <dt>Packet loss</dt><dd>{peer.stats?.packetsLost ?? 'n/a'}</dd>
             <dt>Frames encoded / decoded</dt><dd>{peer.stats?.framesEncoded ?? 'n/a'} / {peer.stats?.framesDecoded ?? 'n/a'}</dd>
             <dt>Packets sent / received</dt><dd>{peer.stats?.packetsSent ?? 'n/a'} / {peer.stats?.packetsReceived ?? 'n/a'}</dd>
+            <dt>Remote video dimensions / FPS</dt><dd>{peer.stats?.resolution ?? 'n/a'} / {peer.stats?.frameRate ?? 'n/a'}</dd>
             <dt>Quality</dt><dd>{qualityLabel(peer.quality)}</dd>
             <dt>Local / Remote audio track</dt><dd>{trackLabel(direction?.localAudio ?? null)} / {trackLabel(direction?.remoteAudio ?? null)}</dd>
             <dt>Local / Remote video track</dt><dd>{trackLabel(direction?.localVideo ?? null)} / {trackLabel(direction?.remoteVideo ?? null)}</dd>
