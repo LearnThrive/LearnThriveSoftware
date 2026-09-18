@@ -1,5 +1,5 @@
 import { useRef, useState, type RefObject } from 'react';
-import type { PollVisibility, RoomSettings, TimerMode } from '../../shared/protocol';
+import { MAX_ANNOUNCEMENT_LENGTH, type PollVisibility, type RoomSettings, type TimerMode } from '../../shared/protocol';
 import { usePopoverDismiss } from '../usePopoverDismiss';
 import { Icon } from './Icon';
 import { PollCreator } from './PollCreator';
@@ -19,19 +19,21 @@ interface ClassControlsMenuProps {
   onStartUnderstandingCheck: () => void;
   timerActive: boolean;
   onStartTimer: (mode: TimerMode, durationMs: number | null) => void;
+  onSendAnnouncement: (text: string) => void;
 }
 
-type Expanded = 'poll' | 'timer' | null;
+type Expanded = 'poll' | 'timer' | 'announce' | null;
 
 export function ClassControlsMenu({
   open, onClose, triggerRef, roomSettings, onSetLocked, onSetStudentsCanShareScreen, onSetStudentsCanChat, onMuteAll,
-  pollActive, onCreatePoll, understandingActive, onStartUnderstandingCheck, timerActive, onStartTimer,
+  pollActive, onCreatePoll, understandingActive, onStartUnderstandingCheck, timerActive, onStartTimer, onSendAnnouncement,
 }: ClassControlsMenuProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   usePopoverDismiss(open, onClose, panelRef, triggerRef);
   const [expanded, setExpanded] = useState<Expanded>(null);
   const [timerMode, setTimerMode] = useState<TimerMode>('stopwatch');
   const [timerMinutes, setTimerMinutes] = useState(10);
+  const [announcementText, setAnnouncementText] = useState('');
 
   if (!open) return null;
 
@@ -65,6 +67,30 @@ export function ClassControlsMenu({
 
       <div className="class-controls-section">
         <p className="class-controls-section-title">Tools</p>
+
+        {expanded === 'announce' ? (
+          <div className="timer-creator">
+            <label className="field-label" htmlFor="announcement-text">Announcement</label>
+            <input
+              id="announcement-text" value={announcementText} maxLength={MAX_ANNOUNCEMENT_LENGTH}
+              placeholder="e.g. You have 5 minutes remaining." onChange={(event) => setAnnouncementText(event.target.value)}
+            />
+            <div className="poll-creator-actions">
+              <button type="button" className="button-secondary" onClick={() => { setExpanded(null); setAnnouncementText(''); }}>Cancel</button>
+              <button
+                type="button" className="button button-primary" disabled={!announcementText.trim()}
+                onClick={() => { onSendAnnouncement(announcementText.trim()); setAnnouncementText(''); setExpanded(null); onClose(); }}
+              >
+                Send
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button type="button" className="class-controls-action" onClick={() => setExpanded('announce')}>
+            <Icon name="spark" size={15} />
+            <span>Send announcement</span>
+          </button>
+        )}
 
         {expanded === 'poll' ? (
           <PollCreator onCancel={closeExpanded} onCreate={(question, options, anonymous, resultsVisible) => { onCreatePoll(question, options, anonymous, resultsVisible); closeExpanded(); onClose(); }} />

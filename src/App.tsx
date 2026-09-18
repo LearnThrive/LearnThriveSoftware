@@ -22,6 +22,8 @@ import { PollPanel } from './components/PollPanel';
 import { UnderstandingCheckPanel } from './components/UnderstandingCheckPanel';
 import { ClassTimer } from './components/ClassTimer';
 import { Whiteboard } from './components/Whiteboard';
+import { AnnouncementBanner } from './components/AnnouncementBanner';
+import { HelpQueuePanel } from './components/HelpQueuePanel';
 
 type FocusTarget = 'local' | string; // string = a peer's participant id
 type LayoutMode = 'focus' | 'sideBySide' | 'gallery';
@@ -52,7 +54,7 @@ function App() {
     votePoll, startUnderstandingCheck, endUnderstandingCheck, respondUnderstanding, startTimer, pauseTimer,
     resumeTimer, stopTimer, sendBoardUpdate, sendBoardCursor, sendBoardLaser, createBoardPage, renameBoardPage,
     deleteBoardPage, reorderBoardPages, switchBoardPage, setBoardBackground, setStudentsCanDraw, clearBoardPage,
-    followMe, importBoard, duplicateBoardPage, commitLocalPageElements,
+    followMe, importBoard, duplicateBoardPage, commitLocalPageElements, sendAnnouncement,
     join, leave, reset, rejoin, copyInvite, retryConnection,
   } = useMeeting();
   const [name, setName] = useState('');
@@ -203,6 +205,9 @@ function App() {
   </section>;
 
   const reconnectingPeers = snapshot.peers.filter((peer) => peer.reconnecting);
+  const helpQueueEntries = snapshot.peers
+    .filter((peer) => peer.participant.role === 'student' && peer.participant.handRaised && peer.participant.handRaisedAt != null)
+    .map((peer) => ({ id: peer.participant.id, name: peer.participant.name, handRaisedAt: peer.participant.handRaisedAt! }));
   const mainPeer = effectiveFocus !== 'local' ? snapshot.peers.find((peer) => peer.participant.id === effectiveFocus) : undefined;
   const otherTiles = () => {
     const tiles: ReactElement[] = [];
@@ -263,8 +268,10 @@ function App() {
         </div>
         {reconnectingPeers.length > 0 && <p className="peer-reconnecting" role="status"><span className="status-dot" />{reconnectingPeers.map((peer) => peer.participant.name).join(', ')} {reconnectingPeers.length > 1 ? 'are' : 'is'} reconnecting…</p>}
         {snapshot.notice && <div className="participant-toast" role="status" key={snapshot.notice.id}>{snapshot.notice.text}</div>}
+        {snapshot.announcement && <AnnouncementBanner announcement={snapshot.announcement} />}
         {snapshot.poll && <PollPanel poll={snapshot.poll} isTutor={snapshot.role === 'tutor'} onVote={votePoll} onClose={closePoll} onClear={clearPoll} />}
         {snapshot.understandingCheck && <UnderstandingCheckPanel check={snapshot.understandingCheck} isTutor={snapshot.role === 'tutor'} onRespond={respondUnderstanding} onEnd={endUnderstandingCheck} />}
+        {snapshot.role === 'tutor' && helpQueueEntries.length > 0 && <HelpQueuePanel entries={helpQueueEntries} onMarkHelped={lowerHand} />}
         <div className="call-body">
           {workspaceMode === 'board' ? (
             <Whiteboard
@@ -352,7 +359,7 @@ function App() {
                 onSetStudentsCanChat={setStudentsCanChat} onMuteAll={muteAll}
                 pollActive={snapshot.poll != null} onCreatePoll={createPoll}
                 understandingActive={snapshot.understandingCheck != null} onStartUnderstandingCheck={startUnderstandingCheck}
-                timerActive={snapshot.timer != null} onStartTimer={startTimer}
+                timerActive={snapshot.timer != null} onStartTimer={startTimer} onSendAnnouncement={sendAnnouncement}
               />
             </div>}
             <div className="control-item popover-anchor">

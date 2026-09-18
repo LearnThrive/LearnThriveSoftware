@@ -5,7 +5,12 @@ export type ParticipantRole = 'tutor' | 'student';
 // from the other) so a broadcast never lies about what a track is actually doing. See
 // PRODUCTION_GAPS.md for why force-mute can only ever be a directive a client complies with, not
 // real media-path enforcement, in a P2P (non-SFU) architecture.
-export interface Participant { id: string; name: string; media: MediaState; screenSharing: boolean; handRaised: boolean; role: ParticipantRole; forceMuted: boolean }
+// handRaisedAt (server timestamp, null while lowered) drives the tutor-only Help Queue's
+// time-raised ordering and elapsed-time display — see ClassControlsMenu.tsx's HelpQueue.
+export interface Participant {
+  id: string; name: string; media: MediaState; screenSharing: boolean; handRaised: boolean; handRaisedAt: number | null;
+  role: ParticipantRole; forceMuted: boolean;
+}
 export interface WaitingParticipant { id: string; name: string }
 export interface JoinRequest { roomId: string; name: string; media: MediaState; role: ParticipantRole }
 // One entry per already-admitted participant the joiner needs a WebRTC connection to — replaces
@@ -58,10 +63,16 @@ export interface BoardPage { id: string; name: string; background: BoardBackgrou
 // switching pages is a pure local operation with no server round-trip.
 export interface BoardState { pages: BoardPage[]; activePageId: string; elementsByPage: Record<string, BoardElement[]>; studentsCanDraw: boolean }
 
+// A single active announcement per room (like the poll/understanding-check/timer, not a queue or
+// chat history) — the tutor sending a new one replaces the last, and it auto-expires server-side
+// after ANNOUNCEMENT_TTL_MS so it genuinely disappears for everyone rather than just fading
+// locally. Deliberately separate from chat, which it must never pollute (see plan section 33).
+export interface Announcement { id: string; text: string; sentAt: number }
+
 export interface JoinedRoom {
   roomId: string; self: Participant; peers: PeerEdge[]; waiting: WaitingParticipant[];
   settings: RoomSettings; poll: PollState | null; understandingCheck: UnderstandingCheckState | null; timer: RoomTimerState | null;
-  board: BoardState;
+  board: BoardState; announcement: Announcement | null;
 }
 export interface PeerJoined { peer: Participant; sessionId: string; initiator: boolean }
 export interface SignalDescription { sessionId: string; description: RTCSessionDescriptionInit }
@@ -117,6 +128,7 @@ export interface ClientToServerEvents {
   'board:clear': (payload: { pageId: string }) => void;
   'board:follow-me': () => void;
   'board:import': (payload: { pageId: string; elements: BoardElement[] }) => void;
+  'announce:send': (payload: { text: string }) => void;
   'webrtc:offer': (payload: SignalDescription) => void;
   'webrtc:answer': (payload: SignalDescription) => void;
   'webrtc:ice-candidate': (payload: SignalCandidate) => void;
@@ -174,6 +186,7 @@ export interface ServerToClientEvents {
   'board:permission-update': (payload: { studentsCanDraw: boolean }) => void;
   'board:cleared': (payload: { pageId: string }) => void;
   'board:follow-me': () => void;
+  'announce:update': (payload: Announcement | null) => void;
   'webrtc:offer': (payload: SignalDescription) => void;
   'webrtc:answer': (payload: SignalDescription) => void;
   'webrtc:ice-candidate': (payload: SignalCandidate) => void;
@@ -200,3 +213,5 @@ export const MAX_BOARD_UPDATE_BATCH = 200;
 // carry hundreds of points), tight enough to reject an obviously abusive payload.
 export const MAX_BOARD_ELEMENT_BYTES = 200_000;
 export const MAX_BOARD_IMPORT_BYTES = 5_000_000;
+export const MAX_ANNOUNCEMENT_LENGTH = 200;
+export const ANNOUNCEMENT_TTL_MS = 15_000;

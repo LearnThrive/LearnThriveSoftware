@@ -63,6 +63,7 @@ export function useMeeting() {
     importBoard: controller.importBoard,
     duplicateBoardPage: controller.duplicateBoardPage,
     commitLocalPageElements: controller.commitLocalPageElements,
+    sendAnnouncement: controller.sendAnnouncement,
     join: controller.join,
     leave: controller.leave,
     reset: controller.reset,
