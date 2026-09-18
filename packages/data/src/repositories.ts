@@ -1,4 +1,4 @@
-import type { Client, ClientStudentLink, Student, TuitionAssignment, Tutor } from "./domain";
+import type { Client, ClientStudentLink, Lesson, Student, TuitionAssignment, Tutor, TutorAvailabilityBlock } from "./domain";
 
 // Every repository interface follows the same shape deliberately — a future
 // SupabaseTutorRepository/SupabaseClientRepository/etc. implements these same interfaces (see
@@ -45,9 +45,32 @@ export interface AssignmentRepository {
   update(id: string, patch: Partial<Omit<TuitionAssignment, "id" | "createdAt">>): Promise<TuitionAssignment>;
 }
 
+export interface LessonRepository {
+  list(): Promise<Lesson[]>;
+  get(id: string): Promise<Lesson | null>;
+  forTutor(tutorId: string): Promise<Lesson[]>;
+  forStudent(studentId: string): Promise<Lesson[]>;
+  forClient(clientId: string): Promise<Lesson[]>;
+  forRecurrence(recurrenceId: string): Promise<Lesson[]>;
+  // Overlap check for conflict detection — [startAt, startAt+durationMinutes). excludeLessonId
+  // lets rescheduling a lesson check against every *other* lesson without tripping over itself.
+  overlapping(params: { tutorId?: string; studentId?: string; startAt: string; durationMinutes: number; excludeLessonId?: string }): Promise<Lesson[]>;
+  create(input: Omit<Lesson, "id" | "createdAt" | "updatedAt">): Promise<Lesson>;
+  createMany(inputs: Array<Omit<Lesson, "id" | "createdAt" | "updatedAt">>): Promise<Lesson[]>;
+  update(id: string, patch: Partial<Omit<Lesson, "id" | "createdAt">>): Promise<Lesson>;
+}
+
+export interface AvailabilityRepository {
+  forTutor(tutorId: string): Promise<TutorAvailabilityBlock[]>;
+  create(input: Omit<TutorAvailabilityBlock, "id">): Promise<TutorAvailabilityBlock>;
+  remove(id: string): Promise<void>;
+}
+
 export interface DataProvider {
   tutors: TutorRepository;
   clients: ClientRepository;
   students: StudentRepository;
   assignments: AssignmentRepository;
+  lessons: LessonRepository;
+  availability: AvailabilityRepository;
 }

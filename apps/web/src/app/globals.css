@@ -3556,3 +3556,74 @@ ol {
   color: var(--colour-muted);
   font-size: 0.82rem;
 }
+
+.dashboard-page__header-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+/* FullCalendar ships its own layout CSS via its plugins; this scopes just LearnThrive's own
+   brand colours/typography onto it, rather than fighting or duplicating its internal styling. */
+.calendar-wrap {
+  margin-top: 1.5rem;
+  --fc-border-color: var(--colour-border);
+  --fc-button-bg-color: var(--colour-white);
+  --fc-button-border-color: var(--colour-border);
+  --fc-button-text-color: var(--colour-ink);
+  --fc-button-hover-bg-color: var(--colour-mint-100);
+  --fc-button-hover-border-color: var(--colour-green-600);
+  --fc-button-active-bg-color: var(--colour-green-800);
+  --fc-button-active-border-color: var(--colour-green-800);
+  --fc-today-bg-color: var(--colour-mint-100);
+  font-family: var(--font-sans);
+}
+
+.calendar-wrap .fc-toolbar-title {
+  font-family: var(--font-heading);
+  color: var(--colour-navy-900);
+}
+
+.calendar-wrap .fc-event {
+  border: none;
+  border-radius: 5px;
+  background: var(--colour-green-700);
+  cursor: pointer;
+}
+
+.calendar-wrap .fc-event.lesson-status-completed {
+  background: var(--colour-muted);
+}
+
+.calendar-wrap .fc-event.lesson-status-cancelled {
+  background: transparent;
+  border: 1px dashed var(--colour-error);
+  color: var(--colour-error);
+  text-decoration: line-through;
+}
+
+.calendar-wrap .fc-event.lesson-status-no_show {
+  background: var(--colour-error);
+}
+
+.calendar-reschedule-confirm {
+  position: fixed;
+  z-index: 40;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  max-width: 24rem;
+  padding: 1.2rem 1.4rem;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-white);
+  box-shadow: var(--shadow-md);
+}
+
+.calendar-reschedule-confirm__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
