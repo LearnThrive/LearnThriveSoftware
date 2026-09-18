@@ -371,3 +371,15 @@ export function getDataProvider(): DataProvider {
   if (!globalForData.__learnthriveDataProvider) globalForData.__learnthriveDataProvider = seedProvider();
   return globalForData.__learnthriveDataProvider;
 }
+
+// Plan section 98: a deliberate development-only way to discard whatever's accumulated during a
+// working session (extra people, lessons, reports, notifications created while testing) and
+// return to the fixed demo scenario — without restarting the whole dev server. Re-seeding uses
+// the same fixed SEED_IDS every time, so anything cross-referencing them (e.g. devProvider.ts's
+// AuthenticatedUser.profileId values) stays valid across a reset; only records created beyond
+// the seed scenario are lost, which is the point. See the guarded route at
+// apps/web/src/app/api/dev/reset/route.ts for why this is never reachable outside development.
+export function resetDataProvider(): DataProvider {
+  globalForData.__learnthriveDataProvider = seedProvider();
+  return globalForData.__learnthriveDataProvider;
+}

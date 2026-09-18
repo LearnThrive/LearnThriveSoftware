@@ -113,3 +113,14 @@ test('report approval IDOR: a Tutor never sees an Approve report control, even o
   // isAdmin, so the Tutor who just submitted this exact report has no way to approve it.
   await expect(page.getByRole('button', { name: 'Approve report' })).toHaveCount(0);
 });
+
+test('the development data reset endpoint refuses a non-Admin caller', async ({ page }) => {
+  // Deliberately does NOT test the Admin-success path here: this suite's spec files run in
+  // parallel workers against one shared dev server (see playwright.config.ts), and an actual
+  // reset would wipe data other tests are concurrently relying on. The reset behavior itself
+  // (seed scenario restored, session clutter discarded) is proven in isolation by
+  // packages/data/src/inMemoryProvider.test.ts, which has no such shared-state risk.
+  await login(page, TUTOR.email, TUTOR.password);
+  const response = await page.request.post('/api/dev/reset');
+  expect(response.status()).toBe(403);
+});

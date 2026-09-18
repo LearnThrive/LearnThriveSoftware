@@ -16,4 +16,7 @@ To add another seed account, edit `SEED_ACCOUNTS` in `apps/web/src/lib/auth/devP
 
 ## Resetting
 
-Restart the dev server (`npm run dev --workspace=apps/web`, or the root `npm run dev:web`). The in-memory user store and every issued session are both wiped — there's no separate reset command needed yet (plan section 98's `npm run dev:reset-data` becomes relevant once there's actual domain data — students, lessons, reports — worth resetting; the auth store alone doesn't need one).
+Two options, for two different things:
+
+- **Restarting the dev server** (`npm run dev --workspace=apps/web`, or the root `npm run dev:web`) wipes everything — the in-memory user store, every issued session, and all domain data (people, lessons, reports, notifications).
+- **"Reset demo data"** on `/dashboard/admin` (Admin only, hidden when `NODE_ENV=production`) — plan section 98's deliberate reset-without-restarting: `POST /api/dev/reset` discards whatever domain data (extra people, lessons, reports, notifications) accumulated during the current dev-server process, and restores the fixed seed scenario (`packages/data/src/inMemoryProvider.ts`'s `resetDataProvider()`), **without** logging anyone out — the auth/session store is untouched, since accumulated test clutter is a domain-data problem, not a login problem. The route is guarded twice: a hard `NODE_ENV === "production"` check (throws, doesn't silently no-op) and `requireRoleForApi(["ADMIN"])`.

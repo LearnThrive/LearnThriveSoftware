@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/auth/guard";
 import { createMetadata } from "@/lib/metadata";
 import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
 import { formatInTimeZone } from "@/lib/scheduling/timezone";
+import { ResetDevDataButton } from "@/components/ResetDevDataButton";
 
 export const metadata: Metadata = createMetadata({
   title: "Admin",
@@ -39,6 +40,7 @@ export default async function AdminPage() {
       <div className="dashboard-quick-actions">
         <Link href="/dashboard/admin/people" className="button button--secondary"><span>People</span></Link>
         <Link href="/dashboard/admin/assignments" className="button button--secondary"><span>Tuition Assignments</span></Link>
+        {process.env.NODE_ENV !== "production" && <ResetDevDataButton />}
       </div>
 
       <h2>Recent activity</h2>
