@@ -1191,4 +1191,19 @@ describe('signalling through real Socket.IO clients', () => {
     tutor.emit('board:update', { pageId, elements: [element] });
     for (const receipt of await receipts) expect(receipt).toEqual({ pageId, elements: [element] });
   });
+
+  it('reports TURN as unconfigured (503) rather than crashing when no Cloudflare credentials are set', async () => {
+    const previousKeyId = process.env.CLOUDFLARE_TURN_KEY_ID;
+    const previousApiToken = process.env.CLOUDFLARE_TURN_API_TOKEN;
+    delete process.env.CLOUDFLARE_TURN_KEY_ID;
+    delete process.env.CLOUDFLARE_TURN_API_TOKEN;
+    try {
+      const response = await fetch(`${url}/api/turn-credentials`);
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({ error: 'TURN is not configured on this server.' });
+    } finally {
+      if (previousKeyId !== undefined) process.env.CLOUDFLARE_TURN_KEY_ID = previousKeyId;
+      if (previousApiToken !== undefined) process.env.CLOUDFLARE_TURN_API_TOKEN = previousApiToken;
+    }
+  });
 });

@@ -8,6 +8,7 @@ import {
 } from '../shared/protocol';
 import { aggregateConnectionStatus } from './callStatus';
 import { reconcileBoardElements } from './board';
+import { ensureFreshTurnCredentials } from './ice';
 import { createLogger } from './log';
 import { browserSupportError, listDevices, LocalMedia, mediaErrorMessage, type DeviceOption } from './media';
 import { PeerSession, type DirectionDiagnostics } from './peer';
@@ -441,6 +442,10 @@ export class MeetingController {
       return;
     }
     this.active = true;
+    // Kicked off now (fire-and-forget), not awaited — by the time the first peer's offer/answer
+    // actually needs to gather ICE candidates, this has almost always already resolved. A peer
+    // connection created before it resolves simply falls back to STUN-only for that connection.
+    void ensureFreshTurnCredentials();
     this.update({
       phase: 'joining', status: 'Connecting…', error: null, roomId, name, role: null, waiting: [],
       messages: [], unreadCount: 0, chatOpen: false, handRaised: false, reactions: [],
@@ -612,6 +617,10 @@ export class MeetingController {
     const existing = this.peers.get(peerId);
     if (existing?.sessionId === sessionId || !this.socket) return;
     if (existing) this.closePeer(peerId, { keepDisplay: true });
+    // Won't affect *this* connection (it's about to read whatever's cached synchronously below),
+    // but keeps credentials fresh for whichever peer connection comes after this one — a long
+    // meeting can easily outlive a single credential set's TTL.
+    void ensureFreshTurnCredentials();
     try {
       const session = new PeerSession(sessionId, initiator, this.socket, this.media, {
         stream: (stream) => this.updatePeer(peerId, { stream }),

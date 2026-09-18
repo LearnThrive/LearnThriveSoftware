@@ -14,7 +14,12 @@ export default defineConfig(({ mode }) => {
       // Tunnel and Tailscale's randomly-generated hostnames with no per-session .env edit.
       // TUNNEL_HOST remains available for a stable named domain (see README).
       allowedHosts: [...DEV_TUNNEL_HOST_SUFFIXES, ...(env.TUNNEL_HOST ? [env.TUNNEL_HOST] : [])],
-      proxy: { '/socket.io': { target: 'http://127.0.0.1:3001', ws: true } },
+      proxy: {
+        '/socket.io': { target: 'http://127.0.0.1:3001', ws: true },
+        // Temporary Cloudflare TURN credential generation (see server/signalling.ts) — same
+        // same-origin-through-Vite pattern as /socket.io above, so one HTTPS tunnel covers both.
+        '/api': { target: 'http://127.0.0.1:3001' },
+      },
     },
   };
 });
