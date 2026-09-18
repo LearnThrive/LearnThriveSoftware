@@ -25,12 +25,34 @@ A feature-by-feature reference for the moderation, room-lock, polls, understandi
 | Role badge | Shown on every camera-off avatar tile and every People-panel row | Same | Display only | Server (role) + Playwright (badge) |
 | ❓ reaction | Available to everyone (6th emoji, alongside 👍❤️😂🎉👏) | Same | Same as existing reactions (rate-limited, ephemeral) | Server |
 | Raise-hand `H` shortcut | Same as clicking Raise/Lower hand | Same | Client-side keybinding | Playwright |
+| Workspace modes (Call / Board / Present) | Switches freely (also `W` to toggle Board); a share auto-surfaces Present for everyone, restoring the prior mode when it ends | Same | Client-side only — media, chat, polls, and board state all live outside the switched view, so nothing is torn down on a mode change | Playwright |
+| Collaborative whiteboard | Full control: pages, backgrounds, drawing permission, clear, import; can draw always regardless of the permission toggle | Draws when permitted; always can pan/zoom/view and follow the tutor's page | See the **Whiteboard** section below and [WHITEBOARD_ARCHITECTURE.md](WHITEBOARD_ARCHITECTURE.md) | Server + Playwright |
+| Screen-share audio | Tab/system audio (where the browser offers it) is mixed with the mic, not swapped for it | Same capability, subject to the screen-share policy above | Client-side (Web Audio mixing); the browser's own picker remains authoritative over source/audio choice | Manual only — no automated harness for real screen capture |
+| Cloudflare Realtime TURN | Not tutor-specific — configured once per deployment via server-only credentials | Same | Server-generated temporary credentials (`GET /api/turn-credentials`); see [TURN_TESTING.md](TURN_TESTING.md) | Server (fallback path only — no live Cloudflare account in this build) |
+| Tutor announcement | Send a short prominent message to everyone; a new one replaces the last | Sees it as a distinct banner, never mixed into chat | Server-enforced (tutor-only), auto-expires server-side after 15s so it disappears in sync for everyone | Server + Playwright |
+| Help Queue | Sees every raised hand ordered by time raised, with live elapsed time, and can mark one helped (lowers it) | Not shown (tutor-only view) | Builds on the existing raise-hand signal; ordering key (`handRaisedAt`) is a real server timestamp on join/resync, client-approximated for live updates (fine for a UI-only elapsed-time display) | Server + Playwright |
 
 ## Capacity
 
 Still exactly 1 tutor + up to 3 students (4 participants max) — an explicit correction to an earlier draft spec that assumed 10 students behind a Cloudflare Realtime SFU. The SFU migration is not attempted in this pass because its stated justification ("a full mesh is unacceptable at 11 participants") does not hold at 4; see [PRODUCTION_GAPS.md](PRODUCTION_GAPS.md#classroom-v2--deferred-to-future-initiatives).
 
+## Whiteboard
+
+A first-class **Board** workspace mode (alongside Call and Present), built on `@excalidraw/excalidraw`. See **[WHITEBOARD_ARCHITECTURE.md](WHITEBOARD_ARCHITECTURE.md)** for the full sync design; in short:
+
+- **Multiple pages** per class — create, rename, duplicate, reorder, delete, switch, each with its own background (blank, lined, grid, dotted, coordinate — rendered as CSS behind a transparent canvas, never as real board elements).
+- **Real-time collaborative drawing**, reconciled by element version/versionNonce (the same merge rule Excalidraw's own collaboration reference implementation uses) so a stale update can never overwrite a newer one, and applied with `captureUpdateAction: NEVER` so a remote peer's edit can never end up on your own undo stack.
+- **Tutor-gated student drawing** — a permission toggle backed by Excalidraw's own view-mode locally, with the server as the actual authority (a disallowed student's mutation is rejected server-side regardless of client state).
+- **Follow Me** — students follow the tutor's active page by default and can stop following locally at any time (a pure local choice, no server round-trip); the tutor can nudge everyone back with one click.
+- **Cursor and laser pointer** via Excalidraw's own native collaborator rendering — both throttled client-side and rate-limited server-side as a backstop.
+- **Tutor-only page clear** (with a confirmation) and **JSON import** (replaces a page outright, validated for size/shape server-side).
+- **PNG/JSON export** (client-side only, never persisted anywhere).
+- **Reconnect resync** — a full board snapshot (every page's elements) is resent alongside the rest of the room state.
+- Three lightweight **tutoring shortcuts** (number line, coordinate axes, fraction bar) insert pre-built Excalidraw elements rather than requiring freehand drawing.
+
+**Known gap:** renaming a page requires a double-click on its tab — there's no keyboard-only equivalent yet. See [PRODUCTION_GAPS.md](PRODUCTION_GAPS.md).
+
 ## Explicitly out of scope this pass
 
-- **Cloudflare Realtime SFU migration** — no Cloudflare account/credentials exist for this build, and isn't justified at the current 4-participant capacity anyway.
-- **Collaborative whiteboard** — a standalone subsystem (new dependency, its own sync protocol, pages, permissions, backgrounds, follow-mode, laser pointer, export/import) comparable in size to everything in the table above combined; deferred to its own dedicated pass.
+- **Cloudflare Realtime SFU migration** — no Cloudflare account/credentials exist for this build, and isn't justified at the current 4-participant capacity anyway. (The TURN credential-generation path *is* now implemented against Cloudflare's Realtime TURN service — a different, much smaller piece of the same platform — see [TURN_TESTING.md](TURN_TESTING.md).)
+- **Recording, transcripts, AI summaries, private DMs, breakout rooms, billing, persistent student records, a homework platform, a parent portal, permanent authentication, or full scheduling** — see [PRODUCTION_GAPS.md](PRODUCTION_GAPS.md) for why each is a later-phase concern, not a gap in this pass.

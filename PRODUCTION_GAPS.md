@@ -34,7 +34,11 @@ This document lists what stands between this prototype and real use with LearnTh
 
 ## Browser/device coverage
 
-- **Final Safari/iOS testing.** This prototype was built and automated-tested on Windows (Chrome and Firefox via Playwright). Safari and iOS Safari have not been tested at all — see [TESTING.md](TESTING.md)'s test matrix. Given LearnThrive students plausibly join from iPhones/iPads, this is a real gap to close before considering any wider trial, not just a formality.
+- **Final Safari/iOS testing.** This prototype was built and automated-tested on Windows (Chrome and Firefox via Playwright). Safari and iOS Safari have not been tested at all — see [BROWSER_SUPPORT.md](BROWSER_SUPPORT.md) for the full consolidated matrix and [TESTING.md](TESTING.md)'s test matrix. Given LearnThrive students plausibly join from iPhones/iPads, this is a real gap to close before considering any wider trial, not just a formality.
+- **Screen-share audio has not been verified with real hardware.** The mixing logic (Web Audio, mic + tab/system audio) is implemented and typechecked, but there is no automated harness for real screen capture, and no human has yet confirmed the mixed audio is actually audible and correctly balanced on the receiving end. See [LAPTOP_PHONE_TEST.md](LAPTOP_PHONE_TEST.md).
+- **Frontend bundle size grew substantially with the whiteboard.** `@excalidraw/excalidraw` pulls in its own dependency tree (including optional diagram/chart/math-rendering support this app never uses) — the production build now exceeds Vite's 500KB chunk-size warning threshold on its largest chunks. Not yet addressed: `manualChunks`/code-splitting so the whiteboard bundle only loads when Board mode is actually opened, rather than as part of the initial page load.
+- **Whiteboard page rename has no keyboard-only path.** Renaming a page tab requires a double-click; there's no visible button or keyboard shortcut equivalent yet. See [WHITEBOARD_ARCHITECTURE.md](WHITEBOARD_ARCHITECTURE.md).
+- **No formal accessibility audit of the newest UI** (whiteboard toolbar/page tabs, Class controls' poll/timer/announcement forms, the Help Queue). Built following the same aria-label/keyboard-dismiss patterns already established and adversarially reviewed elsewhere in this app, but not independently re-audited with a screen reader or an automated tool (e.g. axe-core, not installed in this project).
 
 ## Considered but intentionally not built this pass
 
@@ -47,14 +51,15 @@ None of these block real use of the prototype as it stands; they're straightforw
 
 ## Classroom V2 — deferred to future initiatives
 
-Capacity stays at 1 tutor + up to 3 students (4 total) for now — a corrected, deliberately smaller target than an earlier draft spec that assumed 10 students behind a Cloudflare Realtime SFU. At 4 participants a full P2P mesh is entirely reasonable (up to 6 edges), which is why the SFU migration below is still not attempted: its stated justification doesn't hold at this size. Room lock, waiting-room deny, tutor moderation (force-mute, mute-all, remove, lower-hand, screen-share/chat policy, screen-share ownership arbitration), chat moderation, quick polls, and Understanding Check are now implemented — see [CLASSROOM_FEATURES.md](CLASSROOM_FEATURES.md) for the full feature matrix. What remains deferred, each needing its own dedicated spec and planning pass:
+Capacity stays at 1 tutor + up to 3 students (4 total) for now — a corrected, deliberately smaller target than an earlier draft spec that assumed 10 students behind a Cloudflare Realtime SFU. At 4 participants a full P2P mesh is entirely reasonable (up to 6 edges), which is why the SFU migration below is still not attempted: its stated justification doesn't hold at this size. Room lock, waiting-room deny, tutor moderation, chat moderation, quick polls, Understanding Check, the collaborative whiteboard, Call/Board/Present workspace modes, tutor announcements, and the Help Queue are now all implemented — see [CLASSROOM_FEATURES.md](CLASSROOM_FEATURES.md) for the full feature matrix. What remains deferred, each needing its own dedicated spec and planning pass:
 
-- **Cloudflare Realtime SFU migration** (see the Infrastructure section above for why it wasn't attempted this pass).
-- **Collaborative whiteboard** (Excalidraw or similar) — pages, permissions, backgrounds, follow-tutor mode, laser pointer, export/import.
-- **Additional layout modes named in passing** — Speaker, Present, Board — beyond the Focus/Side-by-side/Gallery modes actually built this pass.
+- **Cloudflare Realtime SFU migration** (see the Infrastructure section above for why it wasn't attempted this pass — note this is distinct from, and unaffected by, the newly-implemented Cloudflare *TURN* credential generation, a much smaller piece of the same platform).
+- **Speaker view** as a named-in-passing layout mode beyond Focus/Side-by-side/Gallery/Present actually built.
 - **Pin / Spotlight** as distinct concepts from the click-to-focus already built.
 - **Data Saver / audio-only mode, and simulcast** beyond what a future SFU migration would need anyway.
 - **Attendance tracking / class analytics.**
+- **A Class Resources panel** (tutor-shared links/notes/files) and a **tutor-only local notes scratchpad** — both named in the source spec but not built this pass; deferred rather than half-built, since a resources panel in particular raises file-handling questions (see the file-serving caution in the source spec) worth their own design pass.
+- **Persistent Student Status** (Ready/Working/Need help, beyond the existing Understanding Check and Help Queue) — the Help Queue was judged the higher-value subset of this idea and was built; the broader always-on status concept was left for later to avoid duplicating/confusing it with Understanding Check.
 
 ## What this prototype does establish
 

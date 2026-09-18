@@ -1286,6 +1286,49 @@ describe('signalling through real Socket.IO clients', () => {
     expect(room.participants.get(studentA.id!)!.handRaisedAt).not.toBeNull();
   });
 
+  it('never leaks whiteboard updates or cursor/laser positions to a different room', async () => {
+    const tutor = await connect();
+    const joined = await joinTutor(tutor, 'Alice');
+    const pageId = joined.board.activePageId;
+    const outsider = await connect();
+    await joinTutor(outsider, 'Dara', 'room-two');
+    const outsiderSignals: unknown[] = [];
+    outsider.onAny((event, payload) => outsiderSignals.push({ event, payload }));
+
+    tutor.emit('board:update', { pageId, elements: [makeElement('el-1')] });
+    tutor.emit('board:cursor', { x: 1, y: 2 });
+    tutor.emit('board:laser', { x: 3, y: 4 });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(outsiderSignals).toEqual([]);
+  });
+
+  it('rejects an oversized announcement and a malformed whiteboard update batch rather than crashing', async () => {
+    const tutor = await connect();
+    const joined = await joinTutor(tutor, 'Alice');
+    const pageId = joined.board.activePageId;
+
+    const announceRejected = new Promise((resolve) => tutor.once('room:error', resolve));
+    tutor.emit('announce:send', { text: 'x'.repeat(201) });
+    expect(await announceRejected).toEqual({ message: 'Announcements must be 1–200 characters.' });
+
+    const boardRejected = new Promise((resolve) => tutor.once('room:error', resolve));
+    // Missing version/versionNonce — cast past the wire type since this is deliberately malformed.
+    tutor.emit('board:update', { pageId, elements: [{ id: 'el-1' }] } as Parameters<ClientToServerEvents['board:update']>[0]);
+    expect(await boardRejected).toEqual({ message: 'Invalid whiteboard update.' });
+
+    const batchRejected = new Promise((resolve) => tutor.once('room:error', resolve));
+    tutor.emit('board:update', { pageId, elements: Array.from({ length: 201 }, (_, i) => makeElement(`el-${i}`)) }); // over MAX_BOARD_UPDATE_BATCH
+    expect(await batchRejected).toEqual({ message: 'Invalid whiteboard update.' });
+
+    // The room survives all of the above — a subsequent valid update still works.
+    const student = await connect();
+    await admit(tutor, student);
+    const acceptedOnStudent = new Promise((resolve) => student.once('board:update', resolve));
+    tutor.emit('board:update', { pageId, elements: [makeElement('el-ok')] });
+    expect(await acceptedOnStudent).toEqual({ pageId, elements: [makeElement('el-ok')] });
+  });
+
   it('reports TURN as unconfigured (503) rather than crashing when no Cloudflare credentials are set', async () => {
     const previousKeyId = process.env.CLOUDFLARE_TURN_KEY_ID;
     const previousApiToken = process.env.CLOUDFLARE_TURN_API_TOKEN;
