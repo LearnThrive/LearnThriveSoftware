@@ -600,6 +600,19 @@ test('the collaborative whiteboard syncs a drawn element to the student, gates d
     await expect(pageB.locator('.board-page-tabs .board-page-tab')).toHaveCount(2);
   });
 
+  await test.step('the tutor renames a page keyboard-only, with no mouse click on the tab itself', async () => {
+    // Both the F2 shortcut (focus the tab, press F2) and the dedicated Rename button work without
+    // a mouse; this exercises F2 specifically since the button is covered by ordinary Tab+Enter.
+    await pageA.getByRole('tab', { name: 'Board 1' }).focus();
+    await pageA.keyboard.press('F2');
+    const renameInput = pageA.getByLabel('Rename page (was Board 1)');
+    await expect(renameInput).toBeFocused();
+    await renameInput.fill('Warm-up');
+    await pageA.keyboard.press('Enter');
+    await expect(pageA.getByRole('tab', { name: 'Warm-up' })).toBeVisible();
+    await expect(pageB.getByRole('tab', { name: 'Warm-up' })).toBeVisible();
+  });
+
   await contextA.close();
   await contextB.close();
 });

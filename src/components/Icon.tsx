@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react';
 
 export type IconName = 'microphone' | 'microphone-off' | 'camera' | 'camera-off' | 'arrow' | 'plus' | 'link' | 'check' | 'leave' | 'people' | 'shield' | 'info' | 'refresh' | 'volume' | 'spark'
   | 'screen' | 'screen-off' | 'chat' | 'settings' | 'send' | 'expand' | 'collapse' | 'flip' | 'close' | 'pip' | 'hand'
-  | 'lock' | 'unlock' | 'poll' | 'timer' | 'help-circle' | 'user-x';
+  | 'lock' | 'unlock' | 'poll' | 'timer' | 'help-circle' | 'user-x' | 'edit';
 
 export function Icon({ name, size = 20, style }: { name: IconName; size?: number; style?: CSSProperties }) {
   const paths: Record<IconName, React.ReactNode> = {
@@ -38,6 +38,7 @@ export function Icon({ name, size = 20, style }: { name: IconName; size?: number
     timer: <><circle cx="12" cy="13" r="8" /><path d="M12 9v4l3 2M10 2h4M12 2v2" /></>,
     'help-circle': <><circle cx="12" cy="12" r="9" /><path d="M9.2 9a2.8 2.8 0 0 1 5.4 1c0 1.8-2.6 2-2.6 3.6M12 17v.1" /></>,
     'user-x': <><circle cx="9" cy="7" r="3" /><path d="M3 21v-3a6 6 0 0 1 12 0v3" /><path d="m16 8 5 5m0-5-5 5" /></>,
+    edit: <><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></>,
   };
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={style}>{paths[name]}</svg>;
 }

@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { MAX_BOARD_PAGES, type BoardBackground, type BoardPage } from '../../shared/protocol';
 import { Icon } from './Icon';
+import { usePopoverDismiss } from '../usePopoverDismiss';
 
 const BACKGROUND_LABELS: Record<BoardBackground, string> = {
   blank: 'Blank', lined: 'Lined paper', grid: 'Grid paper', dotted: 'Dotted paper', coordinate: 'Coordinate grid',
@@ -27,6 +28,9 @@ export function BoardPageTabs({
 }: BoardPageTabsProps) {
   const [renaming, setRenaming] = useState<{ pageId: string; value: string } | null>(null);
   const [backgroundMenuFor, setBackgroundMenuFor] = useState<string | null>(null);
+  const backgroundMenuContainerRef = useRef<HTMLDivElement>(null);
+  const backgroundMenuTriggerRef = useRef<HTMLButtonElement>(null);
+  usePopoverDismiss(backgroundMenuFor !== null, () => setBackgroundMenuFor(null), backgroundMenuContainerRef, backgroundMenuTriggerRef);
 
   const move = (index: number, direction: -1 | 1) => {
     const target = index + direction;
@@ -47,10 +51,13 @@ export function BoardPageTabs({
         const isActive = page.id === viewedPageId;
         const isTutorPage = page.id === activePageId;
         return (
-          <div key={page.id} className={`board-page-tab ${isActive ? 'is-active' : ''}`} role="presentation">
+          <div
+            key={page.id} className={`board-page-tab ${isActive ? 'is-active' : ''}`} role="presentation"
+            ref={backgroundMenuFor === page.id ? backgroundMenuContainerRef : undefined}
+          >
             {renaming?.pageId === page.id ? (
               <input
-                className="board-page-tab-rename" autoFocus value={renaming.value}
+                className="board-page-tab-rename" autoFocus value={renaming.value} aria-label={`Rename page (was ${page.name})`}
                 onChange={(event) => setRenaming({ pageId: page.id, value: event.target.value })}
                 onBlur={commitRename}
                 onKeyDown={(event) => { if (event.key === 'Enter') commitRename(); if (event.key === 'Escape') setRenaming(null); }}
@@ -60,6 +67,7 @@ export function BoardPageTabs({
                 type="button" role="tab" aria-selected={isActive} className="board-page-tab-button"
                 onClick={() => onSelect(page.id)}
                 onDoubleClick={() => { if (isTutor) setRenaming({ pageId: page.id, value: page.name }); }}
+                onKeyDown={(event) => { if (isTutor && event.key === 'F2') { event.preventDefault(); setRenaming({ pageId: page.id, value: page.name }); } }}
               >
                 {isTutorPage && <Icon name="people" size={11} />}
                 {page.name}
@@ -67,9 +75,14 @@ export function BoardPageTabs({
             )}
             {isTutor && (
               <span className="board-page-tab-actions">
+                <button type="button" onClick={() => setRenaming({ pageId: page.id, value: page.name })} aria-label={`Rename ${page.name}`}><Icon name="edit" size={11} /></button>
                 <button type="button" onClick={() => move(index, -1)} disabled={index === 0} aria-label={`Move ${page.name} earlier`}><Icon name="arrow" size={11} style={{ transform: 'rotate(180deg)' }} /></button>
                 <button type="button" onClick={() => move(index, 1)} disabled={index === pages.length - 1} aria-label={`Move ${page.name} later`}><Icon name="arrow" size={11} /></button>
-                <button type="button" onClick={() => setBackgroundMenuFor(backgroundMenuFor === page.id ? null : page.id)} aria-label={`${page.name} background`}><Icon name="settings" size={11} /></button>
+                <button
+                  type="button" ref={backgroundMenuFor === page.id ? backgroundMenuTriggerRef : undefined}
+                  onClick={() => setBackgroundMenuFor(backgroundMenuFor === page.id ? null : page.id)}
+                  aria-label={`${page.name} background`} aria-haspopup="menu" aria-expanded={backgroundMenuFor === page.id}
+                ><Icon name="settings" size={11} /></button>
                 <button type="button" onClick={() => onDuplicate(page.id)} aria-label={`Duplicate ${page.name}`}><Icon name="plus" size={11} /></button>
                 {pages.length > 1 && (
                   <button type="button" onClick={() => onDelete(page.id)} aria-label={`Delete ${page.name}`}><Icon name="close" size={11} /></button>

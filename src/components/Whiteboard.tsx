@@ -9,6 +9,7 @@ import '@excalidraw/excalidraw/index.css';
 import { MAX_BOARD_IMPORT_BYTES, type BoardElement, type BoardPage, type ParticipantRole } from '../../shared/protocol';
 import type { BoardPointer } from '../meeting';
 import { boardBackgroundStyle, trailingThrottle } from '../board';
+import { usePopoverDismiss } from '../usePopoverDismiss';
 import { BoardPageTabs } from './BoardPageTabs';
 import { Icon } from './Icon';
 
@@ -61,6 +62,9 @@ export function Whiteboard({
   const prevViewedRef = useRef<string | null>(null);
   const lastSentRef = useRef(new Map<string, { version: number; versionNonce: number }>());
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const shortcutsPanelRef = useRef<HTMLDivElement>(null);
+  const shortcutsTriggerRef = useRef<HTMLButtonElement>(null);
+  usePopoverDismiss(shortcutsOpen, () => setShortcutsOpen(false), shortcutsPanelRef, shortcutsTriggerRef);
 
   // The tutor always views whatever page they themselves switch to (there's nothing to "follow");
   // a student follows the tutor's active page only while `following` is true, and can stop
@@ -220,15 +224,22 @@ export function Whiteboard({
               <button
                 type="button" className={`inline-action ${!studentsCanDraw ? 'is-active' : ''}`}
                 onClick={() => onSetStudentsCanDraw(!studentsCanDraw)}
+                aria-pressed={!studentsCanDraw}
               >
                 {studentsCanDraw ? 'Students can draw' : 'Drawing locked'}
               </button>
-              <div className="popover-anchor">
-                <button type="button" className="inline-action" onClick={() => setShortcutsOpen((open) => !open)}>Insert</button>
+              <div className="popover-anchor" ref={shortcutsPanelRef}>
+                <button
+                  type="button" className="inline-action" ref={shortcutsTriggerRef}
+                  onClick={() => setShortcutsOpen((open) => !open)}
+                  aria-haspopup="menu" aria-expanded={shortcutsOpen}
+                >
+                  Insert
+                </button>
                 {shortcutsOpen && (
                   <div className="board-shortcuts-menu" role="menu">
                     {TUTORING_SHORTCUTS.map((shortcut) => (
-                      <button key={shortcut.id} type="button" onClick={() => insertShortcut(shortcut.id)}>{shortcut.label}</button>
+                      <button key={shortcut.id} type="button" role="menuitem" onClick={() => { insertShortcut(shortcut.id); setShortcutsOpen(false); }}>{shortcut.label}</button>
                     ))}
                   </div>
                 )}
