@@ -4,17 +4,24 @@ import express from 'express';
 import { Server, type Socket } from 'socket.io';
 import { isDevTunnelHost } from '../shared/allowedHosts';
 import {
-  MAX_CHAT_LENGTH, MAX_NAME_LENGTH, MAX_STUDENTS, REACTION_EMOJIS, ROOM_PATTERN, WAITING_ROOM_CAP,
+  MAX_CHAT_LENGTH, MAX_NAME_LENGTH, MAX_POLL_OPTION_LENGTH, MAX_POLL_OPTIONS, MAX_POLL_QUESTION_LENGTH,
+  MAX_STUDENTS, MIN_POLL_OPTIONS, REACTION_EMOJIS, ROOM_PATTERN, WAITING_ROOM_CAP,
 } from '../shared/protocol';
 import type {
-  ChatMessage, ClientToServerEvents, JoinedRoom, MediaState, Participant, ParticipantRole,
-  ServerToClientEvents, SignalCandidate, SignalDescription,
+  ChatMessage, ClientToServerEvents, JoinedRoom, MediaState, Participant, ParticipantRole, PollState,
+  PollVisibility, RoomSettings, RoomTimerState, ServerToClientEvents, SignalCandidate, SignalDescription,
+  TimerMode, UnderstandingCheckState, UnderstandingStatus,
 } from '../shared/protocol';
 
 const CHAT_RATE_WINDOW_MS = 4000;
 const CHAT_RATE_MAX_MESSAGES = 6;
 const REACTION_RATE_WINDOW_MS = 4000;
 const REACTION_RATE_MAX = 10;
+const POLL_VOTE_RATE_WINDOW_MS = 4000;
+const POLL_VOTE_RATE_MAX = 10;
+const UNDERSTANDING_RATE_WINDOW_MS = 4000;
+const UNDERSTANDING_RATE_MAX = 10;
+const MAX_TIMER_DURATION_MS = 4 * 60 * 60 * 1000;
 
 function createRateLimiter(windowMs: number, max: number) {
   const hits = new Map<string, number[]>();
@@ -37,13 +44,33 @@ interface Edge { sessionId: string; participantIds: [string, string]; initiatorI
 // A student who has joined but not yet been let in by the tutor. Keyed by socket id in
 // Room.waiting; Map insertion order gives FIFO for free, so no separate ordering field is kept.
 interface WaitingEntry { name: string; media: MediaState }
+interface RoomPoll {
+  id: string; question: string; options: { id: string; text: string }[];
+  anonymous: boolean; resultsVisible: PollVisibility; open: boolean;
+  votes: Map<string, string>; // participantId -> optionId
+}
+interface RoomUnderstandingCheck { id: string; open: boolean; responses: Map<string, UnderstandingStatus> }
+interface RoomTimer { mode: TimerMode; anchorAt: number; durationMs: number | null; paused: boolean; elapsedAtPauseMs: number | null }
 interface Room {
   participants: Map<string, Participant>;
   waiting: Map<string, WaitingEntry>;
   edges: Map<string, Edge>;
+  settings: RoomSettings;
+  activeScreenShareId: string | null;
+  poll: RoomPoll | null;
+  understandingCheck: RoomUnderstandingCheck | null;
+  timer: RoomTimer | null;
 }
 interface SocketData { roomId?: string }
 type MeetingSocket = Socket<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>;
+
+function createRoom(): Room {
+  return {
+    participants: new Map(), waiting: new Map(), edges: new Map(),
+    settings: { locked: false, studentsCanShareScreen: true, studentsCanChat: true },
+    activeScreenShareId: null, poll: null, understandingCheck: null, timer: null,
+  };
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -74,6 +101,30 @@ function parseCandidate(value: unknown): RTCIceCandidateInit | null {
     ...(value.sdpMLineIndex !== undefined ? { sdpMLineIndex: value.sdpMLineIndex as number | null } : {}),
     ...(value.usernameFragment !== undefined ? { usernameFragment: value.usernameFragment as string | null } : {}),
   };
+}
+
+function parseSettingsPatch(value: unknown): Partial<RoomSettings> | null {
+  if (!isRecord(value)) return null;
+  const patch: Partial<RoomSettings> = {};
+  for (const key of ['locked', 'studentsCanShareScreen', 'studentsCanChat'] as const) {
+    if (key in value) {
+      if (typeof value[key] !== 'boolean') return null;
+      patch[key] = value[key];
+    }
+  }
+  return patch;
+}
+
+function parsePollCreate(value: unknown): { question: string; options: string[]; anonymous: boolean; resultsVisible: PollVisibility } | null {
+  if (!isRecord(value) || typeof value.question !== 'string' || typeof value.anonymous !== 'boolean') return null;
+  const question = value.question.trim();
+  if (!question || question.length > MAX_POLL_QUESTION_LENGTH) return null;
+  if (value.resultsVisible !== 'always' && value.resultsVisible !== 'onClose') return null;
+  if (!Array.isArray(value.options)) return null;
+  const options = value.options.map((option) => (typeof option === 'string' ? option.trim() : '')).filter(Boolean);
+  if (options.length < MIN_POLL_OPTIONS || options.length > MAX_POLL_OPTIONS) return null;
+  if (options.some((option) => option.length > MAX_POLL_OPTION_LENGTH)) return null;
+  return { question, options, anonymous: value.anonymous, resultsVisible: value.resultsVisible };
 }
 
 export function createSignallingServer(options?: { disconnectGraceMs?: number }) {
@@ -115,6 +166,8 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
   const pendingDisconnects = new Map<string, { roomId: string; timer: ReturnType<typeof setTimeout> }>();
   const chatRateLimiter = createRateLimiter(CHAT_RATE_WINDOW_MS, CHAT_RATE_MAX_MESSAGES);
   const reactionRateLimiter = createRateLimiter(REACTION_RATE_WINDOW_MS, REACTION_RATE_MAX);
+  const pollVoteRateLimiter = createRateLimiter(POLL_VOTE_RATE_WINDOW_MS, POLL_VOTE_RATE_MAX);
+  const understandingRateLimiter = createRateLimiter(UNDERSTANDING_RATE_WINDOW_MS, UNDERSTANDING_RATE_MAX);
 
   function fail(socket: MeetingSocket, message: string) {
     socket.emit('room:error', { message });
@@ -143,12 +196,93 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
     return edge.participantIds[0] === socketId ? edge.participantIds[1] : edge.participantIds[0];
   }
 
+  function requireTutor(socket: MeetingSocket, message: string): { room: Room; roomId: string; self: Participant } | null {
+    const roomId = socket.data.roomId;
+    const room = roomId ? rooms.get(roomId) : undefined;
+    const self = room?.participants.get(socket.id);
+    if (!room || !roomId || !self || self.role !== 'tutor') { fail(socket, message); return null; }
+    return { room, roomId, self };
+  }
+
   function broadcastWaiting(room: Room) {
     const tutor = tutorOf(room);
     if (!tutor) return;
     io.to(tutor.id).emit('room:waiting-update', {
       waiting: [...room.waiting.entries()].map(([id, entry]) => ({ id, name: entry.name })),
     });
+  }
+
+  function buildPollState(room: Room, recipientId: string, recipientRole: ParticipantRole): PollState | null {
+    const poll = room.poll;
+    if (!poll) return null;
+    const results: Record<string, number> = {};
+    for (const option of poll.options) results[option.id] = 0;
+    for (const optionId of poll.votes.values()) results[optionId] = (results[optionId] ?? 0) + 1;
+    const showResults = recipientRole === 'tutor' || poll.resultsVisible === 'always' || !poll.open;
+    const state: PollState = {
+      id: poll.id, question: poll.question, options: poll.options, anonymous: poll.anonymous, open: poll.open,
+      resultsVisible: poll.resultsVisible, results: showResults ? results : null,
+      myVote: poll.votes.get(recipientId) ?? null, totalVotes: poll.votes.size,
+    };
+    if (recipientRole === 'tutor' && !poll.anonymous) {
+      state.voters = [...poll.votes.entries()].map(([participantId, optionId]) => ({
+        id: participantId, name: room.participants.get(participantId)?.name ?? 'Unknown', optionId,
+      }));
+    }
+    return state;
+  }
+
+  function buildUnderstandingState(room: Room, recipientId: string, recipientRole: ParticipantRole): UnderstandingCheckState | null {
+    const check = room.understandingCheck;
+    if (!check) return null;
+    const state: UnderstandingCheckState = { id: check.id, open: check.open, myStatus: check.responses.get(recipientId) ?? null };
+    if (recipientRole === 'tutor') {
+      state.responses = [...room.participants.values()]
+        .filter((participant) => participant.role === 'student')
+        .map((participant) => ({ id: participant.id, name: participant.name, status: check.responses.get(participant.id) ?? null }));
+      const summary: Record<UnderstandingStatus, number> = { understood: 0, confused: 0, lost: 0 };
+      for (const status of check.responses.values()) summary[status] += 1;
+      state.summary = summary;
+    }
+    return state;
+  }
+
+  function buildTimerState(room: Room): RoomTimerState | null {
+    if (!room.timer) return null;
+    const { mode, anchorAt, durationMs, paused, elapsedAtPauseMs } = room.timer;
+    return { mode, anchorAt, durationMs, paused, elapsedAtPauseMs };
+  }
+
+  // The three pieces of room state whose visibility differs per recipient (tutor sees more of
+  // polls/understanding-checks than students do) — computed fresh for whoever's about to receive
+  // a room:joined payload, whether from a brand-new admission, a duplicate-join resend, or a
+  // reconnect resync.
+  function personalizedExtras(room: Room, recipientId: string, recipientRole: ParticipantRole) {
+    return {
+      settings: room.settings,
+      poll: buildPollState(room, recipientId, recipientRole),
+      understandingCheck: buildUnderstandingState(room, recipientId, recipientRole),
+      timer: buildTimerState(room),
+    };
+  }
+
+  function broadcastPoll(room: Room) {
+    for (const [id, participant] of room.participants) io.to(id).emit('poll:update', buildPollState(room, id, participant.role));
+  }
+
+  function broadcastUnderstanding(room: Room) {
+    for (const [id, participant] of room.participants) io.to(id).emit('understanding:update', buildUnderstandingState(room, id, participant.role));
+  }
+
+  function broadcastTimer(room: Room) {
+    const state = buildTimerState(room);
+    for (const id of room.participants.keys()) io.to(id).emit('timer:update', state);
+  }
+
+  function setForceMuted(room: Room, target: Participant, forceMuted: boolean) {
+    if (target.forceMuted === forceMuted) return;
+    target.forceMuted = forceMuted;
+    for (const id of room.participants.keys()) io.to(id).emit('participant:force-muted', { id: target.id, forceMuted });
   }
 
   // Admits a participant already cleared to join (role/capacity checks are the caller's
@@ -170,11 +304,15 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
     socket.data.roomId = roomId;
     void socket.join(`meeting:${roomId}`);
     const waiting = self.role === 'tutor' ? [...room.waiting.entries()].map(([id, entry]) => ({ id, name: entry.name })) : [];
-    socket.emit('room:joined', { roomId, self, peers, waiting });
+    socket.emit('room:joined', { roomId, self, peers, waiting, ...personalizedExtras(room, self.id, self.role) });
   }
 
-  // Re-describes a still-admitted participant's existing edges — used only when a client resends
-  // room:join for a room it's already in (e.g. a page that didn't realize it had already joined).
+  // Re-describes a still-admitted participant's existing edges plus current room-level state —
+  // used both when a client resends room:join for a room it's already in, and (via the same
+  // shape) to resync a participant recovering a brief disconnect, who may have missed a
+  // force-mute directive, a settings change, or a poll/understanding-check/timer update while
+  // offline (none of that state is touched by the disconnect/recovery machinery itself, so it's
+  // never lost — only its *delivery* needs this explicit resync).
   function resendJoinedState(socket: MeetingSocket, roomId: string, room: Room) {
     const self = room.participants.get(socket.id)!;
     const peers: JoinedRoom['peers'] = [];
@@ -184,7 +322,7 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
       if (other) peers.push({ peer: other, sessionId: edge.sessionId, initiator: edge.initiatorId === socket.id });
     }
     const waiting = self.role === 'tutor' ? [...room.waiting.entries()].map(([id, entry]) => ({ id, name: entry.name })) : [];
-    socket.emit('room:joined', { roomId, self, peers, waiting });
+    socket.emit('room:joined', { roomId, self, peers, waiting, ...personalizedExtras(room, self.id, self.role) });
   }
 
   // Silently drops a stale (mid-grace-period) participant so a same-role newcomer can take their
@@ -195,6 +333,9 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
     clearPending(staleId);
     chatRateLimiter.clear(staleId);
     reactionRateLimiter.clear(staleId);
+    pollVoteRateLimiter.clear(staleId);
+    understandingRateLimiter.clear(staleId);
+    if (room.activeScreenShareId === staleId) room.activeScreenShareId = null;
     for (const [sessionId, edge] of room.edges) {
       if (edge.participantIds.includes(staleId)) room.edges.delete(sessionId);
     }
@@ -207,7 +348,7 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
     if (!waitingSocket) { room.waiting.delete(waitingId); return false; } // gone for good; clean up, don't count as admitted
     room.waiting.delete(waitingId);
     const newParticipant: Participant = {
-      id: waitingId, name: entry.name, media: entry.media, screenSharing: false, handRaised: false, role: 'student',
+      id: waitingId, name: entry.name, media: entry.media, screenSharing: false, handRaised: false, role: 'student', forceMuted: false,
     };
     admitParticipant(waitingSocket, roomId, room, newParticipant);
     return true;
@@ -230,6 +371,9 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
 
     chatRateLimiter.clear(socket.id);
     reactionRateLimiter.clear(socket.id);
+    pollVoteRateLimiter.clear(socket.id);
+    understandingRateLimiter.clear(socket.id);
+    if (room.activeScreenShareId === socket.id) room.activeScreenShareId = null;
     const departing = room.participants.get(socket.id) ?? null;
     if (!room.participants.delete(socket.id)) return;
     const remainingIds = new Set<string>();
@@ -238,6 +382,19 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
       room.edges.delete(sessionId);
       remainingIds.add(otherIdOnEdge(edge, socket.id));
     }
+
+    // The tutor departing ends the class for everyone still in it — every remaining admitted
+    // participant AND every still-waiting student (who today would otherwise get no signal at
+    // all and just sit unadmitted forever) — instead of the ordinary per-edge "left" notice.
+    // This only ever runs via an explicit leave or the grace-timer expiring (never straight from
+    // the `disconnect` handler), so a brief tutor Wi-Fi blip that recovers in time never reaches
+    // here — the existing connectionStateRecovery/clearPending path resolves it first.
+    if (departing?.role === 'tutor') {
+      for (const id of [...room.participants.keys(), ...room.waiting.keys()]) io.to(id).emit('room:ended');
+      rooms.delete(roomId);
+      return;
+    }
+
     for (const id of remainingIds) io.to(id).emit('room:participant-left', { id: socket.id, name: departing?.name ?? null });
     if (room.participants.size === 0 && room.waiting.size === 0) rooms.delete(roomId);
   }
@@ -278,6 +435,16 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
         for (const edge of room.edges.values()) {
           if (edge.participantIds.includes(socket.id)) io.to(otherIdOnEdge(edge, socket.id)).emit('room:participant-reconnected', self);
         }
+        // Refresh the recovering client's own view of anything that may have changed while it
+        // was offline (a force-mute directive, a settings/poll/understanding-check/timer update,
+        // a screen-share stop directive) — resendJoinedState is safe to call on an
+        // already-admitted, already-connected client: startPeer is idempotent against an
+        // unchanged sessionId, so known peers just no-op.
+        resendJoinedState(socket, socket.data.roomId, room);
+      } else if (!room) {
+        // The room was torn down (e.g. the tutor ended the class) while this socket was offline.
+        delete socket.data.roomId;
+        socket.emit('room:ended');
       }
     }
 
@@ -304,7 +471,7 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
         return;
       }
 
-      const room = rooms.get(roomId) ?? { participants: new Map<string, Participant>(), waiting: new Map(), edges: new Map() };
+      const room = rooms.get(roomId) ?? createRoom();
 
       if (role === 'tutor') {
         const existingTutor = tutorOf(room);
@@ -315,9 +482,14 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
           }
           evictStale(room, existingTutor.id);
         }
-        const self: Participant = { id: socket.id, name, media, screenSharing: false, handRaised: false, role };
+        const self: Participant = { id: socket.id, name, media, screenSharing: false, handRaised: false, role, forceMuted: false };
         rooms.set(roomId, room);
         admitParticipant(socket, roomId, room, self);
+        return;
+      }
+
+      if (room.settings.locked) {
+        socket.emit('room:full', { message: 'This class is currently locked. Please try again shortly.' });
         return;
       }
 
@@ -336,32 +508,112 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
     });
 
     socket.on('room:admit', (payload: unknown) => {
-      const roomId = socket.data.roomId;
-      const room = roomId ? rooms.get(roomId) : undefined;
-      const self = room?.participants.get(socket.id);
-      if (!room || !roomId || !self || self.role !== 'tutor') return fail(socket, 'Only the tutor can admit students.');
+      const ctx = requireTutor(socket, 'Only the tutor can admit students.');
+      if (!ctx) return;
       if (!isRecord(payload) || typeof payload.id !== 'string') return fail(socket, 'Invalid admit request.');
       // A failed admit isn't a malformed request — it's an ordinary race (the student left, or
       // the class filled up in the meantime) — so it's reported once, via room:admit-result
       // (which the client turns into a toast), not also as a room:error banner.
-      const admitted = admitWaitingId(roomId, room, payload.id) ? 1 : 0;
-      socket.emit('room:admit-result', { admitted, remaining: room.waiting.size });
-      broadcastWaiting(room);
+      const admitted = admitWaitingId(ctx.roomId, ctx.room, payload.id) ? 1 : 0;
+      socket.emit('room:admit-result', { admitted, remaining: ctx.room.waiting.size });
+      broadcastWaiting(ctx.room);
     });
 
     socket.on('room:admit-all', () => {
-      const roomId = socket.data.roomId;
-      const room = roomId ? rooms.get(roomId) : undefined;
-      const self = room?.participants.get(socket.id);
-      if (!room || !roomId || !self || self.role !== 'tutor') return fail(socket, 'Only the tutor can admit students.');
-      const waitingIds = [...room.waiting.keys()]; // snapshot before the loop mutates room.waiting
+      const ctx = requireTutor(socket, 'Only the tutor can admit students.');
+      if (!ctx) return;
+      const waitingIds = [...ctx.room.waiting.keys()]; // snapshot before the loop mutates room.waiting
       let admitted = 0;
       for (const id of waitingIds) {
-        if (studentCount(room) >= MAX_STUDENTS) break;
-        if (admitWaitingId(roomId, room, id)) admitted += 1;
+        if (studentCount(ctx.room) >= MAX_STUDENTS) break;
+        if (admitWaitingId(ctx.roomId, ctx.room, id)) admitted += 1;
       }
-      socket.emit('room:admit-result', { admitted, remaining: room.waiting.size });
-      broadcastWaiting(room);
+      socket.emit('room:admit-result', { admitted, remaining: ctx.room.waiting.size });
+      broadcastWaiting(ctx.room);
+    });
+
+    socket.on('room:deny', (payload: unknown) => {
+      const ctx = requireTutor(socket, 'Only the tutor can manage the waiting room.');
+      if (!ctx) return;
+      if (!isRecord(payload) || typeof payload.id !== 'string') return fail(socket, 'Invalid request.');
+      const deniedSocket = io.sockets.sockets.get(payload.id);
+      if (!deniedSocket || !ctx.room.waiting.has(payload.id)) return fail(socket, 'That student is no longer waiting.');
+      deniedSocket.emit('room:denied');
+      leaveNow(deniedSocket);
+    });
+
+    socket.on('room:settings', (payload: unknown) => {
+      const ctx = requireTutor(socket, 'Only the tutor can change class settings.');
+      if (!ctx) return;
+      const patch = parseSettingsPatch(payload);
+      if (!patch) return fail(socket, 'Invalid settings update.');
+      ctx.room.settings = { ...ctx.room.settings, ...patch };
+      for (const id of ctx.room.participants.keys()) io.to(id).emit('room:settings-update', ctx.room.settings);
+    });
+
+    socket.on('room:mute-participant', (payload: unknown) => {
+      const ctx = requireTutor(socket, 'Only the tutor can mute students.');
+      if (!ctx) return;
+      if (!isRecord(payload) || typeof payload.id !== 'string') return fail(socket, 'Invalid request.');
+      const target = ctx.room.participants.get(payload.id);
+      if (!target || target.role !== 'student') return fail(socket, 'That student is not currently in the class.');
+      setForceMuted(ctx.room, target, true);
+    });
+
+    socket.on('room:mute-all', () => {
+      const ctx = requireTutor(socket, 'Only the tutor can mute students.');
+      if (!ctx) return;
+      for (const participant of ctx.room.participants.values()) {
+        if (participant.role === 'student') setForceMuted(ctx.room, participant, true);
+      }
+    });
+
+    socket.on('room:allow-unmute', (payload: unknown) => {
+      const ctx = requireTutor(socket, 'Only the tutor can allow a student to unmute.');
+      if (!ctx) return;
+      if (!isRecord(payload) || typeof payload.id !== 'string') return fail(socket, 'Invalid request.');
+      const target = ctx.room.participants.get(payload.id);
+      if (!target || target.role !== 'student') return fail(socket, 'That student is not currently in the class.');
+      setForceMuted(ctx.room, target, false);
+    });
+
+    socket.on('room:remove-participant', (payload: unknown) => {
+      const ctx = requireTutor(socket, 'Only the tutor can remove a participant.');
+      if (!ctx) return;
+      if (!isRecord(payload) || typeof payload.id !== 'string') return fail(socket, 'Invalid request.');
+      const target = ctx.room.participants.get(payload.id);
+      if (!target || target.role !== 'student') return fail(socket, 'That student is not currently in the class.');
+      const targetSocket = io.sockets.sockets.get(payload.id);
+      if (!targetSocket) return fail(socket, 'That participant already disconnected.');
+      targetSocket.emit('room:removed');
+      leaveNow(targetSocket);
+      // Safety net in case the removed client doesn't disconnect itself promptly, mirroring the
+      // bounded-fallback pattern MeetingController's own closeSocket() already uses for leave.
+      setTimeout(() => { if (targetSocket.connected) targetSocket.disconnect(true); }, 2000);
+    });
+
+    socket.on('room:stop-share', (payload: unknown) => {
+      const ctx = requireTutor(socket, 'Only the tutor can stop a screen share.');
+      if (!ctx) return;
+      if (!isRecord(payload) || typeof payload.id !== 'string') return fail(socket, 'Invalid request.');
+      if (ctx.room.activeScreenShareId !== payload.id) return fail(socket, 'That participant is not currently sharing.');
+      ctx.room.activeScreenShareId = null;
+      const target = ctx.room.participants.get(payload.id);
+      if (target) target.screenSharing = false;
+      for (const id of ctx.room.participants.keys()) io.to(id).emit('participant:screen-share', { id: payload.id, sharing: false });
+      io.to(payload.id).emit('room:stop-share');
+    });
+
+    socket.on('room:lower-hand', (payload: unknown) => {
+      const ctx = requireTutor(socket, 'Only the tutor can lower a hand.');
+      if (!ctx) return;
+      if (!isRecord(payload) || typeof payload.id !== 'string') return fail(socket, 'Invalid request.');
+      const target = ctx.room.participants.get(payload.id);
+      if (!target) return fail(socket, 'That participant is not currently in the class.');
+      target.handRaised = false;
+      // Includes the target (unlike the self-report participant:hand broadcast below) — they
+      // haven't applied this optimistically themselves, so their own client needs telling too.
+      for (const id of ctx.room.participants.keys()) io.to(id).emit('participant:hand', { id: payload.id, raised: false });
     });
 
     socket.on('participant:media', (payload: unknown) => {
@@ -380,6 +632,17 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
       if (!room || !self || !isRecord(payload) || typeof payload.sharing !== 'boolean') {
         return fail(socket, 'Invalid screen-share update.');
       }
+      if (payload.sharing) {
+        if (room.activeScreenShareId && room.activeScreenShareId !== socket.id) {
+          return fail(socket, 'Someone else is already sharing their screen.');
+        }
+        if (self.role === 'student' && !room.settings.studentsCanShareScreen) {
+          return fail(socket, 'The tutor has turned off screen sharing for students.');
+        }
+        room.activeScreenShareId = socket.id;
+      } else if (room.activeScreenShareId === socket.id) {
+        room.activeScreenShareId = null;
+      }
       self.screenSharing = payload.sharing;
       for (const id of room.participants.keys()) {
         if (id !== socket.id) io.to(id).emit('participant:screen-share', { id: socket.id, sharing: payload.sharing });
@@ -389,6 +652,7 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
       const room = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
       const self = room?.participants.get(socket.id);
       if (!room || !self) return fail(socket, 'You are not currently in a meeting.');
+      if (self.role === 'student' && !room.settings.studentsCanChat) return fail(socket, 'The tutor has turned off chat for students.');
       if (!isRecord(payload) || typeof payload.text !== 'string' || payload.text.length > MAX_CHAT_LENGTH * 4) {
         return fail(socket, 'Invalid chat message.');
       }
@@ -398,6 +662,19 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
       // Plain text only: no markdown/HTML is ever interpreted server-side or client-side.
       const message: ChatMessage = { id: randomUUID(), senderId: socket.id, name: self.name, text, timestamp: Date.now() };
       for (const id of room.participants.keys()) io.to(id).emit('chat:message', message);
+    });
+    socket.on('chat:delete', (payload: unknown) => {
+      const ctx = requireTutor(socket, 'Only the tutor can delete a message.');
+      if (!ctx) return;
+      if (!isRecord(payload) || typeof payload.id !== 'string') return fail(socket, 'Invalid request.');
+      // Pure relay, matching how chat itself is never stored server-side — each client filters
+      // its own locally-held message list by id.
+      for (const id of ctx.room.participants.keys()) io.to(id).emit('chat:message-deleted', { id: payload.id });
+    });
+    socket.on('chat:clear', () => {
+      const ctx = requireTutor(socket, 'Only the tutor can clear the chat.');
+      if (!ctx) return;
+      for (const id of ctx.room.participants.keys()) io.to(id).emit('chat:cleared');
     });
     socket.on('participant:hand', (payload: unknown) => {
       const room = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
@@ -422,6 +699,106 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
         if (id !== socket.id) io.to(id).emit('participant:reaction', { id: socket.id, emoji: payload.emoji });
       }
     });
+
+    socket.on('poll:create', (payload: unknown) => {
+      const ctx = requireTutor(socket, 'Only the tutor can start a poll.');
+      if (!ctx) return;
+      const parsed = parsePollCreate(payload);
+      if (!parsed) return fail(socket, 'Invalid poll.');
+      ctx.room.poll = {
+        id: randomUUID(), question: parsed.question, options: parsed.options.map((text) => ({ id: randomUUID(), text })),
+        anonymous: parsed.anonymous, resultsVisible: parsed.resultsVisible, open: true, votes: new Map(),
+      };
+      broadcastPoll(ctx.room);
+    });
+    socket.on('poll:vote', (payload: unknown) => {
+      const room = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
+      const self = room?.participants.get(socket.id);
+      if (!room || !self) return fail(socket, 'You are not currently in a class.');
+      if (!room.poll || !room.poll.open) return fail(socket, 'There is no open poll right now.');
+      if (!isRecord(payload) || typeof payload.optionId !== 'string' || !room.poll.options.some((option) => option.id === payload.optionId)) {
+        return fail(socket, 'Invalid vote.');
+      }
+      if (!pollVoteRateLimiter.allow(socket.id)) return fail(socket, 'You are voting too quickly. Please slow down.');
+      room.poll.votes.set(socket.id, payload.optionId);
+      broadcastPoll(room);
+    });
+    socket.on('poll:close', () => {
+      const ctx = requireTutor(socket, 'Only the tutor can close the poll.');
+      if (!ctx) return;
+      if (!ctx.room.poll) return fail(socket, 'There is no poll to close.');
+      ctx.room.poll.open = false;
+      broadcastPoll(ctx.room);
+    });
+    socket.on('poll:clear', () => {
+      const ctx = requireTutor(socket, 'Only the tutor can clear the poll.');
+      if (!ctx) return;
+      ctx.room.poll = null;
+      broadcastPoll(ctx.room);
+    });
+
+    socket.on('understanding:start', () => {
+      const ctx = requireTutor(socket, 'Only the tutor can start an understanding check.');
+      if (!ctx) return;
+      ctx.room.understandingCheck = { id: randomUUID(), open: true, responses: new Map() };
+      broadcastUnderstanding(ctx.room);
+    });
+    socket.on('understanding:respond', (payload: unknown) => {
+      const room = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
+      const self = room?.participants.get(socket.id);
+      if (!room || !self) return fail(socket, 'You are not currently in a class.');
+      if (!room.understandingCheck || !room.understandingCheck.open) return fail(socket, 'There is no open understanding check right now.');
+      if (!isRecord(payload) || (payload.status !== 'understood' && payload.status !== 'confused' && payload.status !== 'lost')) {
+        return fail(socket, 'Invalid response.');
+      }
+      if (!understandingRateLimiter.allow(socket.id)) return fail(socket, 'Please slow down.');
+      room.understandingCheck.responses.set(socket.id, payload.status);
+      broadcastUnderstanding(room);
+    });
+    socket.on('understanding:end', () => {
+      const ctx = requireTutor(socket, 'Only the tutor can end the understanding check.');
+      if (!ctx) return;
+      ctx.room.understandingCheck = null;
+      broadcastUnderstanding(ctx.room);
+    });
+
+    socket.on('timer:start', (payload: unknown) => {
+      const ctx = requireTutor(socket, 'Only the tutor can start the timer.');
+      if (!ctx) return;
+      if (!isRecord(payload) || (payload.mode !== 'stopwatch' && payload.mode !== 'countdown')) return fail(socket, 'Invalid timer request.');
+      let durationMs: number | null = null;
+      if (payload.mode === 'countdown') {
+        if (typeof payload.durationMs !== 'number' || !Number.isFinite(payload.durationMs)
+          || payload.durationMs <= 0 || payload.durationMs > MAX_TIMER_DURATION_MS) {
+          return fail(socket, 'Invalid timer duration.');
+        }
+        durationMs = payload.durationMs;
+      }
+      ctx.room.timer = { mode: payload.mode, anchorAt: Date.now(), durationMs, paused: false, elapsedAtPauseMs: null };
+      broadcastTimer(ctx.room);
+    });
+    socket.on('timer:pause', () => {
+      const ctx = requireTutor(socket, 'Only the tutor can pause the timer.');
+      if (!ctx || !ctx.room.timer || ctx.room.timer.paused) return;
+      ctx.room.timer.elapsedAtPauseMs = Date.now() - ctx.room.timer.anchorAt;
+      ctx.room.timer.paused = true;
+      broadcastTimer(ctx.room);
+    });
+    socket.on('timer:resume', () => {
+      const ctx = requireTutor(socket, 'Only the tutor can resume the timer.');
+      if (!ctx || !ctx.room.timer || !ctx.room.timer.paused) return;
+      ctx.room.timer.anchorAt = Date.now() - (ctx.room.timer.elapsedAtPauseMs ?? 0);
+      ctx.room.timer.paused = false;
+      ctx.room.timer.elapsedAtPauseMs = null;
+      broadcastTimer(ctx.room);
+    });
+    socket.on('timer:stop', () => {
+      const ctx = requireTutor(socket, 'Only the tutor can stop the timer.');
+      if (!ctx) return;
+      ctx.room.timer = null;
+      broadcastTimer(ctx.room);
+    });
+
     socket.on('webrtc:offer', (payload) => relayDescription(socket, 'offer', payload));
     socket.on('webrtc:answer', (payload) => relayDescription(socket, 'answer', payload));
     socket.on('webrtc:ice-candidate', (payload: unknown) => {

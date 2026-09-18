@@ -3,7 +3,8 @@ import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { io, type Socket } from 'socket.io-client';
 import type {
-  ChatMessage, ClientToServerEvents, JoinedRoom, Participant, ParticipantRole, ServerToClientEvents, WaitingParticipant,
+  ChatMessage, ClientToServerEvents, JoinedRoom, Participant, ParticipantRole, PollState, RoomTimerState,
+  ServerToClientEvents, UnderstandingCheckState, WaitingParticipant,
 } from '../shared/protocol';
 import { createSignallingServer } from './signalling';
 
@@ -11,6 +12,7 @@ const DISCONNECT_GRACE_MS = 300;
 
 type Client = Socket<ServerToClientEvents, ClientToServerEvents>;
 const media = { audio: true, video: true };
+const DEFAULT_SETTINGS = { locked: false, studentsCanShareScreen: true, studentsCanChat: true };
 
 describe('signalling through real Socket.IO clients', () => {
   let server: ReturnType<typeof createSignallingServer>;
@@ -87,8 +89,8 @@ describe('signalling through real Socket.IO clients', () => {
     requestJoin(tutor, '  Alice  ', 'tutor');
     await expect.poll(() => tutorEvents.length, { timeout: 500 }).toBe(1);
     expect(tutorEvents[0]).toEqual({
-      roomId: 'room-one', self: { id: tutor.id, name: 'Alice', media, screenSharing: false, handRaised: false, role: 'tutor' },
-      peers: [], waiting: [],
+      roomId: 'room-one', self: { id: tutor.id, name: 'Alice', media, screenSharing: false, handRaised: false, role: 'tutor', forceMuted: false },
+      peers: [], waiting: [], settings: DEFAULT_SETTINGS, poll: null, understandingCheck: null, timer: null,
     });
 
     const waitingUpdate = new Promise<{ waiting: WaitingParticipant[] }>((resolve) => tutor.once('room:waiting-update', resolve));
@@ -101,7 +103,7 @@ describe('signalling through real Socket.IO clients', () => {
       (resolve) => tutor.once('room:participant-joined', resolve),
     );
     const admitted = await admit(tutor, student);
-    expect(admitted.self).toEqual({ id: student.id, name: 'Bob', media, screenSharing: false, handRaised: false, role: 'student' });
+    expect(admitted.self).toEqual({ id: student.id, name: 'Bob', media, screenSharing: false, handRaised: false, role: 'student', forceMuted: false });
     expect(admitted.peers).toEqual([{ peer: tutorEvents[0].self, sessionId: admitted.peers[0].sessionId, initiator: false }]);
     expect(admitted.peers[0].sessionId).toMatch(/^[0-9a-f-]{36}$/);
     expect(await peerAnnounced).toEqual({ peer: admitted.self, sessionId: admitted.peers[0].sessionId, initiator: true });
@@ -187,7 +189,9 @@ describe('signalling through real Socket.IO clients', () => {
     tutor.emit('webrtc:offer', { sessionId: original.peers[0]?.sessionId ?? 'stale', description: { type: 'offer', sdp: 'v=0\r\n' } });
     await staleError;
 
-    const remaining = new Promise<void>((resolve) => third.once('room:participant-left', () => resolve()));
+    // The tutor leaving now ends the class for everyone still in it (room:ended), not the
+    // per-participant room:participant-left notice — see the tutor-departure cascade test below.
+    const remaining = new Promise<void>((resolve) => third.once('room:ended', () => resolve()));
     tutor.emit('room:leave', () => {});
     await remaining;
     third.emit('room:leave', () => {});
@@ -506,5 +510,397 @@ describe('signalling through real Socket.IO clients', () => {
     expect((await connect('https://my-laptop.tailnet-name.ts.net')).connected).toBe(true);
     await expect(connect('http://deutsche-handed-videos-his.trycloudflare.com')).rejects.toBeDefined();
     await expect(connect('https://evil-trycloudflare.com')).rejects.toBeDefined();
+  });
+
+  it('locks and unlocks a room; rejects a new student join while locked without affecting existing participants', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const student = await connect();
+    await admit(tutor, student);
+
+    const settingsUpdate = new Promise<typeof DEFAULT_SETTINGS>((resolve) => tutor.once('room:settings-update', resolve));
+    tutor.emit('room:settings', { locked: true });
+    expect(await settingsUpdate).toEqual({ ...DEFAULT_SETTINGS, locked: true });
+
+    const outsider = await connect();
+    const full = new Promise<{ message: string }>((resolve) => outsider.once('room:full', resolve));
+    requestJoin(outsider, 'Mallory', 'student');
+    expect(await full).toEqual({ message: 'This class is currently locked. Please try again shortly.' });
+    expect(tutor.connected && student.connected).toBe(true);
+
+    const unlocked = new Promise<typeof DEFAULT_SETTINGS>((resolve) => tutor.once('room:settings-update', resolve));
+    tutor.emit('room:settings', { locked: false });
+    expect(await unlocked).toEqual(DEFAULT_SETTINGS);
+    await joinStudent(outsider, 'Mallory again');
+  });
+
+  it('denies a waiting student, who is notified and removed from the queue', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const student = await connect();
+    const joinWaitingUpdate = new Promise((resolve) => tutor.once('room:waiting-update', resolve));
+    await joinStudent(student, 'Bob');
+    await joinWaitingUpdate; // drain the join-triggered update so it can't be mistaken for the deny's own
+
+    const denied = new Promise<void>((resolve) => student.once('room:denied', () => resolve()));
+    const waitingUpdate = new Promise<{ waiting: unknown[] }>((resolve) => tutor.once('room:waiting-update', resolve));
+    tutor.emit('room:deny', { id: student.id! });
+    await denied;
+    expect(await waitingUpdate).toEqual({ waiting: [] });
+    expect(server.rooms.get('room-one')?.waiting.size).toBe(0);
+  });
+
+  it('force-mutes a student and lets the tutor allow them to unmute again', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const student = await connect();
+    await admit(tutor, student);
+
+    const mutedOnTutor = new Promise<{ id: string; forceMuted: boolean }>((resolve) => tutor.once('participant:force-muted', resolve));
+    const mutedOnStudent = new Promise<{ id: string; forceMuted: boolean }>((resolve) => student.once('participant:force-muted', resolve));
+    tutor.emit('room:mute-participant', { id: student.id! });
+    expect(await mutedOnTutor).toEqual({ id: student.id, forceMuted: true });
+    expect(await mutedOnStudent).toEqual({ id: student.id, forceMuted: true });
+
+    const allowed = new Promise<{ id: string; forceMuted: boolean }>((resolve) => student.once('participant:force-muted', resolve));
+    tutor.emit('room:allow-unmute', { id: student.id! });
+    expect(await allowed).toEqual({ id: student.id, forceMuted: false });
+  });
+
+  it('mutes all current students at once, never the tutor', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const studentA = await connect();
+    await admit(tutor, studentA, 'Bob');
+    const studentB = await connect();
+    await admit(tutor, studentB, 'Cate');
+
+    // Everyone (including studentB) receives BOTH broadcasts — one per muted student — so
+    // studentB must be filtered by id rather than matched via a single `.once`.
+    const onB: { id: string; forceMuted: boolean }[] = [];
+    studentB.on('participant:force-muted', (payload: { id: string; forceMuted: boolean }) => onB.push(payload));
+    const mutedA = new Promise<{ id: string; forceMuted: boolean }>((resolve) => studentA.once('participant:force-muted', resolve));
+    tutor.emit('room:mute-all');
+    expect(await mutedA).toEqual({ id: studentA.id, forceMuted: true });
+    await expect.poll(() => onB.some((event) => event.id === studentB.id), { timeout: 500 }).toBe(true);
+    expect(onB.find((event) => event.id === studentB.id)).toEqual({ id: studentB.id, forceMuted: true });
+    expect(server.rooms.get('room-one')?.participants.get(tutor.id!)?.forceMuted).toBe(false);
+  });
+
+  it('rejects moderation and class-settings actions from a non-tutor', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const student = await connect();
+    await admit(tutor, student);
+
+    const actions: Array<() => void> = [
+      () => student.emit('room:settings', { locked: true }),
+      () => student.emit('room:mute-participant', { id: tutor.id! }),
+      () => student.emit('room:mute-all'),
+      () => student.emit('room:allow-unmute', { id: tutor.id! }),
+      () => student.emit('room:remove-participant', { id: tutor.id! }),
+      () => student.emit('room:stop-share', { id: tutor.id! }),
+      () => student.emit('room:lower-hand', { id: tutor.id! }),
+      () => student.emit('room:admit', { id: 'whoever' }),
+      () => student.emit('room:admit-all'),
+      () => student.emit('room:deny', { id: 'whoever' }),
+      () => student.emit('chat:delete', { id: 'whatever' }),
+      () => student.emit('chat:clear'),
+      () => student.emit('poll:create', { question: 'q', options: ['a', 'b'], anonymous: false, resultsVisible: 'always' }),
+      () => student.emit('poll:close'),
+      () => student.emit('poll:clear'),
+      () => student.emit('understanding:start'),
+      () => student.emit('understanding:end'),
+      () => student.emit('timer:start', { mode: 'stopwatch', durationMs: null }),
+      () => student.emit('timer:pause'),
+      () => student.emit('timer:resume'),
+      () => student.emit('timer:stop'),
+    ];
+    for (const act of actions) {
+      const error = new Promise((resolve) => student.once('room:error', resolve));
+      act();
+      expect(await error).toHaveProperty('message');
+    }
+  });
+
+  it('arbitrates screen-share ownership: rejects a second concurrent sharer, and the tutor can force-stop the active share', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const studentA = await connect();
+    await admit(tutor, studentA, 'Bob');
+    const studentB = await connect();
+    await admit(tutor, studentB, 'Cate');
+
+    const sharingOnTutor = new Promise((resolve) => tutor.once('participant:screen-share', resolve));
+    studentA.emit('participant:screen-share', { sharing: true });
+    expect(await sharingOnTutor).toEqual({ id: studentA.id, sharing: true });
+
+    const rejected = new Promise((resolve) => studentB.once('room:error', resolve));
+    studentB.emit('participant:screen-share', { sharing: true });
+    expect(await rejected).toEqual({ message: 'Someone else is already sharing their screen.' });
+
+    const stoppedOnA = new Promise<void>((resolve) => studentA.once('room:stop-share', () => resolve()));
+    const stoppedBroadcast = new Promise((resolve) => tutor.once('participant:screen-share', resolve));
+    tutor.emit('room:stop-share', { id: studentA.id! });
+    await stoppedOnA;
+    expect(await stoppedBroadcast).toEqual({ id: studentA.id, sharing: false });
+
+    const sharingOnTutor2 = new Promise((resolve) => tutor.once('participant:screen-share', resolve));
+    studentB.emit('participant:screen-share', { sharing: true });
+    expect(await sharingOnTutor2).toEqual({ id: studentB.id, sharing: true });
+  });
+
+  it('clears screen-share ownership when the sharer leaves, so someone else can share afterwards', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const studentA = await connect();
+    await admit(tutor, studentA, 'Bob');
+    const studentB = await connect();
+    await admit(tutor, studentB, 'Cate');
+
+    await new Promise<void>((resolve) => { tutor.once('participant:screen-share', () => resolve()); studentA.emit('participant:screen-share', { sharing: true }); });
+    expect(server.rooms.get('room-one')?.activeScreenShareId).toBe(studentA.id);
+
+    studentA.emit('room:leave', () => {});
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(server.rooms.get('room-one')?.activeScreenShareId).toBeNull();
+
+    const sharingOnTutor = new Promise((resolve) => tutor.once('participant:screen-share', resolve));
+    studentB.emit('participant:screen-share', { sharing: true });
+    expect(await sharingOnTutor).toEqual({ id: studentB.id, sharing: true });
+  });
+
+  it('gates student screen-share and chat behind room settings, without restricting the tutor', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const student = await connect();
+    await admit(tutor, student);
+
+    const settingsUpdate = new Promise((resolve) => student.once('room:settings-update', resolve));
+    tutor.emit('room:settings', { studentsCanShareScreen: false, studentsCanChat: false });
+    await settingsUpdate;
+
+    const shareRejected = new Promise((resolve) => student.once('room:error', resolve));
+    student.emit('participant:screen-share', { sharing: true });
+    expect(await shareRejected).toEqual({ message: 'The tutor has turned off screen sharing for students.' });
+
+    const chatRejected = new Promise((resolve) => student.once('room:error', resolve));
+    student.emit('chat:message', { text: 'hello' });
+    expect(await chatRejected).toEqual({ message: 'The tutor has turned off chat for students.' });
+
+    const tutorShareOk = new Promise((resolve) => student.once('participant:screen-share', resolve));
+    tutor.emit('participant:screen-share', { sharing: true });
+    expect(await tutorShareOk).toEqual({ id: tutor.id, sharing: true });
+    const tutorChatOk = new Promise((resolve) => student.once('chat:message', resolve));
+    tutor.emit('chat:message', { text: 'hello from tutor' });
+    await tutorChatOk;
+  });
+
+  it('removes a participant immediately, bypassing the disconnect grace period', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const student = await connect();
+    await admit(tutor, student);
+    const studentId = student.id;
+
+    const removed = new Promise<void>((resolve) => student.once('room:removed', () => resolve()));
+    const left = new Promise<{ id: string; name: string | null }>((resolve) => tutor.once('room:participant-left', resolve));
+    tutor.emit('room:remove-participant', { id: studentId! });
+    await removed;
+    expect(await left).toEqual({ id: studentId, name: 'Bob' });
+    expect(server.rooms.get('room-one')?.participants.has(studentId!)).toBe(false);
+  });
+
+  it('cascades a tutor\'s departure into room:ended for every remaining participant and every still-waiting student', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const student = await connect();
+    await admit(tutor, student);
+    const waitingStudent = await connect();
+    await joinStudent(waitingStudent, 'Cate');
+
+    const endedForStudent = new Promise<void>((resolve) => student.once('room:ended', () => resolve()));
+    const endedForWaiting = new Promise<void>((resolve) => waitingStudent.once('room:ended', () => resolve()));
+    tutor.emit('room:leave', () => {});
+    await endedForStudent;
+    await endedForWaiting;
+    expect(server.rooms.size).toBe(0);
+  });
+
+  it('a lone tutor leaving with nobody else behaves exactly as before (no notifications, room just deleted)', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const acked = new Promise<void>((resolve) => tutor.emit('room:leave', resolve));
+    await acked;
+    expect(server.rooms.size).toBe(0);
+  });
+
+  it('resyncs force-muted state and settings to a participant recovering a brief disconnect', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const student = await connectRecoverable();
+    await admit(tutor, student);
+    const studentId = student.id!; // captured before disconnect clears it client-side
+
+    const resynced = new Promise<JoinedRoom>((resolve) => student.once('room:joined', resolve));
+    // Wait for the server's own disconnect signal (not a fixed sleep) before mutating state, so
+    // the mutation deterministically lands in the offline gap regardless of how fast the client's
+    // own reconnection attempt happens to race it.
+    const reconnecting = new Promise<void>((resolve) => tutor.once('room:participant-reconnecting', () => resolve()));
+    student.io.engine.close();
+    await reconnecting;
+    tutor.emit('room:mute-participant', { id: studentId });
+    tutor.emit('room:settings', { studentsCanChat: false });
+
+    await expect.poll(() => student.connected, { timeout: 2000 }).toBe(true);
+    expect(student.recovered).toBe(true);
+    const payload = await resynced;
+    expect(payload.self.forceMuted).toBe(true);
+    expect(payload.settings.studentsCanChat).toBe(false);
+  });
+
+  it('runs a poll end to end: creating, voting (including changing a vote), and closing, honouring visibility', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const student = await connect();
+    await admit(tutor, student);
+
+    const pollOnStudent = new Promise<PollState | null>((resolve) => student.once('poll:update', resolve));
+    tutor.emit('poll:create', { question: 'Ready for a quiz?', options: ['Yes', 'No'], anonymous: false, resultsVisible: 'onClose' });
+    const initial = await pollOnStudent;
+    expect(initial?.question).toBe('Ready for a quiz?');
+    expect(initial?.options).toHaveLength(2);
+    expect(initial?.results).toBeNull(); // hidden from the student until close, per resultsVisible:'onClose'
+    expect(initial?.myVote).toBeNull();
+
+    const yesId = initial!.options.find((option) => option.text === 'Yes')!.id;
+    const noId = initial!.options.find((option) => option.text === 'No')!.id;
+
+    const afterVote = new Promise<PollState | null>((resolve) => student.once('poll:update', resolve));
+    student.emit('poll:vote', { optionId: yesId });
+    expect((await afterVote)?.myVote).toBe(yesId);
+
+    // Changing a vote before close overwrites, doesn't add a second vote.
+    const afterRevote = new Promise<PollState | null>((resolve) => student.once('poll:update', resolve));
+    student.emit('poll:vote', { optionId: noId });
+    const revoted = await afterRevote;
+    expect(revoted?.myVote).toBe(noId);
+    expect(revoted?.totalVotes).toBe(1);
+
+    const closedOnStudent = new Promise<PollState | null>((resolve) => student.once('poll:update', resolve));
+    tutor.emit('poll:close');
+    const closed = await closedOnStudent;
+    expect(closed?.open).toBe(false);
+    expect(closed?.results).toEqual({ [yesId]: 0, [noId]: 1 }); // now visible post-close
+  });
+
+  it('keeps anonymous poll voters hidden even from the tutor', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const student = await connect();
+    await admit(tutor, student);
+
+    const onStudent = new Promise<PollState | null>((resolve) => student.once('poll:update', resolve));
+    tutor.emit('poll:create', { question: 'Anonymous?', options: ['A', 'B'], anonymous: true, resultsVisible: 'always' });
+    const initial = await onStudent;
+    const optionId = initial!.options[0].id;
+
+    const onTutor = new Promise<PollState | null>((resolve) => tutor.once('poll:update', resolve));
+    student.emit('poll:vote', { optionId });
+    const tutorView = await onTutor;
+    expect(tutorView?.voters).toBeUndefined();
+    expect(tutorView?.results?.[optionId]).toBe(1);
+  });
+
+  it('runs an understanding check: the tutor sees live per-student status and an aggregate, each student sees only their own', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const studentA = await connect();
+    await admit(tutor, studentA, 'Bob');
+    const studentB = await connect();
+    await admit(tutor, studentB, 'Cate');
+
+    const onA = new Promise<UnderstandingCheckState | null>((resolve) => studentA.once('understanding:update', resolve));
+    const onBStart = new Promise<UnderstandingCheckState | null>((resolve) => studentB.once('understanding:update', resolve));
+    tutor.emit('understanding:start');
+    const aInitial = await onA;
+    expect(aInitial?.myStatus).toBeNull();
+    expect(aInitial?.responses).toBeUndefined();
+    expect(aInitial?.summary).toBeUndefined();
+    await onBStart;
+
+    const onTutor = new Promise<UnderstandingCheckState | null>((resolve) => tutor.once('understanding:update', resolve));
+    const onB = new Promise<UnderstandingCheckState | null>((resolve) => studentB.once('understanding:update', resolve));
+    studentA.emit('understanding:respond', { status: 'confused' });
+    const tutorView = await onTutor;
+    expect(tutorView?.responses).toEqual([
+      { id: studentA.id, name: 'Bob', status: 'confused' },
+      { id: studentB.id, name: 'Cate', status: null },
+    ]);
+    expect(tutorView?.summary).toEqual({ understood: 0, confused: 1, lost: 0 });
+
+    const bView = await onB;
+    expect(bView?.myStatus).toBeNull(); // B never responded, and never sees A's response
+    expect(bView?.responses).toBeUndefined();
+  });
+
+  it('starts, pauses, resumes, and stops a class timer via state-transition broadcasts, not a per-second tick', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const student = await connect();
+    await admit(tutor, student);
+
+    const started = new Promise<RoomTimerState | null>((resolve) => student.once('timer:update', resolve));
+    tutor.emit('timer:start', { mode: 'countdown', durationMs: 60_000 });
+    const state = await started;
+    expect(state).toMatchObject({ mode: 'countdown', durationMs: 60_000, paused: false });
+
+    const ticks: unknown[] = [];
+    student.onAny((event) => { if (event === 'timer:update') ticks.push(event); });
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    expect(ticks).toEqual([]); // no per-second broadcast — only state transitions
+
+    const paused = new Promise<RoomTimerState | null>((resolve) => student.once('timer:update', resolve));
+    tutor.emit('timer:pause');
+    expect((await paused)?.paused).toBe(true);
+
+    const resumed = new Promise<RoomTimerState | null>((resolve) => student.once('timer:update', resolve));
+    tutor.emit('timer:resume');
+    expect((await resumed)?.paused).toBe(false);
+
+    const stopped = new Promise<RoomTimerState | null>((resolve) => student.once('timer:update', resolve));
+    tutor.emit('timer:stop');
+    expect(await stopped).toBeNull();
+  });
+
+  it('deletes a chat message and clears the chat via relay only, with no server-side storage', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const student = await connect();
+    await admit(tutor, student);
+
+    const deleted = new Promise<{ id: string }>((resolve) => student.once('chat:message-deleted', resolve));
+    tutor.emit('chat:delete', { id: 'some-message-id' });
+    expect(await deleted).toEqual({ id: 'some-message-id' });
+
+    const cleared = new Promise<void>((resolve) => student.once('chat:cleared', () => resolve()));
+    tutor.emit('chat:clear');
+    await cleared;
+  });
+
+  it("lowers a student's raised hand, notifying the student too", async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const student = await connect();
+    await admit(tutor, student);
+
+    await new Promise<void>((resolve) => { tutor.once('participant:hand', () => resolve()); student.emit('participant:hand', { raised: true }); });
+    expect(server.rooms.get('room-one')?.participants.get(student.id!)?.handRaised).toBe(true);
+
+    const loweredOnStudent = new Promise((resolve) => student.once('participant:hand', resolve));
+    const loweredOnTutor = new Promise((resolve) => tutor.once('participant:hand', resolve));
+    tutor.emit('room:lower-hand', { id: student.id! });
+    expect(await loweredOnStudent).toEqual({ id: student.id, raised: false });
+    expect(await loweredOnTutor).toEqual({ id: student.id, raised: false });
   });
 });
