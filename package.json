@@ -17,6 +17,7 @@
     "test:browser": "playwright test"
   },
   "dependencies": {
+    "@excalidraw/excalidraw": "^0.18.1",
     "express": "^5.2.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

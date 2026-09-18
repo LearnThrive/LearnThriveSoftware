@@ -4,13 +4,15 @@ import express from 'express';
 import { Server, type Socket } from 'socket.io';
 import { isDevTunnelHost } from '../shared/allowedHosts';
 import {
-  MAX_CHAT_LENGTH, MAX_NAME_LENGTH, MAX_POLL_OPTION_LENGTH, MAX_POLL_OPTIONS, MAX_POLL_QUESTION_LENGTH,
-  MAX_STUDENTS, MIN_POLL_OPTIONS, REACTION_EMOJIS, ROOM_PATTERN, WAITING_ROOM_CAP,
+  MAX_BOARD_ELEMENT_BYTES, MAX_BOARD_ELEMENTS_PER_PAGE, MAX_BOARD_IMPORT_BYTES, MAX_BOARD_PAGE_NAME_LENGTH,
+  MAX_BOARD_PAGES, MAX_BOARD_UPDATE_BATCH, MAX_CHAT_LENGTH, MAX_NAME_LENGTH, MAX_POLL_OPTION_LENGTH,
+  MAX_POLL_OPTIONS, MAX_POLL_QUESTION_LENGTH, MAX_STUDENTS, MIN_POLL_OPTIONS, REACTION_EMOJIS, ROOM_PATTERN,
+  WAITING_ROOM_CAP,
 } from '../shared/protocol';
 import type {
-  ChatMessage, ClientToServerEvents, JoinedRoom, MediaState, Participant, ParticipantRole, PollState,
-  PollVisibility, RoomSettings, RoomTimerState, ServerToClientEvents, SignalCandidate, SignalDescription,
-  TimerMode, UnderstandingCheckState, UnderstandingStatus,
+  BoardBackground, BoardElement, BoardPage, BoardState, ChatMessage, ClientToServerEvents, JoinedRoom,
+  MediaState, Participant, ParticipantRole, PollState, PollVisibility, RoomSettings, RoomTimerState,
+  ServerToClientEvents, SignalCandidate, SignalDescription, TimerMode, UnderstandingCheckState, UnderstandingStatus,
 } from '../shared/protocol';
 
 const CHAT_RATE_WINDOW_MS = 4000;
@@ -21,7 +23,12 @@ const POLL_VOTE_RATE_WINDOW_MS = 4000;
 const POLL_VOTE_RATE_MAX = 10;
 const UNDERSTANDING_RATE_WINDOW_MS = 4000;
 const UNDERSTANDING_RATE_MAX = 10;
+// Cursor and laser-pointer broadcasts are already throttled client-side; this is just a
+// server-side backstop against a misbehaving client, generous enough to never bite a real one.
+const BOARD_POINTER_RATE_WINDOW_MS = 1000;
+const BOARD_POINTER_RATE_MAX = 30;
 const MAX_TIMER_DURATION_MS = 4 * 60 * 60 * 1000;
+const BACKGROUNDS: readonly BoardBackground[] = ['blank', 'lined', 'grid', 'dotted', 'coordinate'];
 
 function createRateLimiter(windowMs: number, max: number) {
   const hits = new Map<string, number[]>();
@@ -51,6 +58,10 @@ interface RoomPoll {
 }
 interface RoomUnderstandingCheck { id: string; open: boolean; responses: Map<string, UnderstandingStatus> }
 interface RoomTimer { mode: TimerMode; anchorAt: number; durationMs: number | null; paused: boolean; elapsedAtPauseMs: number | null }
+// Elements are keyed by id for O(1) reconciliation lookups. The server is schema-blind to
+// everything on a BoardElement except id/version/versionNonce/isDeleted — see shared/protocol.ts.
+interface RoomBoardPage { id: string; name: string; background: BoardBackground; elements: Map<string, BoardElement> }
+interface RoomBoard { pages: RoomBoardPage[]; activePageId: string; studentsCanDraw: boolean }
 interface Room {
   participants: Map<string, Participant>;
   waiting: Map<string, WaitingEntry>;
@@ -60,15 +71,21 @@ interface Room {
   poll: RoomPoll | null;
   understandingCheck: RoomUnderstandingCheck | null;
   timer: RoomTimer | null;
+  board: RoomBoard;
 }
 interface SocketData { roomId?: string }
 type MeetingSocket = Socket<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>;
 
 function createRoom(): Room {
+  const firstPageId = randomUUID();
   return {
     participants: new Map(), waiting: new Map(), edges: new Map(),
     settings: { locked: false, studentsCanShareScreen: true, studentsCanChat: true },
     activeScreenShareId: null, poll: null, understandingCheck: null, timer: null,
+    board: {
+      pages: [{ id: firstPageId, name: 'Board 1', background: 'blank', elements: new Map() }],
+      activePageId: firstPageId, studentsCanDraw: true,
+    },
   };
 }
 
@@ -115,6 +132,57 @@ function parseSettingsPatch(value: unknown): Partial<RoomSettings> | null {
   return patch;
 }
 
+function jsonByteLength(value: unknown): number {
+  try { return Buffer.byteLength(JSON.stringify(value)); } catch { return Infinity; }
+}
+
+function parseBoardElement(value: unknown): BoardElement | null {
+  if (!isRecord(value) || typeof value.id !== 'string' || !value.id || value.id.length > 256) return null;
+  if (typeof value.version !== 'number' || !Number.isFinite(value.version)) return null;
+  if (typeof value.versionNonce !== 'number' || !Number.isFinite(value.versionNonce)) return null;
+  if (value.isDeleted !== undefined && typeof value.isDeleted !== 'boolean') return null;
+  if (jsonByteLength(value) > MAX_BOARD_ELEMENT_BYTES) return null;
+  return value as BoardElement;
+}
+
+function parseBoardUpdateBatch(value: unknown): { pageId: string; elements: BoardElement[] } | null {
+  if (!isRecord(value) || typeof value.pageId !== 'string') return null;
+  if (!Array.isArray(value.elements) || value.elements.length === 0 || value.elements.length > MAX_BOARD_UPDATE_BATCH) return null;
+  const elements: BoardElement[] = [];
+  for (const raw of value.elements) {
+    const element = parseBoardElement(raw);
+    if (!element) return null;
+    elements.push(element);
+  }
+  return { pageId: value.pageId, elements };
+}
+
+function parseBoardImport(value: unknown): { pageId: string; elements: BoardElement[] } | null {
+  if (jsonByteLength(value) > MAX_BOARD_IMPORT_BYTES) return null;
+  if (!isRecord(value) || typeof value.pageId !== 'string' || !Array.isArray(value.elements)) return null;
+  if (value.elements.length > MAX_BOARD_ELEMENTS_PER_PAGE) return null;
+  const elements: BoardElement[] = [];
+  for (const raw of value.elements) {
+    const element = parseBoardElement(raw);
+    if (!element) return null;
+    elements.push(element);
+  }
+  return { pageId: value.pageId, elements };
+}
+
+function parseBackground(value: unknown): BoardBackground | null {
+  return typeof value === 'string' && (BACKGROUNDS as readonly string[]).includes(value) ? (value as BoardBackground) : null;
+}
+
+// The same version/versionNonce merge rule Excalidraw's own collaboration reference
+// implementation uses: a strictly higher version always wins; on a tied version, the higher
+// versionNonce wins as a deterministic tiebreaker. Never accepts a stale/equal-or-older update.
+function shouldAcceptElement(existing: BoardElement | undefined, incoming: BoardElement): boolean {
+  if (!existing) return true;
+  if (incoming.version > existing.version) return true;
+  return incoming.version === existing.version && incoming.versionNonce > existing.versionNonce;
+}
+
 function parsePollCreate(value: unknown): { question: string; options: string[]; anonymous: boolean; resultsVisible: PollVisibility } | null {
   if (!isRecord(value) || typeof value.question !== 'string' || typeof value.anonymous !== 'boolean') return null;
   const question = value.question.trim();
@@ -152,8 +220,10 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
     }
   };
   const io = new Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>(httpServer, {
-    // This process only handles small signalling messages; never media streams.
-    maxHttpBufferSize: 100_000,
+    // This process never handles media streams, but a whiteboard JSON import can legitimately be
+    // a few MB — raised from the prototype's original 100KB (fine for pure signalling messages)
+    // to comfortably fit MAX_BOARD_IMPORT_BYTES plus JSON/Socket.IO framing overhead.
+    maxHttpBufferSize: 6_000_000,
     cors: { origin: (origin, callback) => callback(null, acceptsOrigin(origin)) },
     allowRequest: (request, callback) => callback(null, acceptsOrigin(request.headers.origin)),
     pingInterval: 10_000,
@@ -168,6 +238,7 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
   const reactionRateLimiter = createRateLimiter(REACTION_RATE_WINDOW_MS, REACTION_RATE_MAX);
   const pollVoteRateLimiter = createRateLimiter(POLL_VOTE_RATE_WINDOW_MS, POLL_VOTE_RATE_MAX);
   const understandingRateLimiter = createRateLimiter(UNDERSTANDING_RATE_WINDOW_MS, UNDERSTANDING_RATE_MAX);
+  const boardPointerRateLimiter = createRateLimiter(BOARD_POINTER_RATE_WINDOW_MS, BOARD_POINTER_RATE_MAX);
 
   function fail(socket: MeetingSocket, message: string) {
     socket.emit('room:error', { message });
@@ -279,6 +350,26 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
     for (const id of room.participants.keys()) io.to(id).emit('timer:update', state);
   }
 
+  // Not personalized (unlike poll/understanding) — every participant sees the same board, so this
+  // is embedded as-is into room:joined and broadcast as-is on any page-level change. Every page's
+  // elements are included so switching pages (including a student browsing away from the tutor's
+  // active page while not following) is a pure local operation, never a server round-trip.
+  function buildBoardState(room: Room): BoardState {
+    const elementsByPage: Record<string, BoardElement[]> = {};
+    for (const page of room.board.pages) elementsByPage[page.id] = [...page.elements.values()];
+    return {
+      pages: room.board.pages.map((page): BoardPage => ({ id: page.id, name: page.name, background: page.background })),
+      activePageId: room.board.activePageId,
+      elementsByPage,
+      studentsCanDraw: room.board.studentsCanDraw,
+    };
+  }
+
+  function broadcastBoardPages(room: Room) {
+    const pages = room.board.pages.map((page): BoardPage => ({ id: page.id, name: page.name, background: page.background }));
+    for (const id of room.participants.keys()) io.to(id).emit('board:pages-update', { pages, activePageId: room.board.activePageId });
+  }
+
   function setForceMuted(room: Room, target: Participant, forceMuted: boolean) {
     if (target.forceMuted === forceMuted) return;
     target.forceMuted = forceMuted;
@@ -304,7 +395,7 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
     socket.data.roomId = roomId;
     void socket.join(`meeting:${roomId}`);
     const waiting = self.role === 'tutor' ? [...room.waiting.entries()].map(([id, entry]) => ({ id, name: entry.name })) : [];
-    socket.emit('room:joined', { roomId, self, peers, waiting, ...personalizedExtras(room, self.id, self.role) });
+    socket.emit('room:joined', { roomId, self, peers, waiting, ...personalizedExtras(room, self.id, self.role), board: buildBoardState(room) });
   }
 
   // Re-describes a still-admitted participant's existing edges plus current room-level state —
@@ -322,7 +413,7 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
       if (other) peers.push({ peer: other, sessionId: edge.sessionId, initiator: edge.initiatorId === socket.id });
     }
     const waiting = self.role === 'tutor' ? [...room.waiting.entries()].map(([id, entry]) => ({ id, name: entry.name })) : [];
-    socket.emit('room:joined', { roomId, self, peers, waiting, ...personalizedExtras(room, self.id, self.role) });
+    socket.emit('room:joined', { roomId, self, peers, waiting, ...personalizedExtras(room, self.id, self.role), board: buildBoardState(room) });
   }
 
   // Silently drops a stale (mid-grace-period) participant so a same-role newcomer can take their
@@ -335,6 +426,7 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
     reactionRateLimiter.clear(staleId);
     pollVoteRateLimiter.clear(staleId);
     understandingRateLimiter.clear(staleId);
+    boardPointerRateLimiter.clear(staleId);
     if (room.activeScreenShareId === staleId) room.activeScreenShareId = null;
     for (const [sessionId, edge] of room.edges) {
       if (edge.participantIds.includes(staleId)) room.edges.delete(sessionId);
@@ -373,6 +465,7 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
     reactionRateLimiter.clear(socket.id);
     pollVoteRateLimiter.clear(socket.id);
     understandingRateLimiter.clear(socket.id);
+    boardPointerRateLimiter.clear(socket.id);
     if (room.activeScreenShareId === socket.id) room.activeScreenShareId = null;
     const departing = room.participants.get(socket.id) ?? null;
     if (!room.participants.delete(socket.id)) return;
@@ -797,6 +890,160 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number })
       if (!ctx) return;
       ctx.room.timer = null;
       broadcastTimer(ctx.room);
+    });
+
+    socket.on('board:update', (payload: unknown) => {
+      const room = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
+      const self = room?.participants.get(socket.id);
+      if (!room || !self) return fail(socket, 'You are not currently in a class.');
+      if (self.role === 'student' && !room.board.studentsCanDraw) return fail(socket, 'The tutor has turned off drawing for students.');
+      const parsed = parseBoardUpdateBatch(payload);
+      if (!parsed) return fail(socket, 'Invalid whiteboard update.');
+      const page = room.board.pages.find((candidate) => candidate.id === parsed.pageId);
+      if (!page) return fail(socket, 'That whiteboard page no longer exists.');
+      const accepted: BoardElement[] = [];
+      for (const element of parsed.elements) {
+        const existing = page.elements.get(element.id);
+        // A brand-new (never-seen) element is dropped once the page is at capacity; an edit to an
+        // element the page already holds (including marking it deleted) is always allowed, since
+        // it doesn't grow the page.
+        if (!existing && !element.isDeleted && page.elements.size >= MAX_BOARD_ELEMENTS_PER_PAGE) continue;
+        if (shouldAcceptElement(existing, element)) {
+          page.elements.set(element.id, element);
+          accepted.push(element);
+        }
+      }
+      if (accepted.length === 0) return;
+      for (const id of room.participants.keys()) {
+        if (id !== socket.id) io.to(id).emit('board:update', { pageId: parsed.pageId, elements: accepted });
+      }
+    });
+    socket.on('board:cursor', (payload: unknown) => {
+      const room = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
+      const self = room?.participants.get(socket.id);
+      if (!room || !self || !isRecord(payload) || typeof payload.x !== 'number' || typeof payload.y !== 'number'
+        || !Number.isFinite(payload.x) || !Number.isFinite(payload.y)) return;
+      if (!boardPointerRateLimiter.allow(socket.id)) return;
+      for (const id of room.participants.keys()) {
+        if (id !== socket.id) io.to(id).emit('board:cursor', { id: socket.id, name: self.name, x: payload.x, y: payload.y });
+      }
+    });
+    socket.on('board:laser', (payload: unknown) => {
+      const room = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
+      const self = room?.participants.get(socket.id);
+      if (!room || !self || !isRecord(payload) || typeof payload.x !== 'number' || typeof payload.y !== 'number'
+        || !Number.isFinite(payload.x) || !Number.isFinite(payload.y)) return;
+      if (!boardPointerRateLimiter.allow(socket.id)) return;
+      // Ephemeral only — never written into board history, unlike board:update.
+      for (const id of room.participants.keys()) {
+        if (id !== socket.id) io.to(id).emit('board:laser', { id: socket.id, x: payload.x, y: payload.y });
+      }
+    });
+
+    socket.on('board:page-create', () => {
+      const ctx = requireTutor(socket, 'Only the tutor can add a whiteboard page.');
+      if (!ctx) return;
+      if (ctx.room.board.pages.length >= MAX_BOARD_PAGES) return fail(socket, 'This class has reached the maximum number of whiteboard pages.');
+      const id = randomUUID();
+      ctx.room.board.pages.push({ id, name: `Board ${ctx.room.board.pages.length + 1}`, background: 'blank', elements: new Map() });
+      ctx.room.board.activePageId = id;
+      broadcastBoardPages(ctx.room);
+    });
+    socket.on('board:page-rename', (payload: unknown) => {
+      const ctx = requireTutor(socket, 'Only the tutor can rename a whiteboard page.');
+      if (!ctx) return;
+      if (!isRecord(payload) || typeof payload.pageId !== 'string' || typeof payload.name !== 'string') return fail(socket, 'Invalid request.');
+      const name = payload.name.trim();
+      if (!name || name.length > MAX_BOARD_PAGE_NAME_LENGTH) return fail(socket, `Page names must be 1–${MAX_BOARD_PAGE_NAME_LENGTH} characters.`);
+      const page = ctx.room.board.pages.find((candidate) => candidate.id === payload.pageId);
+      if (!page) return fail(socket, 'That whiteboard page no longer exists.');
+      page.name = name;
+      broadcastBoardPages(ctx.room);
+    });
+    socket.on('board:page-delete', (payload: unknown) => {
+      const ctx = requireTutor(socket, 'Only the tutor can delete a whiteboard page.');
+      if (!ctx) return;
+      if (!isRecord(payload) || typeof payload.pageId !== 'string') return fail(socket, 'Invalid request.');
+      if (ctx.room.board.pages.length <= 1) return fail(socket, 'A class must always have at least one whiteboard page.');
+      const index = ctx.room.board.pages.findIndex((candidate) => candidate.id === payload.pageId);
+      if (index === -1) return fail(socket, 'That whiteboard page no longer exists.');
+      ctx.room.board.pages.splice(index, 1);
+      if (ctx.room.board.activePageId === payload.pageId) {
+        ctx.room.board.activePageId = ctx.room.board.pages[Math.max(0, index - 1)].id;
+      }
+      broadcastBoardPages(ctx.room);
+    });
+    socket.on('board:page-reorder', (payload: unknown) => {
+      const ctx = requireTutor(socket, 'Only the tutor can reorder whiteboard pages.');
+      if (!ctx) return;
+      if (!isRecord(payload) || !Array.isArray(payload.pageIds)) return fail(socket, 'Invalid request.');
+      const currentIds = new Set(ctx.room.board.pages.map((page) => page.id));
+      const nextIds: unknown[] = payload.pageIds;
+      if (nextIds.length !== currentIds.size || !nextIds.every((id) => typeof id === 'string' && currentIds.has(id))
+        || new Set(nextIds).size !== nextIds.length) {
+        return fail(socket, 'Invalid page order.');
+      }
+      const byId = new Map(ctx.room.board.pages.map((page) => [page.id, page]));
+      ctx.room.board.pages = (nextIds as string[]).map((id) => byId.get(id)!);
+      broadcastBoardPages(ctx.room);
+    });
+    socket.on('board:page-switch', (payload: unknown) => {
+      const ctx = requireTutor(socket, 'Only the tutor can change the active whiteboard page.');
+      if (!ctx) return;
+      if (!isRecord(payload) || typeof payload.pageId !== 'string') return fail(socket, 'Invalid request.');
+      if (!ctx.room.board.pages.some((page) => page.id === payload.pageId)) return fail(socket, 'That whiteboard page no longer exists.');
+      ctx.room.board.activePageId = payload.pageId;
+      broadcastBoardPages(ctx.room);
+    });
+    socket.on('board:background', (payload: unknown) => {
+      const ctx = requireTutor(socket, 'Only the tutor can change a whiteboard page’s background.');
+      if (!ctx) return;
+      if (!isRecord(payload) || typeof payload.pageId !== 'string') return fail(socket, 'Invalid request.');
+      const background = parseBackground(payload.background);
+      if (!background) return fail(socket, 'Invalid background.');
+      const page = ctx.room.board.pages.find((candidate) => candidate.id === payload.pageId);
+      if (!page) return fail(socket, 'That whiteboard page no longer exists.');
+      page.background = background;
+      broadcastBoardPages(ctx.room);
+    });
+    socket.on('board:permission', (payload: unknown) => {
+      const ctx = requireTutor(socket, 'Only the tutor can change whiteboard drawing permission.');
+      if (!ctx) return;
+      if (!isRecord(payload) || typeof payload.studentsCanDraw !== 'boolean') return fail(socket, 'Invalid request.');
+      ctx.room.board.studentsCanDraw = payload.studentsCanDraw;
+      for (const id of ctx.room.participants.keys()) io.to(id).emit('board:permission-update', { studentsCanDraw: payload.studentsCanDraw });
+    });
+    socket.on('board:clear', (payload: unknown) => {
+      const ctx = requireTutor(socket, 'Only the tutor can clear a whiteboard page.');
+      if (!ctx) return;
+      if (!isRecord(payload) || typeof payload.pageId !== 'string') return fail(socket, 'Invalid request.');
+      const page = ctx.room.board.pages.find((candidate) => candidate.id === payload.pageId);
+      if (!page) return fail(socket, 'That whiteboard page no longer exists.');
+      page.elements.clear();
+      for (const id of ctx.room.participants.keys()) io.to(id).emit('board:cleared', { pageId: payload.pageId });
+    });
+    socket.on('board:follow-me', () => {
+      const ctx = requireTutor(socket, 'Only the tutor can ask the class to follow.');
+      if (!ctx) return;
+      for (const id of ctx.room.participants.keys()) {
+        if (id !== socket.id) io.to(id).emit('board:follow-me');
+      }
+    });
+    socket.on('board:import', (payload: unknown) => {
+      const ctx = requireTutor(socket, 'Only the tutor can import a whiteboard file.');
+      if (!ctx) return;
+      const parsed = parseBoardImport(payload);
+      if (!parsed) return fail(socket, 'That whiteboard file is invalid, malformed, or too large.');
+      const page = ctx.room.board.pages.find((candidate) => candidate.id === parsed.pageId);
+      if (!page) return fail(socket, 'That whiteboard page no longer exists.');
+      // An import replaces the page outright rather than merging — an omitted element means the
+      // imported file doesn't include it, not that every other client should keep it around.
+      page.elements.clear();
+      for (const element of parsed.elements) page.elements.set(element.id, element);
+      for (const id of ctx.room.participants.keys()) {
+        io.to(id).emit('board:cleared', { pageId: parsed.pageId });
+        if (parsed.elements.length > 0) io.to(id).emit('board:update', { pageId: parsed.pageId, elements: parsed.elements });
+      }
     });
 
     socket.on('webrtc:offer', (payload) => relayDescription(socket, 'offer', payload));

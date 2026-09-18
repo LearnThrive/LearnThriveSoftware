@@ -45,9 +45,23 @@ export type TimerMode = 'stopwatch' | 'countdown';
 // elapsed is frozen at elapsedAtPauseMs instead. Countdown remaining = durationMs - elapsed.
 export interface RoomTimerState { mode: TimerMode; anchorAt: number; durationMs: number | null; paused: boolean; elapsedAtPauseMs: number | null }
 
+export type BoardBackground = 'blank' | 'lined' | 'grid' | 'dotted' | 'coordinate';
+// The server treats a board element as an opaque bag of properties — it only ever reads
+// id/version/versionNonce/isDeleted (for reconciliation, the same version/versionNonce merge
+// strategy Excalidraw's own collaboration reference implementation uses) and never interprets or
+// validates the drawing-specific fields. Excalidraw's actual element schema lives entirely
+// client-side; the server is deliberately schema-blind to it.
+export interface BoardElement { id: string; version: number; versionNonce: number; isDeleted?: boolean; [key: string]: unknown }
+export interface BoardPage { id: string; name: string; background: BoardBackground }
+// Not personalized (unlike polls/understanding checks) — every participant sees the same board
+// state, so this is broadcast/embedded as-is. Every page's elements are included up front so
+// switching pages is a pure local operation with no server round-trip.
+export interface BoardState { pages: BoardPage[]; activePageId: string; elementsByPage: Record<string, BoardElement[]>; studentsCanDraw: boolean }
+
 export interface JoinedRoom {
   roomId: string; self: Participant; peers: PeerEdge[]; waiting: WaitingParticipant[];
   settings: RoomSettings; poll: PollState | null; understandingCheck: UnderstandingCheckState | null; timer: RoomTimerState | null;
+  board: BoardState;
 }
 export interface PeerJoined { peer: Participant; sessionId: string; initiator: boolean }
 export interface SignalDescription { sessionId: string; description: RTCSessionDescriptionInit }
@@ -90,6 +104,19 @@ export interface ClientToServerEvents {
   'timer:pause': () => void;
   'timer:resume': () => void;
   'timer:stop': () => void;
+  'board:update': (payload: { pageId: string; elements: BoardElement[] }) => void;
+  'board:cursor': (payload: { x: number; y: number }) => void;
+  'board:laser': (payload: { x: number; y: number }) => void;
+  'board:page-create': () => void;
+  'board:page-rename': (payload: { pageId: string; name: string }) => void;
+  'board:page-delete': (payload: { pageId: string }) => void;
+  'board:page-reorder': (payload: { pageIds: string[] }) => void;
+  'board:page-switch': (payload: { pageId: string }) => void;
+  'board:background': (payload: { pageId: string; background: BoardBackground }) => void;
+  'board:permission': (payload: { studentsCanDraw: boolean }) => void;
+  'board:clear': (payload: { pageId: string }) => void;
+  'board:follow-me': () => void;
+  'board:import': (payload: { pageId: string; elements: BoardElement[] }) => void;
   'webrtc:offer': (payload: SignalDescription) => void;
   'webrtc:answer': (payload: SignalDescription) => void;
   'webrtc:ice-candidate': (payload: SignalCandidate) => void;
@@ -135,6 +162,18 @@ export interface ServerToClientEvents {
   'poll:update': (payload: PollState | null) => void;
   'understanding:update': (payload: UnderstandingCheckState | null) => void;
   'timer:update': (payload: RoomTimerState | null) => void;
+  // Full-state resend, used both for the initial post-admission snapshot and a reconnect resync
+  // (same shape as the rest of room:joined's personalized-extras pattern).
+  'board:snapshot': (payload: BoardState) => void;
+  // The reconciled subset of `elements` actually accepted (stale/rejected elements are silently
+  // dropped, never broadcast) — never sent back to the sender, who already applied them locally.
+  'board:update': (payload: { pageId: string; elements: BoardElement[] }) => void;
+  'board:cursor': (payload: { id: string; name: string; x: number; y: number }) => void;
+  'board:laser': (payload: { id: string; x: number; y: number }) => void;
+  'board:pages-update': (payload: { pages: BoardPage[]; activePageId: string }) => void;
+  'board:permission-update': (payload: { studentsCanDraw: boolean }) => void;
+  'board:cleared': (payload: { pageId: string }) => void;
+  'board:follow-me': () => void;
   'webrtc:offer': (payload: SignalDescription) => void;
   'webrtc:answer': (payload: SignalDescription) => void;
   'webrtc:ice-candidate': (payload: SignalCandidate) => void;
@@ -151,3 +190,13 @@ export const MAX_POLL_QUESTION_LENGTH = 200;
 export const MAX_POLL_OPTION_LENGTH = 80;
 export const MIN_POLL_OPTIONS = 2;
 export const MAX_POLL_OPTIONS = 6;
+export const MAX_BOARD_PAGES = 20;
+export const MAX_BOARD_PAGE_NAME_LENGTH = 40;
+// Per-page element cap and a per-message batch cap — generous for a 4-person classroom board,
+// tight enough that a malicious/buggy client can't grow a room's memory unboundedly.
+export const MAX_BOARD_ELEMENTS_PER_PAGE = 5000;
+export const MAX_BOARD_UPDATE_BATCH = 200;
+// A single element's serialized JSON size — generous for real drawing data (freehand strokes can
+// carry hundreds of points), tight enough to reject an obviously abusive payload.
+export const MAX_BOARD_ELEMENT_BYTES = 200_000;
+export const MAX_BOARD_IMPORT_BYTES = 5_000_000;
