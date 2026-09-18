@@ -57,7 +57,7 @@ function App() {
     votePoll, startUnderstandingCheck, endUnderstandingCheck, respondUnderstanding, startTimer, pauseTimer,
     resumeTimer, stopTimer, sendBoardUpdate, sendBoardCursor, sendBoardLaser, createBoardPage, renameBoardPage,
     deleteBoardPage, reorderBoardPages, switchBoardPage, setBoardBackground, setStudentsCanDraw, clearBoardPage,
-    followMe, importBoard, duplicateBoardPage, commitLocalPageElements, sendAnnouncement, setDataSaver,
+    followMe, importBoard, duplicateBoardPage, commitLocalPageElements, sendAnnouncement, setDataSaver, allowRejoin,
     join, leave, reset, rejoin, copyInvite, retryConnection,
   } = useMeeting();
   const [name, setName] = useState('');
@@ -367,6 +367,7 @@ function App() {
                 pollActive={snapshot.poll != null} onCreatePoll={createPoll}
                 understandingActive={snapshot.understandingCheck != null} onStartUnderstandingCheck={startUnderstandingCheck}
                 timerActive={snapshot.timer != null} onStartTimer={startTimer} onSendAnnouncement={sendAnnouncement}
+                removedNames={snapshot.removedNames} onAllowRejoin={allowRejoin}
               />
             </div>}
             <div className="control-item popover-anchor">

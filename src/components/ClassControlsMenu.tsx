@@ -20,6 +20,8 @@ interface ClassControlsMenuProps {
   timerActive: boolean;
   onStartTimer: (mode: TimerMode, durationMs: number | null) => void;
   onSendAnnouncement: (text: string) => void;
+  removedNames: string[];
+  onAllowRejoin: (name: string) => void;
 }
 
 type Expanded = 'poll' | 'timer' | 'announce' | null;
@@ -27,6 +29,7 @@ type Expanded = 'poll' | 'timer' | 'announce' | null;
 export function ClassControlsMenu({
   open, onClose, triggerRef, roomSettings, onSetLocked, onSetStudentsCanShareScreen, onSetStudentsCanChat, onMuteAll,
   pollActive, onCreatePoll, understandingActive, onStartUnderstandingCheck, timerActive, onStartTimer, onSendAnnouncement,
+  removedNames, onAllowRejoin,
 }: ClassControlsMenuProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   usePopoverDismiss(open, onClose, panelRef, triggerRef);
@@ -138,6 +141,19 @@ export function ClassControlsMenu({
           </button>
         )}
       </div>
+
+      {removedNames.length > 0 && (
+        <div className="class-controls-section">
+          <p className="class-controls-section-title">Removed students</p>
+          <p className="device-menu-hint">Removed students can&apos;t rejoin this class until you allow it.</p>
+          {removedNames.map((removedName) => (
+            <button key={removedName} type="button" className="class-controls-action" onClick={() => onAllowRejoin(removedName)}>
+              <Icon name="user-x" size={15} />
+              <span>Allow {removedName} to rejoin</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

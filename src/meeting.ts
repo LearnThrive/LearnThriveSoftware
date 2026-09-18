@@ -99,6 +99,9 @@ export interface MeetingSnapshot {
   boardFollowMeSeq: number;
   announcement: Announcement | null;
   dataSaver: boolean;
+  // Tutor-only (always empty for a student — the server never sends this event to one). Names
+  // the tutor has removed from this room and not yet allowed back.
+  removedNames: string[];
 }
 
 // "own" is resolved once, at the moment each message arrives, against the socket id live at
@@ -122,7 +125,7 @@ export class MeetingController {
     cameras: [], microphones: [], selectedCamera: undefined, selectedMicrophone: undefined, notice: null,
     chatOpen: false, messages: [], unreadCount: 0, handRaised: false, reactions: [],
     forceMuted: false, roomSettings: DEFAULT_ROOM_SETTINGS, poll: null, understandingCheck: null, timer: null, endedReason: null,
-    board: DEFAULT_BOARD_STATE, boardPointers: {}, boardFollowMeSeq: 0, announcement: null, dataSaver: false,
+    board: DEFAULT_BOARD_STATE, boardPointers: {}, boardFollowMeSeq: 0, announcement: null, dataSaver: false, removedNames: [],
   };
   // Set by duplicateBoardPage() while waiting for board:page-create's own pages-update echo to
   // learn the new page's id (the server doesn't otherwise report it) — see duplicateBoardPage.
@@ -388,6 +391,7 @@ export class MeetingController {
   muteAll = () => this.tutorEmit('room:mute-all');
   allowUnmute = (id: string) => this.tutorEmit('room:allow-unmute', { id });
   removeParticipant = (id: string) => this.tutorEmit('room:remove-participant', { id });
+  allowRejoin = (name: string) => this.tutorEmit('room:allow-rejoin', { name });
   stopShare = (id: string) => this.tutorEmit('room:stop-share', { id });
   lowerHand = (id: string) => this.tutorEmit('room:lower-hand', { id });
 
@@ -483,7 +487,7 @@ export class MeetingController {
       phase: 'joining', status: 'Connecting…', error: null, roomId, name, role: null, waiting: [],
       messages: [], unreadCount: 0, chatOpen: false, handRaised: false, reactions: [],
       forceMuted: false, roomSettings: DEFAULT_ROOM_SETTINGS, poll: null, understandingCheck: null, timer: null, endedReason: null,
-      board: DEFAULT_BOARD_STATE, boardPointers: {}, announcement: null,
+      board: DEFAULT_BOARD_STATE, boardPointers: {}, announcement: null, removedNames: [],
     });
     const url = new URL(window.location.href);
     url.pathname = '/meeting';
@@ -549,6 +553,7 @@ export class MeetingController {
       this.update({ phase: 'waiting', status: 'Waiting to be admitted…', error: null });
     });
     socket.on('room:waiting-update', ({ waiting }) => this.update({ waiting }));
+    socket.on('room:removed-list-update', ({ names }) => this.update({ removedNames: names }));
     socket.on('room:admit-result', ({ admitted, remaining }) => {
       if (admitted === 0) this.announce(remaining > 0 ? 'That student could not be admitted — the class may be full.' : 'That student is no longer waiting.');
       else if (remaining > 0) this.announce(`Admitted ${admitted} — ${remaining} still waiting (class is full).`);
