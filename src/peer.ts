@@ -250,6 +250,24 @@ export class PeerSession {
     });
   }
 
+  // A pure P2P mesh means every camera upload fans out to every other peer directly — capping
+  // each outgoing video encode keeps a 4-person call's total upload bandwidth sane. `null` clears
+  // the cap (used for an active screen share, which needs to stay legible). No-ops quietly if the
+  // video sender isn't set up yet or the browser rejects the parameters (never worth surfacing to
+  // the user — the call still works, just without the tuned bitrate).
+  async setVideoSendBitrate(maxBitrateKbps: number | null) {
+    const sender = this.senders.get('video');
+    if (!sender) return;
+    try {
+      const parameters = sender.getParameters();
+      if (!parameters.encodings?.length) parameters.encodings = [{}];
+      parameters.encodings[0].maxBitrate = maxBitrateKbps != null ? maxBitrateKbps * 1000 : undefined;
+      await sender.setParameters(parameters);
+    } catch (error) {
+      statsLog.warn('Could not apply video send bitrate parameters', error);
+    }
+  }
+
   close() {
     this.closed = true;
     clearTimeout(this.negotiationTimer);

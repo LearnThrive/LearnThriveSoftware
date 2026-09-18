@@ -13,6 +13,10 @@
 .screen-share-tile video{object-fit:contain;background:#0a1620}
 .screen-share-badge{position:absolute;top:16px;left:16px;z-index:2;display:flex;align-items:center;gap:6px;font-size:11px;color:#e8f1ee;background:#146440cc;padding:6px 11px;border-radius:20px}
 .compact-tile.screen-share-tile .screen-share-badge{font-size:9px;padding:4px 8px;top:8px;left:8px}
+.connection-quality-badge{position:absolute;top:16px;right:16px;z-index:2;display:flex;align-items:center;gap:5px;font-size:11px;padding:5px 10px;border-radius:20px;border:1px solid transparent}
+.connection-quality-badge.connection-quality-fair{color:#8a6d23;background:#fbf1deee;border-color:#ecdcb2}
+.connection-quality-badge.connection-quality-poor{color:#933f35;background:#fdeae7ee;border-color:#e8b3a9}
+.compact-tile .connection-quality-badge{font-size:9px;padding:4px 8px;top:8px;right:8px}
 .unread-badge{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;padding:0 4px;display:grid;place-items:center;background:#a53f3f;color:#fff;font-size:9px;font-weight:700;border-radius:20px;line-height:1}
 .device-menu-anchor{position:relative}
 .device-menu{position:absolute;bottom:62px;left:50%;transform:translateX(-50%);z-index:20;background:#fff;border:1px solid #e2e5de;border-radius:12px;box-shadow:0 12px 32px #091d3122;padding:16px;width:min(230px,calc(100vw - 32px));display:flex;flex-direction:column;gap:14px}
@@ -21,6 +25,8 @@
 .device-menu-group select{height:38px;border:1px solid #d8dfdb;border-radius:6px;padding:0 8px;font-size:12px;background:#fff;color:var(--navy)}
 .device-menu-flip{display:flex;align-items:center;gap:8px;font-size:11px;color:#284737;background:#f5f8f3;border:1px solid #d8dfdb;border-radius:6px;padding:8px 10px}
 .device-menu-flip:hover{background:#eaf1e6}
+.device-menu-flip[aria-pressed="true"]{background:#146440;color:#fff;border-color:#146440}
+.device-menu-hint{font-size:10px;color:#8a9a92;margin:2px 0 0}
 .mic-meter{width:100%;max-width:120px;height:5px;border-radius:4px;background:#e3e9e3;overflow:hidden;margin-left:auto}
 .mic-meter-fill{height:100%;width:100%;transform-origin:left;background:#168a5b;transition:transform .08s linear}
 .chat-panel{width:320px;flex-shrink:0;display:flex;flex-direction:column;background:#fff;border:1px solid #e2e5de;border-radius:16px;overflow:hidden;box-shadow:0 8px 28px #091d3108}

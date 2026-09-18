@@ -57,7 +57,7 @@ function App() {
     votePoll, startUnderstandingCheck, endUnderstandingCheck, respondUnderstanding, startTimer, pauseTimer,
     resumeTimer, stopTimer, sendBoardUpdate, sendBoardCursor, sendBoardLaser, createBoardPage, renameBoardPage,
     deleteBoardPage, reorderBoardPages, switchBoardPage, setBoardBackground, setStudentsCanDraw, clearBoardPage,
-    followMe, importBoard, duplicateBoardPage, commitLocalPageElements, sendAnnouncement,
+    followMe, importBoard, duplicateBoardPage, commitLocalPageElements, sendAnnouncement, setDataSaver,
     join, leave, reset, rejoin, copyInvite, retryConnection,
   } = useMeeting();
   const [name, setName] = useState('');
@@ -193,6 +193,7 @@ function App() {
     stream={peer.stream} name={peer.participant.name} audio={peer.participant.media.audio}
     video={peer.participant.media.video} screenSharing={peer.participant.screenSharing} compact={compact} role={peer.participant.role}
     focused={canFocusToggle && effectiveFocus === peer.participant.id} onFocus={canFocusToggle ? () => setFocusTarget(peer.participant.id) : undefined}
+    quality={peer.quality}
   />;
   const selfTile = (compact: boolean) => <ParticipantTile
     key="local"
@@ -325,6 +326,7 @@ function App() {
                 onSelectCamera={(id) => void switchCamera(id)} onSelectMicrophone={(id) => void switchMicrophone(id)}
                 canFlip={snapshot.cameras.length > 1} onFlip={() => void flipCamera()} triggerRef={deviceMenuTriggerRef}
                 layoutMode={layoutMode} onLayoutMode={setLayoutMode} sideBySideAvailable={snapshot.peers.length === 1}
+                dataSaver={snapshot.dataSaver} onDataSaver={setDataSaver}
               />
             </div>
             <span className="controls-divider" />
@@ -402,6 +404,7 @@ function App() {
                     selectedCamera={snapshot.selectedCamera} selectedMicrophone={snapshot.selectedMicrophone}
                     onSelectCamera={(id) => void switchCamera(id)} onSelectMicrophone={(id) => void switchMicrophone(id)}
                     canFlip={snapshot.cameras.length > 1} onFlip={() => void flipCamera()} triggerRef={deviceMenuTriggerRef}
+                    dataSaver={snapshot.dataSaver} onDataSaver={setDataSaver}
                   />
                 </div>
               </div>
