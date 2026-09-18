@@ -128,3 +128,32 @@ export interface TutorAvailabilityBlock {
   startTime: string; // "HH:mm", 24-hour, in the scheduling timezone
   endTime: string;
 }
+
+// Plan section 38. One record per Student per Lesson — a group lesson with 3 Students gets 3
+// independent attendance records, since one Student being absent doesn't mean they all were.
+export type AttendanceStatus = "ATTENDED" | "ABSENT" | "LATE" | "EXCUSED";
+
+export interface LessonAttendanceRecord {
+  lessonId: string;
+  studentId: string;
+  status: AttendanceStatus;
+  arrivalTime?: string; // ISO 8601 UTC instant, optional
+  departureTime?: string;
+  notes?: string;
+  markedBy: string; // AuthenticatedUser.id
+  markedAt: string; // ISO 8601 UTC instant
+}
+
+// Plan section 40: a chronological, append-only audit/activity timeline per Lesson — never
+// edited or deleted once written, so it stays a trustworthy record of what actually happened.
+export type LessonActivityEventType =
+  | "CREATED" | "RESCHEDULED" | "CANCELLED" | "ATTENDANCE_MARKED" | "COMPLETED" | "REPORT_SUBMITTED";
+
+export interface LessonActivityEvent {
+  id: string;
+  lessonId: string;
+  type: LessonActivityEventType;
+  message: string; // human-readable, e.g. "Changed from Tuesday 17:00 to Thursday 18:00"
+  actorId?: string; // AuthenticatedUser.id — absent for a system-generated event
+  createdAt: string;
+}

@@ -1,7 +1,8 @@
 import type { DataProvider } from "@learnthrive/data/repositories";
 import type { Lesson, LocationType, RecurrenceInput, TuitionAssignment } from "@learnthrive/data/domain";
 import { generateRecurrenceOccurrences } from "./recurrence";
-import { LEARNTHRIVE_DEFAULT_TIMEZONE } from "./timezone";
+import { formatInTimeZone, LEARNTHRIVE_DEFAULT_TIMEZONE } from "./timezone";
+import { logActivity } from "@/lib/activity/activityService";
 
 export interface ConflictWarning {
   kind: "TUTOR" | "STUDENT";
@@ -41,6 +42,7 @@ export interface CreateLessonInput {
   notes?: string;
   reportRequired: boolean;
   recurrence?: RecurrenceInput;
+  createdBy?: string; // AuthenticatedUser.id, for the activity log
 }
 
 /** Creates a single lesson, or — if `recurrence` is given — a whole series of independently
@@ -69,15 +71,20 @@ export async function createLessonOrSeries(data: DataProvider, input: CreateLess
   // can't be replayed into a different lesson's classroom.
   const classroomFields = () => (input.locationType === "ONLINE" ? { classroomRoomId: crypto.randomUUID() } : {});
 
+  let created: Lesson[];
   if (!input.recurrence) {
-    return [await data.lessons.create({ ...base, ...classroomFields(), startAt: input.startAt })];
+    created = [await data.lessons.create({ ...base, ...classroomFields(), startAt: input.startAt })];
+  } else {
+    const recurrenceId = crypto.randomUUID();
+    const occurrences = generateRecurrenceOccurrences(new Date(input.startAt), input.recurrence, LEARNTHRIVE_DEFAULT_TIMEZONE);
+    created = await data.lessons.createMany(
+      occurrences.map((occurrence) => ({ ...base, ...classroomFields(), startAt: occurrence.toISOString(), recurrenceId })),
+    );
   }
-
-  const recurrenceId = crypto.randomUUID();
-  const occurrences = generateRecurrenceOccurrences(new Date(input.startAt), input.recurrence, LEARNTHRIVE_DEFAULT_TIMEZONE);
-  return data.lessons.createMany(
-    occurrences.map((occurrence) => ({ ...base, ...classroomFields(), startAt: occurrence.toISOString(), recurrenceId })),
-  );
+  for (const lesson of created) {
+    await logActivity(data, lesson.id, "CREATED", `Lesson created for ${formatInTimeZone(lesson.startAt, LEARNTHRIVE_DEFAULT_TIMEZONE, { dateStyle: "medium", timeStyle: "short" })}`, input.createdBy);
+  }
+  return created;
 }
 
 export type RescheduleScope = "THIS_ONLY" | "THIS_AND_FUTURE" | "ENTIRE_SERIES";
@@ -92,12 +99,20 @@ export async function rescheduleLesson(
   lessonId: string,
   newStartAt: string,
   scope: RescheduleScope,
+  actorId?: string,
 ): Promise<Lesson[]> {
   const lesson = await data.lessons.get(lessonId);
   if (!lesson) throw new Error(`Lesson ${lessonId} not found`);
 
+  // "Changed from Tuesday 17:00 to Thursday 18:00" (plan section 65) — recorded once per
+  // request, against the lesson the Admin actually edited, even when the change cascades to
+  // other occurrences in the series.
+  const changeMessage = `Rescheduled from ${formatInTimeZone(lesson.startAt, LEARNTHRIVE_DEFAULT_TIMEZONE, { weekday: "long", hour: "2-digit", minute: "2-digit" })} to ${formatInTimeZone(newStartAt, LEARNTHRIVE_DEFAULT_TIMEZONE, { weekday: "long", hour: "2-digit", minute: "2-digit" })}`;
+
   if (scope === "THIS_ONLY" || !lesson.recurrenceId) {
-    return [await data.lessons.update(lessonId, { startAt: newStartAt })];
+    const updated = await data.lessons.update(lessonId, { startAt: newStartAt });
+    await logActivity(data, lessonId, "RESCHEDULED", changeMessage, actorId);
+    return [updated];
   }
 
   const deltaMs = new Date(newStartAt).getTime() - new Date(lesson.startAt).getTime();
@@ -109,6 +124,7 @@ export async function rescheduleLesson(
     const shifted = new Date(new Date(target.startAt).getTime() + deltaMs).toISOString();
     updated.push(await data.lessons.update(target.id, { startAt: shifted }));
   }
+  await logActivity(data, lessonId, "RESCHEDULED", `${changeMessage} (${scope === "ENTIRE_SERIES" ? "entire series" : "this and future lessons"})`, actorId);
   return updated;
 }
 
@@ -119,7 +135,9 @@ export async function cancelLesson(
   cancelledBy: string,
   reason: string | undefined,
 ): Promise<Lesson> {
-  return data.lessons.update(lessonId, {
+  const lesson = await data.lessons.update(lessonId, {
     status: "CANCELLED", cancelledAt: new Date().toISOString(), cancelledBy, ...(reason ? { cancellationReason: reason } : {}),
   });
+  await logActivity(data, lessonId, "CANCELLED", reason ? `Lesson cancelled — ${reason}` : "Lesson cancelled", cancelledBy);
+  return lesson;
 }
