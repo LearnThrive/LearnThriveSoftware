@@ -138,6 +138,14 @@ A consolidation and gap-filling pass against plan section 85's IDOR/access-contr
 
 Verification: 3 new Playwright scenarios in `hardening.spec.ts` — 34/34 across all four `apps/web` Playwright spec files. Full workspace lint/typecheck/test/build pass.
 
-## What's next
+## Phase J — Documentation
 
-Phase J (Documentation — remaining docs, `docs/PRODUCTION_GAPS.md`, final role-permission/test-account updates) is next in the plan's own sequence — see `plan5.md` (private) for the full phase sequence.
+The final phase in the plan's own sequence. Adds the remaining referenced-but-not-yet-written docs: `docs/SUPABASE_MIGRATION.md` (the repository→table map plan section 99 asks for — not implemented, deliberately just the map) and `docs/PRODUCTION_GAPS.md` (platform-wide, cross-referencing the pre-existing classroom-scoped `apps/classroom/PRODUCTION_GAPS.md` rather than duplicating it). Rewrites `docs/ROLE_PERMISSIONS.md`, which had been left at its Phase B "nothing built yet" state through eight subsequent phases, to reflect the real three-layer enforcement model (page/object-IDOR/action) and the actual per-role/per-action table. Updates `docs/DEVELOPMENT_ACCOUNTS.md`'s reset section for the new mechanism below.
+
+Also closes out plan section 98 (development data reset), the one still-open concrete deliverable found while writing these docs: `resetDataProvider()` (`packages/data/src/inMemoryProvider.ts`) discards everything created beyond the fixed seed scenario and restores it, exposed via a guarded `POST /api/dev/reset` (a hard `NODE_ENV=production` throw plus `requireRoleForApi(["ADMIN"])`) and an Admin-only "Reset demo data" button on `/dashboard/admin`, hidden outside development.
+
+Verification: 1 new `packages/data` unit test (`resetDataProvider` — session clutter discarded, seed scenario returns with the same fixed ids) and 1 new Playwright scenario (a Tutor is refused by the reset endpoint) — deliberately **not** an E2E test of the Admin-success path, since this suite's spec files run in parallel workers against one shared dev server and an actual reset would corrupt whatever other test happens to be running concurrently; the reset behavior itself is proven in `packages/data`'s isolated unit test instead. 35/35 `apps/web` Playwright scenarios (all four spec files), 69/69 `apps/web` unit tests, 7/7 `packages/data` unit tests. Full workspace lint/typecheck/build pass.
+
+## Plan5 status
+
+Phases A through J — the plan's full implementation sequence — are complete as of this commit. See `plan5.md` (private) for the phase definitions this followed, and each phase's own doc (`docs/AUTHENTICATION.md`, `docs/DOMAIN_MODEL.md`, `docs/SCHEDULING.md`, `docs/CLASSROOM_INTEGRATION.md`, `docs/ATTENDANCE.md`, `docs/LESSON_REPORTS.md`, `docs/NOTIFICATIONS.md`, `docs/HARDENING.md`) for what each one actually built, tested, and honestly left undone. `docs/PRODUCTION_GAPS.md` is the single place that consolidates every gap named across all of them.

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { SEED_IDS, getDataProvider } from "./inMemoryProvider";
+import { SEED_IDS, getDataProvider, resetDataProvider } from "./inMemoryProvider";
 
 test("seed data: the demo Tutor, Client, and Student exist with the expected fixed ids", async () => {
   const data = getDataProvider();
@@ -68,4 +68,23 @@ test("updating a Tuition Assignment's status preserves its other fields", async 
   assert.equal(updated.subject, "Mathematics");
   // Restore, since this is the shared singleton other tests read from.
   await data.assignments.update(SEED_IDS.assignmentGcseMaths, { status: "ACTIVE" });
+});
+
+// Last in the file deliberately — this wipes every change earlier tests made (including any
+// they didn't bother restoring), so nothing after it may depend on prior test state.
+test("resetDataProvider: discards anything created beyond the seed scenario, but the seed scenario itself comes back identical (plan section 98)", async () => {
+  const before = getDataProvider();
+  await before.tutors.create({ name: "Session Clutter Tutor", email: "clutter@example.test", subjects: ["Art"], active: true });
+  const clutteredTutors = await before.tutors.list();
+  assert.ok(clutteredTutors.length > 1);
+
+  const after = resetDataProvider();
+  assert.equal(after, getDataProvider()); // the singleton itself was replaced, not just its contents
+
+  const tutorsAfterReset = await after.tutors.list();
+  assert.equal(tutorsAfterReset.length, 1);
+  assert.equal(tutorsAfterReset[0].id, SEED_IDS.tutorJamiePatel); // same fixed id, not a new random one
+
+  const assignment = await after.assignments.get(SEED_IDS.assignmentGcseMaths);
+  assert.equal(assignment?.status, "ACTIVE"); // the seed scenario's own default, not whatever an earlier test left it as
 });
