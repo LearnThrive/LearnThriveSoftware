@@ -33,9 +33,9 @@ export async function getAttendanceForLesson(data: DataProvider, lessonId: strin
 export class LessonCompletionError extends Error {}
 
 /** Plan section 66: "Do not prematurely set completed while mandatory fields are absent." Every
- * Student on the Lesson must have an attendance record before it can be marked Completed — a
- * report is not required here even if `reportRequired` is set, since LessonReport doesn't exist
- * yet (see docs/PRODUCTION_GAPS.md's Phase F note); that gate is added when Phase G builds it. */
+ * Student on the Lesson must have an attendance record, and — if `Lesson.reportRequired` is set
+ * (plan section 45) — a report must exist at SUBMITTED or APPROVED (a DRAFT isn't "the report"
+ * yet, just work in progress on it). */
 export async function completeLesson(data: DataProvider, lessonId: string, actorId: string): Promise<Lesson> {
   const lesson = await data.lessons.get(lessonId);
   if (!lesson) throw new LessonCompletionError(`Lesson ${lessonId} not found`);
@@ -45,6 +45,11 @@ export async function completeLesson(data: DataProvider, lessonId: string, actor
   const markedStudentIds = new Set(records.map((r) => r.studentId));
   const missing = lesson.studentIds.filter((id) => !markedStudentIds.has(id));
   if (missing.length > 0) throw new LessonCompletionError("Attendance must be marked for every Student before completing this lesson.");
+
+  if (lesson.reportRequired) {
+    const report = await data.reports.forLesson(lessonId);
+    if (!report || report.status === "DRAFT") throw new LessonCompletionError("A submitted lesson report is required before completing this lesson.");
+  }
 
   const completed = await data.lessons.update(lessonId, { status: "COMPLETED" });
   await logActivity(data, lessonId, "COMPLETED", "Lesson marked complete", actorId);

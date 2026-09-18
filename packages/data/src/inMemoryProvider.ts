@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type {
-  Client, ClientStudentLink, Lesson, LessonActivityEvent, LessonAttendanceRecord, Student, TuitionAssignment, Tutor, TutorAvailabilityBlock,
+  Client, ClientStudentLink, Lesson, LessonActivityEvent, LessonAttendanceRecord, LessonReport, PlatformSettings, Student, TuitionAssignment,
+  Tutor, TutorAvailabilityBlock,
 } from "./domain";
 import type {
   ActivityRepository, AssignmentRepository, AttendanceRepository, AvailabilityRepository, ClientRepository, DataProvider, LessonRepository,
-  StudentRepository, TutorRepository,
+  ReportRepository, SettingsRepository, StudentRepository, TutorRepository,
 } from "./repositories";
 
 // Fixed, well-known ids for the seeded demo people (plan section 89's scenario) — not random,
@@ -20,6 +21,7 @@ export const SEED_IDS = {
   lessonCompleted: "lesson-gcse-maths-completed",
   lessonUpcoming: "lesson-gcse-maths-upcoming",
   classroomRoomUpcoming: "classroom-room-gcse-maths-upcoming",
+  reportApproved: "report-gcse-maths-completed-approved",
 } as const;
 
 function now() {
@@ -209,6 +211,40 @@ class InMemoryActivityRepository implements ActivityRepository {
   }
 }
 
+class InMemoryReportRepository implements ReportRepository {
+  constructor(private readonly store: Map<string, LessonReport>, private readonly lessonStore: Map<string, Lesson>) {}
+  async get(id: string) { return this.store.get(id) ?? null; }
+  async forLesson(lessonId: string) {
+    return [...this.store.values()].find((r) => r.lessonId === lessonId) ?? null;
+  }
+  async forStudent(studentId: string) {
+    const lessonIds = new Set([...this.lessonStore.values()].filter((l) => l.studentIds.includes(studentId)).map((l) => l.id));
+    return [...this.store.values()].filter((r) => lessonIds.has(r.lessonId));
+  }
+  async create(input: Omit<LessonReport, "id" | "createdAt" | "updatedAt">) {
+    const timestamp = now();
+    const report: LessonReport = { ...input, id: randomUUID(), createdAt: timestamp, updatedAt: timestamp };
+    this.store.set(report.id, report);
+    return report;
+  }
+  async update(id: string, patch: Partial<Omit<LessonReport, "id" | "lessonId" | "tutorId" | "createdAt">>) {
+    const existing = this.store.get(id);
+    if (!existing) throw new Error(`LessonReport ${id} not found`);
+    const updated = { ...existing, ...patch, updatedAt: now() };
+    this.store.set(id, updated);
+    return updated;
+  }
+}
+
+class InMemorySettingsRepository implements SettingsRepository {
+  constructor(private settings: PlatformSettings) {}
+  async get() { return this.settings; }
+  async update(patch: Partial<PlatformSettings>) {
+    this.settings = { ...this.settings, ...patch };
+    return this.settings;
+  }
+}
+
 function seedProvider(): DataProvider {
   const tutorStore = new Map<string, Tutor>();
   const clientStore = new Map<string, Client>();
@@ -218,6 +254,7 @@ function seedProvider(): DataProvider {
   const availabilityStore = new Map<string, TutorAvailabilityBlock>();
   const attendanceStore = new Map<string, LessonAttendanceRecord>();
   const activityStore = new Map<string, LessonActivityEvent>();
+  const reportStore = new Map<string, LessonReport>();
   const links: ClientStudentLink[] = [];
 
   tutorStore.set(SEED_IDS.tutorJamiePatel, {
@@ -274,6 +311,20 @@ function seedProvider(): DataProvider {
     classroomRoomId: SEED_IDS.classroomRoomUpcoming,
   });
 
+  // Plan section 89's "one approved report" — attached to the one completed seed lesson, since a
+  // report on a lesson that hasn't happened yet wouldn't make sense as demo data.
+  reportStore.set(SEED_IDS.reportApproved, {
+    id: SEED_IDS.reportApproved, lessonId: SEED_IDS.lessonCompleted, tutorId: SEED_IDS.tutorJamiePatel, status: "APPROVED",
+    publicSummary: "We covered simultaneous equations and practised exam-style questions.",
+    progress: "Ayaan is much more confident solving by substitution.",
+    areasForImprovement: "Still working on elimination method for trickier pairs.",
+    nextSteps: "Complete the worksheet on page 42 before next lesson.",
+    engagement: "HIGH", confidence: "MEDIUM",
+    internalTutorNotes: "Ayaan seemed tired today — worth checking in with Sarah about workload.",
+    submittedAt: oneWeekAgo, approvedAt: oneWeekAgo,
+    createdAt: oneWeekAgo, updatedAt: oneWeekAgo,
+  });
+
   return {
     tutors: new InMemoryTutorRepository(tutorStore),
     clients: new InMemoryClientRepository(clientStore),
@@ -283,6 +334,8 @@ function seedProvider(): DataProvider {
     availability: new InMemoryAvailabilityRepository(availabilityStore),
     attendance: new InMemoryAttendanceRepository(attendanceStore),
     activity: new InMemoryActivityRepository(activityStore),
+    reports: new InMemoryReportRepository(reportStore, lessonStore),
+    settings: new InMemorySettingsRepository({ requireReportApproval: true }),
   };
 }
 
