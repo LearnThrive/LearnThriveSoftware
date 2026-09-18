@@ -1,0 +1,394 @@
+/* ── About page redesign — scoped styles ────────────────── */
+
+.page {
+  --lt-navy: #143152;
+  --lt-navy-deep: #0E2540;
+  --lt-green: #075f52;
+  --lt-green-dark: #075f52;
+  --lt-green-light: #087363;
+  --lt-cream: #F7F2E8;
+  --lt-cream-light: #FBF8F1;
+  --lt-border: #E7DFCD;
+  --lt-ink: #26333F;
+  --lt-text: #64727E;
+  --lt-font-heading: var(--font-bricolage), sans-serif;
+  --lt-font-body: var(--font-public-sans), system-ui, sans-serif;
+  --lt-font-mono: var(--font-ibm-plex-mono), monospace;
+
+  font-family: var(--lt-font-body);
+  color: var(--lt-ink);
+  background: var(--lt-cream);
+}
+
+.page h1,
+.page h2,
+.page h3 {
+  font-family: var(--lt-font-heading);
+  font-weight: 800;
+  color: var(--lt-navy);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+/* ── Override site header ──────────────────────────────── */
+:global(body.is-about .site-header) {
+  background: #F7F2E8;
+  border-bottom-color: #E7DFCD;
+}
+
+/* ── Hero ──────────────────────────────────────────────── */
+.hero {
+  position: relative;
+  background: var(--lt-navy);
+  color: #fff;
+  overflow: hidden;
+}
+
+.heroDots {
+  position: absolute;
+  inset: 0 55% 0 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.11) 1px, transparent 1px);
+  background-size: 22px 22px;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.heroGlow {
+  position: absolute;
+  right: -90px;
+  top: -70px;
+  width: 340px;
+  height: 340px;
+  border-radius: 50%;
+  background: rgba(7, 95, 82, 0.18);
+  filter: blur(10px);
+  pointer-events: none;
+  animation: lt-float 11s ease-in-out infinite;
+}
+
+.heroInner {
+  position: relative;
+  padding: 58px 40px 54px;
+  max-width: 980px;
+}
+
+.eyebrow {
+  font-family: var(--lt-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--lt-green-light);
+  margin-bottom: 16px;
+  animation: lt-rise 0.6s both;
+}
+
+.eyebrowDark {
+  color: var(--lt-green-dark);
+}
+
+.heroTitle {
+  font-size: clamp(34px, 4.4vw, 52px) !important;
+  line-height: 1 !important;
+  letter-spacing: -0.03em !important;
+  color: #fff !important;
+  margin: 0 0 20px !important;
+  animation: lt-rise 0.8s both 0.12s;
+}
+
+.heroMark {
+  position: relative;
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.heroMarkBg {
+  position: absolute;
+  left: -8px;
+  right: -8px;
+  bottom: 2px;
+  height: 22px;
+  background: var(--lt-green);
+  transform-origin: left;
+  animation: lt-mark 0.75s cubic-bezier(0.2, 0.8, 0.3, 1) both 0.9s;
+  border-radius: 4px;
+}
+
+.heroMarkText {
+  position: relative;
+}
+
+.heroLead {
+  font-size: 18.5px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.84);
+  max-width: 52ch;
+  margin: 0;
+  animation: lt-rise 0.8s both 0.3s;
+}
+
+/* ── Marquee ───────────────────────────────────────────── */
+/* Reuses the global .lt-marquee styles from home.module.css */
+
+/* ── Story Section ─────────────────────────────────────── */
+.storySection {
+  padding: 64px 40px;
+  scroll-margin-top: 24px;
+}
+
+.storyTitle {
+  font-size: 40px !important;
+  line-height: 1.05 !important;
+  margin: 0 0 20px !important;
+  max-width: 22ch;
+}
+
+.storyText {
+  margin: 0 0 16px;
+  font-size: 17px;
+  line-height: 1.65;
+  color: var(--lt-ink);
+  max-width: 62ch;
+}
+
+.storyText:last-child {
+  margin-bottom: 0;
+}
+
+/* ── Founders Section ──────────────────────────────────── */
+.foundersSection {
+  background: var(--lt-cream-light);
+  border-block: 1px solid var(--lt-border);
+  padding: 64px 40px;
+}
+
+.foundersTitle {
+  font-size: 40px !important;
+  line-height: 1.05 !important;
+  margin: 0 !important;
+  max-width: 20ch;
+}
+
+.foundersGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 30px;
+}
+
+.founderCard {
+  background: #fff;
+  border: 1px solid var(--lt-border);
+  border-top: 4px solid var(--lt-green);
+  border-radius: 22px;
+  overflow: hidden;
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.founderCard:hover {
+  transform: translateY(-7px);
+  box-shadow: 0 26px 44px -28px rgba(20, 49, 82, 0.5);
+}
+
+.founderCardInner {
+  display: flex;
+  gap: 22px;
+  padding: 26px;
+  align-items: flex-start;
+}
+
+.founderPortrait {
+  width: 190px;
+  aspect-ratio: 3 / 4;
+  flex: none;
+  object-fit: cover;
+  object-position: 50% 28%;
+  border-radius: 16px;
+  border: 1px solid var(--lt-border);
+  background: #EFE7D6;
+}
+
+.founderPortraitTahasin {
+  object-position: 50% 22%;
+}
+
+.founderName {
+  font-size: 21px !important;
+  letter-spacing: -0.01em !important;
+  margin: 0 !important;
+}
+
+.founderRole {
+  font-family: var(--lt-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--lt-green-dark);
+  margin-top: 5px;
+}
+
+.founderBio {
+  margin: 14px 0 0;
+}
+
+.founderBio p {
+  margin: 0 0 14px;
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--lt-ink);
+}
+
+.founderBio p:last-child {
+  margin-bottom: 0;
+}
+
+/* ── Mission Section ───────────────────────────────────── */
+.missionSection {
+  position: relative;
+  background: var(--lt-navy);
+  color: #fff;
+  overflow: hidden;
+  padding: 70px 40px;
+  text-align: center;
+}
+
+.missionDots {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+  background-size: 22px 22px;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.missionInner {
+  position: relative;
+  max-width: 64ch;
+  margin-inline: auto;
+}
+
+.missionTitle {
+  font-size: 40px !important;
+  line-height: 1.08 !important;
+  color: #fff !important;
+  margin: 0 auto 18px !important;
+  max-width: 24ch;
+}
+
+.missionText {
+  margin: 0;
+  font-size: 17.5px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* ── CTA Section ───────────────────────────────────────── */
+.ctaSection {
+  background: var(--lt-cream-light);
+  border-block: 1px solid var(--lt-border);
+  padding: 72px 40px;
+  text-align: center;
+}
+
+.ctaSection h2 {
+  font-size: 40px !important;
+  margin: 0 0 14px !important;
+}
+
+.ctaSection p {
+  margin: 0 auto 28px;
+  max-width: 46ch;
+  font-size: 16.5px;
+  line-height: 1.6;
+  color: var(--lt-text);
+}
+
+.btnPrimary {
+  display: inline-block;
+  background: var(--lt-green);
+  color: #fff;
+  font-weight: 600;
+  font-size: 16.5px;
+  padding: 16px 30px;
+  border-radius: 999px;
+  text-decoration: none;
+  box-shadow: 0 14px 30px -16px rgba(7, 95, 82, 0.9);
+  transition: transform 0.2s, background 0.2s;
+  font-family: var(--lt-font-body);
+}
+
+.btnPrimary:hover {
+  transform: translateY(-3px);
+  background: var(--lt-green-dark);
+  color: #fff;
+}
+
+/* ── Animations ────────────────────────────────────────── */
+@keyframes lt-rise {
+  from { opacity: 0; transform: translateY(26px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes lt-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-9px); }
+}
+
+@keyframes lt-mark {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+/* ── Responsive ────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .foundersGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .founderPortrait {
+    width: 150px;
+  }
+
+  .heroTitle {
+    font-size: 38px !important;
+  }
+
+  .storyTitle,
+  .foundersTitle,
+  .missionTitle {
+    font-size: 28px !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .founderCardInner {
+    flex-direction: column;
+  }
+
+  .founderPortrait {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+  }
+}
+
+@media (max-width: 640px) {
+  .heroInner,
+  .storySection,
+  .foundersSection,
+  .missionSection,
+  .ctaSection {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page,
+  .page :global(*) {
+    animation: none !important;
+  }
+
+  :global(.rv) {
+    opacity: 1;
+    transform: none;
+  }
+}
