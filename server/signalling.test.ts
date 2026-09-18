@@ -1379,7 +1379,7 @@ describe('signalling through real Socket.IO clients', () => {
       // call, so it stays fast regardless of the bogus credentials above.
       const statuses: number[] = [];
       for (let i = 0; i < 21; i += 1) {
-        // eslint-disable-next-line no-await-in-loop -- must be sequential to hit the same rate-limit window deterministically
+        // Deliberately sequential (not Promise.all) to hit the same rate-limit window deterministically.
         const response = await fetch(`${url}/api/turn-credentials`);
         statuses.push(response.status);
       }
