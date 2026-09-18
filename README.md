@@ -76,9 +76,10 @@ npm run build          # classroom build, realtime typecheck, web build
 - [docs/ROLE_PERMISSIONS.md](docs/ROLE_PERMISSIONS.md) — roles and what's actually enforced where.
 - [docs/DEVELOPMENT_ACCOUNTS.md](docs/DEVELOPMENT_ACCOUNTS.md) — the five seeded dev accounts and their credentials.
 - [docs/DOMAIN_MODEL.md](docs/DOMAIN_MODEL.md) — Tutors, Clients, Students, Tuition Assignments, and the repository layer.
+- [docs/SCHEDULING.md](docs/SCHEDULING.md) — the calendar, lessons, recurrence, timezones/DST, rescheduling, cancellation, availability, and conflict detection.
 
-Further platform-level docs (scheduling, lesson reports, Supabase migration plan, platform-wide production gaps) land as the corresponding phases of this migration are implemented — see `docs/` as it grows.
+Further platform-level docs (lesson reports, Supabase migration plan, platform-wide production gaps) land as the corresponding phases of this migration are implemented — see `docs/` as it grows.
 
 ## Status
 
-This is a **development platform**, not production-ready. As of this migration (Phase A — repository convergence, Phase B — auth foundation, Phase C — people and tuition assignments), there is real login/logout/sessions/role guards and a real (in-memory) domain model for Tutors/Clients/Students/Tuition Assignments with Admin CRUD pages, but no accounts beyond five fictional dev users, no calendar or lessons yet, and nothing survives a server restart. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for what exists today versus what's planned.
+This is a **development platform**, not production-ready. As of this migration (Phase A — repository convergence, Phase B — auth foundation, Phase C — people and tuition assignments, Phase D — calendar and lessons), there is real login/logout/sessions/role guards, a real (in-memory) domain model for Tutors/Clients/Students/Tuition Assignments/Lessons with Admin CRUD pages, and a real calendar (Month/Week/Day/List, recurrence, drag-to-reschedule, conflict detection, DST-correct timezone handling) — but no accounts beyond five fictional dev users, no classroom integration yet (lessons don't launch a real classroom session), and nothing survives a server restart. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for what exists today versus what's planned.

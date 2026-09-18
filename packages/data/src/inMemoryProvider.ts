@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
-import type { Client, ClientStudentLink, Student, TuitionAssignment, Tutor } from "./domain";
-import type { AssignmentRepository, ClientRepository, DataProvider, StudentRepository, TutorRepository } from "./repositories";
+import type { Client, ClientStudentLink, Lesson, Student, TuitionAssignment, Tutor, TutorAvailabilityBlock } from "./domain";
+import type {
+  AssignmentRepository, AvailabilityRepository, ClientRepository, DataProvider, LessonRepository, StudentRepository, TutorRepository,
+} from "./repositories";
 
 // Fixed, well-known ids for the seeded demo people (plan section 89's scenario) — not random,
 // so apps/web's auth seed (devProvider.ts) can set matching AuthenticatedUser.profileId values
@@ -10,6 +12,10 @@ export const SEED_IDS = {
   clientSarahAhmed: "client-sarah-ahmed",
   studentAyaanAhmed: "student-ayaan-ahmed",
   assignmentGcseMaths: "assignment-gcse-maths-ayaan",
+  availabilityTuesday: "availability-jamie-tuesday",
+  availabilityThursday: "availability-jamie-thursday",
+  lessonCompleted: "lesson-gcse-maths-completed",
+  lessonUpcoming: "lesson-gcse-maths-upcoming",
 } as const;
 
 function now() {
@@ -115,11 +121,72 @@ class InMemoryAssignmentRepository implements AssignmentRepository {
   }
 }
 
+function overlaps(aStart: number, aEnd: number, bStart: number, bEnd: number): boolean {
+  return aStart < bEnd && bStart < aEnd;
+}
+
+class InMemoryLessonRepository implements LessonRepository {
+  constructor(private readonly store: Map<string, Lesson>) {}
+  async list() { return [...this.store.values()]; }
+  async get(id: string) { return this.store.get(id) ?? null; }
+  async forTutor(tutorId: string) { return [...this.store.values()].filter((l) => l.tutorId === tutorId); }
+  async forStudent(studentId: string) { return [...this.store.values()].filter((l) => l.studentIds.includes(studentId)); }
+  async forClient(clientId: string) { return [...this.store.values()].filter((l) => l.clientIds.includes(clientId)); }
+  async forRecurrence(recurrenceId: string) {
+    return [...this.store.values()].filter((l) => l.recurrenceId === recurrenceId).sort((a, b) => a.startAt.localeCompare(b.startAt));
+  }
+  async overlapping(params: { tutorId?: string; studentId?: string; startAt: string; durationMinutes: number; excludeLessonId?: string }) {
+    const start = new Date(params.startAt).getTime();
+    const end = start + params.durationMinutes * 60_000;
+    return [...this.store.values()].filter((l) => {
+      if (l.id === params.excludeLessonId) return false;
+      if (l.status === "CANCELLED") return false;
+      const matchesTutor = params.tutorId != null && l.tutorId === params.tutorId;
+      const matchesStudent = params.studentId != null && l.studentIds.includes(params.studentId);
+      if (!matchesTutor && !matchesStudent) return false;
+      const lStart = new Date(l.startAt).getTime();
+      const lEnd = lStart + l.durationMinutes * 60_000;
+      return overlaps(start, end, lStart, lEnd);
+    });
+  }
+  async create(input: Omit<Lesson, "id" | "createdAt" | "updatedAt">) {
+    const timestamp = now();
+    const lesson: Lesson = { ...input, id: randomUUID(), createdAt: timestamp, updatedAt: timestamp };
+    this.store.set(lesson.id, lesson);
+    return lesson;
+  }
+  async createMany(inputs: Array<Omit<Lesson, "id" | "createdAt" | "updatedAt">>) {
+    const created: Lesson[] = [];
+    for (const input of inputs) created.push(await this.create(input));
+    return created;
+  }
+  async update(id: string, patch: Partial<Omit<Lesson, "id" | "createdAt">>) {
+    const existing = this.store.get(id);
+    if (!existing) throw new Error(`Lesson ${id} not found`);
+    const updated = { ...existing, ...patch, updatedAt: now() };
+    this.store.set(id, updated);
+    return updated;
+  }
+}
+
+class InMemoryAvailabilityRepository implements AvailabilityRepository {
+  constructor(private readonly store: Map<string, TutorAvailabilityBlock>) {}
+  async forTutor(tutorId: string) { return [...this.store.values()].filter((b) => b.tutorId === tutorId); }
+  async create(input: Omit<TutorAvailabilityBlock, "id">) {
+    const block: TutorAvailabilityBlock = { ...input, id: randomUUID() };
+    this.store.set(block.id, block);
+    return block;
+  }
+  async remove(id: string) { this.store.delete(id); }
+}
+
 function seedProvider(): DataProvider {
   const tutorStore = new Map<string, Tutor>();
   const clientStore = new Map<string, Client>();
   const studentStore = new Map<string, Student>();
   const assignmentStore = new Map<string, TuitionAssignment>();
+  const lessonStore = new Map<string, Lesson>();
+  const availabilityStore = new Map<string, TutorAvailabilityBlock>();
   const links: ClientStudentLink[] = [];
 
   tutorStore.set(SEED_IDS.tutorJamiePatel, {
@@ -141,11 +208,47 @@ function seedProvider(): DataProvider {
     status: "ACTIVE", defaultDurationMinutes: 60, defaultLocationType: "ONLINE", createdAt: now(),
   });
 
+  // A weekly Tuesday 16:00-18:00 availability window and a Thursday half-day, in the
+  // scheduling default timezone (Europe/London — see apps/web/src/lib/scheduling/timezone.ts).
+  availabilityStore.set(SEED_IDS.availabilityTuesday, {
+    id: SEED_IDS.availabilityTuesday, tutorId: SEED_IDS.tutorJamiePatel, type: "AVAILABLE",
+    weekday: 2, startTime: "16:00", endTime: "18:00",
+  });
+  availabilityStore.set(SEED_IDS.availabilityThursday, {
+    id: SEED_IDS.availabilityThursday, tutorId: SEED_IDS.tutorJamiePatel, type: "AVAILABLE",
+    weekday: 4, startTime: "09:00", endTime: "13:00",
+  });
+
+  // One completed lesson (in the past) and one planned lesson (in the future) — plan section 89's
+  // "several upcoming/completed lessons" for the demo scenario, kept to two since a from-scratch
+  // in-memory seed doesn't need more to exercise every status/timing code path meaningfully.
+  const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const nextTuesday = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + ((2 - d.getDay() + 7) % 7 || 7));
+    d.setHours(16, 0, 0, 0);
+    return d.toISOString();
+  })();
+  lessonStore.set(SEED_IDS.lessonCompleted, {
+    id: SEED_IDS.lessonCompleted, assignmentId: SEED_IDS.assignmentGcseMaths, tutorId: SEED_IDS.tutorJamiePatel,
+    studentIds: [SEED_IDS.studentAyaanAhmed], clientIds: [SEED_IDS.clientSarahAhmed],
+    title: "GCSE Mathematics — Ayaan", subject: "Mathematics", startAt: oneWeekAgo, durationMinutes: 60,
+    locationType: "ONLINE", reportRequired: true, status: "COMPLETED", createdAt: oneWeekAgo, updatedAt: oneWeekAgo,
+  });
+  lessonStore.set(SEED_IDS.lessonUpcoming, {
+    id: SEED_IDS.lessonUpcoming, assignmentId: SEED_IDS.assignmentGcseMaths, tutorId: SEED_IDS.tutorJamiePatel,
+    studentIds: [SEED_IDS.studentAyaanAhmed], clientIds: [SEED_IDS.clientSarahAhmed],
+    title: "GCSE Mathematics — Ayaan", subject: "Mathematics", startAt: nextTuesday, durationMinutes: 60,
+    locationType: "ONLINE", reportRequired: true, status: "PLANNED", createdAt: now(), updatedAt: now(),
+  });
+
   return {
     tutors: new InMemoryTutorRepository(tutorStore),
     clients: new InMemoryClientRepository(clientStore),
     students: new InMemoryStudentRepository(studentStore, clientStore, links),
     assignments: new InMemoryAssignmentRepository(assignmentStore),
+    lessons: new InMemoryLessonRepository(lessonStore),
+    availability: new InMemoryAvailabilityRepository(availabilityStore),
   };
 }
 

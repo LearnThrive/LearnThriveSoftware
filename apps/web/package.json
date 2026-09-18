@@ -16,6 +16,12 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@fullcalendar/core": "6.1.19",
+    "@fullcalendar/daygrid": "6.1.19",
+    "@fullcalendar/interaction": "6.1.19",
+    "@fullcalendar/list": "6.1.19",
+    "@fullcalendar/react": "6.1.19",
+    "@fullcalendar/timegrid": "6.1.19",
     "@learnthrive/data": "*",
     "next": "16.3.2",
     "react": "^19.3.0",

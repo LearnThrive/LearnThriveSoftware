@@ -1,52 +1,9 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import test from "node:test";
-import { compileFunction } from "node:vm";
-import ts from "typescript";
-
-// Same "compile the real TypeScript source" approach as tests/enquiry.test.mjs — works on the
-// supported Node 20 releases, which cannot import TypeScript directly. Extended here (unlike
-// enquiry.test.mjs's route file, which has no relative imports of its own) to resolve a
-// module's *own* relative TypeScript imports recursively — devProvider.ts imports
-// "./passwords", which a require() anchored to this test file would never find.
-const moduleCache = new Map();
-
-function loadTsModule(fileUrl) {
-  const cacheKey = fileUrl.href;
-  if (moduleCache.has(cacheKey)) return moduleCache.get(cacheKey);
-
-  const source = readFileSync(fileUrl, "utf8");
-  const compiled = ts.transpileModule(source, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-  }).outputText;
-
-  const nodeRequire = createRequire(fileUrl);
-  const scopedRequire = (specifier) => {
-    if (specifier.startsWith(".")) return loadTsModule(new URL(`${specifier}.ts`, fileUrl));
-    // @learnthrive/* workspace packages are raw TS source with no compiled JS (see their
-    // package.json `exports`) — real require() can resolve the path via node_modules, but
-    // Node's own native TS support can't handle constructor parameter properties, which
-    // packages/data's repositories use. Route these through our own transpiler too, same as
-    // relative imports, rather than real Node require. Anchored to this test file's own
-    // location (not the importing file's), since the workspace layout is fixed either way and
-    // this avoids re-deriving "how many ../ from wherever we currently are" per caller.
-    if (specifier.startsWith("@learnthrive/data/")) {
-      const subpath = specifier.slice("@learnthrive/data/".length);
-      return loadTsModule(new URL(`../../../packages/data/src/${subpath}.ts`, import.meta.url));
-    }
-    return nodeRequire(specifier); // bare specifier (node:*, an npm package) — real Node resolution
-  };
-
-  const fakeModule = { exports: {} };
-  moduleCache.set(cacheKey, fakeModule.exports); // set before executing, in case of circular imports
-  compileFunction(compiled, ["require", "module", "exports"])(scopedRequire, fakeModule, fakeModule.exports);
-  moduleCache.set(cacheKey, fakeModule.exports);
-  return fakeModule.exports;
-}
+import { loadTsFrom } from "./_tsLoader.mjs";
 
 function loadModule(relativePath) {
-  return loadTsModule(new URL(relativePath, import.meta.url));
+  return loadTsFrom(import.meta.url, relativePath);
 }
 
 const { hashPassword, verifyPassword } = loadModule("../src/lib/auth/passwords.ts");
