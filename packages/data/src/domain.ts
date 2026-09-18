@@ -62,6 +62,9 @@ export interface TuitionAssignment {
   defaultDurationMinutes?: number;
   defaultLocationType?: LocationType;
   defaultLessonNotes?: string;
+  // Plan section 45: overrides PlatformSettings.requireReportApproval for lessons on this
+  // Assignment only. Absent means "use the platform default".
+  requireReportApproval?: boolean;
   createdAt: string;
 }
 
@@ -147,7 +150,7 @@ export interface LessonAttendanceRecord {
 // Plan section 40: a chronological, append-only audit/activity timeline per Lesson — never
 // edited or deleted once written, so it stays a trustworthy record of what actually happened.
 export type LessonActivityEventType =
-  | "CREATED" | "RESCHEDULED" | "CANCELLED" | "ATTENDANCE_MARKED" | "COMPLETED" | "REPORT_SUBMITTED";
+  | "CREATED" | "RESCHEDULED" | "CANCELLED" | "ATTENDANCE_MARKED" | "COMPLETED" | "REPORT_SUBMITTED" | "REPORT_APPROVED";
 
 export interface LessonActivityEvent {
   id: string;
@@ -156,4 +159,41 @@ export interface LessonActivityEvent {
   message: string; // human-readable, e.g. "Changed from Tuesday 17:00 to Thursday 18:00"
   actorId?: string; // AuthenticatedUser.id — absent for a system-generated event
   createdAt: string;
+}
+
+// Plan sections 41-44. One LessonReport per Lesson. `internalTutorNotes` must NEVER be sent to a
+// Client/Student — see docs/LESSON_REPORTS.md's visibility model, which keeps the "what's public"
+// decision in one place (reportService.ts's visibleReportFor()) rather than trusting every caller
+// to remember to strip it.
+export type ReportStatus = "DRAFT" | "SUBMITTED" | "APPROVED";
+export type ReportAssessmentLevel = "LOW" | "MEDIUM" | "HIGH";
+
+export interface LessonReport {
+  id: string;
+  lessonId: string;
+  tutorId: string;
+  status: ReportStatus;
+  // Parent/Student-visible once the report is visible at all (see reportService.ts) —
+  // publicSummary, progress, areasForImprovement, nextSteps, engagement (plan section 43's own
+  // field list, plus engagement as the lesson's "simple assessment").
+  publicSummary: string;
+  progress?: string;
+  areasForImprovement?: string;
+  nextSteps?: string;
+  engagement?: ReportAssessmentLevel;
+  // Tutor-facing only — never included in what a Client/Student can see.
+  confidence?: ReportAssessmentLevel;
+  internalTutorNotes?: string;
+  submittedAt?: string;
+  approvedAt?: string;
+  approvedBy?: string; // AuthenticatedUser.id of the approving Admin — absent when approval isn't required
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Plan section 45: a global default, overridable per Tuition Assignment. Modelled as a single
+// well-known record rather than a full settings table — there is exactly one platform-wide
+// setting so far, and a table for one row would be scaffolding.
+export interface PlatformSettings {
+  requireReportApproval: boolean;
 }

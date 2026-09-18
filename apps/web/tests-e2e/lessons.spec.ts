@@ -226,6 +226,9 @@ test('a Tutor cannot complete a lesson until every Student has an attendance rec
   await page.locator('#lesson-title').fill('Lesson to complete');
   await page.locator('#lesson-date').fill('2026-11-26');
   await page.locator('#lesson-time').fill('14:00');
+  // No report required for this lesson — this test is about the attendance gate specifically;
+  // the report-required completion gate has its own dedicated test below.
+  await page.getByLabel('Require a lesson report').uncheck();
   await page.getByRole('button', { name: 'Schedule lesson' }).click();
   await expect(page).toHaveURL(/\/dashboard\/calendar$/);
 
@@ -252,4 +255,57 @@ test('a Tutor cannot complete a lesson until every Student has an attendance rec
   await expect(page.locator('.dashboard-page')).toContainText('COMPLETED');
   await expect(page.locator('.activity-list')).toContainText('Attendance marked for Ayaan Ahmed: ATTENDED');
   await expect(page.locator('.activity-list')).toContainText('Lesson marked complete');
+});
+
+test('a required lesson report blocks completion until submitted, and internal Tutor notes never reach the Client view even after approval', async ({ page }) => {
+  await login(page, ADMIN.email, ADMIN.password);
+  await page.goto('/dashboard/admin/lessons/new');
+  await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Ayaan' });
+  await page.locator('#lesson-title').fill('Lesson needing a report');
+  await page.locator('#lesson-date').fill('2026-11-27');
+  await page.locator('#lesson-time').fill('15:00');
+  // "Require a lesson report" is checked by default — deliberately left on for this test.
+  await page.getByRole('button', { name: 'Schedule lesson' }).click();
+  await expect(page).toHaveURL(/\/dashboard\/calendar$/);
+
+  for (let i = 0; i < 12; i += 1) {
+    const title = await page.locator('.fc-toolbar-title').innerText();
+    if (title.includes('November 2026')) break;
+    await page.locator('.fc-next-button').click();
+  }
+  await page.locator('.fc-event', { hasText: 'Lesson needing a report' }).click();
+  await expect(page).toHaveURL(/\/dashboard\/lessons\/(.+)/);
+  const lessonUrl = page.url();
+
+  await login(page, TUTOR.email, TUTOR.password);
+  await page.goto(lessonUrl);
+  await page.locator('select[aria-label="Attendance status for Ayaan Ahmed"]').selectOption('ATTENDED');
+  await page.getByRole('button', { name: 'Mark', exact: true }).click();
+
+  const completeButton = page.getByRole('button', { name: /Complete Lesson|Submit the lesson report/ });
+  await expect(completeButton).toHaveText('Submit the lesson report to complete this lesson');
+  await expect(completeButton).toBeDisabled();
+
+  await page.getByRole('button', { name: 'Start a report' }).click();
+  await page.locator('#report-summary').fill('Covered quadratic equations.');
+  await page.locator('#report-private-notes').fill('CONFIDENTIAL: struggling with confidence, discuss with Sarah privately.');
+  await page.getByRole('button', { name: 'Save draft' }).click();
+  await expect(completeButton).toBeDisabled(); // still a draft — doesn't count as "the report exists" yet
+
+  await page.getByRole('button', { name: 'Submit report' }).click();
+  await expect(page.locator('.dashboard-page')).toContainText('SUBMITTED');
+  await expect(completeButton).toBeEnabled();
+  await completeButton.click();
+  await expect(page.locator('.dashboard-page')).toContainText('COMPLETED');
+
+  await login(page, ADMIN.email, ADMIN.password);
+  await page.goto(lessonUrl);
+  await expect(page.locator('.dashboard-page')).toContainText('SUBMITTED');
+  await page.getByRole('button', { name: 'Approve report' }).click();
+  await expect(page.locator('.dashboard-page')).toContainText('APPROVED');
+
+  await login(page, CLIENT.email, CLIENT.password);
+  await page.goto(lessonUrl);
+  await expect(page.locator('.dashboard-page')).toContainText('Covered quadratic equations.');
+  await expect(page.locator('.dashboard-page')).not.toContainText('CONFIDENTIAL');
 });

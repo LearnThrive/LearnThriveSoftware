@@ -6,11 +6,14 @@ import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
 import { cancelLessonAction } from "@/lib/actions/lessons";
 import { joinClassroomAction } from "@/lib/actions/classroom";
 import { markAttendanceAction, completeLessonAction } from "@/lib/actions/attendance";
+import { approveReportAction, saveReportDraftAction, submitReportAction } from "@/lib/actions/reports";
+import { visibleReportFor } from "@/lib/reports/reportService";
 import { formatInTimeZone } from "@/lib/scheduling/timezone";
 import { isWithinJoinWindow } from "@/lib/scheduling/joinWindow";
-import type { AttendanceStatus } from "@learnthrive/data/domain";
+import type { AttendanceStatus, ReportAssessmentLevel } from "@learnthrive/data/domain";
 
 const ATTENDANCE_STATUSES: AttendanceStatus[] = ["ATTENDED", "LATE", "ABSENT", "EXCUSED"];
+const ASSESSMENT_LEVELS: ReportAssessmentLevel[] = ["LOW", "MEDIUM", "HIGH"];
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -44,11 +47,12 @@ export default async function LessonDetailPage({
   if (!lesson) notFound();
   if (!canView(user, lesson)) redirect("/403");
 
-  const [tutor, students, attendanceRecords, activityEvents] = await Promise.all([
+  const [tutor, students, attendanceRecords, activityEvents, report] = await Promise.all([
     data.tutors.get(lesson.tutorId),
     Promise.all(lesson.studentIds.map((sid) => data.students.get(sid))),
     data.attendance.forLesson(lesson.id),
     data.activity.forLesson(lesson.id),
+    data.reports.forLesson(lesson.id),
   ]);
   const attendanceByStudent = new Map(attendanceRecords.map((r) => [r.studentId, r]));
 
@@ -59,8 +63,13 @@ export default async function LessonDetailPage({
   const canCancel = isAdmin && lesson.status === "PLANNED";
   const canJoin = lesson.locationType === "ONLINE" && lesson.status !== "CANCELLED" && (user.role === "TUTOR" || user.role === "STUDENT");
   const joinWindowOpen = canJoin && isWithinJoinWindow(lesson, user.role as "TUTOR" | "STUDENT");
-  const canComplete = canManageAttendance && lesson.status !== "CANCELLED" && lesson.status !== "COMPLETED";
   const allAttendanceMarked = lesson.studentIds.every((sid) => attendanceByStudent.has(sid));
+  const reportBlocksCompletion = lesson.reportRequired && (!report || report.status === "DRAFT");
+  const canComplete = canManageAttendance && lesson.status !== "CANCELLED" && lesson.status !== "COMPLETED";
+  const completionBlockedReason = !allAttendanceMarked
+    ? "Mark attendance for every Student to complete this lesson"
+    : reportBlocksCompletion ? "Submit the lesson report to complete this lesson" : null;
+  const visibleReport = report ? visibleReportFor(user, report) : null;
 
   return (
     <div className="dashboard-page">
@@ -129,11 +138,75 @@ export default async function LessonDetailPage({
         </>
       )}
 
+      {canManageAttendance && lesson.status !== "CANCELLED" && (
+        <>
+          <h2>Lesson report</h2>
+          {visibleReport ? (
+            <div className="dashboard-page__note">
+              <p>Status: <strong>{visibleReport.status}</strong></p>
+              <p>{visibleReport.publicSummary}</p>
+              {visibleReport.progress && <p>Progress: {visibleReport.progress}</p>}
+              {visibleReport.areasForImprovement && <p>Areas to improve: {visibleReport.areasForImprovement}</p>}
+              {visibleReport.nextSteps && <p>Homework / next steps: {visibleReport.nextSteps}</p>}
+              {visibleReport.engagement && <p>Engagement: {visibleReport.engagement}</p>}
+              {report && "confidence" in report && report.confidence && <p>Confidence (Tutor-only): {report.confidence}</p>}
+              {report?.internalTutorNotes && <p>Private Tutor notes (Tutor/Admin-only): {report.internalTutorNotes}</p>}
+            </div>
+          ) : (
+            <p className="dashboard-page__note">No report yet.</p>
+          )}
+
+          {report?.status === "DRAFT" && (
+            <form action={saveReportDraftAction} className="login-form" style={{ marginTop: "1rem" }}>
+              <input type="hidden" name="lessonId" value={lesson.id} />
+              <div className="form-field"><label htmlFor="report-summary">Lesson summary</label><textarea id="report-summary" name="publicSummary" defaultValue={report.publicSummary} required /></div>
+              <div className="form-field"><label htmlFor="report-progress">Progress</label><textarea id="report-progress" name="progress" defaultValue={report.progress ?? ""} /></div>
+              <div className="form-field"><label htmlFor="report-areas">Areas to improve</label><textarea id="report-areas" name="areasForImprovement" defaultValue={report.areasForImprovement ?? ""} /></div>
+              <div className="form-field"><label htmlFor="report-next-steps">Homework / next steps (optional)</label><textarea id="report-next-steps" name="nextSteps" defaultValue={report.nextSteps ?? ""} /></div>
+              <div className="form-field">
+                <label htmlFor="report-engagement">Engagement</label>
+                <select id="report-engagement" name="engagement" defaultValue={report.engagement ?? ""}>
+                  <option value="">Not assessed</option>
+                  {ASSESSMENT_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
+                </select>
+              </div>
+              <div className="form-field">
+                <label htmlFor="report-confidence">Confidence (Tutor-only, optional)</label>
+                <select id="report-confidence" name="confidence" defaultValue={report.confidence ?? ""}>
+                  <option value="">Not assessed</option>
+                  {ASSESSMENT_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
+                </select>
+              </div>
+              <div className="form-field"><label htmlFor="report-private-notes">Private Tutor notes (never shown to Client/Student)</label><textarea id="report-private-notes" name="internalTutorNotes" defaultValue={report.internalTutorNotes ?? ""} /></div>
+              <div className="form-actions">
+                <button type="submit" formAction={saveReportDraftAction} className="button-secondary">Save draft</button>
+                <button type="submit" formAction={submitReportAction} className="button button--primary"><span>Submit report</span></button>
+              </div>
+            </form>
+          )}
+
+          {!report && (
+            <form action={saveReportDraftAction} style={{ marginTop: "1rem" }}>
+              <input type="hidden" name="lessonId" value={lesson.id} />
+              <input type="hidden" name="publicSummary" value="" />
+              <button type="submit" className="button-secondary">Start a report</button>
+            </form>
+          )}
+
+          {isAdmin && report?.status === "SUBMITTED" && (
+            <form action={approveReportAction} style={{ marginTop: "1rem" }}>
+              <input type="hidden" name="lessonId" value={lesson.id} />
+              <button type="submit" className="button button--primary"><span>Approve report</span></button>
+            </form>
+          )}
+        </>
+      )}
+
       {canComplete && (
         <form action={completeLessonAction} style={{ marginTop: "1rem" }}>
           <input type="hidden" name="lessonId" value={lesson.id} />
-          <button type="submit" className="button button--primary" disabled={!allAttendanceMarked}>
-            <span>{allAttendanceMarked ? "Complete Lesson" : "Mark attendance for every Student to complete this lesson"}</span>
+          <button type="submit" className="button button--primary" disabled={completionBlockedReason != null}>
+            <span>{completionBlockedReason ?? "Complete Lesson"}</span>
           </button>
         </form>
       )}
@@ -154,9 +227,20 @@ export default async function LessonDetailPage({
       )}
 
       {!canManageAttendance && (
-        <p className="dashboard-page__note">
-          Lesson reports and student progress history arrive in a later phase of this platform.
-        </p>
+        <>
+          <h2>Lesson report</h2>
+          {visibleReport ? (
+            <div className="dashboard-page__note">
+              <p>{visibleReport.publicSummary}</p>
+              {visibleReport.progress && <p>Progress: {visibleReport.progress}</p>}
+              {visibleReport.areasForImprovement && <p>Areas to improve: {visibleReport.areasForImprovement}</p>}
+              {visibleReport.nextSteps && <p>Homework / next steps: {visibleReport.nextSteps}</p>}
+              {visibleReport.engagement && <p>Engagement: {visibleReport.engagement}</p>}
+            </div>
+          ) : (
+            <p className="dashboard-page__note">No report available for this lesson yet.</p>
+          )}
+        </>
       )}
     </div>
   );

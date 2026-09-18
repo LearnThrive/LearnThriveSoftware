@@ -1,5 +1,6 @@
 import type {
-  Client, ClientStudentLink, Lesson, LessonActivityEvent, LessonAttendanceRecord, Student, TuitionAssignment, Tutor, TutorAvailabilityBlock,
+  Client, ClientStudentLink, Lesson, LessonActivityEvent, LessonAttendanceRecord, LessonReport, PlatformSettings, Student, TuitionAssignment,
+  Tutor, TutorAvailabilityBlock,
 } from "./domain";
 
 // Every repository interface follows the same shape deliberately — a future
@@ -80,6 +81,19 @@ export interface ActivityRepository {
   append(event: Omit<LessonActivityEvent, "id" | "createdAt">): Promise<LessonActivityEvent>;
 }
 
+export interface ReportRepository {
+  get(id: string): Promise<LessonReport | null>;
+  forLesson(lessonId: string): Promise<LessonReport | null>; // one report per Lesson
+  forStudent(studentId: string): Promise<LessonReport[]>; // via the Lesson's studentIds — for the progress timeline
+  create(input: Omit<LessonReport, "id" | "createdAt" | "updatedAt">): Promise<LessonReport>;
+  update(id: string, patch: Partial<Omit<LessonReport, "id" | "lessonId" | "tutorId" | "createdAt">>): Promise<LessonReport>;
+}
+
+export interface SettingsRepository {
+  get(): Promise<PlatformSettings>;
+  update(patch: Partial<PlatformSettings>): Promise<PlatformSettings>;
+}
+
 export interface DataProvider {
   tutors: TutorRepository;
   clients: ClientRepository;
@@ -89,4 +103,6 @@ export interface DataProvider {
   availability: AvailabilityRepository;
   attendance: AttendanceRepository;
   activity: ActivityRepository;
+  reports: ReportRepository;
+  settings: SettingsRepository;
 }
