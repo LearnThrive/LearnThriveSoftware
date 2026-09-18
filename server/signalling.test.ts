@@ -1343,4 +1343,51 @@ describe('signalling through real Socket.IO clients', () => {
       if (previousApiToken !== undefined) process.env.CLOUDFLARE_TURN_API_TOKEN = previousApiToken;
     }
   });
+
+  it('reports TURN as unavailable (502) with a clean message — never the raw Cloudflare response — when credentials are configured but rejected', async () => {
+    const previousKeyId = process.env.CLOUDFLARE_TURN_KEY_ID;
+    const previousApiToken = process.env.CLOUDFLARE_TURN_API_TOKEN;
+    // Deliberately bogus, obviously-fake credentials — a real network call to Cloudflare that we
+    // expect it to reject, proving the failure-mapping path end to end rather than just the 503
+    // "not configured" shortcut above.
+    process.env.CLOUDFLARE_TURN_KEY_ID = 'not-a-real-key-id-0000000000000000';
+    process.env.CLOUDFLARE_TURN_API_TOKEN = 'not-a-real-api-token-0000000000000000';
+    try {
+      const response = await fetch(`${url}/api/turn-credentials`);
+      expect(response.status).toBe(502);
+      const body = await response.json();
+      expect(body).toEqual({ error: 'Could not generate temporary TURN credentials.' });
+      // The client-visible error must never include Cloudflare's own response body/headers.
+      expect(JSON.stringify(body)).not.toMatch(/cloudflare/i);
+    } finally {
+      if (previousKeyId !== undefined) process.env.CLOUDFLARE_TURN_KEY_ID = previousKeyId; else delete process.env.CLOUDFLARE_TURN_KEY_ID;
+      if (previousApiToken !== undefined) process.env.CLOUDFLARE_TURN_API_TOKEN = previousApiToken; else delete process.env.CLOUDFLARE_TURN_API_TOKEN;
+    }
+  }, 15_000);
+
+  it('rate-limits repeated TURN credential requests from the same client (429) once past the per-minute cap', async () => {
+    const previousKeyId = process.env.CLOUDFLARE_TURN_KEY_ID;
+    const previousApiToken = process.env.CLOUDFLARE_TURN_API_TOKEN;
+    // The 503 "not configured" short-circuit runs before the rate limiter, so unconfigured
+    // credentials would never exercise it — use (bogus) configured credentials instead, which
+    // still reach the rate limiter first on every request per server/signalling.ts's handler order.
+    process.env.CLOUDFLARE_TURN_KEY_ID = 'not-a-real-key-id-0000000000000000';
+    process.env.CLOUDFLARE_TURN_API_TOKEN = 'not-a-real-api-token-0000000000000000';
+    try {
+      // TURN_RATE_MAX is 20/min in server/signalling.ts; 21 rapid requests from the same client
+      // should tip the 21st into 429 — and the 429 check runs before the (real, slower) Cloudflare
+      // call, so it stays fast regardless of the bogus credentials above.
+      const statuses: number[] = [];
+      for (let i = 0; i < 21; i += 1) {
+        // eslint-disable-next-line no-await-in-loop -- must be sequential to hit the same rate-limit window deterministically
+        const response = await fetch(`${url}/api/turn-credentials`);
+        statuses.push(response.status);
+      }
+      expect(statuses[20]).toBe(429);
+      expect(statuses.slice(0, 20).every((status) => status === 502)).toBe(true);
+    } finally {
+      if (previousKeyId !== undefined) process.env.CLOUDFLARE_TURN_KEY_ID = previousKeyId; else delete process.env.CLOUDFLARE_TURN_KEY_ID;
+      if (previousApiToken !== undefined) process.env.CLOUDFLARE_TURN_API_TOKEN = previousApiToken; else delete process.env.CLOUDFLARE_TURN_API_TOKEN;
+    }
+  }, 60_000);
 });
