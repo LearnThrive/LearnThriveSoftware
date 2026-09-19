@@ -1,0 +1,128 @@
+/*
+ * LearnThrive — sign-in, notifications, availability and the last shared odds and ends.
+ * Fourth app stylesheet, kept separate for the same reason as the others (plan6 section 87).
+ */
+
+/* ============================================================ Sign in (sections 79-81) */
+
+.auth-layout {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-height: 100vh; background: var(--app-canvas);
+}
+
+.auth-brand {
+  display: flex; flex-direction: column; justify-content: space-between; gap: var(--space-6);
+  padding: var(--space-6) var(--space-7);
+  background: linear-gradient(150deg, var(--colour-navy-900) 0%, #10314f 55%, var(--colour-green-800) 100%);
+  color: var(--app-on-dark);
+}
+
+.auth-brand__back {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  color: var(--colour-mint-200); font-size: var(--text-small); font-weight: 600; text-decoration: none;
+  align-self: flex-start;
+}
+.auth-brand__back:hover { color: #fff; text-decoration: underline; text-underline-offset: 0.2em; }
+
+.auth-brand__body { max-width: 30rem; }
+.auth-brand__mark {
+  display: grid; place-items: center; width: 3rem; height: 3rem; margin-bottom: var(--space-5);
+  border-radius: 0.9rem; background: var(--colour-green-600); color: #fff;
+  font-weight: 700; font-size: 1rem; letter-spacing: 0.02em;
+}
+.auth-brand__tagline {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-label); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--colour-mint-200);
+}
+.auth-brand__headline {
+  margin: 0 0 var(--space-5);
+  font-family: var(--font-heading); font-size: clamp(1.8rem, 2.6vw, 2.5rem); font-weight: 700;
+  line-height: 1.15; letter-spacing: -0.015em; color: #fff;
+}
+.auth-brand__points { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-3); }
+.auth-brand__points li { position: relative; padding-left: var(--space-5); color: var(--app-on-dark-muted); }
+.auth-brand__points li::before {
+  content: ""; position: absolute; left: 0; top: 0.55em;
+  width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--colour-mint-200);
+}
+.auth-brand__foot { margin: 0; font-size: var(--text-small); color: var(--app-on-dark-muted); }
+
+.auth-panel { display: grid; place-items: center; padding: var(--space-6) var(--space-5); }
+.auth-panel__inner { width: min(24rem, 100%); }
+.auth-panel__title { margin: 0; font-family: var(--font-heading); font-size: var(--text-display); font-weight: 700; color: var(--app-ink); }
+.auth-panel__subtitle { margin: var(--space-2) 0 var(--space-5); color: var(--app-muted); font-size: var(--text-small); }
+
+.auth-form .field + .field { margin-top: 0; }
+
+.password-field { position: relative; display: flex; align-items: center; }
+.password-field input { padding-right: 4rem; }
+.password-field__toggle {
+  position: absolute; right: 0.4rem;
+  padding: 0.3rem 0.5rem; border: 0; border-radius: var(--app-radius-sm);
+  background: transparent; color: var(--app-muted);
+  font: inherit; font-size: var(--text-small); font-weight: 650; cursor: pointer;
+}
+.password-field__toggle:hover { color: var(--app-accent); background: var(--app-surface-sunken); }
+.password-field__toggle:focus-visible { outline: none; box-shadow: var(--app-focus-ring); }
+
+@media (max-width: 62rem) {
+  .auth-layout { grid-template-columns: minmax(0, 1fr); }
+  .auth-brand { padding: var(--space-5); gap: var(--space-5); }
+  .auth-brand__headline { font-size: 1.6rem; margin-bottom: var(--space-4); }
+  .auth-brand__points, .auth-brand__foot { display: none; }
+  .auth-brand__mark { margin-bottom: var(--space-3); }
+}
+
+/* ============================================================ Notifications (section 65) */
+
+.notification-list { list-style: none; margin: 0; padding: 0; }
+.notification {
+  display: flex; align-items: flex-start; gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+}
+.notification + .notification { border-top: 1px solid var(--app-border); }
+.notification--unread { background: #f6fbf8; }
+
+.notification__dot {
+  flex: none; width: 0.5rem; height: 0.5rem; margin-top: 0.45rem;
+  border-radius: 50%; background: transparent;
+}
+.notification--unread .notification__dot { background: var(--app-accent); }
+
+.notification__body { flex: 1; min-width: 0; }
+.notification__message { margin: 0; color: var(--app-ink); font-size: var(--text-body); text-decoration: none; display: block; }
+a.notification__message:hover { color: var(--app-accent); text-decoration: underline; }
+.notification__meta { display: flex; align-items: center; gap: var(--space-2); margin: 0.2rem 0 0; font-size: var(--text-small); color: var(--app-muted); }
+.notification__unread-tag {
+  padding: 0.05rem 0.4rem; border-radius: 999px;
+  background: var(--app-accent-soft); color: var(--app-accent-strong);
+  font-size: var(--text-label); font-weight: 700;
+}
+
+/* ============================================================ Availability */
+
+.availability-list { list-style: none; margin: 0; padding: 0; }
+.availability-row {
+  display: flex; align-items: center; gap: var(--space-4);
+  padding: var(--space-3) var(--space-5);
+}
+.availability-row + .availability-row { border-top: 1px solid var(--app-border); }
+.availability-row__day { min-width: 7rem; font-weight: 600; color: var(--app-ink); }
+.availability-row__time { color: var(--app-text); font-variant-numeric: tabular-nums; }
+.availability-row__action { margin-left: auto; }
+
+/* ============================================================ Attendance + plain lists */
+
+.attendance-list { list-style: none; margin: 0; padding: 0; }
+
+.plain-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.plain-list li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); font-size: var(--text-small); color: var(--app-text); }
+.plain-list a { color: var(--app-accent); text-decoration: none; }
+.plain-list a:hover { text-decoration: underline; }
+
+/* Screen-reader-only text, used by loading states and icon-only controls. */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}

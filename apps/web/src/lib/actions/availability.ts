@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
 import { requireRole } from "@/lib/auth/guard";
 
@@ -23,6 +24,12 @@ export async function addAvailabilityAction(formData: FormData): Promise<void> {
   const data = getDataProvider();
   await data.availability.create({ tutorId: user.profileId, type, weekday, startTime, endTime });
   revalidatePath("/dashboard/tutor/availability");
+  // A redirect (even back to the same path) is what actually closes the Dialog this form lives
+  // in — a bare revalidatePath() re-renders the Server Component tree with fresh data but leaves
+  // the Dialog's own client-side `open` state untouched, so it would otherwise stay open over
+  // the very list it just updated. Also gives this flow the same toast confirmation every other
+  // creation form already has (plan6 section 37).
+  redirect(`/dashboard/tutor/availability?toast=${encodeURIComponent("Availability added")}`);
 }
 
 export async function removeAvailabilityAction(formData: FormData): Promise<void> {
@@ -37,4 +44,5 @@ export async function removeAvailabilityAction(formData: FormData): Promise<void
   if (!own.some((b) => b.id === blockId)) throw new Error("Availability block not found.");
   await data.availability.remove(blockId);
   revalidatePath("/dashboard/tutor/availability");
+  redirect(`/dashboard/tutor/availability?toast=${encodeURIComponent("Availability removed")}`);
 }

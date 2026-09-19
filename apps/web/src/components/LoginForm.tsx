@@ -50,15 +50,15 @@ export function LoginForm() {
   const submitting = status === "submitting";
 
   return (
-    <form className="login-form" onSubmit={handleSubmit} noValidate>
+    <form className="form auth-form" onSubmit={handleSubmit} noValidate>
       {error ? (
-        <div className="form-message form-message--error" role="alert">
+        <div className="alert alert--error" role="alert">
           <p>{error}</p>
         </div>
       ) : null}
 
-      <div className="form-field">
-        <label htmlFor="login-email">Email</label>
+      <div className="field">
+        <label className="field__label" htmlFor="login-email">Email</label>
         <input
           id="login-email"
           name="email"
@@ -72,9 +72,9 @@ export function LoginForm() {
         />
       </div>
 
-      <div className="form-field">
-        <label htmlFor="login-password">Password</label>
-        <div className="login-password-field">
+      <div className="field">
+        <label className="field__label" htmlFor="login-password">Password</label>
+        <div className="password-field">
           <input
             id="login-password"
             name="password"
@@ -88,7 +88,7 @@ export function LoginForm() {
           />
           <button
             type="button"
-            className="login-password-toggle"
+            className="password-field__toggle"
             onClick={() => setShowPassword((current) => !current)}
             aria-pressed={showPassword}
             aria-label={showPassword ? "Hide password" : "Show password"}
@@ -98,7 +98,7 @@ export function LoginForm() {
         </div>
       </div>
 
-      <label className="login-remember">
+      <label className="checkbox-field">
         <input
           type="checkbox"
           checked={rememberMe}
@@ -109,7 +109,7 @@ export function LoginForm() {
       </label>
 
       <div className="form-actions">
-        <button type="submit" className="button button--primary" disabled={submitting}>
+        <button type="submit" className="btn btn--primary btn--block" disabled={submitting}>
           <span>{submitting ? "Signing in…" : "Sign in"}</span>
         </button>
       </div>

@@ -28,8 +28,8 @@ export async function createTutorAction(formData: FormData): Promise<void> {
     name, email, active: true,
     subjects: subjects ? subjects.split(",").map((s) => s.trim()).filter(Boolean) : [],
   });
-  revalidatePath("/dashboard/admin/people");
-  redirect("/dashboard/admin/people");
+  revalidatePath("/dashboard/admin/people/tutors");
+  redirect(`/dashboard/admin/people/tutors?toast=${encodeURIComponent(`${name} added as a tutor`)}`);
 }
 
 export async function createClientAction(formData: FormData): Promise<void> {
@@ -41,8 +41,8 @@ export async function createClientAction(formData: FormData): Promise<void> {
 
   const data = getDataProvider();
   await data.clients.create({ name, email, active: true, ...(phone ? { phone } : {}) });
-  revalidatePath("/dashboard/admin/people");
-  redirect("/dashboard/admin/people");
+  revalidatePath("/dashboard/admin/people/clients");
+  redirect(`/dashboard/admin/people/clients?toast=${encodeURIComponent(`${name} added as a client`)}`);
 }
 
 export async function createStudentAction(formData: FormData): Promise<void> {
@@ -55,8 +55,8 @@ export async function createStudentAction(formData: FormData): Promise<void> {
   const data = getDataProvider();
   const student = await data.students.create({ name, active: true, ...(yearGroup ? { yearGroup } : {}) });
   if (clientId) await data.students.linkClient(clientId, student.id);
-  revalidatePath("/dashboard/admin/people");
-  redirect("/dashboard/admin/people");
+  revalidatePath("/dashboard/admin/people/students");
+  redirect(`/dashboard/admin/people/students?toast=${encodeURIComponent(`${name} added as a student`)}`);
 }
 
 export async function createAssignmentAction(formData: FormData): Promise<void> {
@@ -88,5 +88,5 @@ export async function createAssignmentAction(formData: FormData): Promise<void> 
     defaultLocationType: "ONLINE",
   });
   revalidatePath("/dashboard/admin/assignments");
-  redirect("/dashboard/admin/assignments");
+  redirect(`/dashboard/admin/assignments?toast=${encodeURIComponent(`${title} created`)}`);
 }
