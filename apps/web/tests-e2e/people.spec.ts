@@ -14,13 +14,13 @@ test('Admin sees the seeded demo Tutor, Client, Student and Tuition Assignment',
   await loginAsAdmin(page);
   // People is now three separate tabbed pages (plan6 section 39), not one page with three lists.
   await page.goto('/dashboard/admin/people/tutors');
-  await expect(page.locator('.person-list')).toContainText('Jamie Patel');
+  await expect(page.locator('.person-list')).toContainText('Tahasin Hasan');
 
   await page.goto('/dashboard/admin/people/clients');
-  await expect(page.locator('.person-list')).toContainText('Sarah Ahmed');
+  await expect(page.locator('.person-list')).toContainText('Abdurrahman Mustafa');
 
   await page.goto('/dashboard/admin/people/students');
-  await expect(page.locator('.person-list')).toContainText('Ayaan Ahmed');
+  await expect(page.locator('.person-list')).toContainText('Brian James Khalawon');
 
   await page.goto('/dashboard/admin/assignments');
   await expect(page.locator('.record-list')).toContainText('GCSE Mathematics');
@@ -49,14 +49,14 @@ test('a new Tuition Assignment appears in the list and on the Tutor profile', as
   await loginAsAdmin(page);
   await page.goto('/dashboard/admin/assignments');
   await page.getByRole('button', { name: 'Create assignment' }).click();
-  await page.getByLabel('Title').fill('Year 8 Science — Ayaan');
+  await page.getByLabel('Title').fill('Year 8 Science — Brian');
   await page.getByLabel('Subject').fill('Science');
-  await page.getByLabel('Tutor').selectOption({ label: 'Jamie Patel' });
-  await page.getByLabel('Student(s)').selectOption({ label: 'Ayaan Ahmed' });
+  await page.getByLabel('Tutor').selectOption({ label: 'Tahasin Hasan' });
+  await page.getByLabel('Student(s)').selectOption({ label: 'Brian James Khalawon' });
   await page.getByRole('dialog').getByRole('button', { name: 'Create assignment' }).click();
 
   await expect(page).toHaveURL(/\/dashboard\/admin\/assignments/);
-  await expect(page.locator('.record-list')).toContainText('Year 8 Science — Ayaan');
+  await expect(page.locator('.record-list')).toContainText('Year 8 Science — Brian');
 });
 
 test('a Tutor cannot reach /dashboard/admin/people — redirected to /403', async ({ page }) => {

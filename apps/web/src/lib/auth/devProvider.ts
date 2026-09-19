@@ -17,16 +17,17 @@ function usersStore(): Map<string, DevelopmentUser> {
   return globalForAuth.__learnthriveDevUsers;
 }
 
-// Fictional accounts only — see section 11 of the plan behind this migration ("do not use real
-// sensitive personal data") and docs/DEVELOPMENT_ACCOUNTS.md for the credentials and rationale.
+// Development-only accounts — see docs/DEVELOPMENT_ACCOUNTS.md for the credentials and rationale.
+// The credentials only work on a local dev server (NODE_ENV !== "production", enforced in
+// session.ts) and nothing here persists past a server restart.
 const SEED_ACCOUNTS: Array<Omit<DevelopmentUser, "id" | "passwordHash"> & { password: string }> = [
-  { email: "admin@learnthrive.dev", password: "dev-admin-pass", role: "ADMIN", name: "Ade Okafor (Admin)", active: true },
+  { email: "admin@learnthrive.dev", password: "dev-admin-pass", role: "ADMIN", name: "Alvi Hossain (Admin)", active: true },
   // profileId cross-references packages/data's seeded domain records (see SEED_IDS there) — the
   // two seed systems share these fixed ids deliberately, not by coincidence, so e.g. the Tutor
   // dashboard can find "this logged-in user's own Tutor record" without a lookup-by-email hack.
-  { email: "tutor@learnthrive.dev", password: "dev-tutor-pass", role: "TUTOR", name: "Jamie Patel (Tutor)", active: true, profileId: SEED_IDS.tutorJamiePatel },
-  { email: "client@learnthrive.dev", password: "dev-client-pass", role: "CLIENT", name: "Sarah Ahmed (Client)", active: true, profileId: SEED_IDS.clientSarahAhmed },
-  { email: "student@learnthrive.dev", password: "dev-student-pass", role: "STUDENT", name: "Ayaan Ahmed (Student)", active: true, profileId: SEED_IDS.studentAyaanAhmed },
+  { email: "tutor@learnthrive.dev", password: "dev-tutor-pass", role: "TUTOR", name: "Tahasin Hasan (Tutor)", active: true, profileId: SEED_IDS.tutorJamiePatel },
+  { email: "client@learnthrive.dev", password: "dev-client-pass", role: "CLIENT", name: "Abdurrahman Mustafa (Client)", active: true, profileId: SEED_IDS.clientSarahAhmed },
+  { email: "student@learnthrive.dev", password: "dev-student-pass", role: "STUDENT", name: "Brian James Khalawon (Student)", active: true, profileId: SEED_IDS.studentAyaanAhmed },
   // Deliberately disabled, so the "locked/disabled account" login state is exercisable without
   // extra setup — see docs/DEVELOPMENT_ACCOUNTS.md.
   { email: "disabled@learnthrive.dev", password: "dev-disabled-pass", role: "STUDENT", name: "Disabled Test Account", active: false },

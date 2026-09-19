@@ -281,20 +281,20 @@ function seedProvider(): DataProvider {
   const links: ClientStudentLink[] = [];
 
   tutorStore.set(SEED_IDS.tutorJamiePatel, {
-    id: SEED_IDS.tutorJamiePatel, name: "Jamie Patel", email: "tutor@learnthrive.dev",
+    id: SEED_IDS.tutorJamiePatel, name: "Tahasin Hasan", email: "tutor@learnthrive.dev",
     subjects: ["Mathematics"], active: true, createdAt: now(),
   });
   clientStore.set(SEED_IDS.clientSarahAhmed, {
-    id: SEED_IDS.clientSarahAhmed, name: "Sarah Ahmed", email: "client@learnthrive.dev",
+    id: SEED_IDS.clientSarahAhmed, name: "Abdurrahman Mustafa", email: "client@learnthrive.dev",
     active: true, createdAt: now(),
   });
   studentStore.set(SEED_IDS.studentAyaanAhmed, {
-    id: SEED_IDS.studentAyaanAhmed, name: "Ayaan Ahmed", yearGroup: "Year 10",
+    id: SEED_IDS.studentAyaanAhmed, name: "Brian James Khalawon", yearGroup: "Year 10",
     active: true, createdAt: now(),
   });
   links.push({ clientId: SEED_IDS.clientSarahAhmed, studentId: SEED_IDS.studentAyaanAhmed });
   assignmentStore.set(SEED_IDS.assignmentGcseMaths, {
-    id: SEED_IDS.assignmentGcseMaths, title: "GCSE Mathematics — Ayaan", subject: "Mathematics", level: "GCSE",
+    id: SEED_IDS.assignmentGcseMaths, title: "GCSE Mathematics — Brian", subject: "Mathematics", level: "GCSE",
     tutorId: SEED_IDS.tutorJamiePatel, studentIds: [SEED_IDS.studentAyaanAhmed], clientIds: [SEED_IDS.clientSarahAhmed],
     status: "ACTIVE", defaultDurationMinutes: 60, defaultLocationType: "ONLINE", createdAt: now(),
   });
@@ -323,13 +323,13 @@ function seedProvider(): DataProvider {
   lessonStore.set(SEED_IDS.lessonCompleted, {
     id: SEED_IDS.lessonCompleted, assignmentId: SEED_IDS.assignmentGcseMaths, tutorId: SEED_IDS.tutorJamiePatel,
     studentIds: [SEED_IDS.studentAyaanAhmed], clientIds: [SEED_IDS.clientSarahAhmed],
-    title: "GCSE Mathematics — Ayaan", subject: "Mathematics", startAt: oneWeekAgo, durationMinutes: 60,
+    title: "GCSE Mathematics — Brian", subject: "Mathematics", startAt: oneWeekAgo, durationMinutes: 60,
     locationType: "ONLINE", reportRequired: true, status: "COMPLETED", createdAt: oneWeekAgo, updatedAt: oneWeekAgo,
   });
   lessonStore.set(SEED_IDS.lessonUpcoming, {
     id: SEED_IDS.lessonUpcoming, assignmentId: SEED_IDS.assignmentGcseMaths, tutorId: SEED_IDS.tutorJamiePatel,
     studentIds: [SEED_IDS.studentAyaanAhmed], clientIds: [SEED_IDS.clientSarahAhmed],
-    title: "GCSE Mathematics — Ayaan", subject: "Mathematics", startAt: nextTuesday, durationMinutes: 60,
+    title: "GCSE Mathematics — Brian", subject: "Mathematics", startAt: nextTuesday, durationMinutes: 60,
     locationType: "ONLINE", reportRequired: true, status: "PLANNED", createdAt: now(), updatedAt: now(),
     classroomRoomId: SEED_IDS.classroomRoomUpcoming,
   });
@@ -339,11 +339,11 @@ function seedProvider(): DataProvider {
   reportStore.set(SEED_IDS.reportApproved, {
     id: SEED_IDS.reportApproved, lessonId: SEED_IDS.lessonCompleted, tutorId: SEED_IDS.tutorJamiePatel, status: "APPROVED",
     publicSummary: "We covered simultaneous equations and practised exam-style questions.",
-    progress: "Ayaan is much more confident solving by substitution.",
+    progress: "Brian is much more confident solving by substitution.",
     areasForImprovement: "Still working on elimination method for trickier pairs.",
     nextSteps: "Complete the worksheet on page 42 before next lesson.",
     engagement: "HIGH", confidence: "MEDIUM",
-    internalTutorNotes: "Ayaan seemed tired today — worth checking in with Sarah about workload.",
+    internalTutorNotes: "Brian seemed tired today — worth checking in with Abdurrahman about workload.",
     submittedAt: oneWeekAgo, approvedAt: oneWeekAgo,
     createdAt: oneWeekAgo, updatedAt: oneWeekAgo,
   });

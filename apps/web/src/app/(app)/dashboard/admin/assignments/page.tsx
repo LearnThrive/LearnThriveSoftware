@@ -49,7 +49,7 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
             description="Pair a tutor with one or more students for a subject."
           >
             <form action={createAssignmentAction} className="form">
-              <Field label="Title" htmlFor="assignment-title" required hint="How it appears throughout the product, e.g. GCSE Mathematics — Ayaan.">
+              <Field label="Title" htmlFor="assignment-title" required hint="How it appears throughout the product, e.g. GCSE Mathematics — Brian.">
                 <input id="assignment-title" name="title" required autoComplete="off" />
               </Field>
               <Field label="Subject" htmlFor="assignment-subject" required>

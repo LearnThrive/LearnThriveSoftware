@@ -82,7 +82,7 @@ test('lesson detail IDOR: a Tutor cannot view a lesson they are not assigned to'
   await expect(page).toHaveURL(/\/dashboard\/lessons\/(.+)/);
   const lessonUrl = page.url();
 
-  // The seeded Tutor (Jamie Patel) has a real login but is NOT on this lesson — a different
+  // The seeded Tutor (Tahasin Hasan) has a real login but is NOT on this lesson — a different
   // Tutor entirely ("Hardening Test Tutor", who has no login at all) is.
   await login(page, TUTOR.email, TUTOR.password);
   await page.goto(lessonUrl);
@@ -102,7 +102,7 @@ test('a Tutor cannot reach the Admin-only reschedule/cancel actions for any less
 test('report approval IDOR: a Tutor never sees an Approve report control, even on their own submitted report', async ({ page }) => {
   await login(page, ADMIN.email, ADMIN.password);
   await page.goto('/dashboard/admin/lessons/new');
-  await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Ayaan' });
+  await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Brian' });
   const lessonTitle = uniqueLabel('Hardening report lesson');
   await page.locator('#lesson-title').fill(lessonTitle);
   await page.locator('#lesson-date').fill('2026-11-22');

@@ -54,7 +54,7 @@ test('clicking a calendar lesson opens the peek panel with its summary, and "Vie
 test('Admin can schedule a single (non-recurring) lesson, which appears on the calendar', async ({ page }) => {
   await login(page, ADMIN.email, ADMIN.password);
   await page.goto('/dashboard/admin/lessons/new');
-  await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Ayaan' });
+  await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Brian' });
   const lessonTitle = uniqueLabel('Algebra revision');
   await page.locator('#lesson-title').fill(lessonTitle);
   await page.locator('#lesson-date').fill('2026-11-03'); // a Tuesday, well clear of the seed lessons
@@ -76,7 +76,7 @@ test('Admin can schedule a single (non-recurring) lesson, which appears on the c
 test('scheduling an overlapping lesson warns about the conflict, and "Schedule anyway" proceeds', async ({ page }) => {
   await login(page, ADMIN.email, ADMIN.password);
   await page.goto('/dashboard/admin/lessons/new');
-  await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Ayaan' });
+  await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Brian' });
   await page.locator('#lesson-title').fill(uniqueLabel('Double-booked test lesson'));
   // Same day/time as the "Algebra revision" lesson scheduled above — deliberately overlapping.
   await page.locator('#lesson-date').fill('2026-11-03');
@@ -92,7 +92,7 @@ test('scheduling an overlapping lesson warns about the conflict, and "Schedule a
 test('Admin can schedule a recurring lesson, producing multiple independent occurrences', async ({ page }) => {
   await login(page, ADMIN.email, ADMIN.password);
   await page.goto('/dashboard/admin/lessons/new');
-  await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Ayaan' });
+  await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Brian' });
   const lessonTitle = uniqueLabel('Weekly recurring practice');
   await page.locator('#lesson-title').fill(lessonTitle);
   await page.locator('#lesson-date').fill('2026-12-01');
@@ -122,7 +122,7 @@ test('lesson detail: Admin sees admin-only controls that a Tutor does not', asyn
 });
 
 test('lesson detail IDOR: a Student cannot view a lesson they are not on', async ({ page }) => {
-  // Get a real lesson id belonging to the seeded assignment (which Ayaan/the seed Student IS on)
+  // Get a real lesson id belonging to the seeded assignment (which Brian/the seed Student IS on)
   // vs. one that a genuinely unrelated Student should be blocked from. We create an unrelated
   // Student+lesson as Admin first, then try to view it as the seeded Student.
   const studentName = uniqueLabel('Unrelated Student');
@@ -179,7 +179,7 @@ test('lesson detail IDOR: a Student cannot view a lesson they are not on', async
 test('Tutor sees only their own lessons on the calendar', async ({ page }) => {
   await login(page, TUTOR.email, TUTOR.password);
   await page.goto('/dashboard/calendar');
-  // The seeded Tutor (Jamie Patel) has the seeded GCSE Maths lessons — at least one should show.
+  // The seeded Tutor (Tahasin Hasan) has the seeded GCSE Maths lessons — at least one should show.
   await expect(page.locator('.fc-event').first()).toBeVisible();
   // Clicking one must not 403 (proving it really is theirs) and must reach the real detail page.
   await openLessonFromCalendar(page);
@@ -190,7 +190,7 @@ test('Tutor sees only their own lessons on the calendar', async ({ page }) => {
 test('Admin can cancel a planned lesson, which then shows as cancelled', async ({ page }) => {
   await login(page, ADMIN.email, ADMIN.password);
   await page.goto('/dashboard/admin/lessons/new');
-  await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Ayaan' });
+  await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Brian' });
   const lessonTitle = uniqueLabel('Lesson to cancel');
   await page.locator('#lesson-title').fill(lessonTitle);
   await page.locator('#lesson-date').fill('2026-11-25');
@@ -228,7 +228,7 @@ test('a Tutor can add and remove their own availability', async ({ page }) => {
 test('a Client only sees lessons belonging to their own Students on the calendar', async ({ page }) => {
   await login(page, CLIENT.email, CLIENT.password);
   await page.goto('/dashboard/calendar');
-  // The seeded Client (Sarah Ahmed) should see the seeded GCSE Maths lessons but not the
+  // The seeded Client (Abdurrahman Mustafa) should see the seeded GCSE Maths lessons but not the
   // "Unrelated lesson" created for a different family earlier in this suite.
   await expect(page.locator('.fc-event', { hasText: 'Unrelated lesson' })).toHaveCount(0);
 });
@@ -258,7 +258,7 @@ test('lesson detail surfaces a joinError message from the query string', async (
 test('a Tutor cannot complete a lesson until every Student has an attendance record, then can once marked, with the event on the activity timeline', async ({ page }) => {
   await login(page, ADMIN.email, ADMIN.password);
   await page.goto('/dashboard/admin/lessons/new');
-  await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Ayaan' });
+  await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Brian' });
   const lessonTitle = uniqueLabel('Lesson to complete');
   await page.locator('#lesson-title').fill(lessonTitle);
   await page.locator('#lesson-date').fill('2026-11-26');
@@ -286,21 +286,21 @@ test('a Tutor cannot complete a lesson until every Student has an attendance rec
   await expect(completeButton).toBeDisabled();
   await expect(page.locator('#complete-lesson-hint')).toContainText('Mark attendance for every student first');
 
-  await page.locator('select[aria-label="Attendance status for Ayaan Ahmed"]').selectOption('ATTENDED');
+  await page.locator('select[aria-label="Attendance status for Brian James Khalawon"]').selectOption('ATTENDED');
   await page.getByRole('button', { name: 'Mark', exact: true }).click();
   await expect(page.locator('.attendance-list')).toContainText(/attended/i);
 
   await expect(completeButton).toBeEnabled();
   await completeButton.click();
   await expect(page.locator('#main-content')).toContainText(/completed/i);
-  await expect(page.locator('.timeline')).toContainText('Attendance marked for Ayaan Ahmed: ATTENDED');
+  await expect(page.locator('.timeline')).toContainText('Attendance marked for Brian James Khalawon: ATTENDED');
   await expect(page.locator('.timeline')).toContainText('Lesson marked complete');
 });
 
 test('a required lesson report blocks completion until submitted, and internal Tutor notes never reach the Client view even after approval', async ({ page }) => {
   await login(page, ADMIN.email, ADMIN.password);
   await page.goto('/dashboard/admin/lessons/new');
-  await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Ayaan' });
+  await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Brian' });
   const lessonTitle = uniqueLabel('Lesson needing a report');
   await page.locator('#lesson-title').fill(lessonTitle);
   await page.locator('#lesson-date').fill('2026-11-27');
@@ -320,7 +320,7 @@ test('a required lesson report blocks completion until submitted, and internal T
 
   await login(page, TUTOR.email, TUTOR.password);
   await page.goto(lessonUrl);
-  await page.locator('select[aria-label="Attendance status for Ayaan Ahmed"]').selectOption('ATTENDED');
+  await page.locator('select[aria-label="Attendance status for Brian James Khalawon"]').selectOption('ATTENDED');
   await page.getByRole('button', { name: 'Mark', exact: true }).click();
 
   const completeButton = page.getByRole('button', { name: 'Complete lesson' });
@@ -329,7 +329,7 @@ test('a required lesson report blocks completion until submitted, and internal T
 
   await page.getByRole('button', { name: 'Start a report' }).click();
   await page.locator('#report-summary').fill('Covered quadratic equations.');
-  await page.locator('#report-private-notes').fill('CONFIDENTIAL: struggling with confidence, discuss with Sarah privately.');
+  await page.locator('#report-private-notes').fill('CONFIDENTIAL: struggling with confidence, discuss with Abdurrahman privately.');
   await page.getByRole('button', { name: 'Save draft' }).click();
   await expect(completeButton).toBeDisabled(); // still a draft — doesn't count as "the report exists" yet
 

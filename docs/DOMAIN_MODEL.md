@@ -69,7 +69,7 @@ The LearnThrive-native term (plan section 15) for what TutorCruncher calls a "Jo
 ```ts
 interface TuitionAssignment {
   id: string;
-  title: string;                                    // e.g. "GCSE Mathematics — Ayaan"
+  title: string;                                    // e.g. "GCSE Mathematics — Brian"
   subject: string;
   level?: string;
   tutorId: string;
@@ -101,11 +101,11 @@ Seeded automatically, every server start:
 
 | Entity | Value |
 | --- | --- |
-| Tutor | Jamie Patel (`tutor@learnthrive.dev`) |
-| Client | Sarah Ahmed (`client@learnthrive.dev`) |
-| Student | Ayaan Ahmed, Year 10 |
-| Link | Sarah Ahmed ↔ Ayaan Ahmed |
-| Tuition Assignment | "GCSE Mathematics — Ayaan", Jamie Patel ↔ Ayaan Ahmed, `ACTIVE` |
+| Tutor | Tahasin Hasan (`tutor@learnthrive.dev`) |
+| Client | Abdurrahman Mustafa (`client@learnthrive.dev`) |
+| Student | Brian James Khalawon, Year 10 |
+| Link | Abdurrahman Mustafa ↔ Brian James Khalawon |
+| Tuition Assignment | "GCSE Mathematics — Brian", Tahasin Hasan ↔ Brian James Khalawon, `ACTIVE` |
 
 ## What's built on top of this (Phase C)
 
