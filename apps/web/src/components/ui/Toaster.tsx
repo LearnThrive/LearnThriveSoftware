@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, AlertCircle, X } from "lucide-react";
+import { useDelayedUnmount } from "@/lib/motion/useDelayedUnmount";
+
+type ToastData = { message: string; tone: "success" | "error" };
 
 /**
  * Success/error feedback for actions that end in a redirect (plan6 section 37: "do not rely on
@@ -22,16 +25,26 @@ export function Toaster() {
   const error = params.get("toastError");
   const incoming = error ?? message;
 
-  const [toast, setToast] = useState<{ message: string; tone: "success" | "error" } | null>(null);
+  const [toast, setToast] = useState<ToastData | null>(null);
   const [handled, setHandled] = useState<string | null>(null);
+  // The exit animation needs something to render *while* toast is already null (the instant a
+  // close was requested) — this holds the last real toast's content, as real state rather than a
+  // ref, since a ref can't safely be read during render (react-hooks/refs). Only ever set from a
+  // genuinely new non-null toast, so it naturally keeps showing the right content through the
+  // closing window without needing to be cleared alongside `toast`.
+  const [shown, setShown] = useState<ToastData | null>(null);
 
   // Adjusted during render rather than in an effect: the toast is derived from the URL, and
   // React's own guidance is to compute state from props/params here instead of firing an extra
   // render pass from an effect. `handled` makes it happen exactly once per distinct message.
   if (incoming && incoming !== handled) {
     setHandled(incoming);
-    setToast({ message: incoming, tone: error ? "error" : "success" });
+    const next: ToastData = { message: incoming, tone: error ? "error" : "success" };
+    setToast(next);
+    setShown(next);
   }
+
+  const { rendered, closing } = useDelayedUnmount(toast !== null, 160);
 
   useEffect(() => {
     if (!toast) return;
@@ -49,15 +62,15 @@ export function Toaster() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toast, incoming, pathname]);
 
-  if (!toast) return null;
+  if (!rendered || !shown) return null;
 
   return (
     <div className="toaster" role="status" aria-live="polite">
-      <div className={`toast toast--${toast.tone}`}>
-        {toast.tone === "success"
-          ? <CheckCircle2 size={18} aria-hidden="true" />
-          : <AlertCircle size={18} aria-hidden="true" />}
-        <p>{toast.message}</p>
+      <div className={`toast toast--${shown.tone} ${closing ? "is-closing" : ""}`}>
+        {shown.tone === "success"
+          ? <CheckCircle2 size={18} aria-hidden="true" className="toast__icon" />
+          : <AlertCircle size={18} aria-hidden="true" className="toast__icon" />}
+        <p>{shown.message}</p>
         <button type="button" className="toast__dismiss" onClick={() => setToast(null)} aria-label="Dismiss">
           <X size={15} aria-hidden="true" />
         </button>

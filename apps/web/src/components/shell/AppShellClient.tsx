@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
@@ -7,7 +8,10 @@ import { Bell, ChevronsLeft, ChevronsRight, LogOut, Menu, UserRound, X } from "l
 import { NavIcon } from "@/components/shell/NavIcon";
 import { Avatar } from "@/components/ui/Avatar";
 import { Toaster } from "@/components/ui/Toaster";
+import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { isNavItemActive, type AppNavSection } from "@/lib/navigation/appNavigation";
+import { prefersReducedMotion } from "@/lib/motion/reducedMotion";
+import { useDelayedUnmount } from "@/lib/motion/useDelayedUnmount";
 import {
   getSidebarCollapsed, getSidebarCollapsedServer, setSidebarCollapsed, subscribeToSidebarPreference,
 } from "@/lib/ui/sidebarPreference";
@@ -36,6 +40,32 @@ export function AppShellClient({
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const drawerCloseRef = useRef<HTMLButtonElement>(null);
   const menuId = useId();
+  // Keeps each panel mounted for its own exit animation (app-pop-out / app-drawer-out) instead
+  // of it vanishing the instant state flips to closed — see useDelayedUnmount's own comment.
+  const menu = useDelayedUnmount(menuOpen, 100);
+  const drawer = useDelayedUnmount(drawerOpen, 160);
+
+  // The sidebar/topbar are the one part of the shell that persists across a client-side
+  // navigation (only `children` swaps), so `unreadCount` genuinely can change under this same
+  // mounted instance — e.g. marking a notification read elsewhere. A one-off ring on a real
+  // *increase* (never on the initial mount, never on a decrease) is what plan8 section 31 asks
+  // for. The change is detected during render via a second piece of state holding the previous
+  // count (the paired-useState pattern useDelayedUnmount.ts's own comment explains) rather than a
+  // ref — this project's lint config disallows reading a ref's `.current` during render — and the
+  // effect below exists only to run the auto-clear timer, whose setState call lives inside the
+  // timer callback rather than as a bare statement in the effect body.
+  const [bellRinging, setBellRinging] = useState(false);
+  const [previousUnreadCount, setPreviousUnreadCount] = useState(unreadCount);
+  if (unreadCount !== previousUnreadCount) {
+    const increased = unreadCount > previousUnreadCount;
+    setPreviousUnreadCount(unreadCount);
+    if (increased && !prefersReducedMotion()) setBellRinging(true);
+  }
+  useEffect(() => {
+    if (!bellRinging) return;
+    const timer = setTimeout(() => setBellRinging(false), 500);
+    return () => clearTimeout(timer);
+  }, [bellRinging]);
 
   /** Closes anything transient. Called when a navigation starts, rather than watching pathname
    * from an effect — the click is the moment we actually know a navigation is happening. */
@@ -119,7 +149,7 @@ export function AppShellClient({
       <aside className="app-sidebar" aria-label="Product navigation">
         <div className="app-sidebar__brand">
           <Link href="/dashboard" className="app-brand">
-            <span className="app-brand__mark" aria-hidden="true">LT</span>
+            <Image className="app-brand__mark" src="/brand/learnthrive-mark.png" alt="" width={28} height={24} priority />
             <span className="app-brand__word">Learn<strong>Thrive</strong></span>
           </Link>
         </div>
@@ -130,12 +160,12 @@ export function AppShellClient({
         </button>
       </aside>
 
-      {drawerOpen && (
-        <div className="app-drawer" role="dialog" aria-modal="true" aria-label="Navigation">
+      {drawer.rendered && (
+        <div className={`app-drawer ${drawer.closing ? "is-closing" : ""}`} role="dialog" aria-modal="true" aria-label="Navigation">
           <div className="app-drawer__panel">
             <div className="app-drawer__top">
               <Link href="/dashboard" className="app-brand">
-                <span className="app-brand__mark" aria-hidden="true">LT</span>
+                <Image className="app-brand__mark" src="/brand/learnthrive-mark.png" alt="" width={28} height={24} priority />
                 <span className="app-brand__word">Learn<strong>Thrive</strong></span>
               </Link>
               <button ref={drawerCloseRef} type="button" className="icon-button" onClick={() => setDrawerOpen(false)} aria-label="Close navigation">
@@ -162,9 +192,17 @@ export function AppShellClient({
             </span>
           )}
 
-          <Link href="/dashboard/notifications" className="icon-button app-topbar__bell" aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}>
+          <Link
+            href="/dashboard/notifications"
+            className={`icon-button app-topbar__bell ${bellRinging ? "is-ringing" : ""}`}
+            aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
+          >
             <Bell size={19} aria-hidden="true" />
-            {unreadCount > 0 && <span className="app-topbar__badge" aria-hidden="true">{unreadCount > 9 ? "9+" : unreadCount}</span>}
+            {unreadCount > 0 && (
+              <span className="app-topbar__badge" aria-hidden="true">
+                {unreadCount > 9 ? "9+" : <AnimatedNumber value={unreadCount} />}
+              </span>
+            )}
           </Link>
 
           <div className="app-usermenu">
@@ -184,8 +222,8 @@ export function AppShellClient({
                 <span className="app-usermenu__role">{ROLE_LABELS[user.role]}</span>
               </span>
             </button>
-            {menuOpen && (
-              <div className="app-usermenu__panel" id={menuId} role="menu" ref={menuRef}>
+            {menu.rendered && (
+              <div className={`app-usermenu__panel ${menu.closing ? "is-closing" : ""}`} id={menuId} role="menu" ref={menuRef}>
                 <div className="app-usermenu__header">
                   <Avatar name={user.name} size="md" />
                   <div>
@@ -204,6 +242,14 @@ export function AppShellClient({
           </div>
         </header>
 
+        {/* plan8 section 12 asks for a restrained per-navigation content fade. Tried it here as
+            `key={pathname}` on this element (forcing a fresh mount so the CSS entrance animation
+            replays on every navigation) — reverted: it made the incoming page's own controls
+            briefly "unstable" during the transition (a link Playwright's actionability check, and
+            a real click, both have to wait out), catching real interaction failures across the
+            e2e suite the instant it landed. Section 72 is explicit that interaction must never be
+            delayed to let a motion effect finish, and this genuinely did — so on that rule alone,
+            not just the test failures, it comes back out rather than being patched to "pass". */}
         <main id="main-content" className="app-content">{children}</main>
       </div>
 

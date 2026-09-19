@@ -141,3 +141,53 @@
 .leave-confirm{width:min(304px,calc(100vw - 32px))}
 .leave-confirm>p:first-of-type{font-weight:650}
 .leave-confirm-actions>button{white-space:nowrap}
+
+/* ── Motion pass (plan8) ──────────────────────────────────────────────────────────────────────
+   The generic `button{transition:background .16s,border-color .16s,box-shadow .16s,transform
+   .16s}button:active:not(:disabled){transform:translateY(1px)}` near the top of this file
+   already gives every control here — mic, camera, hand-raise, reactions, the whole call bar —
+   a tactile press and a smooth is-on/is-off colour swap; that's this stylesheet's own equivalent
+   of app-components.css's .btn standard, so it's left as-is rather than duplicated. What follows
+   is the handful of things that rule doesn't reach: elements that mount/unmount (a participant
+   tile, the camera placeholder), and one-off state cues (the timer's final seconds). */
+
+/* Camera on/off crossfades into the avatar placeholder instead of one instantly replacing the
+   other (plan8 section 44) — both are already stacked (video is absolutely positioned over the
+   tile, camera-placeholder sits in normal flow beneath it), so this is only ever an opacity
+   transition on the video element already in the DOM, never a mount/unmount and never something
+   that can delay the actual camera turning on or off. */
+.participant-tile video{transition:opacity .2s ease-out}
+
+/* A tile joining or leaving the call (plan8 section 45) — the tile itself, not its video stream,
+   so it never touches how the video/audio inside it renders. Grid reflow when a tile leaves is
+   left to the browser's normal layout (no forced layout animation on the surrounding tiles) —
+   forcing every remaining tile to also animate its new position on every join/leave in a call
+   that can reach four participants risked exactly the janky-while-video-plays-through-it problem
+   plan8 section 93 says to remove a motion effect for, so this stays a per-tile enter/exit only. */
+.participant-tile{animation:tile-in .22s ease-out}
+@keyframes tile-in{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
+
+/* Countdown timer: quiet emphasis in the final 10 seconds, one pulse on completion — never a
+   loop, never a full-screen flash (plan8 section 50). */
+.class-timer.is-low{color:#8a5a06;border-color:#e6cf9c;background:#fdf6e6}
+.class-timer.is-low .class-timer-value{animation:timer-tick 1s ease-in-out infinite}
+.class-timer.is-expired{animation:timer-done .4s ease-out}
+@keyframes timer-tick{0%,100%{opacity:1}50%{opacity:.55}}
+@keyframes timer-done{0%{transform:scale(1)}30%{transform:scale(1.08)}100%{transform:scale(1)}}
+
+/* Workspace mode (Call/Present share one subtree and are never swapped — App.tsx only ever
+   changes what's rendered *inside* .meeting-stage between them, exactly the "do not destroy/
+   recreate media unnecessarily" plan8 section 52 asks for, and already true before this pass).
+   Board is the one real DOM swap (.meeting-stage <-> Whiteboard's own .whiteboard root), so
+   that's the one crossfade worth adding — a plain opacity fade on whichever side has just
+   mounted, never touching the video tiles or the Excalidraw canvas within it (section 54: don't
+   animate board contents independently). */
+.meeting-stage,.whiteboard{animation:workspace-fade .18s ease-out}
+@keyframes workspace-fade{from{opacity:0}to{opacity:1}}
+
+@media(prefers-reduced-motion:reduce){
+  .participant-tile{animation:none}
+  .class-timer.is-low .class-timer-value{animation:none}
+  .class-timer.is-expired{animation:none}
+  .meeting-stage,.whiteboard{animation:none}
+}

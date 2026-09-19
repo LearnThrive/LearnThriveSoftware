@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { CalendarPlus, ChevronDown, ClipboardList, GraduationCap, Plus, UserRound, Users } from "lucide-react";
+import { useDelayedUnmount } from "@/lib/motion/useDelayedUnmount";
 
 const ITEMS = [
   { href: "/dashboard/admin/people/students", label: "Student", icon: GraduationCap },
@@ -20,6 +21,7 @@ export function QuickCreateMenu() {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const panel = useDelayedUnmount(open, 100);
 
   useEffect(() => {
     if (!open) return;
@@ -48,12 +50,18 @@ export function QuickCreateMenu() {
         aria-haspopup="menu"
       >
         <Plus size={16} aria-hidden="true" />Create
-        <ChevronDown size={14} aria-hidden="true" />
+        <ChevronDown size={14} aria-hidden="true" className={`icon-rotate ${open ? "is-open" : ""}`} />
       </button>
-      {open && (
-        <div className="quick-create__panel" role="menu">
-          {ITEMS.map((item) => (
-            <Link key={item.href} href={item.href} className="quick-create__item" role="menuitem">
+      {panel.rendered && (
+        <div className={`quick-create__panel ${panel.closing ? "is-closing" : ""}`} role="menu">
+          {ITEMS.map((item, index) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="quick-create__item"
+              role="menuitem"
+              style={{ animationDelay: `${index * 25}ms` }}
+            >
               <item.icon size={16} aria-hidden="true" />{item.label}
             </Link>
           ))}

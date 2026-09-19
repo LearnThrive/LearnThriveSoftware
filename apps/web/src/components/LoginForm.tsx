@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { Loader2 } from "lucide-react";
 
 type Status = "idle" | "submitting" | "error";
 
@@ -109,7 +110,11 @@ export function LoginForm() {
       </label>
 
       <div className="form-actions">
-        <button type="submit" className="btn btn--primary btn--block" disabled={submitting}>
+        {/* Width is already fixed by btn--block, so the text/spinner swap never shifts the
+            button's own footprint — only its content. aria-busy tells assistive tech the button
+            is doing something without needing to parse the icon swap. */}
+        <button type="submit" className="btn btn--primary btn--block" disabled={submitting} aria-busy={submitting}>
+          {submitting && <Loader2 size={16} className="btn__spinner" aria-hidden="true" />}
           <span>{submitting ? "Signing in…" : "Sign in"}</span>
         </button>
       </div>

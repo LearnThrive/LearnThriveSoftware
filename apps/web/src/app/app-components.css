@@ -8,6 +8,13 @@
 
 /* ============================================================ Buttons (section 33) */
 
+/* The one tactile-press treatment, shared by every button-shaped control in the product (plan8
+   section 82 names this as the single change most worth making: a 1px hover lift that says "this
+   is raised, come press it", and a small scale-down on press that releases the instant the mouse
+   or finger lifts — a real depress, not a bounce. Kept deliberately small (translateY(-1px),
+   scale(0.97)) — enough to register as touch, not enough to read as decoration. `:active` is
+   guarded by `:not(:disabled)` the same way `:hover` already was here, so a disabled button
+   (already opacity 0.55, cursor not-allowed) stays inert under a press too. */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem;
   min-height: 2.375rem; padding: 0 var(--space-4);
@@ -15,10 +22,20 @@
   font: inherit; font-size: var(--text-small); font-weight: 650; line-height: 1;
   text-decoration: none; white-space: nowrap; cursor: pointer;
   transition: background var(--duration-fast) var(--app-ease), border-color var(--duration-fast) var(--app-ease),
-    color var(--duration-fast) var(--app-ease), box-shadow var(--duration-fast) var(--app-ease);
+    color var(--duration-fast) var(--app-ease), box-shadow var(--duration-fast) var(--app-ease),
+    transform var(--duration-fast) var(--app-ease);
 }
+.btn:hover:not(:disabled):not([aria-disabled="true"]) { transform: translateY(-1px); }
+.btn:active:not(:disabled):not([aria-disabled="true"]) { transform: translateY(0) scale(0.97); transition-duration: var(--duration-instant); }
 .btn:focus-visible { outline: none; box-shadow: var(--app-focus-ring); }
 .btn:disabled, .btn[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; }
+
+/* An indeterminate spinner (LoginForm's "Signing in…", any future async button) — capped to
+   0.01ms under reduced motion by the blanket rule in globals.css, which leaves it visually still
+   rather than spinning; that's the correct reduced-motion reading of a continuous animation,
+   not a bug. */
+.btn__spinner { animation: btn-spin 0.8s linear infinite; }
+@keyframes btn-spin { to { transform: rotate(360deg); } }
 
 .btn--primary { background: var(--app-accent); border-color: var(--app-accent); color: #fff; }
 .btn--primary:hover:not(:disabled) { background: var(--app-accent-strong); border-color: var(--app-accent-strong); }
@@ -42,8 +59,14 @@
   min-height: 2.375rem; padding: 0 var(--space-4);
   border: 1px solid transparent; border-radius: var(--app-radius-sm);
   font: inherit; font-size: var(--text-small); font-weight: 650; cursor: pointer;
-  transition: background var(--duration-fast) var(--app-ease), border-color var(--duration-fast) var(--app-ease), color var(--duration-fast) var(--app-ease);
+  transition: background var(--duration-fast) var(--app-ease), border-color var(--duration-fast) var(--app-ease),
+    color var(--duration-fast) var(--app-ease), transform var(--duration-fast) var(--app-ease);
 }
+/* Same tactile-press treatment as .btn — a dialog trigger is a button in every way that matters
+   here, and the two having different press behaviour would be exactly the kind of inconsistency
+   section 70 asks to be audited out. */
+.dialog-trigger:hover { transform: translateY(-1px); }
+.dialog-trigger:active { transform: translateY(0) scale(0.97); transition-duration: var(--duration-instant); }
 .dialog-trigger:focus-visible { outline: none; box-shadow: var(--app-focus-ring); }
 
 .dialog-trigger--primary { border-color: var(--app-accent); background: var(--app-accent); color: #fff; }
@@ -69,6 +92,7 @@
   margin-bottom: -1px;
   border-bottom: 2px solid transparent;
   color: var(--app-muted); font-size: var(--text-small); font-weight: 600; text-decoration: none;
+  transition: color var(--duration-fast) var(--app-ease), border-color var(--duration-fast) var(--app-ease);
 }
 .filter-tab:hover { color: var(--app-ink); }
 .filter-tab.is-active { color: var(--app-accent); border-bottom-color: var(--app-accent); }
@@ -76,9 +100,27 @@
 .filter-tab__count {
   padding: 0.05rem 0.4rem; border-radius: 999px;
   background: #eef2f5; color: var(--app-muted); font-size: var(--text-label); font-weight: 700;
+  transition: background var(--duration-fast) var(--app-ease), color var(--duration-fast) var(--app-ease);
 }
 .filter-tab.is-active .filter-tab__count { background: var(--app-accent-soft); color: var(--app-accent-strong); }
 .filter-tab--warning .filter-tab__count { background: #fdf0d9; color: #8a5a06; }
+
+/* The tabs__indicator: an absolutely-positioned bar that a small amount of client JS (see
+   FilterTabs.tsx) slides and resizes to sit under whichever tab is active, instead of each tab's
+   own border-bottom just appearing/disappearing — the "underline slides between tabs" plan8
+   section 18 asks for. It sits UNDER the always-present per-tab border-bottom-color above, which
+   stays as the correctness fallback: if JS hasn't measured yet, or the tabs have wrapped onto
+   more than one line (where "sliding" stops meaning anything), the indicator hides itself
+   (opacity 0) and the ordinary coloured border under the active tab is what actually shows. */
+.filter-tabs { position: relative; }
+.filter-tabs__indicator {
+  position: absolute; bottom: -1px; height: 2px;
+  background: var(--app-accent);
+  opacity: 0;
+  transition: transform var(--duration-standard) var(--ease-smooth), width var(--duration-standard) var(--ease-smooth),
+    opacity var(--duration-fast) var(--app-ease);
+}
+.filter-tabs__indicator.is-visible { opacity: 1; }
 
 /* ============================================================ Lists: lessons, people, records */
 
@@ -95,9 +137,19 @@
   transition: background var(--duration-fast) var(--app-ease);
 }
 .lesson-row__link:hover, .person-row__link:hover, .record-list__link:hover { background: var(--app-surface-sunken); }
+/* A row is the full width of the list, not a button-shaped control, so its "press" is a quiet
+   background step rather than the scale used on cards/buttons — scaling a full-bleed row would
+   pull its edges away from the list's own border and look broken, not tactile. */
+.lesson-row__link:active, .person-row__link:active, .record-list__link:active { background: var(--app-surface-accent); }
 .lesson-row__link:focus-visible, .person-row__link:focus-visible, .record-list__link:focus-visible {
   outline: none; box-shadow: inset 0 0 0 2px var(--app-accent);
 }
+/* The chevron shifting right on hover is what makes an otherwise plain row read as clickable at
+   a glance, before the cursor even lands on it (plan8 section 16). */
+.lesson-row__chevron, .person-row__chevron, .record-list__chevron { transition: transform var(--duration-fast) var(--app-ease), color var(--duration-fast) var(--app-ease); }
+.lesson-row__link:hover .lesson-row__chevron,
+.person-row__link:hover .person-row__chevron,
+.record-list__link:hover .record-list__chevron { transform: translateX(3px); color: var(--app-accent); }
 
 .lesson-row__when { display: flex; flex-direction: column; min-width: 9.5rem; flex: none; }
 .lesson-row__day { font-size: var(--text-small); font-weight: 650; color: var(--app-ink); }
@@ -174,6 +226,7 @@
   min-width: min(22rem, 100%); padding: 0 var(--space-3);
   background: var(--app-surface); border: 1px solid var(--app-border-strong);
   border-radius: var(--app-radius-sm); color: var(--app-muted);
+  transition: border-color var(--duration-fast) var(--app-ease), box-shadow var(--duration-fast) var(--app-ease);
 }
 .search-input:focus-within { border-color: var(--app-accent); box-shadow: var(--app-focus-ring); }
 .search-input input {
@@ -185,6 +238,8 @@
 .search-input button {
   display: grid; place-items: center; padding: 0.2rem;
   border: 0; background: transparent; color: var(--app-muted); cursor: pointer;
+  transition: color var(--duration-fast) var(--app-ease);
+  animation: app-pop var(--duration-fast) var(--app-ease);
 }
 .search-input button:hover { color: var(--app-ink); }
 
@@ -216,6 +271,7 @@
   width: 100%; min-height: 2.375rem; padding: 0.45rem var(--space-3);
   border: 1px solid var(--app-border-strong); border-radius: var(--app-radius-sm);
   background: var(--app-surface); color: var(--app-ink); font: inherit; font-size: var(--text-body);
+  transition: border-color var(--duration-fast) var(--app-ease), box-shadow var(--duration-fast) var(--app-ease);
 }
 .field textarea, .form textarea { min-height: 5.5rem; resize: vertical; line-height: 1.55; }
 .field input:focus, .field select:focus, .field textarea:focus,
@@ -223,6 +279,15 @@
   outline: none; border-color: var(--app-accent); box-shadow: var(--app-focus-ring);
 }
 .field--invalid input, .field--invalid select, .field--invalid textarea { border-color: var(--colour-error); }
+.field__error {
+  /* A field turning invalid is a real layout change (the message takes its own line) — fading
+     and easing it in rather than having it simply appear is what keeps that from reading as a
+     jump (plan8 section 25). Height is one of the properties section 4 says to avoid animating
+     repeatedly, but this fires once per validation state change on one field at a time, not
+     continuously, which is exactly the "unless necessary" it allows for. */
+  animation: field-error-in var(--duration-fast) var(--ease-smooth);
+}
+@keyframes field-error-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
 
 .fieldset { margin: 0; padding: 0; border: 0; }
 .fieldset__legend { padding: 0; font-family: var(--font-heading); font-size: var(--text-h3); font-weight: 700; color: var(--app-ink); }
@@ -290,15 +355,25 @@
 body.has-dialog { overflow: hidden; }
 
 .dialog { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: var(--space-4); }
-.dialog__scrim { position: absolute; inset: 0; border: 0; background: rgb(9 29 49 / 45%); cursor: pointer; }
+.dialog__scrim {
+  position: absolute; inset: 0; border: 0; background: rgb(9 29 49 / 45%); cursor: pointer;
+  animation: dialog-scrim-in var(--duration-medium) var(--app-ease);
+}
+.dialog.is-closing .dialog__scrim { animation: dialog-scrim-out var(--duration-fast) var(--app-ease) forwards; }
 
 .dialog__panel {
   position: relative; z-index: 1;
   width: min(34rem, 100%); max-height: min(85vh, 48rem); overflow-y: auto;
   background: var(--app-surface); border-radius: var(--app-radius-lg);
   box-shadow: var(--app-shadow-lg);
-  animation: dialog-in var(--duration-medium) var(--app-ease);
+  animation: dialog-in var(--duration-medium) var(--ease-gentle);
 }
+.dialog__panel.is-closing { animation: dialog-out var(--duration-fast) var(--app-ease) forwards; }
+/* A destructive confirmation gets a touch more visual weight than title/description colour alone
+   would give it — plan8 section 27's "slightly stronger emphasis", read literally rather than as
+   licence for anything louder (no shake, no red flash — section 69 is explicit that destructive
+   actions should feel deliberate, not alarming). */
+.dialog__panel--danger { box-shadow: var(--app-shadow-lg), inset 0 3px 0 var(--colour-error); }
 .dialog__header {
   display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4);
   padding: var(--space-5) var(--space-5) var(--space-4);
@@ -309,6 +384,9 @@ body.has-dialog { overflow: hidden; }
 .dialog__body { padding: var(--space-5); }
 
 @keyframes dialog-in { from { opacity: 0; transform: translateY(8px) scale(0.99); } to { opacity: 1; transform: none; } }
+@keyframes dialog-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(6px) scale(0.99); } }
+@keyframes dialog-scrim-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dialog-scrim-out { from { opacity: 1; } to { opacity: 0; } }
 
 /* ============================================================ Toasts (section 37) */
 
@@ -326,10 +404,11 @@ body.has-dialog { overflow: hidden; }
   border-radius: var(--app-radius); box-shadow: var(--app-shadow-lg);
   animation: toast-in var(--duration-medium) var(--app-ease);
 }
+.toast.is-closing { animation: toast-out var(--duration-fast) var(--app-ease) forwards; }
 .toast p { margin: 0; flex: 1; font-size: var(--text-small); color: var(--app-ink); }
-.toast--success svg { color: var(--app-accent); }
+.toast--success .toast__icon { color: var(--app-accent); animation: toast-check-in var(--duration-medium) var(--ease-snappy); }
 .toast--error { border-left-color: var(--colour-error); }
-.toast--error svg { color: var(--colour-error); }
+.toast--error .toast__icon { color: var(--colour-error); }
 .toast__dismiss {
   display: grid; place-items: center; padding: 0.15rem;
   border: 0; background: transparent; color: var(--app-muted); cursor: pointer;
@@ -337,6 +416,13 @@ body.has-dialog { overflow: hidden; }
 .toast__dismiss:hover { color: var(--app-ink); }
 
 @keyframes toast-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes toast-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(6px) scale(0.98); } }
+/* The one place a check mark gets its own small entrance rather than just being present — it's
+   what makes a success toast read as "confirmed" rather than merely "here's some text". A scale
+   pop, not a checkmark draw-on: the icon is a solid glyph from lucide, not a stroke path this
+   codebase controls the way it would a custom SVG, so animating stroke-dashoffset isn't available
+   here without shipping a bespoke icon just for this. */
+@keyframes toast-check-in { from { opacity: 0; transform: scale(0.5); } to { opacity: 1; transform: scale(1); } }
 
 @media (max-width: 40rem) {
   .toaster { left: var(--space-4); right: var(--space-4); bottom: var(--space-4); }

@@ -94,6 +94,62 @@ An 8-step spacing scale (`--space-1` through `--space-7`, `0.25rem`→`3rem`) an
 rather than a one-off pixel value. Three shadow levels (`--app-shadow-sm/--app-shadow/
 --app-shadow-lg`) follow the same principle for elevation.
 
+## Motion (plan8)
+
+Four durations and three easing curves, defined once in `globals.css`'s `:root` and shared by the
+marketing site, the app and the classroom alike:
+
+| Token | Value | Use |
+|---|---|---|
+| `--duration-instant` | `100ms` | A press releasing — `:active` states |
+| `--duration-fast` | `160ms` | Hover, focus, most one-property transitions (pre-existing, kept as-is) |
+| `--duration-standard` (alias of the pre-existing `--duration-medium`) | `220ms` | Dropdowns, badges, a card settling in |
+| `--duration-slow` | `380ms` | Dialogs, drawers, counted numbers — bigger movements that should feel weighty, not snappy |
+
+| Token | Curve | Use |
+|---|---|---|
+| `--ease-snappy` (alias of the pre-existing `--ease-out`/`--app-ease`) | `cubic-bezier(0.22, 1, 0.36, 1)` | The default — confident deceleration, no overshoot. Hover, press, most entrances. |
+| `--ease-smooth` | `cubic-bezier(0.4, 0, 0.2, 1)` | Symmetric ease-in-out — crossfades, a tab underline sliding between two positions. |
+| `--ease-gentle` | `cubic-bezier(0.16, 1, 0.3, 1)` | A slower, more settled ease-out for larger movements — dialogs, empty-state icons. |
+
+**The tactile-press standard**, applied to every button-shaped control (`.btn`, `.dialog-trigger`,
+`.icon-button`, FullCalendar's own toolbar buttons, the marketing `.btnPrimary`/`.btnSecondary`):
+hover lifts `translateY(-1px)`, press drops to `scale(0.97)` (a smaller `scale(0.92)` on
+`.icon-button`, since a big scale on a small square reads as a shove) at `--duration-instant` so
+release feels immediate. One rule, reused everywhere, rather than each control inventing its own —
+this alone is most of what makes the product feel less static (plan8 section 82).
+
+**`useDelayedUnmount`** (`src/lib/motion/useDelayedUnmount.ts`) is the one primitive behind every
+dropdown/dialog/drawer/toast that plays a reverse "closing" transition instead of the panel simply
+vanishing the instant its `open` state flips to `false` — Dialog, the account menu,
+QuickCreateMenu, the mobile drawer and Toaster all use it. It closes with no delay at all under
+`prefers-reduced-motion`, since a reduced-motion pass must never leave an element sitting in the
+DOM (and the accessibility tree) for the length of an animation that isn't actually going to run.
+
+**`AnimatedNumber`** (`components/ui/AnimatedNumber.tsx`) counts between two values instead of
+snapping — used for the topbar's notification badge. It only animates a *change within one mounted
+instance*, never the first render a given instance sees: the dashboard's own stat tiles remount on
+every navigation to the page, so counting up from zero on every visit would be the "annoying"
+version of this plan8 section 15 explicitly rules out.
+
+**Reduced motion** is enforced once, at the top: `globals.css`'s `@media (prefers-reduced-motion:
+reduce)` block caps `animation-duration`/`transition-duration` to `0.01ms` on `*, *::before,
+*::after` with `!important`, which — because `!important` beats specificity, not just source order
+— silently defangs every transition/animation in every stylesheet in the document (marketing, app,
+classroom) with no per-component opt-in required. The classroom's own stylesheet, ported from a
+standalone app, carries a second, narrower reduced-motion block of its own for the same purpose,
+which is redundant with the blanket rule but harmless. What that blanket rule *can't* reach is
+anything not expressed as a CSS transition/animation — `useDelayedUnmount`'s exit timer,
+`AnimatedNumber`'s requestAnimationFrame loop, the topbar's one-off bell ring — each of those
+checks `prefersReducedMotion()` (`src/lib/motion/reducedMotion.ts`) directly.
+
+**What was tried and removed.** A per-navigation page fade (`key={pathname}` on `.app-content`,
+forcing every route change to replay a content-enter animation) is not in the product. It measurably
+made a link/button right after navigating briefly non-actionable — a real Playwright actionability
+timeout, not a cosmetic nit — which is exactly the "never delay an interaction to let a motion
+effect finish" rule plan8 section 72 states outright. Removed rather than patched around; see
+`AppShellClient.tsx`'s comment on the reverted `<main>` element for the specifics.
+
 ## Components (`components/ui/`, `components/shell/`)
 
 | Component | Rule it enforces |

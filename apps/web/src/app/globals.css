@@ -32,11 +32,42 @@
   --shadow-sm: 0 8px 24px rgb(9 29 49 / 7%);
   --shadow-md: 0 20px 55px rgb(9 29 49 / 13%);
   --shadow-interactive: 0 16px 34px rgb(9 29 49 / 11%);
+
+  /* ── Motion system (plan8) ───────────────────────────────────────────────────────────────
+     One shared set of durations and easing curves for the whole product — marketing, app and
+     classroom alike — so "how long should this take" and "what curve" stop being re-decided
+     per component. Four durations, named by what they're for rather than a raw number, plus
+     three easing curves for three different *kinds* of motion:
+
+     --ease-snappy  a confident deceleration with no overshoot — presses, hovers, anything that
+                    confirms "you did that". This is the curve this codebase already had
+                    (--ease-out / --app-ease); kept as the default rather than replaced.
+     --ease-smooth  symmetric ease-in-out — crossfades and things that move *between* two states
+                    with no obvious start/end emphasis (tab underline, skeleton→content).
+     --ease-gentle  a slower, more settled ease-out — larger movements that should feel weighty
+                    rather than snappy (dialogs, drawers, page transitions).
+
+     --duration-fast/--duration-medium already had real values in use across dozens of rules;
+     kept as-is rather than churned, and folded into the instant/fast/standard/slow scale below
+     as aliases so existing and new code share one source of truth. */
+  --duration-instant: 100ms;
   --duration-fast: 160ms;
   --duration-medium: 220ms;
+  --duration-standard: var(--duration-medium);
+  --duration-slow: 380ms;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-snappy: var(--ease-out);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-gentle: cubic-bezier(0.16, 1, 0.3, 1);
+
   --section-space: clamp(4.5rem, 8vw, 7.5rem);
 }
+
+/* Every transition/animation in the product is capped to near-zero duration under reduced
+   motion (see the blanket `*, *::before, *::after` rule further down this file) — that rule is
+   the actual enforcement mechanism and needs no per-component opt-in. The handful of JS-driven
+   effects that aren't expressed as a CSS transition (a delayed unmount, a counted-up number)
+   check `prefers-reduced-motion` directly in code instead; see src/lib/motion/. */
 
 *,
 *::before,

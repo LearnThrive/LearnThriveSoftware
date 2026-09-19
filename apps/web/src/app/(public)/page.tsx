@@ -252,7 +252,7 @@ export default function HomePage() {
                 <div className={styles.subjectCardBody}>
                   <h3>{subject.title}</h3>
                   <p>{subject.description}</p>
-                  <span className={styles.subjectCardLink}>{subject.range} &rarr;</span>
+                  <span className={styles.subjectCardLink}>{subject.range} <span className={styles.subjectCardArrow} aria-hidden="true">&rarr;</span></span>
                 </div>
               </Link>
             </ScrollReveal>

@@ -196,7 +196,7 @@
   border-radius: 999px;
   text-decoration: none;
   box-shadow: 0 14px 30px -16px rgba(7, 95, 82, 0.9);
-  transition: transform 0.2s, background 0.2s;
+  transition: transform 0.2s var(--ease-snappy), background 0.2s var(--ease-snappy);
   border: none;
   cursor: pointer;
   font-family: var(--lt-font-body);
@@ -206,6 +206,10 @@
   transform: translateY(-3px);
   background: var(--lt-green-dark);
   color: #fff;
+}
+.btnPrimary:active {
+  transform: translateY(-1px) scale(0.97);
+  transition-duration: var(--duration-instant);
 }
 
 .btnSecondary {
@@ -217,12 +221,16 @@
   border-radius: 999px;
   text-decoration: none;
   border: 2px solid rgba(255, 255, 255, 0.35);
-  transition: background 0.2s;
+  transition: background 0.2s var(--ease-snappy), transform 0.2s var(--ease-snappy);
 }
 
 .btnSecondary:hover {
   background: rgba(255, 255, 255, 0.12);
   color: #fff;
+}
+.btnSecondary:active {
+  transform: scale(0.97);
+  transition-duration: var(--duration-instant);
 }
 
 .heroAssurances {
@@ -358,11 +366,15 @@
   min-height: 230px;
   display: flex;
   flex-direction: column;
-  transition: transform 0.3s, box-shadow 0.3s;
+  transition: transform 0.3s var(--ease-snappy), box-shadow 0.3s var(--ease-snappy);
 }
 
 .whyCard:hover {
   transform: translateY(-7px);
+}
+.whyCard:active {
+  transform: translateY(-4px) scale(0.99);
+  transition-duration: var(--duration-instant);
 }
 
 .whyCardNavy {
@@ -587,7 +599,7 @@
   border: 1px solid var(--lt-border);
   border-radius: 22px;
   overflow: hidden;
-  transition: box-shadow 0.3s, transform 0.3s;
+  transition: box-shadow 0.3s var(--ease-snappy), transform 0.3s var(--ease-snappy), border-color 0.3s var(--ease-snappy);
   text-decoration: none;
   color: inherit;
   display: block;
@@ -596,8 +608,17 @@
 .subjectCard:hover {
   box-shadow: 0 26px 44px -28px rgba(20, 49, 82, 0.55);
   transform: translateY(-5px);
+  border-color: var(--lt-green);
   color: inherit;
 }
+.subjectCard:active {
+  transform: translateY(-3px) scale(0.995);
+  transition-duration: var(--duration-instant);
+}
+.subjectCardImage img { transition: transform 0.4s var(--ease-snappy); }
+.subjectCard:hover .subjectCardImage img { transform: scale(1.04); }
+.subjectCardArrow { display: inline-block; transition: transform var(--duration-fast) var(--ease-snappy); }
+.subjectCard:hover .subjectCardArrow { transform: translateX(4px); }
 
 .subjectCardImage {
   height: 132px;

@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
+import { useDelayedUnmount } from "@/lib/motion/useDelayedUnmount";
 
 /**
  * Modal dialog for significant create/edit flows (plan6 section 36), replacing the `<details>`
@@ -28,6 +29,9 @@ export function Dialog({ trigger, title, description, children, id, tone = "prim
   const triggerRef = useRef<HTMLButtonElement>(null);
   const generatedId = useId();
   const dialogId = id ?? generatedId;
+  // Plays dialog-out instead of the panel simply disappearing on the frame `open` flips false —
+  // faster than the open animation (--duration-fast vs --duration-medium), per plan8 section 27.
+  const dialog = useDelayedUnmount(open, 160);
 
   useEffect(() => {
     if (!open) return;
@@ -72,10 +76,16 @@ export function Dialog({ trigger, title, description, children, id, tone = "prim
       <button ref={triggerRef} type="button" className={`dialog-trigger dialog-trigger--${tone}`} onClick={() => setOpen(true)} aria-haspopup="dialog" aria-expanded={open}>
         {trigger}
       </button>
-      {open && (
-        <div className="dialog">
+      {dialog.rendered && (
+        <div className={`dialog ${dialog.closing ? "is-closing" : ""}`}>
           <button type="button" className="dialog__scrim" aria-label="Close dialog" onClick={close} />
-          <div className="dialog__panel" role="dialog" aria-modal="true" aria-labelledby={`${dialogId}-title`} ref={panelRef}>
+          <div
+            className={`dialog__panel dialog__panel--${tone} ${dialog.closing ? "is-closing" : ""}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={`${dialogId}-title`}
+            ref={panelRef}
+          >
             <header className="dialog__header">
               <div>
                 <h2 className="dialog__title" id={`${dialogId}-title`}>{title}</h2>
