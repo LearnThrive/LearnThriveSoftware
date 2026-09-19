@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { uniqueLabel } from './support';
 
 // Plan section 85's IDOR/access-control adversarial test list. Several of its named attacks
 // (Parent accesses unrelated Student URL, Tutor accesses unassigned Student, Student accesses
@@ -37,30 +38,35 @@ const ADMIN = { email: 'admin@learnthrive.dev', password: 'dev-admin-pass' };
 const TUTOR = { email: 'tutor@learnthrive.dev', password: 'dev-tutor-pass' };
 
 test('lesson detail IDOR: a Tutor cannot view a lesson they are not assigned to', async ({ page }) => {
+  const studentName = uniqueLabel('Hardening Test Student');
+  const tutorName = uniqueLabel('Hardening Test Tutor');
+  const assignmentTitle = uniqueLabel('Hardening Test Assignment');
+  const lessonTitle = uniqueLabel('Hardening test lesson');
+
   await login(page, ADMIN.email, ADMIN.password);
   await page.goto('/dashboard/admin/people/students');
   await page.getByRole('button', { name: 'Add student' }).click();
-  await page.locator('#student-name').fill('Hardening Test Student');
+  await page.locator('#student-name').fill(studentName);
   await page.getByRole('dialog').getByRole('button', { name: 'Add student' }).click();
-  await expect(page.locator('.person-list')).toContainText('Hardening Test Student');
+  await expect(page.locator('.person-list')).toContainText(studentName);
 
   await page.goto('/dashboard/admin/people/tutors');
   await page.getByRole('button', { name: 'Add tutor' }).click();
-  await page.locator('#tutor-name').fill('Hardening Test Tutor');
-  await page.locator('#tutor-email').fill('hardening-tutor@example.test');
+  await page.locator('#tutor-name').fill(tutorName);
+  await page.locator('#tutor-email').fill(`hardening-tutor-${test.info().retry}@example.test`);
   await page.getByRole('dialog').getByRole('button', { name: 'Add tutor' }).click();
 
   await page.goto('/dashboard/admin/assignments');
   await page.getByRole('button', { name: 'Create assignment' }).click();
-  await page.getByLabel('Title').fill('Hardening Test Assignment');
+  await page.getByLabel('Title').fill(assignmentTitle);
   await page.getByLabel('Subject').fill('Chemistry');
-  await page.getByLabel('Tutor').selectOption({ label: 'Hardening Test Tutor' });
-  await page.getByLabel('Student(s)').selectOption({ label: 'Hardening Test Student' });
+  await page.getByLabel('Tutor').selectOption({ label: tutorName });
+  await page.getByLabel('Student(s)').selectOption({ label: studentName });
   await page.getByRole('dialog').getByRole('button', { name: 'Create assignment' }).click();
 
   await page.goto('/dashboard/admin/lessons/new');
-  await page.getByLabel('Tuition Assignment').selectOption({ label: 'Hardening Test Assignment' });
-  await page.locator('#lesson-title').fill('Hardening test lesson');
+  await page.getByLabel('Tuition Assignment').selectOption({ label: assignmentTitle });
+  await page.locator('#lesson-title').fill(lessonTitle);
   await page.locator('#lesson-date').fill('2026-11-21');
   await page.locator('#lesson-time').fill('11:00');
   await page.getByRole('button', { name: 'Schedule lesson' }).click();
@@ -72,7 +78,7 @@ test('lesson detail IDOR: a Tutor cannot view a lesson they are not assigned to'
     if (title.includes('November 2026')) break;
     await page.locator('.fc-next-button').click();
   }
-  await openLessonFromCalendar(page, 'Hardening test lesson');
+  await openLessonFromCalendar(page, lessonTitle);
   await expect(page).toHaveURL(/\/dashboard\/lessons\/(.+)/);
   const lessonUrl = page.url();
 
@@ -97,7 +103,8 @@ test('report approval IDOR: a Tutor never sees an Approve report control, even o
   await login(page, ADMIN.email, ADMIN.password);
   await page.goto('/dashboard/admin/lessons/new');
   await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Ayaan' });
-  await page.locator('#lesson-title').fill('Hardening report lesson');
+  const lessonTitle = uniqueLabel('Hardening report lesson');
+  await page.locator('#lesson-title').fill(lessonTitle);
   await page.locator('#lesson-date').fill('2026-11-22');
   await page.locator('#lesson-time').fill('12:00');
   await page.getByRole('button', { name: 'Schedule lesson' }).click();
@@ -108,7 +115,7 @@ test('report approval IDOR: a Tutor never sees an Approve report control, even o
     if (title.includes('November 2026')) break;
     await page.locator('.fc-next-button').click();
   }
-  await openLessonFromCalendar(page, 'Hardening report lesson');
+  await openLessonFromCalendar(page, lessonTitle);
   await expect(page).toHaveURL(/\/dashboard\/lessons\/(.+)/);
   const lessonUrl = page.url();
 
