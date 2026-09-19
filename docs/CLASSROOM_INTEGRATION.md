@@ -1,8 +1,17 @@
 # Classroom integration
 
 Covers Phase E: how the platform (`apps/web`) hands a logged-in Tutor or Student into the
-existing LearnThrive Classroom prototype (`apps/classroom` + `apps/realtime`) for a specific
-`Lesson`, without the classroom itself needing to know anything about platform accounts.
+LearnThrive Classroom for a specific `Lesson`, without the classroom itself needing to know
+anything about platform accounts.
+
+> **Updated for plan6 Slice A** (single-origin convergence): the classroom UI described here now
+> renders *inside* `apps/web` (`apps/web/src/features/classroom`, a direct port of the original
+> `apps/classroom` source) and joins over the same origin's Socket.IO endpoint, rather than
+> redirecting to a separate `apps/classroom` dev server on its own port. The trust boundary, the
+> token, and everything below it are unchanged — see `docs/ARCHITECTURE.md`'s "Plan6 —
+> single-origin convergence" section for what actually changed and why `apps/classroom` still
+> exists as its own workspace (as the source of truth this feature is ported from, and as a
+> standalone prototype `npm run dev --workspace=apps/classroom` can still run on its own).
 
 ## The trust boundary (plan section 34, 37)
 
@@ -24,11 +33,16 @@ thing that crosses between them:
 2. If every check passes, it signs a token via `@learnthrive/shared/classroomToken`'s
    `signClassroomJoinToken({ roomId, lessonId, name, role, exp })` — `exp` is 5 minutes out,
    deliberately short: the token only needs to survive the redirect, not the whole lesson.
-3. It redirects to `${NEXT_PUBLIC_CLASSROOM_URL}/?token=<token>`.
-4. `apps/classroom`'s `App.tsx` detects `?token=` on load and auto-joins
-   (`meeting.ts`'s `join(name, roomId, role, token)`), **skipping the manual name/room-code
-   form entirely** — the token is stripped from the address bar as soon as it's used.
-5. `apps/realtime`'s `signalling.ts` verifies the token server-side
+3. It redirects to `/dashboard/lessons/${lesson.id}/classroom?token=<token>` — a route inside
+   `apps/web` itself (see the single-origin note above; before Slice A this redirected to a
+   separate `apps/classroom` origin instead).
+4. That route renders `apps/web/src/features/classroom/App.tsx`, which detects `?token=` on load
+   and auto-joins (`meeting.ts`'s `join(name, roomId, role, token)`), **skipping the manual
+   name/room-code form entirely** — the token is stripped from the address bar as soon as it's
+   used.
+5. `apps/web/server.ts`'s embedded Socket.IO server (`createSignallingServer`, the same
+   `apps/realtime/server/signalling.ts` code the standalone `apps/realtime` app also runs)
+   verifies the token server-side
    (`verifyClassroomJoinToken`) and, on success, uses **only the token's own `roomId`/`name`/
    `role`** for the join — never a client-declared value sent alongside it, even if one is
    present. This is what stops a modified client from claiming a different name or role than the
@@ -66,26 +80,28 @@ touching any `.env*` path, even a template with no real secret in it) — set th
 
 **`apps/web/.env.local`**
 ```
-CLASSROOM_JOIN_SECRET=<any long random string, shared with apps/realtime>
-NEXT_PUBLIC_CLASSROOM_URL=http://localhost:5173
+CLASSROOM_JOIN_SECRET=<any long random string>
 ```
 
-**`apps/realtime/.env`**
-```
-CLASSROOM_JOIN_SECRET=<the same value as above>
-```
+`NEXT_PUBLIC_CLASSROOM_URL` is no longer read since Slice A — the classroom route is
+same-origin now, so there's nothing external to point at. `CLASSROOM_JOIN_SECRET` only needs to
+match a *separately deployed* `apps/realtime` if one is standing in for the embedded signalling
+server (see `docs/ARCHITECTURE.md`'s production-separation note); for ordinary local development
+against the single unified server, it can be left unset entirely.
 
-If `CLASSROOM_JOIN_SECRET` is unset in either app, both fall back to the same hardcoded dev-only
-string (`packages/shared/classroomToken.ts`'s `DEV_FALLBACK_SECRET`) so the two apps work
-out-of-the-box together in local development without manual coordination. **This fallback, and
-manually copying the same value into two `.env` files, is not how a real shared secret should be
-managed in production** — see `docs/PRODUCTION_GAPS.md`.
+If unset, `apps/web` falls back to the same hardcoded dev-only string
+(`packages/shared/classroomToken.ts`'s `DEV_FALLBACK_SECRET`) so local development works
+out-of-the-box with no manual setup. **This fallback is not how a real secret should be managed
+in production** — see `docs/PRODUCTION_GAPS.md`.
 
 ## What's not built yet
 
-- A post-class workflow (attendance capture, "how did the lesson go" prompt back on the platform
-  after a Tutor ends a class) — arrives with Phase F (Attendance and Lesson Logs).
-- The classroom prototype has no way to *tell* the platform a lesson actually happened, was
-  joined, or ran long — today that's entirely manual (Admin/Tutor mark it via the platform
-  separately).
+- The classroom has no way to *tell* the platform a lesson actually happened, was joined, or ran
+  long — attendance is entirely Tutor-entered on the platform after the fact (Phase F). Nothing
+  auto-populates it from a real join/leave event.
 - A real secrets manager for `CLASSROOM_JOIN_SECRET` in production, with rotation.
+
+Phase F (Attendance and Lesson Logs) already built the post-class workflow this section
+originally listed as future work: ending a class as Tutor returns to the Lesson page with
+`?postClass=1`, prompting attendance and the report — see `docs/ATTENDANCE.md` and plan6 section
+62.

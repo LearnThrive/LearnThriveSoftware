@@ -149,3 +149,98 @@ Verification: 1 new `packages/data` unit test (`resetDataProvider` — session c
 ## Plan5 status
 
 Phases A through J — the plan's full implementation sequence — are complete as of this commit. See `plan5.md` (private) for the phase definitions this followed, and each phase's own doc (`docs/AUTHENTICATION.md`, `docs/DOMAIN_MODEL.md`, `docs/SCHEDULING.md`, `docs/CLASSROOM_INTEGRATION.md`, `docs/ATTENDANCE.md`, `docs/LESSON_REPORTS.md`, `docs/NOTIFICATIONS.md`, `docs/HARDENING.md`) for what each one actually built, tested, and honestly left undone. `docs/PRODUCTION_GAPS.md` is the single place that consolidates every gap named across all of them.
+
+## Plan6 — single-origin convergence and the visual/UX overhaul
+
+`plan6.md` (private) asked for two things on top of the plan5 platform above: converge the
+classroom from its own dev-server origin into the same single server as everything else, and
+replace the plan5-era functional-but-unstyled UI with a real, consistent design.
+
+### The single origin
+
+```text
+                              Browser
+                                 │
+                                 ▼
+                      http://localhost:3000
+                                 │
+              apps/web/server.ts (one Node process)
+                                 │
+        ┌───────────┬───────────┼───────────┬────────────────┐
+        │           │           │            │                │
+   Public site   Dashboard    APIs      Classroom UI      Socket.IO
+  (marketing,   (auth'd app  (Server    (/dashboard/      (WebRTC
+   statically    shell, all  Actions +  lessons/[id]/      signalling,
+   generated)    role UIs)   route      classroom —        same HTTP
+                             handlers)  apps/web/src/       upgrade,
+                                        features/           same port)
+                                        classroom)
+```
+
+One `apps/web/server.ts` — a plain `node:http` server — does two things with every incoming
+request: `realtime.app(req, res)` (the Express app `createSignallingServer` returns) handles
+`/health` and `/api/turn-credentials`, and everything else goes to Next.js's own request handler.
+`createSignallingServer({ httpServer: server })` attaches Socket.IO to the *same* `http.Server`
+rather than creating its own — a WebSocket upgrade request and an ordinary HTTP request arrive on
+the identical port, and Socket.IO's own upgrade handling takes it from there. `apps/classroom`'s
+signalling code (`apps/realtime/server/signalling.ts`) is unchanged by this — it already accepted
+an external `httpServer` — only how it's invoked changed.
+
+The classroom UI itself is a direct port (`apps/web/src/features/classroom`, ~42 files) of
+`apps/classroom`'s source into a Next.js client component, reached at
+`/dashboard/lessons/[id]/classroom` — a dedicated `(classroom)` route group (see
+`docs/INFORMATION_ARCHITECTURE.md`) so it renders with no AppShell/PublicShell chrome around it,
+full-bleed, the way an immersive video-call surface should. `apps/classroom` and `apps/realtime`
+keep existing as their own workspaces — `apps/classroom` is the source of truth this port was
+taken from and can still run standalone (`npm run dev --workspace=apps/classroom`,
+`apps/classroom/playwright.config.ts`'s own 40-scenario suite), and `apps/realtime` is what a
+production deployment can run as a *separate* process if it ever needs to (see below) — but
+neither is on the path a real user's browser takes anymore.
+
+**Why converge at all**: `docs/CLASSROOM_INTEGRATION.md`'s Phase E cross-app redirect
+(`NEXT_PUBLIC_CLASSROOM_URL`) worked, but it meant a genuinely separate origin in the middle of
+one continuous user journey — a different port, a full page navigation, and (in production) a
+second deployed service to keep in sync with the first. plan6 section 89's regression test
+(`tests-e2e/single-server.spec.ts`) proves the resulting property directly: across an entire
+Login → Dashboard → Lesson → Join → Classroom → End class → back-to-Lesson flow, the browser's
+main frame never navigates to any origin other than the one it started at.
+
+**Two real, latent bugs surfaced only by that regression test actually driving the flow
+end-to-end** (not by unit or component tests, which couldn't see either): a StrictMode
+double-invoke race where an `autoJoinStarted` ref guard, combined with React's mount → cleanup →
+mount dev cycle, caused the *second* mount's join to `dispose()` a socket the *first* mount's join
+was still using — visible as `Room.leaveNow: manager close forced close`; and the "copy invite
+link" building a URL with `pathname = '/meeting'`, a route that no longer exists post-convergence.
+Both fixed as part of Slice A; see the commit for the full diagnosis.
+
+### Production: separating realtime infrastructure behind the same public origin
+
+This convergence is a **development/prototype simplification**, not a claim that one Node
+process is how a real deployment should scale. A production setup can keep the same public
+origin (`https://app.learnthrivetuition.co.uk`, say) while routing WebSocket traffic to
+infrastructure better suited to holding many long-lived connections — Socket.IO's Redis adapter
+across several signalling instances, or a managed realtime platform — behind a reverse proxy or
+load balancer that:
+
+- forwards ordinary HTTP requests (`/`, `/dashboard/*`, Server Actions, most API routes) to the
+  Next.js instance(s);
+- forwards the Socket.IO upgrade path (`/socket.io/*` by default) and `/api/turn-credentials` to
+  the separately-scaled realtime service — which is exactly what `apps/realtime` already is:
+  the same `createSignallingServer` code `apps/web/server.ts` calls in-process today, already
+  packaged as its own standalone Express app with its own `package.json`, ready to deploy
+  independently the moment that split is worth making.
+
+None of the application code changes for that split — `createSignallingServer(options?: {
+httpServer? })` already supports both "attach to an existing server" (today's single-origin dev
+setup) and "run as `apps/realtime`'s own server" (a scaled-out production one) from the same
+source, via the same optional parameter.
+
+### The visual/UX overhaul (Slices B onward)
+
+Everything plan5 built was functional but visually minimal — see `docs/DESIGN_SYSTEM.md` and
+`docs/INFORMATION_ARCHITECTURE.md` for what replaced it: a real design system (tokens, a small
+component library — Card/Badge/Dialog/EmptyState/PageHeader and friends), a role-aware
+AppShell distinct from the marketing site's PublicShell, redesigned dashboards/People/calendar/
+lesson/report pages, and an automated accessibility pass (axe-core against the real rendered DOM,
+`tests-e2e/accessibility.spec.ts`) that found and fixed several genuine contrast issues neither
+plan5 nor a static lint rule could have caught.
