@@ -210,10 +210,19 @@
   padding: 0.4rem 0.85rem; border-radius: var(--app-radius-sm) !important;
 }
 .calendar-wrap .fc-button:focus { box-shadow: var(--app-focus-ring) !important; }
-.calendar-wrap .fc-button-primary:not(:disabled).fc-button-active { box-shadow: none !important; }
+/* --fc-button-text-color has no separate "active" variant of its own — left at --app-ink (dark)
+   it stays dark on the active button's own dark green background too, failing contrast. */
+.calendar-wrap .fc-button-primary:not(:disabled).fc-button-active { box-shadow: none !important; color: #fff !important; }
 .calendar-wrap .fc-col-header-cell-cushion { color: var(--app-muted); font-weight: 650; font-size: var(--text-label); text-transform: uppercase; letter-spacing: 0.05em; text-decoration: none; }
 .calendar-wrap .fc-daygrid-day-number { color: var(--app-text); font-size: var(--text-small); text-decoration: none; padding: var(--space-2); }
 .calendar-wrap .fc-day-today .fc-daygrid-day-number { color: var(--app-accent-strong); font-weight: 700; }
+/* FullCalendar de-emphasises adjacent-month "spillover" days two ways at once: a lighter text
+   colour *and* 30% opacity on the wrapping .fc-daygrid-day-top — stacked, that's ~1.5:1 against
+   white, well past the point of AA compliance. The colour swap alone (--app-muted, 5.3:1) already
+   reads as clearly secondary, so the opacity — the part actually causing the failure — is
+   switched back off rather than trying to find a colour dark enough to survive both. */
+.calendar-wrap .fc-day-other .fc-daygrid-day-number { color: var(--app-muted) !important; }
+.calendar-wrap .fc-day-other .fc-daygrid-day-top { opacity: 1 !important; }
 .calendar-wrap .fc-daygrid-day.fc-day-today { border: 1px solid var(--app-accent); }
 .calendar-wrap .fc-timegrid-slot-label-cushion { color: var(--app-muted); font-size: var(--text-label); }
 .calendar-wrap .fc-list-day-cushion { background: var(--app-surface-sunken) !important; }

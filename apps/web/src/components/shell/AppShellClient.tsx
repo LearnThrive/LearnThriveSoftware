@@ -18,11 +18,12 @@ const ROLE_LABELS: Record<AuthenticatedUser["role"], string> = {
 };
 
 export function AppShellClient({
-  user, sections, unreadCount, children,
+  user, sections, unreadCount, isDevelopment, children,
 }: {
   user: AuthenticatedUser;
   sections: AppNavSection[];
   unreadCount: number;
+  isDevelopment: boolean;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -154,6 +155,12 @@ export function AppShellClient({
           </button>
 
           <div className="app-topbar__spacer" />
+
+          {isDevelopment && (
+            <span className="dev-badge" title="Development environment · Data resets on server restart">
+              Dev
+            </span>
+          )}
 
           <Link href="/dashboard/notifications" className="icon-button app-topbar__bell" aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}>
             <Bell size={19} aria-hidden="true" />
