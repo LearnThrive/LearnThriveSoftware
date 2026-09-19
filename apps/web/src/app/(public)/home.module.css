@@ -38,7 +38,10 @@
   --lt-cream-light: #FBF8F1;
   --lt-border: #E7DFCD;
   --lt-ink: #26333F;
-  --lt-text: #64727E;
+  /* #64727E only cleared 4.43:1 on this page's cream background — just under AA's 4.5:1, and
+     this token is only ever used as a text colour (never a background), so darkening it here
+     helps every usage and can't regress any of them. */
+  --lt-text: #586573;
   --lt-font-heading: var(--font-bricolage), sans-serif;
   --lt-font-body: var(--font-public-sans), system-ui, sans-serif;
   --lt-font-mono: var(--font-ibm-plex-mono), monospace;
@@ -688,7 +691,10 @@
 }
 
 .levelRowDark .levelYears {
-  color: var(--lt-green-light);
+  /* --lt-green-light (#087363) is fine everywhere it sits on the cream/white sections (5.2-5.8:1)
+     but only 2.5:1 on this row's own dark navy background — a brighter one-off here rather than
+     changing the shared token and risking the other light-background usages. */
+  color: #13c2a0;
 }
 
 .levelDesc {
@@ -755,7 +761,9 @@
 }
 
 .statValueGreen {
-  color: var(--lt-green-light) !important;
+  /* Same fix as .levelRowDark .levelYears just above in this file: --lt-green-light only clears
+     2.5:1 on this dark section's background, well under AA even at this large size (3:1). */
+  color: #13c2a0 !important;
 }
 
 .statLabel {

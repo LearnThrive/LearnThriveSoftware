@@ -8,7 +8,15 @@ export default defineConfig({
   timeout: 30_000,
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  // One shared dev-mode Next.js server (single Node process, on-demand route compilation) backs
+  // every worker here — it doesn't scale with CPU count the way a production server would, and
+  // running one worker per spec file (Playwright's CPU-based default, now 8+ files) has produced
+  // genuine resource-contention flakes (a dropped RSC stream, a slow response landing on the
+  // conflict-detection path instead of a clean redirect) rather than real bugs — reproducibly
+  // gone when the same file runs alone. Capping workers, and retrying locally too (not just in
+  // CI), trades a little wall-clock time for a suite that means what it reports either way.
+  workers: 4,
+  retries: 1,
   reporter: 'list',
   use: {
     // Must be "localhost", not "127.0.0.1" — Next.js 16 dev's origin protection treats them as
