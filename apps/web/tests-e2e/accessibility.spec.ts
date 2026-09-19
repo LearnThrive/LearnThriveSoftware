@@ -51,6 +51,16 @@ const ADMIN = { email: 'admin@learnthrive.dev', password: 'dev-admin-pass' };
 const TUTOR = { email: 'tutor@learnthrive.dev', password: 'dev-tutor-pass' };
 
 test.describe('automated accessibility (axe-core, WCAG 2 A/AA)', () => {
+  // The marketing site's own entrance animations (home.module.css's lt-rise: opacity 0 -> 1 over
+  // ~0.8s) fade elements in from transparent, and axe scores contrast on whatever's actually
+  // rendered at the instant it runs — catching one mid-fade is a real reading, just of a state
+  // that (genuinely) only exists for a fraction of a second, not the page's steady-state
+  // appearance. Both stylesheets already respect prefers-reduced-motion; emulating it removes
+  // that timing confound entirely rather than adding a fixed wait to hopefully outlast it.
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+  });
+
   test('marketing home', async ({ page }) => {
     await page.goto('/');
     await runAxe(page, '/');

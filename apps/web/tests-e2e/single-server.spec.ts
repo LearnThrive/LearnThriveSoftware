@@ -75,7 +75,19 @@ test('the one-dev-server regression test: Home, Login, Admin dashboard, a Lesson
   await page.locator('#lesson-date').fill(date);
   await page.locator('#lesson-time').fill(time);
   await page.getByRole('button', { name: 'Schedule lesson' }).click();
-  await expect(page).toHaveURL(/\/dashboard\/calendar$/);
+  // navigation.spec.ts's Tutor journey schedules its own "now + a bit" lesson on this identical
+  // seeded assignment — a genuine, occasional overlap between two independent test files, not a
+  // bug in either. Handled the same way a real admin would (lessons.spec.ts's "Schedule anyway"
+  // test proves the path itself works). Races two *polling* waits (locator.isVisible() itself
+  // does not poll despite taking a `timeout` option — see navigation.spec.ts's copy of this exact
+  // fix) rather than chasing an offset guaranteed never to collide.
+  const scheduleAnyway = page.getByRole('button', { name: 'Schedule anyway' });
+  await Promise.race([
+    page.waitForURL(/\/dashboard\/calendar$/, { timeout: 10_000 }),
+    scheduleAnyway.waitFor({ state: 'visible', timeout: 10_000 }),
+  ]).catch(() => {});
+  if (await scheduleAnyway.isVisible()) await scheduleAnyway.click();
+  await expect(page).toHaveURL(/\/dashboard\/calendar$/, { timeout: 10_000 });
 
   await page.goto('/dashboard/calendar');
   await openLessonFromCalendar(page, 'Single-server regression lesson');

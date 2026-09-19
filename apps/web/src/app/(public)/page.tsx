@@ -154,7 +154,10 @@ export default function HomePage() {
                     <path d="M5 19c0-3.5 3.1-6 7-6s7 2.5 7 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                   </svg>
                 </div>
-                <span className={styles.whyCardNumber} style={{ color: "rgba(8,115,99,.9)" }}>01</span>
+                {/* rgba(8,115,99,.9) only cleared 2.09:1 against this card's navy background —
+                    well under AA's 4.5:1. Matches the brighter green used elsewhere on navy
+                    (home.module.css's .levelRowDark .levelYears / .statValueGreen). */}
+                <span className={styles.whyCardNumber} style={{ color: "#13c2a0" }}>01</span>
               </div>
               <h3 className={styles.whyCardTitle}>Truly one-to-one</h3>
               <p className={styles.whyCardText}>No groups, no shared screens. The whole session belongs to your child.</p>
