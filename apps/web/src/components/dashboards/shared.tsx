@@ -100,7 +100,7 @@ export function LessonSection({ title, description, lessons, subtitleFor, emptyT
       <CardHeader title={title} description={description} action={action} />
       <CardBody className="card__body--flush">
         {lessons.length === 0 ? (
-          <EmptyState title={emptyTitle} description={emptyDescription} />
+          <EmptyState icon={<CalendarDays size={22} />} title={emptyTitle} description={emptyDescription} />
         ) : (
           <LessonList>
             {lessons.map((lesson) => (
@@ -116,7 +116,7 @@ export function LessonSection({ title, description, lessons, subtitleFor, emptyT
 /** Today's schedule as a compact timeline — the Admin's and Tutor's "what's happening now" view. */
 export function TodaySchedule({ lessons, labelFor }: { lessons: Lesson[]; labelFor: (lesson: Lesson) => string }) {
   if (lessons.length === 0) {
-    return <EmptyState title="Nothing scheduled today" description="A quieter one. Upcoming lessons are further down." />;
+    return <EmptyState icon={<CalendarDays size={22} />} title="Nothing scheduled today" description="A quieter one. Upcoming lessons are further down." />;
   }
   return (
     <ul className="day-schedule">

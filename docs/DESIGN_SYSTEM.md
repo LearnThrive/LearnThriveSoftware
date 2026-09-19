@@ -41,7 +41,22 @@ palette move without touching every component.
 | `--app-on-dark` / `--app-on-dark-muted` | `#eef4f4` / 62% | Text on the navy sidebar |
 | `--app-accent` / `--app-accent-strong` | `--colour-green-700` / `-800` | Primary actions, links, focus accents |
 | `--app-accent-soft` | `--colour-mint-100` | Accent-tinted background (badges, hover) |
-| `--app-focus-ring` | `0 0 0 3px rgb(8 115 99 / 28%)` | The one focus-visible treatment, everywhere |
+| `--app-focus-ring` | `0 0 0 2px var(--app-surface), 0 0 0 4px var(--app-accent)` | The one focus-visible treatment, everywhere |
+
+`globals.css` gives the whole document the marketing site's focus ring (a brown outline in a yellow
+halo). `app-shell.css` overrides it for `.app-shell` and `.auth-route` so a keyboard user moving
+through one dashboard screen doesn't meet two unrelated focus treatments — components with their
+own rule showed the accent ring while breadcrumbs, inline links and timeline entries fell through
+to the marketing one. It's a solid two-tone band (surface-coloured gap, then accent) rather than a
+soft translucent glow, because the glow disappeared against the accent-tinted and sunken surfaces
+it had to sit on. The classroom keeps its own high-contrast ring — correct against dark surfaces.
+
+**Headings inherit their surface's colour.** `globals.css` styles bare `h1, h2, h3 { color:
+var(--colour-ink) }`, and a rule matching an element beats an inherited value — so any heading on
+a dark surface rendered dark-on-dark unless its component happened to set a colour. `app-shell.css`
+restores inheritance with `.app-shell :where(h1, h2, h3) { color: inherit }`; `:where()` adds no
+specificity, so it beats the bare element selector while every component rule still wins over it.
+The classroom carries the equivalent guard in its own stylesheet.
 
 Status colour is a separate, semantic vocabulary — never hardcode a status colour, use `<Badge
 tone>` / `<StatusBadge status>` (`components/ui/Badge.tsx`), whose `STATUS_TONES` map is the one
@@ -86,13 +101,30 @@ rather than a one-off pixel value. Three shadow levels (`--app-shadow-sm/--app-s
 | `Card` / `CardHeader` / `CardBody` / `StatTile` | The one surface primitive — white card on the neutral canvas, never the whole page tinted (plan6 section 30). |
 | `Badge` / `StatusBadge` | One badge vocabulary for every status in the product (section 34) — see Colour above. |
 | `Avatar` | Initials-only identity mark (no photo uploads anywhere), tint derived from the name so the same person reads consistently across lists. |
-| `Dialog` | The one modal pattern — focus moves in and is trapped while open, returns to the trigger on close, Escape and backdrop both close it. Replaced every ad hoc `<details>` disclosure from plan5 (section 36). |
+| `Dialog` | The one modal pattern — focus moves in and is trapped while open, returns to the trigger on close, Escape and backdrop both close it. Replaced every ad hoc `<details>` disclosure from plan5 (section 36). Its trigger takes a `tone` (`primary` \| `secondary` \| `danger`) so a destructive flow stops presenting itself as a green primary action; it is also the only confirmation pattern in the product — never `window.confirm()`. |
+| `RecordRow` / `RecordList` (`components/records/`) | The one clickable-row primitive for "a list of things you can open" — optional avatar, title, meta line, excerpt, right-hand aside, and always a chevron. This markup had been hand-written ten times across eight files, which is how it drifted: profile-page rows had no chevron while the equally clickable lesson and person rows beside them did. |
 | `Field` / `FieldSet` / `FormActions` | One label/hint/error/control style for every form (section 35). |
-| `EmptyState` | Purposeful empty states — what would be here, why it matters, the action that fills it. Never a bare "Tutors (0)" (section 68). |
+| `EmptyState` | Purposeful empty states — what would be here, why it matters, the action that fills it. Never a bare "Tutors (0)" (section 68). Always give it an `icon`: without one the card is a paragraph floating in whitespace, and a dashboard stacking three of those reads as a page that failed to load. |
 | `Toaster` | Action feedback that survives a Server Action's redirect (the message travels as `?toast=`, stripped from the URL once shown) — never an invisible server-side-only redirect as the only feedback (section 37). |
 | `SearchInput` / `FilterTabs` | Search and filtering are real URL state (`?q=`, `?filter=`), not client state that vanishes on reload — bookmarkable, shareable, survives Back. |
 | `PageHeader` / `Breadcrumbs` / `BackLink` | The one page header every authenticated page uses — optional back link and breadcrumbs, eyebrow, title, description, actions — so a heading never floats without context (sections 26-28). |
 | `AppShell` / `AppShellClient` | See Navigation below. |
+
+## Measure and density
+
+Full content width is right for a list or a dashboard and wrong for everything else. Three
+modifiers exist so that judgement doesn't get re-made (differently) per page:
+
+| Class | Use |
+|---|---|
+| `.page--narrow` | A focused single-task page — wraps the whole page, header included. Constraining only the card leaves a 46rem form pinned to the left of a 71rem content area, with the heading above it aligned to neither; it reads as a page whose right-hand side failed to load. |
+| `.card--form` | A form card on a page that also has wider content, where the page itself can't narrow. |
+| `.card--empty` | A card whose entire content is an `EmptyState` — centres it and caps it at 40rem rather than stretching one sentence across the full width, and restores the generous padding that the in-card variant deliberately drops. |
+
+`EmptyState` has two densities on purpose. The default is the compact one, for an empty section
+*inside* a card that also holds other sections — at page-level padding each "nothing here" claimed
+almost 300px, so three quiet sections filled a whole screen with void. `.card--empty` opts back
+into the generous version, where the message really is the whole page.
 
 ## Navigation principles
 
