@@ -26,12 +26,13 @@
 
 .auth-brand__body { max-width: 30rem; }
 .auth-brand__mark {
-  display: grid; place-items: center; width: 3rem; height: 3rem; margin-bottom: var(--space-5);
+  /* Same reasoning as .app-brand__mark (app-shell.css): the logo mark is drawn for a light
+     surface, not this panel's navy/green gradient, so it sits on its own small cream chip. */
+  width: 3rem; height: 3rem; margin-bottom: var(--space-5);
+  padding: 0.3rem;
   border-radius: 0.9rem;
-  /* green-600 clears only 4.36:1 against white text here — under AA's 4.5:1 (16px bold doesn't
-     reach the 18.66px+ bold "large text" threshold). green-700 clears it (5.76:1). */
-  background: var(--colour-green-700); color: #fff;
-  font-weight: 700; font-size: 1rem; letter-spacing: 0.02em;
+  background: var(--colour-cream);
+  object-fit: contain;
 }
 .auth-brand__tagline {
   margin: 0 0 var(--space-2);
@@ -77,12 +78,23 @@
   .auth-brand__mark { margin-bottom: var(--space-3); }
 }
 
+/* A quiet once-only entrance for first paint (plan8 section 36) — the brand block rises in just
+   ahead of the sign-in card, bullet points trailing slightly behind the headline. `both` fill
+   mode holds each element at opacity 0 until its own delay elapses (no flash of the unstyled,
+   fully-visible page) and holds the settled state afterwards. Every element animates the same
+   short distance at the same duration/curve; only the stagger (each caller's own inline
+   `animationDelay`) differs, which is what reads as a sequence rather than five identical fades
+   firing at once. */
+@keyframes auth-enter { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.auth-enter { animation: auth-enter var(--duration-slow) var(--ease-gentle) both; }
+
 /* ============================================================ Notifications (section 65) */
 
 .notification-list { list-style: none; margin: 0; padding: 0; }
 .notification {
   display: flex; align-items: flex-start; gap: var(--space-3);
   padding: var(--space-4) var(--space-5);
+  transition: background var(--duration-standard) var(--ease-smooth);
 }
 .notification + .notification { border-top: 1px solid var(--app-border); }
 .notification--unread { background: #f6fbf8; }

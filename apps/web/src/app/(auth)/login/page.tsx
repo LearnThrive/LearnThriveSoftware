@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
@@ -28,20 +29,27 @@ export default async function LoginPage() {
           <ArrowLeft size={16} aria-hidden="true" />Back to learnthrivetuition.co.uk
         </Link>
         <div className="auth-brand__body">
-          <span className="auth-brand__mark" aria-hidden="true">LT</span>
-          <p className="auth-brand__tagline">Learn. Grow. Thrive.</p>
-          <h1 className="auth-brand__headline">Everything for your tuition, in one place.</h1>
+          <Image
+            className="auth-brand__mark auth-enter"
+            src="/brand/learnthrive-mark.png"
+            alt=""
+            width={40}
+            height={34}
+            priority
+          />
+          <p className="auth-brand__tagline auth-enter" style={{ animationDelay: "60ms" }}>Learn. Grow. Thrive.</p>
+          <h1 className="auth-brand__headline auth-enter" style={{ animationDelay: "100ms" }}>Everything for your tuition, in one place.</h1>
           <ul className="auth-brand__points">
-            <li>Your lessons and schedule, always up to date</li>
-            <li>Join the online classroom in one click</li>
-            <li>Reports and progress, shared when they&apos;re ready</li>
+            <li className="auth-enter" style={{ animationDelay: "170ms" }}>Your lessons and schedule, always up to date</li>
+            <li className="auth-enter" style={{ animationDelay: "210ms" }}>Join the online classroom in one click</li>
+            <li className="auth-enter" style={{ animationDelay: "250ms" }}>Reports and progress, shared when they&apos;re ready</li>
           </ul>
         </div>
         <p className="auth-brand__foot">Tutors, parents, students and administrators all sign in here.</p>
       </aside>
 
       <main id="main-content" className="auth-panel">
-        <div className="auth-panel__inner">
+        <div className="auth-panel__inner auth-enter" style={{ animationDelay: "120ms" }}>
           <h2 className="auth-panel__title">Sign in</h2>
           <p className="auth-panel__subtitle">Use the email address LearnThrive set your account up with.</p>
           <LoginForm />

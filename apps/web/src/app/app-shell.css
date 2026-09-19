@@ -62,7 +62,10 @@
   --app-shadow-sm: 0 1px 2px rgb(16 42 67 / 6%), 0 1px 3px rgb(16 42 67 / 4%);
   --app-shadow: 0 2px 4px rgb(16 42 67 / 5%), 0 8px 20px rgb(16 42 67 / 6%);
   --app-shadow-lg: 0 12px 32px rgb(16 42 67 / 12%);
-  --app-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Same curve as --ease-snappy (globals.css) under its pre-existing app-side name — kept so the
+     ~30 rules already written against --app-ease don't need touching, now pointed at the one
+     shared definition instead of carrying its own copy of the same cubic-bezier. */
+  --app-ease: var(--ease-snappy);
 
   /* Layout */
   --app-sidebar-width: 15.5rem;
@@ -104,6 +107,12 @@
   background: var(--app-canvas);
   color: var(--app-text);
   font-size: var(--text-body);
+  /* Collapse/expand moves the whole page's column split, not just the sidebar — animating it
+     here (rather than leaving it an instant snap) is what stops the content column jumping to
+     its new width a frame ahead of or behind the sidebar itself (plan8 section 8's "avoid layout
+     jumping"). Widely supported in evergreen Chromium/Firefox; browsers that don't animate grid
+     tracks simply snap, same as before this rule existed — a pure enhancement either way. */
+  transition: grid-template-columns var(--duration-medium) var(--ease-smooth);
 }
 
 .app-shell--collapsed { grid-template-columns: var(--app-sidebar-width-collapsed) minmax(0, 1fr); }
@@ -127,19 +136,25 @@
   display: flex; align-items: center; gap: var(--space-3);
   color: inherit; text-decoration: none; font-weight: 600;
 }
+.app-brand:hover .app-brand__mark { transform: scale(1.04); }
 
 .app-brand__mark {
-  display: grid; place-items: center;
+  /* The LearnThrive mark (an open book + growth arrow) is drawn on a near-white matte, not
+     designed to sit directly on the navy sidebar — a small light chip behind it keeps the same
+     footprint the "LT" initials used to occupy while giving the actual logo room to read clearly. */
   width: 2rem; height: 2rem; flex: none;
+  padding: 0.2rem;
   border-radius: 0.625rem;
-  /* green-600 only clears 4.36:1 against white text here — under AA's 4.5:1 for text this small,
-     even bold (needs 18.66px+ bold to count as "large text"). green-700 clears it (5.76:1). */
-  background: var(--colour-green-700);
-  color: #fff;
-  font-size: var(--text-small); font-weight: 700; letter-spacing: 0.02em;
+  background: var(--colour-cream);
+  object-fit: contain;
+  transition: transform var(--duration-fast) var(--app-ease);
 }
 
-.app-brand__word { font-size: 1rem; letter-spacing: -0.01em; white-space: nowrap; }
+.app-brand__word {
+  font-size: 1rem; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden;
+  max-width: 8rem; opacity: 1;
+  transition: max-width var(--duration-medium) var(--ease-smooth), opacity var(--duration-fast) var(--ease-smooth);
+}
 .app-brand__word strong { font-weight: 700; color: var(--colour-mint-200); }
 
 .app-nav { display: flex; flex-direction: column; gap: var(--space-5); flex: 1; }
@@ -161,12 +176,18 @@
   font-size: var(--text-body);
   transition: background var(--duration-fast) var(--app-ease), color var(--duration-fast) var(--app-ease);
 }
+.app-nav__link svg { transition: color var(--duration-fast) var(--app-ease), transform var(--duration-fast) var(--app-ease); }
 
 .app-nav__link:hover { background: var(--app-sidebar-hover); }
+.app-nav__link:hover svg { transform: translateX(1px); }
 .app-nav__link.is-active { background: var(--app-sidebar-active); font-weight: 600; }
 .app-nav__link.is-active svg { color: var(--colour-mint-200); }
 .app-nav__link:focus-visible { outline: 2px solid var(--colour-mint-200); outline-offset: 1px; }
-.app-nav__label { white-space: nowrap; overflow: hidden; }
+.app-nav__label {
+  white-space: nowrap; overflow: hidden;
+  max-width: 10rem; opacity: 1;
+  transition: max-width var(--duration-medium) var(--ease-smooth), opacity var(--duration-fast) var(--ease-smooth);
+}
 
 .app-nav__count {
   margin-left: auto; min-width: 1.25rem; padding: 0 0.3rem;
@@ -183,12 +204,20 @@
   border: 0; border-radius: var(--app-radius-sm);
   background: transparent; color: var(--app-on-dark-muted);
   font: inherit; font-size: var(--text-small); cursor: pointer;
+  transition: background var(--duration-fast) var(--app-ease), color var(--duration-fast) var(--app-ease),
+    transform var(--duration-fast) var(--app-ease);
 }
 .app-sidebar__collapse:hover { background: var(--app-sidebar-hover); color: var(--app-on-dark); }
+.app-sidebar__collapse:active { transform: scale(0.97); transition-duration: var(--duration-instant); }
+.app-sidebar__collapse svg { transition: transform var(--duration-medium) var(--ease-smooth); }
 
-/* Icon-only mode: labels collapse away, tooltips (title attr) carry the meaning (section 22). */
+/* Icon-only mode: labels collapse away, tooltips (title attr) carry the meaning (section 22).
+   The item/brand labels fade and shrink (they have their own transition, above); the WORKSPACE/
+   PEOPLE/… section headings are cut instantly — plan8 section 9 asks that static labels like
+   these specifically not be animated, and they'd otherwise leave an odd sliver of uppercase text
+   behind as the icons re-centre under them. */
 .app-shell--collapsed .app-nav__label,
-.app-shell--collapsed .app-brand__word,
+.app-shell--collapsed .app-brand__word { max-width: 0; opacity: 0; }
 .app-shell--collapsed .app-nav__heading { display: none; }
 .app-shell--collapsed .app-nav__link,
 .app-shell--collapsed .app-sidebar__collapse { justify-content: center; }
@@ -220,10 +249,21 @@
   border: 1px solid transparent; border-radius: var(--app-radius-sm);
   background: transparent; color: var(--app-ink);
   cursor: pointer; text-decoration: none;
-  transition: background var(--duration-fast) var(--app-ease), border-color var(--duration-fast) var(--app-ease);
+  transition: background var(--duration-fast) var(--app-ease), border-color var(--duration-fast) var(--app-ease),
+    color var(--duration-fast) var(--app-ease), transform var(--duration-fast) var(--app-ease);
 }
 .icon-button:hover { background: var(--app-surface-sunken); border-color: var(--app-border); }
+/* A small icon target gets a smaller press than a full-size button (scale(0.97) on a 2.25rem
+   square reads as a shove, not a tap) — same idea, tuned to the control's own size. */
+.icon-button:active { transform: scale(0.92); transition-duration: var(--duration-instant); }
 .icon-button:focus-visible { outline: none; box-shadow: var(--app-focus-ring); }
+
+/* Icon-motion standard (plan8 section 85): every icon that changes state — a chevron that opens
+   a section, a plus that becomes a close, a check that confirms — rotates or scales rather than
+   hard-cutting to its new glyph. `.icon-rotate` is the shared hook; a caller toggles
+   `.is-open`/`.is-active` and this is the one rule that animates it. */
+.icon-rotate { transition: transform var(--duration-fast) var(--app-ease); }
+.icon-rotate.is-open { transform: rotate(180deg); }
 
 /* The drawer toggle only exists below the sidebar breakpoint. Declared after .icon-button
    deliberately — both are single-class selectors, so source order is what decides. */
@@ -245,6 +285,21 @@
   min-width: 1rem; padding: 0 0.2rem;
   border-radius: 999px; background: var(--colour-green-700); color: #fff;
   font-size: 0.625rem; font-weight: 700; line-height: 1rem; text-align: center;
+  animation: app-pop var(--duration-fast) var(--app-ease);
+}
+/* A one-off ring when unread genuinely increases (never a loop — plan8 section 7/31 are explicit
+   that this fires once, not on a timer). A rotation, not a scale/shake: the bell has a fixed
+   pivot at its top, so a small alternating tilt around that point reads as "the bell moved" the
+   way a translateX shake reads as "wrong", without the layout risk of scaling an icon that sits
+   this close to the badge. */
+.app-topbar__bell.is-ringing svg { animation: bell-ring 0.5s var(--ease-snappy); transform-origin: 50% 0%; }
+@keyframes bell-ring {
+  0%, 100% { transform: rotate(0deg); }
+  15% { transform: rotate(14deg); }
+  30% { transform: rotate(-10deg); }
+  45% { transform: rotate(7deg); }
+  60% { transform: rotate(-4deg); }
+  75% { transform: rotate(2deg); }
 }
 
 /* ============================================================ Account menu */
@@ -271,8 +326,10 @@
   background: var(--app-surface);
   border: 1px solid var(--app-border); border-radius: var(--app-radius);
   box-shadow: var(--app-shadow-lg);
+  transform-origin: top right;
   animation: app-pop var(--duration-fast) var(--app-ease);
 }
+.app-usermenu__panel.is-closing { animation: app-pop-out var(--duration-instant) var(--app-ease) forwards; }
 
 .app-usermenu__header {
   display: flex; gap: var(--space-3); align-items: center;
@@ -293,7 +350,14 @@
 .app-usermenu__item--danger:hover { background: var(--colour-error-bg); }
 .app-usermenu__item:disabled { opacity: 0.6; cursor: progress; }
 
-@keyframes app-pop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+/* The one dropdown/popover entrance, used by the account menu, QuickCreateMenu and every other
+   `{open && <Panel/>}` popover at the app-shell level (plan8 section 11): opacity + a small rise
+   + a small scale, all under --duration-fast. Closing is a separate, faster keyframe — plan
+   section 11 asks for close to read quicker than open, not just the open one in reverse at the
+   same speed — played via `.is-closing` (see src/lib/motion/useDelayedUnmount.ts) while the
+   panel finishes its exit before actually leaving the DOM. */
+@keyframes app-pop { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes app-pop-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-2px) scale(0.98); } }
 
 /* ============================================================ Content & page header */
 
@@ -301,6 +365,14 @@
   flex: 1; width: 100%; max-width: var(--app-content-max);
   margin: 0 auto; padding: var(--space-6) var(--space-5) var(--space-7);
 }
+
+/* plan8 section 12 asks for a per-navigation content fade; section 13, a small stagger across the
+   page header's own pieces on top of that. Both were tried as a `key={pathname}`-forced remount
+   of .app-content (see AppShellClient.tsx's comment on why that's gone) — removed together with
+   it, since a header stagger with nothing to trigger a replay on navigation would either never
+   fire (no remount) or reintroduce the same "unstable right after navigating" problem (if it
+   did). Genuinely not done, not quietly downgraded — see the plan8 report's Bugs/Remaining
+   sections. */
 
 .page-header { margin-bottom: var(--space-5); }
 .page-header__nav { display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-3); flex-wrap: wrap; }
@@ -378,14 +450,34 @@
   background: var(--app-surface);
   border: 1px solid var(--app-border); border-radius: var(--app-radius);
   box-shadow: var(--app-shadow-sm);
+  /* A small settle-in on mount, staggered by position (plan8 section 15) — kept short (well under
+     the 300ms range other one-off entrances in this file already use, e.g. dialog-in) and capped
+     at four tiles' worth of stagger so a row with more never turns into a visible cascade. Plain
+     mount-triggered CSS, not a forced-remount-on-navigation trick — the earlier attempt at that
+     for the whole page (see AppShellClient.tsx's comment on app-content-enter) measurably delayed
+     real interactions and was removed; a single row of four static stat cards settling in behind
+     the dashboard's own natural first paint carries none of that risk. */
+  animation: stat-tile-in var(--duration-standard) var(--ease-gentle) both;
   text-decoration: none;
 }
-.stat-tile--link { transition: border-color var(--duration-fast) var(--app-ease), box-shadow var(--duration-fast) var(--app-ease); }
-.stat-tile--link:hover { border-color: var(--app-accent); box-shadow: var(--app-shadow); }
+/* The clickable-card standard (plan8 section 83): a 1-2px lift and a stronger shadow on hover,
+   a small press-in on click — visibly more than a static card gets (the base .card never moves),
+   which is what tells a stat tile apart from an inert one at a glance rather than only on hover. */
+.stat-tile--link {
+  transition: border-color var(--duration-fast) var(--app-ease), box-shadow var(--duration-fast) var(--app-ease),
+    transform var(--duration-fast) var(--app-ease);
+}
+.stat-tile--link:hover { border-color: var(--app-accent); box-shadow: var(--app-shadow); transform: translateY(-2px); }
+.stat-tile--link:active { transform: translateY(-1px) scale(0.99); transition-duration: var(--duration-instant); }
 .stat-tile--link:focus-visible { outline: none; box-shadow: var(--app-focus-ring); }
 .stat-tile__value { font-family: var(--font-heading); font-size: 1.75rem; font-weight: 700; color: var(--app-ink); line-height: 1.1; }
 .stat-tile__label { font-size: var(--text-small); color: var(--app-muted); }
 .stat-tile__hint { font-size: var(--text-label); color: var(--app-accent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+
+@keyframes stat-tile-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.stat-grid .stat-tile:nth-child(2) { animation-delay: 40ms; }
+.stat-grid .stat-tile:nth-child(3) { animation-delay: 80ms; }
+.stat-grid .stat-tile:nth-child(4) { animation-delay: 120ms; }
 
 /* ============================================================ Badges, avatars */
 
@@ -395,6 +487,13 @@
   border-radius: 999px;
   font-size: var(--text-label); font-weight: 700; letter-spacing: 0.03em;
   white-space: nowrap;
+  /* A status badge (Badge/StatusBadge) only ever gets a new *tone* class, not new markup, when
+     the underlying status changes — React reuses the same node, so a plain colour transition on
+     background/text-colour is all a "Planned → Completed" change needs to read as a change
+     rather than a hard cut (plan8 section 30). No scale — a repeatedly-updating list of these
+     (an attendance table, a lesson list) popping on every render would be exactly the "bounces
+     repeatedly" the same section rules out. */
+  transition: background var(--duration-standard) var(--ease-smooth), color var(--duration-standard) var(--ease-smooth);
 }
 .badge--neutral  { background: #eef2f5; color: #3d4f60; }
 .badge--positive { background: #e2f3e9; color: #1d6b42; }
@@ -407,7 +506,14 @@
   display: inline-grid; place-items: center; flex: none;
   border-radius: 50%;
   font-weight: 700; letter-spacing: 0.01em; text-transform: uppercase;
+  transition: transform var(--duration-fast) var(--app-ease);
 }
+/* A subtle emphasis when the row/card it identifies is hovered — not a hover state of its own
+   (plan8 section 58 is explicit: no rotate/bounce, just enough to register). */
+.lesson-row__link:hover .avatar,
+.person-row__link:hover .avatar,
+.record-list__link:hover .avatar,
+.app-usermenu__trigger:hover .avatar { transform: scale(1.06); }
 .avatar--sm { width: 2rem; height: 2rem; font-size: 0.6875rem; }
 .avatar--md { width: 2.5rem; height: 2.5rem; font-size: 0.8125rem; }
 .avatar--lg { width: 3.5rem; height: 3.5rem; font-size: 1.0625rem; }
@@ -435,7 +541,9 @@
   /* A soft ring rather than a heavier fill — enough presence to anchor the message without
      turning an "everything is fine" state into something that reads as an alert. */
   box-shadow: 0 0 0 6px rgb(233 245 239 / 55%);
+  animation: empty-state-in var(--duration-standard) var(--ease-gentle) both;
 }
+@keyframes empty-state-in { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: scale(1); } }
 .empty-state__title { margin: 0; font-family: var(--font-heading); font-size: var(--text-h3); font-weight: 700; color: var(--app-ink); }
 .empty-state__description { margin: 0; max-width: 42ch; font-size: var(--text-small); color: var(--app-muted); }
 .empty-state__action { margin-top: var(--space-3); }
@@ -454,7 +562,10 @@
   .app-content { padding: var(--space-5) var(--space-4) var(--space-6); }
 }
 
-/* Mobile navigation is a proper drawer, not a squeezed desktop sidebar (plan6 section 21). */
+/* Mobile navigation is a proper drawer, not a squeezed desktop sidebar (plan6 section 21). Open
+   is a slide + the scrim fading in behind it; close (`.is-closing`, held mounted briefly by
+   useDelayedUnmount) is the same slide in reverse, faster, so dismissing feels quicker than
+   opening — the same asymmetry as the app-pop dropdowns (plan8 sections 11 and 28). */
 .app-drawer { position: fixed; inset: 0; z-index: 60; display: flex; }
 .app-drawer__panel {
   position: relative; z-index: 1;
@@ -464,12 +575,20 @@
   overflow-y: auto;
   animation: app-drawer-in var(--duration-medium) var(--app-ease);
 }
+.app-drawer.is-closing .app-drawer__panel { animation: app-drawer-out var(--duration-fast) var(--app-ease) forwards; }
+.app-drawer.is-closing .app-drawer__scrim { animation: app-scrim-out var(--duration-fast) var(--app-ease) forwards; }
 .app-drawer__top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-2); }
 .app-drawer__top .icon-button { color: var(--app-on-dark); }
 .app-drawer__top .icon-button:hover { background: var(--app-sidebar-hover); border-color: transparent; }
-.app-drawer__scrim { position: absolute; inset: 0; border: 0; background: rgb(9 29 49 / 45%); cursor: pointer; }
+.app-drawer__scrim {
+  position: absolute; inset: 0; border: 0; background: rgb(9 29 49 / 45%); cursor: pointer;
+  animation: app-scrim-in var(--duration-medium) var(--app-ease);
+}
 
 @keyframes app-drawer-in { from { transform: translateX(-100%); } to { transform: none; } }
+@keyframes app-drawer-out { from { transform: none; } to { transform: translateX(-100%); } }
+@keyframes app-scrim-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes app-scrim-out { from { opacity: 1; } to { opacity: 0; } }
 
 @media (prefers-reduced-motion: reduce) {
   .app-drawer__panel, .app-usermenu__panel { animation: none; }

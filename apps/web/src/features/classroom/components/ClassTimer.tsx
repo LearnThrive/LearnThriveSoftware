@@ -34,9 +34,14 @@ export function ClassTimer({ timer, isTutor, onPause, onResume, onStop }: ClassT
   const elapsed = timer.paused ? (timer.elapsedAtPauseMs ?? 0) : now - timer.anchorAt;
   const displayMs = timer.mode === 'countdown' ? Math.max(0, (timer.durationMs ?? 0) - elapsed) : elapsed;
   const expired = timer.mode === 'countdown' && displayMs === 0;
+  // Final 10 seconds of a countdown get a quiet pulse — a genuinely useful cue in a class that
+  // shouldn't need anyone staring at the number (plan8 section 50). `is-expired` fires the
+  // completion pulse exactly once: it's a plain CSS animation (no infinite loop) that plays when
+  // the class is first added, i.e. the one frame displayMs reaches 0, not on every re-render.
+  const low = timer.mode === 'countdown' && !timer.paused && displayMs > 0 && displayMs <= 10_000;
 
   return (
-    <span className={`class-timer ${expired ? 'is-expired' : ''}`} aria-label="Class timer">
+    <span className={`class-timer ${low ? 'is-low' : ''} ${expired ? 'is-expired' : ''}`} aria-label="Class timer">
       <Icon name="timer" size={13} />
       <span className="class-timer-value">{format(displayMs)}</span>
       {isTutor && (

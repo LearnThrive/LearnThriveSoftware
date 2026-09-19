@@ -61,12 +61,19 @@
   min-width: 14rem; padding: var(--space-2);
   background: var(--app-surface); border: 1px solid var(--app-border);
   border-radius: var(--app-radius); box-shadow: var(--app-shadow-lg);
+  transform-origin: top right;
   animation: app-pop var(--duration-fast) var(--app-ease);
 }
+.quick-create__panel.is-closing { animation: app-pop-out var(--duration-instant) var(--app-ease) forwards; }
 .quick-create__item {
   display: flex; align-items: center; gap: var(--space-3);
   padding: 0.5rem var(--space-2); border-radius: var(--app-radius-sm);
   color: var(--app-ink); font-size: var(--text-small); text-decoration: none;
+  transition: background var(--duration-fast) var(--app-ease);
+  /* A slight stagger per item (each caller sets its own animationDelay) — five items entering
+     together read as a block; a 25ms offset between them reads as a considered list (section 59),
+     without holding the menu's actual usability up for it (last item is fully in by ~140ms). */
+  animation: app-pop var(--duration-fast) var(--app-ease) both;
 }
 .quick-create__item:hover { background: var(--app-surface-sunken); }
 .quick-create__item:focus-visible { outline: none; box-shadow: var(--app-focus-ring); }
@@ -207,8 +214,14 @@
 .calendar-wrap .fc-button {
   box-shadow: none !important; text-transform: capitalize; font-weight: 600;
   padding: 0.4rem 0.85rem; border-radius: var(--app-radius-sm) !important;
+  transition: background var(--duration-fast) var(--app-ease), border-color var(--duration-fast) var(--app-ease),
+    transform var(--duration-fast) var(--app-ease) !important;
 }
 .calendar-wrap .fc-button:focus { box-shadow: var(--app-focus-ring) !important; }
+/* The same press feedback as every other button in the product (section 43/82) — FullCalendar's
+   own buttons don't carry .btn, so they need the same treatment declared again here rather than
+   feeling like a different control family from the toolbar around them. */
+.calendar-wrap .fc-button:active:not(:disabled) { transform: scale(0.96); transition-duration: var(--duration-instant) !important; }
 /* --fc-button-text-color has no separate "active" variant of its own — left at --app-ink (dark)
    it stays dark on the active button's own dark green background too, failing contrast. */
 .calendar-wrap .fc-button-primary:not(:disabled).fc-button-active { box-shadow: none !important; color: #fff !important; }
@@ -233,10 +246,18 @@
 .calendar-wrap .fc-event {
   border: none; border-radius: 5px; padding: 1px 5px;
   background: #e4eefb; color: #1d4e87; font-weight: 650;
-  cursor: pointer; transition: filter var(--duration-fast) var(--app-ease);
+  cursor: pointer;
+  transition: filter var(--duration-fast) var(--app-ease), box-shadow var(--duration-fast) var(--app-ease),
+    transform var(--duration-fast) var(--app-ease);
 }
 .calendar-wrap .fc-daygrid-event { padding: 2px 5px; }
-.calendar-wrap .fc-event:hover { filter: brightness(0.96); }
+/* A very small lift, not a scale — FullCalendar lays events out in a tight grid with real
+   neighbours on every side; scaling one would visibly overlap the next cell (plan8 section 34's
+   own "do not make calendar blocks grow enough to shift layout"), so elevation reads through
+   filter + shadow instead of size. */
+.calendar-wrap .fc-event:hover { filter: brightness(0.96); box-shadow: 0 2px 6px rgb(9 29 49 / 18%); }
+.calendar-wrap .fc-event:active { transform: scale(0.98); transition-duration: var(--duration-instant); }
+.calendar-wrap .fc-event.is-selected { transition: box-shadow var(--duration-fast) var(--app-ease); }
 .calendar-wrap .fc-event:focus-visible { outline: none; box-shadow: var(--app-focus-ring); }
 .calendar-wrap .fc-event.lesson-status-in_progress { background: #fdf0d9; color: #8a5a06; }
 .calendar-wrap .fc-event.lesson-status-completed { background: #e2f3e9; color: #1d6b42; }
