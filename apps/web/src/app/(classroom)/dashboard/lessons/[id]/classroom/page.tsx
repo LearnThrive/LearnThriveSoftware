@@ -64,8 +64,12 @@ export default async function LessonClassroomPage({
     exp: Date.now() + 5 * 60_000,
   });
 
+  // No background override: the classroom paints its own surfaces (a cream page around dark stage
+  // tiles). A navy one underneath was invisible during a call — .call-app covers it — but showed
+  // through on the post-class "ended" screen, which has no background of its own, leaving that
+  // screen's heading dark-on-navy and unreadable.
   return (
-    <div className="classroom-page-container" style={{ minHeight: "100vh", background: "#0e2a47" }}>
+    <div className="classroom-page-container">
       <ClassroomClient lessonId={id} initialToken={token} />
     </div>
   );

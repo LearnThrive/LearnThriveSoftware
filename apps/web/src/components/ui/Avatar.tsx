@@ -7,7 +7,14 @@
 const TINTS = ["a", "b", "c", "d", "e"] as const;
 
 function initialsFor(name: string): string {
-  const words = name.trim().split(/\s+/).filter((word) => /[a-z0-9]/i.test(word));
+  // Strip anything that isn't a letter or digit from each word before taking its first character
+  // — filtering only *whole* words meant a parenthesised suffix still counted, so the seeded
+  // "Ade Okafor (Admin)" rendered as "A(" everywhere an avatar appeared.
+  const words = name
+    .trim()
+    .split(/\s+/)
+    .map((word) => word.replace(/[^\p{L}\p{N}]/gu, ""))
+    .filter(Boolean);
   if (words.length === 0) return "?";
   if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
   return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase();

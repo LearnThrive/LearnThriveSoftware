@@ -12,8 +12,10 @@ export default function DevClassroomPage() {
     notFound();
   }
 
+  // No background override here: the classroom paints its own (a cream page around dark stage
+  // tiles). A navy one underneath made the pre-join hero render dark-on-dark.
   return (
-    <div className="classroom-dev-container" style={{ minHeight: "100vh", background: "#0e2a47" }}>
+    <div className="classroom-dev-container">
       <ClassroomClient isDevRoute={true} />
     </div>
   );

@@ -88,7 +88,7 @@ export default async function LessonsPage({ searchParams }: { searchParams: Prom
         }))}
       />
 
-      <Card>
+      <Card className={lessons.length === 0 ? "card--empty" : ""}>
         {lessons.length === 0 ? (
           <EmptyState
             icon={<BookOpen size={22} />}

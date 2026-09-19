@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Avatar } from "@/components/ui/Avatar";
 import { LessonSection, greeting } from "@/components/dashboards/shared";
 import { formatDateOnly, formatLongDate, formatRelative } from "@/lib/format";
+import { RecordList, RecordRow } from "@/components/records/RecordRow";
 
 /** Plan6 section 53: a parent's home — when is the next lesson, who are the children, what's
  * been said about their progress. No administrative complexity. */
@@ -110,20 +111,16 @@ export async function ClientDashboard({ user }: { user: AuthenticatedUser }) {
               description="After a lesson, your tutor writes a report. Once approved, it appears here."
             />
           ) : (
-            <ul className="record-list">
+            <RecordList>
               {readableReports.map(({ report, lesson }) => (
-                <li key={report.id} className="record-list__item">
-                  <Link href={`/dashboard/lessons/${lesson.id}`} className="record-list__link">
-                    <span className="record-list__body">
-                      <span className="record-list__title">{lesson.title}</span>
-                      <span className="record-list__meta">
-                        {formatDateOnly(lesson.startAt)} · {tutorNames.get(lesson.tutorId) ?? "Tutor"}
-                      </span>
-                    </span>
-                  </Link>
-                </li>
+                <RecordRow
+                  key={report.id}
+                  href={`/dashboard/lessons/${lesson.id}`}
+                  title={lesson.title}
+                  meta={`${formatDateOnly(lesson.startAt)} · ${tutorNames.get(lesson.tutorId) ?? "Tutor"}`}
+                />
               ))}
-            </ul>
+            </RecordList>
           )}
         </CardBody>
       </Card>

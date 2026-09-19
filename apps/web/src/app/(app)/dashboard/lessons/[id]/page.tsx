@@ -121,6 +121,7 @@ export default async function LessonDetailPage({
             {canCancel && (
               <Dialog
                 trigger="Cancel lesson"
+                tone="danger"
                 title="Cancel this lesson?"
                 description="The lesson stays on record as cancelled — nothing is deleted."
               >

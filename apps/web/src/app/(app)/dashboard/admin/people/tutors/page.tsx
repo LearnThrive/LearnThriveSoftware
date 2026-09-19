@@ -70,7 +70,7 @@ export default async function TutorsPage({ searchParams }: { searchParams: Promi
         <p className="list-toolbar__count">{visible.length} of {tutors.length}</p>
       </div>
 
-      <Card>
+      <Card className={visible.length === 0 ? "card--empty" : ""}>
         {visible.length === 0 ? (
           <EmptyState
             icon={<UserRound size={22} />}

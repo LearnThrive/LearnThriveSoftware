@@ -79,7 +79,7 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
         <p className="list-toolbar__count">{visible.length} of {students.length}</p>
       </div>
 
-      <Card>
+      <Card className={visible.length === 0 ? "card--empty" : ""}>
         {visible.length === 0 ? (
           <EmptyState
             icon={<GraduationCap size={22} />}

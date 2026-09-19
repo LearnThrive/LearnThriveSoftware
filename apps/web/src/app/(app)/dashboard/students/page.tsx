@@ -44,7 +44,7 @@ export default async function TutorStudentsPage() {
         description="Everyone currently assigned to you, and when you next see them."
       />
 
-      <Card>
+      <Card className={students.length === 0 ? "card--empty" : ""}>
         {students.length === 0 ? (
           <EmptyState
             icon={<GraduationCap size={22} />}

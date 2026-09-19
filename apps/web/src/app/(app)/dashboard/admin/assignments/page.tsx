@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { ClipboardList, Plus } from "lucide-react";
 import { requireRole } from "@/lib/auth/guard";
 import { createMetadata } from "@/lib/metadata";
@@ -13,6 +12,7 @@ import { Dialog } from "@/components/ui/Dialog";
 import { Field, FormActions } from "@/components/ui/Field";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { matchesQuery } from "@/lib/people/peopleHelpers";
+import { RecordList, RecordRow } from "@/components/records/RecordRow";
 
 export const metadata: Metadata = createMetadata({
   title: "Tuition assignments",
@@ -82,7 +82,7 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
         <p className="list-toolbar__count">{visible.length} of {assignments.length}</p>
       </div>
 
-      <Card>
+      <Card className={visible.length === 0 ? "card--empty" : ""}>
         {visible.length === 0 ? (
           <EmptyState
             icon={<ClipboardList size={22} />}
@@ -92,26 +92,24 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
               : "Create one to pair a tutor with a student, then schedule lessons against it."}
           />
         ) : (
-          <ul className="record-list">
+          <RecordList>
             {visible.map((assignment) => {
               const lessonCount = lessons.filter((lesson) => lesson.assignmentId === assignment.id).length;
               return (
-                <li className="record-list__item" key={assignment.id}>
-                  <Link href={`/dashboard/admin/assignments/${assignment.id}`} className="record-list__link">
-                    <span className="record-list__body">
-                      <span className="record-list__title">{assignment.title}</span>
-                      <span className="record-list__meta">
-                        {assignment.studentIds.map((id) => studentNames.get(id)).filter(Boolean).join(", ")}
-                        {" · "}{tutorNames.get(assignment.tutorId) ?? "Unassigned"}
-                        {" · "}{lessonCount} lesson{lessonCount === 1 ? "" : "s"}
-                      </span>
-                    </span>
-                    <span className="record-list__aside"><StatusBadge status={assignment.status} /></span>
-                  </Link>
-                </li>
+                <RecordRow
+                  key={assignment.id}
+                  href={`/dashboard/admin/assignments/${assignment.id}`}
+                  title={assignment.title}
+                  meta={[
+                    assignment.studentIds.map((id) => studentNames.get(id)).filter(Boolean).join(", "),
+                    tutorNames.get(assignment.tutorId) ?? "Unassigned",
+                    `${lessonCount} lesson${lessonCount === 1 ? "" : "s"}`,
+                  ].join(" · ")}
+                  aside={<StatusBadge status={assignment.status} />}
+                />
               );
             })}
-          </ul>
+          </RecordList>
         )}
       </Card>
     </>

@@ -80,7 +80,7 @@ export default async function TutorAvailabilityPage() {
         }
       />
 
-      <Card>
+      <Card className={sorted.length === 0 ? "card--empty" : ""}>
         {sorted.length === 0 ? (
           <EmptyState
             icon={<CalendarClock size={22} />}

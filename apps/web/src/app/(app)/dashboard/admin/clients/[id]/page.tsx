@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth/guard";
 import { createMetadata } from "@/lib/metadata";
@@ -12,6 +11,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { LessonList, LessonRow } from "@/components/lessons/LessonRow";
 import { PersonList, PersonRow } from "@/components/people/PersonRow";
 import { formatDateOnly, formatLessonDayTime } from "@/lib/format";
+import { RecordList, RecordRow } from "@/components/records/RecordRow";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -141,19 +141,17 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
             {reports.length === 0 ? (
               <EmptyState title="Nothing shared yet" description="Reports appear here once an admin approves them." />
             ) : (
-              <ul className="record-list">
+              <RecordList>
                 {reports.slice(0, 8).map((report) => (
-                  <li className="record-list__item" key={report.id}>
-                    <Link href={`/dashboard/lessons/${report.lessonId}`} className="record-list__link">
-                      <span className="record-list__body">
-                        <span className="record-list__title">{report.title}</span>
-                        <span className="record-list__meta">{formatDateOnly(report.startAt)}</span>
-                      </span>
-                      <span className="record-list__aside"><StatusBadge status={report.status} /></span>
-                    </Link>
-                  </li>
+                  <RecordRow
+                    key={report.id}
+                    href={`/dashboard/lessons/${report.lessonId}`}
+                    title={report.title}
+                    meta={formatDateOnly(report.startAt)}
+                    aside={<StatusBadge status={report.status} />}
+                  />
                 ))}
-              </ul>
+              </RecordList>
             )}
           </CardBody>
         </Card>
