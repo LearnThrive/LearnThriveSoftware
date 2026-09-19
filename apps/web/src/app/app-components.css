@@ -240,9 +240,24 @@
 /* A longer form reads better as sections with breathing room between them than as one
    undifferentiated column of inputs (section 35). */
 .form--stacked { gap: var(--space-6); }
-/* Drawn as a pseudo-element rather than `border-top` on the <fieldset> itself: a browser cuts a
-   notch out of a fieldset's own border wherever its <legend> sits, so a real border rendered as a
-   line that started partway across, level with the heading — it read as a rendering fault. */
+/* A <legend> is laid out against its fieldset's top border instead of in normal flow, which
+   causes two separate problems here. The browser cuts a notch out of the fieldset's own border
+   wherever the legend sits, so a plain `border-top` rendered as a line starting partway across,
+   level with the heading. And because the legend straddles that edge rather than sitting inside
+   it, the fieldset's padding-top moves the fields down but leaves the heading where it was — so a
+   pseudo-element drawn at the top edge came out struck through the heading instead of above it,
+   at every offset, since the heading is what's up there.
+   Floating the legend opts it out of that special layout and into normal flow, where it sits
+   inside the padding like any other block and the rule has somewhere to go. The separator is then
+   a pseudo-element at the top edge, with the form's own `gap` above it and the fieldset's
+   padding below — both var(--space-6), so the line sits centred between the two sections. */
+.fieldset__legend { float: left; width: 100%; }
+.fieldset__legend + * { clear: both; }
+/* A section with a description gets its breathing room from that paragraph's margin. One without
+   ("Where and how") had its first field label sitting straight under the heading, so the same
+   pattern read as two different densities on one form. */
+.fieldset__legend + .fieldset__body { margin-top: var(--space-3); }
+
 .form--stacked .fieldset + .fieldset { position: relative; padding-top: var(--space-6); }
 .form--stacked .fieldset + .fieldset::before {
   content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: var(--app-border);

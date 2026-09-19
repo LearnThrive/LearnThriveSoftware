@@ -155,6 +155,16 @@ needs to change shape:
 | `40rem` (640px) | Table-like rows (PersonRow, LessonRow, day schedules) stack into labelled cards instead of columns (section 83). |
 | `30rem` (480px) | The lesson peek panel goes full-width; the smallest phone tightening. |
 
+**Ask the right box.** A media query asks the window how much room there is, which is the wrong
+question whenever the component doesn't get the whole window. A dashboard card in the two-column
+grid is ~390px wide on a tablet whose viewport is 834px, so `48rem` never fires and the lesson
+row — which spends a fixed 9.5rem on its date column and as much again on its badge and chevron —
+was measured leaving 3.7px for the title. `.card` is therefore a query container, and the rows
+stack on `@container (max-width: 32rem)`: below that there is no room for a title worth reading
+beside those columns. The classroom's pre-join column does the same thing for the same reason.
+Reach for a container query whenever a component's layout depends on its own width, and keep the
+viewport queries above for things that really are about the window (the sidebar becoming a drawer).
+
 ## Role patterns
 
 Four dashboards, one shared vocabulary (`components/dashboards/shared.tsx`): a time-of-day
