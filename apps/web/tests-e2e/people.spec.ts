@@ -12,46 +12,51 @@ async function loginAsAdmin(page: Page) {
 
 test('Admin sees the seeded demo Tutor, Client, Student and Tuition Assignment', async ({ page }) => {
   await loginAsAdmin(page);
-  await page.goto('/dashboard/admin/people');
-  // .people-list matches three separate <ul>s on this page (Tutors/Clients/Students) — assert
-  // against the whole page container instead of the ambiguous class selector.
-  await expect(page.locator('.dashboard-page')).toContainText('Jamie Patel');
-  await expect(page.locator('.dashboard-page')).toContainText('Sarah Ahmed');
-  await expect(page.locator('.dashboard-page')).toContainText('Ayaan Ahmed');
+  // People is now three separate tabbed pages (plan6 section 39), not one page with three lists.
+  await page.goto('/dashboard/admin/people/tutors');
+  await expect(page.locator('.person-list')).toContainText('Jamie Patel');
+
+  await page.goto('/dashboard/admin/people/clients');
+  await expect(page.locator('.person-list')).toContainText('Sarah Ahmed');
+
+  await page.goto('/dashboard/admin/people/students');
+  await expect(page.locator('.person-list')).toContainText('Ayaan Ahmed');
 
   await page.goto('/dashboard/admin/assignments');
-  await expect(page.locator('.dashboard-page')).toContainText('GCSE Mathematics');
+  await expect(page.locator('.record-list')).toContainText('GCSE Mathematics');
 });
 
 test('Admin can add a new Tutor, who then appears in the list', async ({ page }) => {
   await loginAsAdmin(page);
-  await page.goto('/dashboard/admin/people');
-  // Three "Add" forms (Tutor/Client/Student) share label text ("Name", "Email") on this one
-  // page, so getByLabel() alone is ambiguous — anchor to this form's own field ids instead.
-  await page.locator('summary', { hasText: 'Add Tutor' }).click();
+  await page.goto('/dashboard/admin/people/tutors');
+  // "Add tutor" opens a Dialog (plan6 section 36) whose own submit button shares the trigger's
+  // text — the trigger is unambiguous before the dialog opens, and the submit is scoped to the
+  // open dialog afterwards to avoid matching both.
+  await page.getByRole('button', { name: 'Add tutor' }).click();
   await page.locator('#tutor-name').fill('Priya Sharma');
   await page.locator('#tutor-email').fill('priya.sharma@example.test');
   await page.locator('#tutor-subjects').fill('Science, Chemistry');
-  await page.getByRole('button', { name: 'Add Tutor' }).click();
-
-  await expect(page).toHaveURL(/\/dashboard\/admin\/people$/);
-  await expect(page.locator('.dashboard-page')).toContainText('Priya Sharma');
+  // Not asserting on the ?toast= query param itself — Toaster strips it via router.replace()
+  // within its own first effect, so by the time this assertion's retry polling checks the URL
+  // it may well have already been removed again. The path landing correctly plus the new tutor
+  // actually appearing is the real proof this worked.
+  await page.getByRole('dialog').getByRole('button', { name: 'Add tutor' }).click();
+  await expect(page).toHaveURL(/\/dashboard\/admin\/people\/tutors/);
+  await expect(page.locator('.person-list')).toContainText('Priya Sharma');
 });
 
 test('a new Tuition Assignment appears in the list and on the Tutor profile', async ({ page }) => {
   await loginAsAdmin(page);
   await page.goto('/dashboard/admin/assignments');
-  // The create form is inside a <details> collapsed by default once at least one assignment
-  // exists (the seed data already has one) — open it before interacting with its fields.
-  await page.locator('summary', { hasText: 'Create Tuition Assignment' }).click();
+  await page.getByRole('button', { name: 'Create assignment' }).click();
   await page.getByLabel('Title').fill('Year 8 Science — Ayaan');
   await page.getByLabel('Subject').fill('Science');
   await page.getByLabel('Tutor').selectOption({ label: 'Jamie Patel' });
   await page.getByLabel('Student(s)').selectOption({ label: 'Ayaan Ahmed' });
-  await page.getByRole('button', { name: 'Create Assignment' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Create assignment' }).click();
 
-  await expect(page).toHaveURL(/\/dashboard\/admin\/assignments$/);
-  await expect(page.locator('.people-list')).toContainText('Year 8 Science — Ayaan');
+  await expect(page).toHaveURL(/\/dashboard\/admin\/assignments/);
+  await expect(page.locator('.record-list')).toContainText('Year 8 Science — Ayaan');
 });
 
 test('a Tutor cannot reach /dashboard/admin/people — redirected to /403', async ({ page }) => {
