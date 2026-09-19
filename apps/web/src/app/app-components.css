@@ -140,6 +140,27 @@
   .lesson-row__chevron, .person-row__chevron { display: none; }
 }
 
+/* The same stacking, keyed on the card's own width instead of the window's.
+   A lesson row spends a fixed 9.5rem on its date column and about the same again on its relative
+   time, status badge and chevron, all of which refuse to shrink — so the lesson title gets
+   whatever is left. On a tablet the viewport is 834px, which is nowhere near the 48rem above, but
+   each card in the two-column dashboard grid is only ~390px: measured, that left the title column
+   3.7px wide, erasing "GCSE Mathematics — Ayaan" entirely while the row still looked deliberate.
+   A viewport query can't see that, because the viewport isn't what ran out of room. Below ~32rem
+   of card width there isn't space for a title worth reading beside those columns, so the row
+   stacks, exactly as it does on a phone. */
+@container (max-width: 32rem) {
+  .lesson-row__link, .person-row__link, .record-list__link {
+    flex-wrap: wrap; align-items: flex-start; gap: var(--space-2);
+  }
+  .lesson-row__when { min-width: 100%; flex-direction: row; gap: var(--space-2); align-items: baseline; }
+  .lesson-row__what, .person-row__identity { min-width: 100%; }
+  .lesson-row__meta, .person-row__aside { margin-left: 0; width: 100%; justify-content: flex-start; }
+  .person-row__cell { min-width: calc(50% - var(--space-2)); flex: none; }
+  .person-row__cell-label { display: block; }
+  .lesson-row__chevron, .person-row__chevron { display: none; }
+}
+
 /* ============================================================ Toolbars and layout helpers */
 
 .list-toolbar {
