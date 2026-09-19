@@ -27,6 +27,18 @@ async function login(page: Page, email: string, password: string) {
 const ADMIN = { email: 'admin@learnthrive.dev', password: 'dev-admin-pass' };
 const TUTOR = { email: 'tutor@learnthrive.dev', password: 'dev-tutor-pass' };
 
+/** The calendar's side panel (plan6 section 56) opens on event click rather than navigating
+ * straight to the lesson — this drills through to the full detail page. Waits for the URL
+ * itself, not just the click event dispatching — see the identical rationale on lessons.spec.ts's
+ * copy of this helper. */
+async function openLessonFromCalendar(page: Page, eventText: string) {
+  await page.locator('.fc-event', { hasText: eventText }).click();
+  await Promise.all([
+    page.waitForURL(/\/dashboard\/lessons\/[^/]+$/),
+    page.getByRole('link', { name: 'View full details' }).click(),
+  ]);
+}
+
 /** London wall-clock date/time strings for "now + minutesFromNow", for the #lesson-date/
  * #lesson-time fields — computed in Europe/London regardless of the machine's own timezone,
  * matching how the lesson-creation form itself interprets those fields (zonedTimeToUtc). */
@@ -45,10 +57,13 @@ test('the one-dev-server regression test: Home, Login, Admin dashboard, a Lesson
   await page.goto('/login');
   await expect(page.getByLabel('Email')).toBeVisible();
 
-  // 3: Admin dashboard reachable after auth.
+  // 3: Admin dashboard reachable after auth. /dashboard/admin itself is now a blind redirect to
+  // /dashboard (plan6 section 50: Admin's Overview *is* /dashboard) — still a real same-origin
+  // route to prove reachable, landing on real Admin-role content.
   await login(page, ADMIN.email, ADMIN.password);
   await page.goto('/dashboard/admin');
-  await expect(page.locator('.dashboard-page')).toContainText('Administration');
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page.locator('.app-usermenu__role')).toContainText('Admin');
 
   // Create a lesson starting soon enough to be inside the Tutor's join window immediately,
   // so this test can prove the classroom route (not just the disabled-button state already
@@ -63,18 +78,20 @@ test('the one-dev-server regression test: Home, Login, Admin dashboard, a Lesson
   await expect(page).toHaveURL(/\/dashboard\/calendar$/);
 
   await page.goto('/dashboard/calendar');
-  await page.locator('.fc-event', { hasText: 'Single-server regression lesson' }).click();
+  await openLessonFromCalendar(page, 'Single-server regression lesson');
   await expect(page).toHaveURL(/\/dashboard\/lessons\/(.+)/);
   const lessonUrl = page.url();
   const origin = new URL(lessonUrl).origin;
 
   // 4: the Lesson itself is reachable.
-  await expect(page.locator('.dashboard-page')).toContainText('Single-server regression lesson');
+  await expect(page.locator('#main-content')).toContainText('Single-server regression lesson');
 
   await login(page, TUTOR.email, TUTOR.password);
   await page.goto(lessonUrl);
-  const joinButton = page.getByRole('button', { name: 'Join Classroom' });
-  await expect(joinButton).toBeEnabled();
+  // Join classroom is a real navigational Link styled as a button, not role="button", while it's
+  // enabled — its disabled state (outside the join window) *is* an inert span, tested elsewhere.
+  const joinButton = page.getByRole('link', { name: 'Join classroom' });
+  await expect(joinButton).toBeVisible();
 
   // Track every frame navigation for the rest of this test — the core one-origin claim.
   const navigatedOrigins = new Set<string>();
@@ -110,7 +127,7 @@ test('the one-dev-server regression test: Home, Login, Admin dashboard, a Lesson
   await expect(page.getByRole('link', { name: /Return to Lesson/ })).toBeVisible();
   await page.getByRole('link', { name: /Return to Lesson/ }).click();
   await expect(page).toHaveURL(new RegExp(`^${origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/dashboard/lessons/[^/]+$`));
-  await expect(page.locator('.dashboard-page')).toContainText('Single-server regression lesson');
+  await expect(page.locator('#main-content')).toContainText('Single-server regression lesson');
 
   // 9, restated as an assertion: across this entire Lesson -> Join -> Classroom -> back flow, the
   // browser's main frame never navigated to any origin other than the one this test started at.
@@ -122,8 +139,23 @@ test('stale URL regression: no served page markup or route references the retire
 
   const routesToCheck = ['/', '/about', '/login', '/dashboard', '/dashboard/admin', '/dashboard/calendar'];
   for (const route of routesToCheck) {
-    await page.goto(route);
-    const html = await page.content();
+    // Six full navigations back-to-back occasionally race Next dev's HMR client reconnecting on
+    // the *previous* page and issuing its own reload right as this goto() is in flight — observed
+    // as a spurious net::ERR_ABORTED (and, once retried, a follow-up "page is navigating" error
+    // reading content() while that stray reload is still settling). `next start` (production) has
+    // no HMR client, so this is a dev-only artifact of this test's own rapid navigation pattern,
+    // not of the markup under test — retrying the whole goto+read is simpler and more honest than
+    // a fixed delay that would just be papering over the same dev-server timing either way.
+    let html: string | undefined;
+    for (let attempt = 0; attempt < 3 && html === undefined; attempt += 1) {
+      try {
+        await page.goto(route);
+        html = await page.content();
+      } catch {
+        html = undefined;
+      }
+    }
+    if (html === undefined) throw new Error(`Could not load ${route} after retries`);
     expect(html, `${route} markup must not reference the retired standalone classroom origin`).not.toMatch(/localhost:5173|127\.0\.0\.1:5173/);
     expect(html, `${route} markup must not reference TutorCruncher`).not.toMatch(/tutorcruncher\.com/i);
     expect(html, `${route} markup must not reference a hard-coded Cloudflare Quick Tunnel URL`).not.toMatch(/\.trycloudflare\.com/);
