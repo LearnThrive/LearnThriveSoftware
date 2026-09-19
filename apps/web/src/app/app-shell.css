@@ -361,9 +361,14 @@
 .card__body { padding: var(--space-5); }
 .card__body--flush { padding: 0; }
 
+/* 9.5rem, not 11rem: a tile holds one number and a two-word label, and at 11rem two of them need
+   368px of a phone's 358px of content width — missing a two-up layout by 10px and stacking four
+   near-empty full-width cards into 420px of scrolling before the page's actual content. The track
+   minimum only decides how many columns fit; `1fr` still shares the row out, so every wider
+   breakpoint lays out exactly as it did. */
 .stat-grid {
   display: grid; gap: var(--space-4);
-  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
   margin-bottom: var(--space-5);
 }
 
