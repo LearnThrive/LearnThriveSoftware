@@ -12,6 +12,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LessonList, LessonRow } from "@/components/lessons/LessonRow";
 import { formatDateOnly } from "@/lib/format";
+import { RecordList, RecordRow } from "@/components/records/RecordRow";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -120,20 +121,18 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
               {reports.length === 0 ? (
                 <EmptyState title="No reports yet" description="Reports appear once a tutor writes one after a lesson." />
               ) : (
-                <ul className="record-list">
+                <RecordList>
                   {reports.slice(0, 6).map((report) => (
-                    <li className="record-list__item" key={report.id}>
-                      <Link href={`/dashboard/lessons/${report.lessonId}`} className="record-list__link">
-                        <span className="record-list__body">
-                          <span className="record-list__title">{report.title}</span>
-                          <span className="record-list__meta">{formatDateOnly(report.startAt)}</span>
-                          {report.summary && <span className="record-list__excerpt">{report.summary}</span>}
-                        </span>
-                        <span className="record-list__aside"><StatusBadge status={report.status} /></span>
-                      </Link>
-                    </li>
+                    <RecordRow
+                      key={report.id}
+                      href={`/dashboard/lessons/${report.lessonId}`}
+                      title={report.title}
+                      meta={formatDateOnly(report.startAt)}
+                      excerpt={report.summary}
+                      aside={<StatusBadge status={report.status} />}
+                    />
                   ))}
-                </ul>
+                </RecordList>
               )}
             </CardBody>
           </Card>
@@ -185,19 +184,17 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
               {assignments.length === 0 ? (
                 <EmptyState title="No assignments" />
               ) : (
-                <ul className="record-list">
+                <RecordList>
                   {assignments.map((assignment) => (
-                    <li className="record-list__item" key={assignment.id}>
-                      <Link href={`/dashboard/admin/assignments/${assignment.id}`} className="record-list__link">
-                        <span className="record-list__body">
-                          <span className="record-list__title">{assignment.title}</span>
-                          <span className="record-list__meta">{tutorNames.get(assignment.tutorId)}</span>
-                        </span>
-                        <span className="record-list__aside"><StatusBadge status={assignment.status} /></span>
-                      </Link>
-                    </li>
+                    <RecordRow
+                      key={assignment.id}
+                      href={`/dashboard/admin/assignments/${assignment.id}`}
+                      title={assignment.title}
+                      meta={tutorNames.get(assignment.tutorId)}
+                      aside={<StatusBadge status={assignment.status} />}
+                    />
                   ))}
-                </ul>
+                </RecordList>
               )}
             </CardBody>
           </Card>

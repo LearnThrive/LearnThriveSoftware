@@ -32,12 +32,17 @@ export default async function ActivityPage() {
         description="What's been happening across lessons, attendance and reports."
       />
 
-      <Card>
+      <Card className={events.length === 0 ? "card--empty" : ""}>
         {events.length === 0 ? (
           <EmptyState
             icon={<Activity size={22} />}
             title="No activity yet"
             description="Scheduling a lesson, marking attendance or approving a report will all show up here."
+            action={
+              <Link href="/dashboard/admin/lessons/new" className="btn btn--primary">
+                Schedule a lesson
+              </Link>
+            }
           />
         ) : (
           <ol className="timeline">

@@ -9,6 +9,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LessonSection, NextLessonCard, greeting } from "@/components/dashboards/shared";
 import { formatDateOnly, formatLongDate } from "@/lib/format";
+import { RecordList, RecordRow } from "@/components/records/RecordRow";
 
 /** Plan6 section 54: the simplest dashboard in the product. Where do I go, when, and what did my
  * tutor say last time. No administrative surface at all. */
@@ -68,19 +69,17 @@ export async function StudentDashboard({ user }: { user: AuthenticatedUser }) {
                 description="After a lesson, your tutor writes a short report. It'll appear here once it's ready."
               />
             ) : (
-              <ul className="record-list">
+              <RecordList>
                 {feedback.map(({ visible, lesson }) => (
-                  <li key={visible.id} className="record-list__item">
-                    <Link href={`/dashboard/lessons/${lesson.id}`} className="record-list__link">
-                      <span className="record-list__body">
-                        <span className="record-list__title">{lesson.title}</span>
-                        <span className="record-list__meta">{formatDateOnly(lesson.startAt)} · {tutorFor(lesson) ?? "Your tutor"}</span>
-                        {visible.publicSummary && <span className="record-list__excerpt">{visible.publicSummary}</span>}
-                      </span>
-                    </Link>
-                  </li>
+                  <RecordRow
+                    key={visible.id}
+                    href={`/dashboard/lessons/${lesson.id}`}
+                    title={lesson.title}
+                    meta={`${formatDateOnly(lesson.startAt)} · ${tutorFor(lesson) ?? "Your tutor"}`}
+                    excerpt={visible.publicSummary}
+                  />
                 ))}
-              </ul>
+              </RecordList>
             )}
           </CardBody>
         </Card>

@@ -11,9 +11,9 @@ import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { FilterTabs } from "@/components/ui/FilterTabs";
 import { StatusBadge } from "@/components/ui/Badge";
-import { Avatar } from "@/components/ui/Avatar";
 import { formatDateOnly } from "@/lib/format";
 import type { Lesson, LessonReport } from "@learnthrive/data/domain";
+import { RecordList, RecordRow } from "@/components/records/RecordRow";
 
 export const metadata: Metadata = createMetadata({
   title: "Lesson reports",
@@ -91,7 +91,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         />
       )}
 
-      <Card>
+      <Card className={rows.length === 0 ? "card--empty" : ""}>
         {rows.length === 0 ? (
           <EmptyState
             icon={<FileText size={22} />}
@@ -99,29 +99,32 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             description={user.role === "CLIENT" || user.role === "STUDENT"
               ? "Once a tutor writes a report and it's approved, it will appear here."
               : "Reports are written from a lesson, once its attendance has been marked."}
+            action={user.role === "ADMIN" || user.role === "TUTOR" ? (
+              <Link href="/dashboard/lessons?filter=needs-attention" className="btn btn--secondary">
+                Lessons needing attention
+              </Link>
+            ) : undefined}
           />
         ) : (
-          <ul className="record-list">
+          <RecordList>
             {rows.map(({ report, lesson }) => {
               const students = lesson.studentIds.map((id) => studentNames.get(id)).filter(Boolean).join(", ");
               return (
-                <li key={report.id} className="record-list__item">
-                  <Link href={`/dashboard/lessons/${lesson.id}`} className="record-list__link">
-                    <Avatar name={students || lesson.title} size="md" />
-                    <span className="record-list__body">
-                      <span className="record-list__title">{lesson.title}</span>
-                      <span className="record-list__meta">
-                        {students || "No students"}
-                        {user.role !== "TUTOR" && ` · ${tutorNames.get(lesson.tutorId) ?? "Unknown tutor"}`}
-                        {` · ${formatDateOnly(lesson.startAt)}`}
-                      </span>
-                    </span>
-                    <span className="record-list__aside"><StatusBadge status={report.status} /></span>
-                  </Link>
-                </li>
+                <RecordRow
+                  key={report.id}
+                  href={`/dashboard/lessons/${lesson.id}`}
+                  avatarName={students || lesson.title}
+                  title={lesson.title}
+                  meta={[
+                    students || "No students",
+                    ...(user.role !== "TUTOR" ? [tutorNames.get(lesson.tutorId) ?? "Unknown tutor"] : []),
+                    formatDateOnly(lesson.startAt),
+                  ].join(" · ")}
+                  aside={<StatusBadge status={report.status} />}
+                />
               );
             })}
-          </ul>
+          </RecordList>
         )}
       </Card>
     </>

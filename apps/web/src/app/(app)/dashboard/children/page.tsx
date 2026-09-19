@@ -37,7 +37,7 @@ export default async function ChildrenPage() {
       />
 
       {students.length === 0 ? (
-        <Card>
+        <Card className="card--empty">
           <EmptyState
             icon={<GraduationCap size={22} />}
             title="No children linked to your account yet"

@@ -12,6 +12,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { LessonList, LessonRow } from "@/components/lessons/LessonRow";
 import { PersonList, PersonRow } from "@/components/people/PersonRow";
 import { formatDateOnly, formatRelative } from "@/lib/format";
+import { RecordList, RecordRow } from "@/components/records/RecordRow";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -108,19 +109,17 @@ export default async function AssignmentDetailPage({ params }: { params: Promise
               {reports.length === 0 ? (
                 <EmptyState title="No reports yet" />
               ) : (
-                <ul className="record-list">
+                <RecordList>
                   {reports.slice(0, 8).map((report) => (
-                    <li className="record-list__item" key={report.id}>
-                      <Link href={`/dashboard/lessons/${report.lessonId}`} className="record-list__link">
-                        <span className="record-list__body">
-                          <span className="record-list__title">{report.title}</span>
-                          <span className="record-list__meta">{formatDateOnly(report.startAt)}</span>
-                        </span>
-                        <span className="record-list__aside"><StatusBadge status={report.status} /></span>
-                      </Link>
-                    </li>
+                    <RecordRow
+                      key={report.id}
+                      href={`/dashboard/lessons/${report.lessonId}`}
+                      title={report.title}
+                      meta={formatDateOnly(report.startAt)}
+                      aside={<StatusBadge status={report.status} />}
+                    />
                   ))}
-                </ul>
+                </RecordList>
               )}
             </CardBody>
           </Card>

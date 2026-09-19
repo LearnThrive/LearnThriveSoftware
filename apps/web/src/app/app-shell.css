@@ -39,7 +39,10 @@
   --app-accent: var(--colour-green-700);
   --app-accent-strong: var(--colour-green-800);
   --app-accent-soft: var(--colour-mint-100);
-  --app-focus-ring: 0 0 0 3px rgb(8 115 99 / 28%);
+  /* A crisp two-tone ring rather than a soft 28%-opacity glow: a gap in the surface colour, then
+     a solid accent band, so the indicator stays clearly visible against a white card, the grey
+     canvas or a tinted row — and reads as one deliberate treatment wherever it lands. */
+  --app-focus-ring: 0 0 0 2px var(--app-surface), 0 0 0 4px var(--app-accent);
 
   /* Type scale: a dashboard H1 must not compete with a marketing hero (section 31). */
   --text-display: clamp(1.9rem, 2.4vw, 2.3rem);
@@ -69,6 +72,21 @@
 }
 
 /* ============================================================ Shell */
+
+/* One focus treatment across the product. globals.css gives the whole document the marketing
+   site's focus ring (a 3px brown outline inside a yellow halo), which is right for those pages
+   but meant a keyboard user moving through a single dashboard screen met two unrelated focus
+   languages: the brand ring on anything without a rule of its own (breadcrumbs, inline links,
+   timeline entries) and the app's own accent ring on buttons, rows and tiles. This makes the
+   accent ring the product-wide default; components that set it explicitly now match rather than
+   contradict it. Deliberately not extended to .classroom-route — the classroom keeps its own
+   high-contrast focus ring, which is the right call against its dark immersive surfaces. */
+.app-shell :focus-visible,
+.auth-route :focus-visible {
+  outline: none;
+  box-shadow: var(--app-focus-ring);
+  border-radius: var(--app-radius-sm);
+}
 
 .app-shell {
   display: grid;
@@ -387,10 +405,22 @@
   display: flex; flex-direction: column; align-items: center; gap: var(--space-2);
   padding: var(--space-7) var(--space-5); text-align: center;
 }
-.empty-state__icon { display: grid; place-items: center; width: 3rem; height: 3rem; margin-bottom: var(--space-1); border-radius: 50%; background: var(--app-surface-accent); color: var(--app-accent); }
+.empty-state__icon {
+  display: grid; place-items: center; width: 3rem; height: 3rem;
+  margin-bottom: var(--space-1); border-radius: 50%;
+  background: var(--app-surface-accent); color: var(--app-accent);
+  /* A soft ring rather than a heavier fill — enough presence to anchor the message without
+     turning an "everything is fine" state into something that reads as an alert. */
+  box-shadow: 0 0 0 6px rgb(233 245 239 / 55%);
+}
 .empty-state__title { margin: 0; font-family: var(--font-heading); font-size: var(--text-h3); font-weight: 700; color: var(--app-ink); }
 .empty-state__description { margin: 0; max-width: 42ch; font-size: var(--text-small); color: var(--app-muted); }
 .empty-state__action { margin-top: var(--space-3); }
+
+/* A card holding nothing but an empty state: constrained and centred, so the message reads as a
+   deliberate answer rather than a small note stranded in a very wide white box. Full width is
+   right when a card holds a list; it is not right when a card holds one sentence. */
+.card--empty { max-width: 40rem; margin-inline: auto; }
 
 /* ============================================================ Responsive */
 
@@ -425,5 +455,8 @@
 
 /* ============================================================ Immersive routes */
 
-.classroom-route { min-height: 100vh; background: var(--colour-navy-900); }
+/* No background of its own: the classroom paints its own surfaces (a cream page around dark
+   stage tiles — see features/classroom/styles.css), and a navy wrapper underneath showed
+   through wherever it doesn't, most visibly behind the whole post-class "ended" screen. */
+.classroom-route { min-height: 100vh; }
 .auth-route { min-height: 100vh; }

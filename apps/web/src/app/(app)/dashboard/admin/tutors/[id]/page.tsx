@@ -12,6 +12,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LessonList, LessonRow } from "@/components/lessons/LessonRow";
 import { PersonList, PersonRow } from "@/components/people/PersonRow";
+import { RecordList, RecordRow } from "@/components/records/RecordRow";
 import { formatDateOnly } from "@/lib/format";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -122,21 +123,17 @@ export default async function TutorProfilePage({ params }: { params: Promise<{ i
               {assignments.length === 0 ? (
                 <EmptyState title="No assignments yet" description="Assign this tutor to a student to start scheduling lessons." />
               ) : (
-                <ul className="record-list">
+                <RecordList>
                   {assignments.map((assignment) => (
-                    <li className="record-list__item" key={assignment.id}>
-                      <Link href={`/dashboard/admin/assignments/${assignment.id}`} className="record-list__link">
-                        <span className="record-list__body">
-                          <span className="record-list__title">{assignment.title}</span>
-                          <span className="record-list__meta">
-                            {assignment.studentIds.map((sid) => studentNames.get(sid)).filter(Boolean).join(", ")} · {assignment.subject}
-                          </span>
-                        </span>
-                        <span className="record-list__aside"><StatusBadge status={assignment.status} /></span>
-                      </Link>
-                    </li>
+                    <RecordRow
+                      key={assignment.id}
+                      href={`/dashboard/admin/assignments/${assignment.id}`}
+                      title={assignment.title}
+                      meta={`${assignment.studentIds.map((sid) => studentNames.get(sid)).filter(Boolean).join(", ")} · ${assignment.subject}`}
+                      aside={<StatusBadge status={assignment.status} />}
+                    />
                   ))}
-                </ul>
+                </RecordList>
               )}
             </CardBody>
           </Card>
@@ -147,19 +144,17 @@ export default async function TutorProfilePage({ params }: { params: Promise<{ i
               {recentReports.length === 0 ? (
                 <EmptyState title="No reports yet" />
               ) : (
-                <ul className="record-list">
+                <RecordList>
                   {recentReports.slice(0, 5).map((report) => (
-                    <li className="record-list__item" key={report.id}>
-                      <Link href={`/dashboard/lessons/${report.lessonId}`} className="record-list__link">
-                        <span className="record-list__body">
-                          <span className="record-list__title">{report.title}</span>
-                          <span className="record-list__meta">{formatDateOnly(report.startAt)}</span>
-                        </span>
-                        <span className="record-list__aside"><StatusBadge status={report.status} /></span>
-                      </Link>
-                    </li>
+                    <RecordRow
+                      key={report.id}
+                      href={`/dashboard/lessons/${report.lessonId}`}
+                      title={report.title}
+                      meta={formatDateOnly(report.startAt)}
+                      aside={<StatusBadge status={report.status} />}
+                    />
                   ))}
-                </ul>
+                </RecordList>
               )}
             </CardBody>
           </Card>

@@ -11,13 +11,17 @@ import { X } from "lucide-react";
  * focus moves into the dialog on open, is trapped inside while it's open, and returns to the
  * trigger on close. Escape and a click on the backdrop both close it.
  */
-export function Dialog({ trigger, title, description, children, id }: {
+export function Dialog({ trigger, title, description, children, id, tone = "primary" }: {
   /** Rendered as the opening control; receives no props, so style it however the page needs. */
   trigger: ReactNode;
   title: string;
   description?: string;
   children: ReactNode;
   id?: string;
+  /** What the dialog leads to, so the trigger can say so before it's opened — a dialog that
+   * cancels a lesson shouldn't present itself as the same green primary action as one that
+   * creates a student. */
+  tone?: "primary" | "danger" | "secondary";
 }) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -65,7 +69,7 @@ export function Dialog({ trigger, title, description, children, id }: {
 
   return (
     <>
-      <button ref={triggerRef} type="button" className="dialog-trigger" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-expanded={open}>
+      <button ref={triggerRef} type="button" className={`dialog-trigger dialog-trigger--${tone}`} onClick={() => setOpen(true)} aria-haspopup="dialog" aria-expanded={open}>
         {trigger}
       </button>
       {open && (

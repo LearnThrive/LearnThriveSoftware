@@ -35,16 +35,25 @@
 .btn--sm { min-height: 2rem; padding: 0 var(--space-3); font-size: var(--text-label); }
 .btn--block { width: 100%; }
 
-/* The dialog trigger is a button that opens a modal; styled as a primary action by default. */
+/* The dialog trigger is a button that opens a modal. It carries the tone of whatever the dialog
+   leads to, so a destructive flow doesn't announce itself as a primary action (Dialog's `tone`). */
 .dialog-trigger {
   display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem;
   min-height: 2.375rem; padding: 0 var(--space-4);
-  border: 1px solid var(--app-accent); border-radius: var(--app-radius-sm);
-  background: var(--app-accent); color: #fff;
+  border: 1px solid transparent; border-radius: var(--app-radius-sm);
   font: inherit; font-size: var(--text-small); font-weight: 650; cursor: pointer;
+  transition: background var(--duration-fast) var(--app-ease), border-color var(--duration-fast) var(--app-ease), color var(--duration-fast) var(--app-ease);
 }
-.dialog-trigger:hover { background: var(--app-accent-strong); border-color: var(--app-accent-strong); }
 .dialog-trigger:focus-visible { outline: none; box-shadow: var(--app-focus-ring); }
+
+.dialog-trigger--primary { border-color: var(--app-accent); background: var(--app-accent); color: #fff; }
+.dialog-trigger--primary:hover { background: var(--app-accent-strong); border-color: var(--app-accent-strong); }
+
+.dialog-trigger--secondary { border-color: var(--app-border-strong); background: var(--app-surface); color: var(--app-ink); }
+.dialog-trigger--secondary:hover { border-color: var(--app-accent); color: var(--app-accent); }
+
+.dialog-trigger--danger { border-color: #e7c4c7; background: var(--app-surface); color: var(--colour-error); }
+.dialog-trigger--danger:hover { background: var(--colour-error-bg); border-color: var(--colour-error); }
 
 /* ============================================================ Filter tabs */
 
@@ -115,7 +124,8 @@
 .record-list__body { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .record-list__title { font-weight: 600; color: var(--app-ink); }
 .record-list__meta { font-size: var(--text-small); color: var(--app-muted); }
-.record-list__aside { flex: none; }
+.record-list__aside { display: flex; align-items: center; gap: var(--space-3); flex: none; margin-left: auto; }
+.record-list__chevron { color: var(--app-muted); }
 
 /* Mobile: the same rows stack into labelled cards rather than scrolling sideways (section 83). */
 @media (max-width: 48rem) {
@@ -210,7 +220,13 @@
 /* A longer form reads better as sections with breathing room between them than as one
    undifferentiated column of inputs (section 35). */
 .form--stacked { gap: var(--space-6); }
-.form--stacked .fieldset + .fieldset { padding-top: var(--space-6); border-top: 1px solid var(--app-border); }
+/* Drawn as a pseudo-element rather than `border-top` on the <fieldset> itself: a browser cuts a
+   notch out of a fieldset's own border wherever its <legend> sits, so a real border rendered as a
+   line that started partway across, level with the heading — it read as a rendering fault. */
+.form--stacked .fieldset + .fieldset { position: relative; padding-top: var(--space-6); }
+.form--stacked .fieldset + .fieldset::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: var(--app-border);
+}
 
 /* Short, related inputs (date / time / duration) belong on one line on a wide screen and
    stack on a narrow one — minmax() handles both without a media query. */

@@ -76,7 +76,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
         <p className="list-toolbar__count">{visible.length} of {clients.length}</p>
       </div>
 
-      <Card>
+      <Card className={visible.length === 0 ? "card--empty" : ""}>
         {visible.length === 0 ? (
           <EmptyState
             icon={<Users size={22} />}

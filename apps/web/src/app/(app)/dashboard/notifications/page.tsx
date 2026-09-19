@@ -31,7 +31,7 @@ export default async function NotificationsPage() {
           : "You're all caught up."}
       />
 
-      <Card>
+      <Card className={notifications.length === 0 ? "card--empty" : ""}>
         {notifications.length === 0 ? (
           <EmptyState
             icon={<Bell size={22} />}
