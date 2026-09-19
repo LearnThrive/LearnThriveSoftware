@@ -2,10 +2,12 @@ import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import type { ReactNode } from "react";
 import { Bricolage_Grotesque, Public_Sans, IBM_Plex_Mono } from "next/font/google";
-import { SiteFooter } from "@/components/SiteFooter";
-import { SiteHeader } from "@/components/SiteHeader";
 import { siteConfig } from "@/lib/site";
 import "./globals.css";
+import "./app-shell.css";
+import "./app-components.css";
+import "./app-dashboard.css";
+import "./app-auth.css";
 
 const bricolage = Bricolage_Grotesque({
   subsets: ["latin"],
@@ -75,16 +77,15 @@ const organisationData = {
   })),
 };
 
+// Deliberately only the document shell: fonts, global styles, structured data. The two product
+// surfaces own their own chrome — marketing pages get PublicShell via the (public) route group,
+// authenticated pages get AppShell via (app). Putting SiteHeader/SiteFooter here (as this file
+// used to) is what made every dashboard page render the public marketing navbar above it.
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="en-GB" className={`${bricolage.variable} ${publicSans.variable} ${ibmPlexMono.variable}`}>
       <body>
-        <a className="skip-link" href="#main-content">
-          Skip to main content
-        </a>
-        <SiteHeader />
-        <main id="main-content">{children}</main>
-        <SiteFooter />
+        {children}
         <Script
           id="learnthrive-organisation-data"
           type="application/ld+json"

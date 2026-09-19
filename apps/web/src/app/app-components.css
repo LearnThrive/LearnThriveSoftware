@@ -1,0 +1,340 @@
+/*
+ * LearnThrive authenticated product — component layer.
+ *
+ * Tokens and shell live in app-shell.css; this file is the reusable pieces built on top of them
+ * (plan6 sections 33-37, 40, 68, 83, 87). Split in two so neither file becomes the "one giant UI
+ * file" section 87 warns against.
+ */
+
+/* ============================================================ Buttons (section 33) */
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem;
+  min-height: 2.375rem; padding: 0 var(--space-4);
+  border: 1px solid transparent; border-radius: var(--app-radius-sm);
+  font: inherit; font-size: var(--text-small); font-weight: 650; line-height: 1;
+  text-decoration: none; white-space: nowrap; cursor: pointer;
+  transition: background var(--duration-fast) var(--app-ease), border-color var(--duration-fast) var(--app-ease),
+    color var(--duration-fast) var(--app-ease), box-shadow var(--duration-fast) var(--app-ease);
+}
+.btn:focus-visible { outline: none; box-shadow: var(--app-focus-ring); }
+.btn:disabled, .btn[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; }
+
+.btn--primary { background: var(--app-accent); border-color: var(--app-accent); color: #fff; }
+.btn--primary:hover:not(:disabled) { background: var(--app-accent-strong); border-color: var(--app-accent-strong); }
+
+.btn--secondary { background: var(--app-surface); border-color: var(--app-border-strong); color: var(--app-ink); }
+.btn--secondary:hover:not(:disabled) { border-color: var(--app-accent); color: var(--app-accent); }
+
+.btn--ghost { background: transparent; color: var(--app-ink); }
+.btn--ghost:hover:not(:disabled) { background: var(--app-surface-sunken); }
+
+.btn--danger { background: var(--app-surface); border-color: #e7c4c7; color: var(--colour-error); }
+.btn--danger:hover:not(:disabled) { background: var(--colour-error-bg); border-color: var(--colour-error); }
+
+.btn--sm { min-height: 2rem; padding: 0 var(--space-3); font-size: var(--text-label); }
+.btn--block { width: 100%; }
+
+/* The dialog trigger is a button that opens a modal; styled as a primary action by default. */
+.dialog-trigger {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem;
+  min-height: 2.375rem; padding: 0 var(--space-4);
+  border: 1px solid var(--app-accent); border-radius: var(--app-radius-sm);
+  background: var(--app-accent); color: #fff;
+  font: inherit; font-size: var(--text-small); font-weight: 650; cursor: pointer;
+}
+.dialog-trigger:hover { background: var(--app-accent-strong); border-color: var(--app-accent-strong); }
+.dialog-trigger:focus-visible { outline: none; box-shadow: var(--app-focus-ring); }
+
+/* ============================================================ Filter tabs */
+
+.filter-tabs {
+  display: flex; gap: var(--space-1); flex-wrap: wrap;
+  margin-bottom: var(--space-4);
+  border-bottom: 1px solid var(--app-border);
+}
+
+.filter-tab {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.5rem var(--space-3);
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  color: var(--app-muted); font-size: var(--text-small); font-weight: 600; text-decoration: none;
+}
+.filter-tab:hover { color: var(--app-ink); }
+.filter-tab.is-active { color: var(--app-accent); border-bottom-color: var(--app-accent); }
+.filter-tab:focus-visible { outline: none; box-shadow: var(--app-focus-ring); border-radius: var(--app-radius-sm); }
+.filter-tab__count {
+  padding: 0.05rem 0.4rem; border-radius: 999px;
+  background: #eef2f5; color: var(--app-muted); font-size: var(--text-label); font-weight: 700;
+}
+.filter-tab.is-active .filter-tab__count { background: var(--app-accent-soft); color: var(--app-accent-strong); }
+.filter-tab--warning .filter-tab__count { background: #fdf0d9; color: #8a5a06; }
+
+/* ============================================================ Lists: lessons, people, records */
+
+.lesson-list, .person-list, .record-list { list-style: none; margin: 0; padding: 0; }
+
+.lesson-row + .lesson-row,
+.person-row + .person-row,
+.record-list__item + .record-list__item { border-top: 1px solid var(--app-border); }
+
+.lesson-row__link, .person-row__link, .record-list__link {
+  display: flex; align-items: center; gap: var(--space-4);
+  padding: var(--space-3) var(--space-5);
+  color: inherit; text-decoration: none;
+  transition: background var(--duration-fast) var(--app-ease);
+}
+.lesson-row__link:hover, .person-row__link:hover, .record-list__link:hover { background: var(--app-surface-sunken); }
+.lesson-row__link:focus-visible, .person-row__link:focus-visible, .record-list__link:focus-visible {
+  outline: none; box-shadow: inset 0 0 0 2px var(--app-accent);
+}
+
+.lesson-row__when { display: flex; flex-direction: column; min-width: 9.5rem; flex: none; }
+.lesson-row__day { font-size: var(--text-small); font-weight: 650; color: var(--app-ink); }
+.lesson-row__time { font-size: var(--text-label); color: var(--app-muted); }
+.lesson-row__what { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.lesson-row__title { font-weight: 600; color: var(--app-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lesson-row__subtitle { font-size: var(--text-small); color: var(--app-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lesson-row__meta { display: flex; align-items: center; gap: var(--space-3); flex: none; }
+.lesson-row__relative { font-size: var(--text-small); color: var(--app-accent); font-weight: 600; }
+.lesson-row__chevron, .person-row__chevron { color: var(--app-muted); }
+
+.person-row__identity { display: flex; align-items: center; gap: var(--space-3); min-width: 13rem; flex: 1; }
+.person-row__names { display: flex; flex-direction: column; min-width: 0; }
+.person-row__name { font-weight: 600; color: var(--app-ink); }
+.person-row__subtitle { font-size: var(--text-small); color: var(--app-muted); overflow: hidden; text-overflow: ellipsis; }
+.person-row__cell { display: flex; flex-direction: column; gap: 0.1rem; min-width: 8rem; flex: 1; }
+.person-row__cell-label {
+  display: none; font-size: var(--text-label); color: var(--app-muted);
+  text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;
+}
+.person-row__cell-value { font-size: var(--text-small); color: var(--app-text); }
+.person-row__aside { display: flex; align-items: center; gap: var(--space-3); flex: none; margin-left: auto; }
+
+.record-list__body { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.record-list__title { font-weight: 600; color: var(--app-ink); }
+.record-list__meta { font-size: var(--text-small); color: var(--app-muted); }
+.record-list__aside { flex: none; }
+
+/* Mobile: the same rows stack into labelled cards rather than scrolling sideways (section 83). */
+@media (max-width: 48rem) {
+  .lesson-row__link, .person-row__link, .record-list__link {
+    flex-wrap: wrap; align-items: flex-start; gap: var(--space-2);
+  }
+  .lesson-row__when { min-width: 100%; flex-direction: row; gap: var(--space-2); align-items: baseline; }
+  .lesson-row__what, .person-row__identity { min-width: 100%; }
+  .lesson-row__meta, .person-row__aside { margin-left: 0; width: 100%; justify-content: flex-start; }
+  .person-row__cell { min-width: calc(50% - var(--space-2)); flex: none; }
+  .person-row__cell-label { display: block; }
+  .lesson-row__chevron, .person-row__chevron { display: none; }
+}
+
+/* ============================================================ Toolbars and layout helpers */
+
+.list-toolbar {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
+  margin-bottom: var(--space-4); flex-wrap: wrap;
+}
+.list-toolbar__count { margin: 0; font-size: var(--text-small); color: var(--app-muted); }
+
+.search-input {
+  display: flex; align-items: center; gap: var(--space-2);
+  min-width: min(22rem, 100%); padding: 0 var(--space-3);
+  background: var(--app-surface); border: 1px solid var(--app-border-strong);
+  border-radius: var(--app-radius-sm); color: var(--app-muted);
+}
+.search-input:focus-within { border-color: var(--app-accent); box-shadow: var(--app-focus-ring); }
+.search-input input {
+  flex: 1; min-width: 0; height: 2.375rem;
+  border: 0; background: transparent; color: var(--app-ink); font: inherit; font-size: var(--text-small);
+}
+.search-input input:focus { outline: none; }
+.search-input input::-webkit-search-cancel-button { display: none; }
+.search-input button {
+  display: grid; place-items: center; padding: 0.2rem;
+  border: 0; background: transparent; color: var(--app-muted); cursor: pointer;
+}
+.search-input button:hover { color: var(--app-ink); }
+
+.stack { display: flex; flex-direction: column; gap: var(--space-4); }
+.grid-2 { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); align-items: start; }
+.settings-grid { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); align-items: start; }
+
+/* ============================================================ Forms (section 35) */
+
+.form { display: flex; flex-direction: column; gap: var(--space-4); }
+
+.field { display: flex; flex-direction: column; gap: 0.35rem; }
+.field__label { display: flex; align-items: baseline; gap: 0.35rem; font-size: var(--text-small); font-weight: 650; color: var(--app-ink); }
+.field__required { color: var(--colour-error); }
+.field__optional {
+  margin-left: auto; font-size: var(--text-label); font-weight: 500;
+  color: var(--app-muted); text-transform: uppercase; letter-spacing: 0.05em;
+}
+.field__hint, .form-hint { margin: 0; font-size: var(--text-small); color: var(--app-muted); }
+.form-hint { margin-top: var(--space-3); }
+.field__error { margin: 0; font-size: var(--text-small); color: var(--colour-error); font-weight: 600; }
+
+.field input:not([type="checkbox"]):not([type="radio"]),
+.field select,
+.field textarea,
+.form input:not([type="checkbox"]):not([type="radio"]),
+.form select,
+.form textarea {
+  width: 100%; min-height: 2.375rem; padding: 0.45rem var(--space-3);
+  border: 1px solid var(--app-border-strong); border-radius: var(--app-radius-sm);
+  background: var(--app-surface); color: var(--app-ink); font: inherit; font-size: var(--text-body);
+}
+.field textarea, .form textarea { min-height: 5.5rem; resize: vertical; line-height: 1.55; }
+.field input:focus, .field select:focus, .field textarea:focus,
+.form input:focus, .form select:focus, .form textarea:focus {
+  outline: none; border-color: var(--app-accent); box-shadow: var(--app-focus-ring);
+}
+.field--invalid input, .field--invalid select, .field--invalid textarea { border-color: var(--colour-error); }
+
+.fieldset { margin: 0; padding: 0; border: 0; }
+.fieldset__legend { padding: 0; font-family: var(--font-heading); font-size: var(--text-h3); font-weight: 700; color: var(--app-ink); }
+.fieldset__description { margin: 0.2rem 0 var(--space-3); font-size: var(--text-small); color: var(--app-muted); }
+.fieldset__body { display: flex; flex-direction: column; gap: var(--space-4); }
+
+.form-actions { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-1); }
+.form-actions--split { justify-content: space-between; }
+
+.checkbox-field { display: flex; align-items: flex-start; gap: var(--space-3); }
+.checkbox-field input { margin-top: 0.2rem; width: 1rem; height: 1rem; accent-color: var(--app-accent); }
+.checkbox-field span { font-size: var(--text-small); color: var(--app-text); }
+.checkbox-field__label { display: block; font-weight: 650; color: var(--app-ink); }
+.checkbox-field__hint { display: block; margin-top: 0.15rem; color: var(--app-muted); }
+
+/* A longer form reads better as sections with breathing room between them than as one
+   undifferentiated column of inputs (section 35). */
+.form--stacked { gap: var(--space-6); }
+.form--stacked .fieldset + .fieldset { padding-top: var(--space-6); border-top: 1px solid var(--app-border); }
+
+/* Short, related inputs (date / time / duration) belong on one line on a wide screen and
+   stack on a narrow one — minmax() handles both without a media query. */
+.field-row { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); }
+
+/* Forms are the one place a card should stay readable rather than stretch the full width. */
+.card--form { max-width: 46rem; }
+
+/* The app's own message tone overrides the marketing-page .form-message spacing. */
+.app-content .form-message { margin-bottom: 0; padding: var(--space-4); border-radius: var(--app-radius-md); box-shadow: none; }
+.form-message--warning {
+  border: 1px solid #e6cf9c; border-left-width: 4px !important;
+  background: #fdf6e6; color: var(--app-ink);
+}
+.form-message__title { display: flex; align-items: center; gap: 0.4rem; margin: 0 0 0.35rem !important; font-weight: 700; color: #8a5a06; }
+.form-message ul { margin: var(--space-2) 0 0; padding-left: 1.1rem; font-size: var(--text-small); }
+.form-message li + li { margin-top: 0.2rem; }
+
+/* ============================================================ Dialog (section 36) */
+
+body.has-dialog { overflow: hidden; }
+
+.dialog { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: var(--space-4); }
+.dialog__scrim { position: absolute; inset: 0; border: 0; background: rgb(9 29 49 / 45%); cursor: pointer; }
+
+.dialog__panel {
+  position: relative; z-index: 1;
+  width: min(34rem, 100%); max-height: min(85vh, 48rem); overflow-y: auto;
+  background: var(--app-surface); border-radius: var(--app-radius-lg);
+  box-shadow: var(--app-shadow-lg);
+  animation: dialog-in var(--duration-medium) var(--app-ease);
+}
+.dialog__header {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4);
+  padding: var(--space-5) var(--space-5) var(--space-4);
+  border-bottom: 1px solid var(--app-border);
+}
+.dialog__title { margin: 0; font-family: var(--font-heading); font-size: var(--text-h2); font-weight: 700; color: var(--app-ink); }
+.dialog__description { margin: 0.25rem 0 0; font-size: var(--text-small); color: var(--app-muted); }
+.dialog__body { padding: var(--space-5); }
+
+@keyframes dialog-in { from { opacity: 0; transform: translateY(8px) scale(0.99); } to { opacity: 1; transform: none; } }
+
+/* ============================================================ Toasts (section 37) */
+
+.toaster {
+  position: fixed; right: var(--space-5); bottom: var(--space-5); z-index: 90;
+  display: flex; flex-direction: column; gap: var(--space-2);
+}
+
+.toast {
+  display: flex; align-items: center; gap: var(--space-3);
+  min-width: 17rem; max-width: min(26rem, calc(100vw - 2rem));
+  padding: var(--space-3) var(--space-4);
+  background: var(--app-surface); border: 1px solid var(--app-border);
+  border-left: 3px solid var(--app-accent);
+  border-radius: var(--app-radius); box-shadow: var(--app-shadow-lg);
+  animation: toast-in var(--duration-medium) var(--app-ease);
+}
+.toast p { margin: 0; flex: 1; font-size: var(--text-small); color: var(--app-ink); }
+.toast--success svg { color: var(--app-accent); }
+.toast--error { border-left-color: var(--colour-error); }
+.toast--error svg { color: var(--colour-error); }
+.toast__dismiss {
+  display: grid; place-items: center; padding: 0.15rem;
+  border: 0; background: transparent; color: var(--app-muted); cursor: pointer;
+}
+.toast__dismiss:hover { color: var(--app-ink); }
+
+@keyframes toast-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+@media (max-width: 40rem) {
+  .toaster { left: var(--space-4); right: var(--space-4); bottom: var(--space-4); }
+  .toast { min-width: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog__panel, .toast { animation: none; }
+  .lesson-row__link, .person-row__link, .record-list__link, .btn { transition: none; }
+}
+
+/* ============================================================ Detail lists, timeline, misc */
+
+.detail-list { display: grid; gap: var(--space-3); margin: var(--space-4) 0 0; }
+.detail-list > div { display: grid; grid-template-columns: 9rem minmax(0, 1fr); gap: var(--space-4); align-items: baseline; }
+.detail-list dt { font-size: var(--text-small); font-weight: 650; color: var(--app-muted); }
+.detail-list dd { margin: 0; font-size: var(--text-body); color: var(--app-ink); }
+@media (max-width: 40rem) { .detail-list > div { grid-template-columns: minmax(0, 1fr); gap: 0.15rem; } }
+
+.settings-identity { display: flex; align-items: center; gap: var(--space-4); }
+.settings-identity__name { margin: 0; font-family: var(--font-heading); font-size: var(--text-h2); font-weight: 700; color: var(--app-ink); }
+.settings-identity__email { margin: 0.15rem 0 0; font-size: var(--text-small); color: var(--app-muted); }
+
+.timeline { list-style: none; margin: 0; padding: var(--space-4) var(--space-5); display: flex; flex-direction: column; }
+.timeline__item { position: relative; display: flex; gap: var(--space-4); padding: 0 0 var(--space-4) var(--space-4); }
+.timeline__item::before {
+  content: ""; position: absolute; left: 0.24rem; top: 0.9rem; bottom: -0.35rem;
+  width: 1px; background: var(--app-border);
+}
+.timeline__item:last-child { padding-bottom: 0; }
+.timeline__item:last-child::before { display: none; }
+.timeline__marker {
+  position: absolute; left: 0; top: 0.4rem;
+  width: 0.5rem; height: 0.5rem; border-radius: 50%;
+  background: var(--app-accent); box-shadow: 0 0 0 3px var(--app-accent-soft);
+}
+.timeline__body { min-width: 0; }
+.timeline__message { margin: 0; font-size: var(--text-body); color: var(--app-ink); }
+.timeline__message a { color: inherit; text-decoration: none; }
+.timeline__message a:hover { color: var(--app-accent); text-decoration: underline; }
+.timeline__meta { margin: 0.1rem 0 0; font-size: var(--text-small); color: var(--app-muted); }
+
+.child-heading { display: flex; align-items: center; gap: var(--space-3); }
+.child-heading__year { display: block; font-size: var(--text-small); font-weight: 500; color: var(--app-muted); }
+
+/* Column headings for the desktop people lists; the rows carry their own inline labels on
+   narrow screens, so this disappears there rather than wrapping awkwardly. */
+.person-list__head {
+  display: flex; align-items: center; gap: var(--space-4);
+  padding: var(--space-2) var(--space-5);
+  border-bottom: 1px solid var(--app-border);
+  background: var(--app-surface-sunken);
+  font-size: var(--text-label); font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--app-muted);
+}
+.person-list__head .person-row__aside { width: 1rem; }
+@media (max-width: 48rem) { .person-list__head { display: none; } }

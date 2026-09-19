@@ -8,10 +8,31 @@ import { ButtonLink } from "@/components/ButtonLink";
 import { Container } from "@/components/Container";
 import { navigation } from "@/lib/site";
 
+interface SiteHeaderSession {
+  name: string;
+  role: string;
+}
+
 export function SiteHeader() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [session, setSession] = useState<SiteHeaderSession | null>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Asked for after hydration rather than rendered on the server, so these pages stay statically
+  // generated (plan6 section 99). Until it resolves the header shows "Login", which is the right
+  // default for the overwhelming majority of marketing-site visitors.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/auth/session")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { signedIn?: boolean; name?: string; role?: string } | null) => {
+        if (cancelled || !data?.signedIn || !data.name || !data.role) return;
+        setSession({ name: data.name, role: data.role });
+      })
+      .catch(() => { /* signed-out is the safe assumption, and the default already shown */ });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     function handleEscape(event: KeyboardEvent) {
@@ -68,14 +89,27 @@ export function SiteHeader() {
               </Link>
             ))}
           </nav>
-          <Link
-            href="/login"
-            className="header-login"
-            aria-current={isCurrent("/login") ? "page" : undefined}
-            onClick={() => setOpen(false)}
-          >
-            Login
-          </Link>
+          {/* Someone already signed in has no use for a "Login" link — send them to their
+              dashboard instead (plan6 sections 14 and 78). */}
+          {session ? (
+            <Link
+              href="/dashboard"
+              className="header-login"
+              onClick={() => setOpen(false)}
+            >
+              Dashboard
+              <span className="header-login__who">{session.name.split(" ")[0]}</span>
+            </Link>
+          ) : (
+            <Link
+              href="/login"
+              className="header-login"
+              aria-current={isCurrent("/login") ? "page" : undefined}
+              onClick={() => setOpen(false)}
+            >
+              Login
+            </Link>
+          )}
           <ButtonLink href="/book" className="header-cta">
             Book a free consultation
           </ButtonLink>

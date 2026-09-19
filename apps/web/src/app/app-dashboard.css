@@ -1,0 +1,286 @@
+/*
+ * LearnThrive authenticated product — dashboard and detail-page patterns.
+ * Third and final app stylesheet (tokens/shell, components, then these) so no single file
+ * becomes unmanageable (plan6 section 87).
+ */
+
+/* ============================================================ Next lesson (sections 52, 54, 59) */
+
+.next-lesson {
+  background: linear-gradient(135deg, var(--colour-navy-900), #12375c);
+  border-color: transparent;
+  color: var(--app-on-dark);
+}
+.next-lesson--empty { background: var(--app-surface); color: inherit; }
+
+.next-lesson__eyebrow {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-label); font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--colour-mint-200);
+}
+.next-lesson__title { margin: 0; font-family: var(--font-heading); font-size: var(--text-display); font-weight: 700; line-height: 1.15; }
+.next-lesson__title a { color: inherit; text-decoration: none; }
+.next-lesson__title a:hover { text-decoration: underline; text-underline-offset: 0.2em; }
+.next-lesson__subtitle { margin: var(--space-2) 0 0; color: var(--colour-mint-200); font-size: var(--text-body); }
+.next-lesson__when { margin: var(--space-1) 0 0; color: var(--app-on-dark-muted); font-size: var(--text-small); }
+.next-lesson__actions { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin-top: var(--space-5); }
+.next-lesson__countdown { margin: 0; font-size: var(--text-small); color: var(--colour-mint-200); font-weight: 600; }
+.next-lesson .btn--secondary { background: transparent; border-color: rgb(255 255 255 / 35%); color: #fff; }
+.next-lesson .btn--secondary:hover { background: rgb(255 255 255 / 10%); border-color: #fff; color: #fff; }
+
+/* ============================================================ Day schedule */
+
+.day-schedule { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.day-schedule--padded { padding: var(--space-2) var(--space-5) var(--space-4); }
+.day-schedule__item {
+  display: flex; align-items: center; gap: var(--space-4);
+  padding: var(--space-3) 0;
+}
+.day-schedule__item + .day-schedule__item { border-top: 1px solid var(--app-border); }
+.day-schedule__time { flex: none; min-width: 6.5rem; font-size: var(--text-small); font-weight: 650; color: var(--app-ink); }
+.day-schedule__body { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.day-schedule__title { font-weight: 600; color: var(--app-ink); text-decoration: none; }
+.day-schedule__title:hover { color: var(--app-accent); text-decoration: underline; }
+.day-schedule__meta { font-size: var(--text-small); color: var(--app-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 40rem) {
+  .day-schedule__item { flex-wrap: wrap; gap: var(--space-2); }
+  .day-schedule__time { min-width: 100%; }
+}
+
+.record-list__excerpt {
+  margin-top: 0.25rem; font-size: var(--text-small); color: var(--app-text);
+  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+/* ============================================================ Quick create (section 51) */
+
+.quick-create { position: relative; }
+.quick-create__panel {
+  position: absolute; top: calc(100% + 0.4rem); right: 0; z-index: 40;
+  min-width: 14rem; padding: var(--space-2);
+  background: var(--app-surface); border: 1px solid var(--app-border);
+  border-radius: var(--app-radius); box-shadow: var(--app-shadow-lg);
+  animation: app-pop var(--duration-fast) var(--app-ease);
+}
+.quick-create__item {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: 0.5rem var(--space-2); border-radius: var(--app-radius-sm);
+  color: var(--app-ink); font-size: var(--text-small); text-decoration: none;
+}
+.quick-create__item:hover { background: var(--app-surface-sunken); }
+.quick-create__item:focus-visible { outline: none; box-shadow: var(--app-focus-ring); }
+
+/* ============================================================ Profile pages (sections 43-47) */
+
+.profile-header {
+  display: flex; align-items: flex-start; gap: var(--space-5); flex-wrap: wrap;
+  padding: var(--space-5);
+  background: var(--app-surface); border: 1px solid var(--app-border);
+  border-radius: var(--app-radius); box-shadow: var(--app-shadow-sm);
+  margin-bottom: var(--space-4);
+}
+.profile-header__identity { display: flex; align-items: center; gap: var(--space-4); min-width: 0; flex: 1; }
+.profile-header__names { min-width: 0; }
+.profile-header__name { margin: 0; font-family: var(--font-heading); font-size: var(--text-h1); font-weight: 700; color: var(--app-ink); }
+.profile-header__meta { margin: 0.25rem 0 0; display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; font-size: var(--text-small); color: var(--app-muted); }
+.profile-header__actions { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+
+.profile-grid { display: grid; gap: var(--space-4); grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; }
+@media (max-width: 62rem) { .profile-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* ============================================================ Lesson detail (section 58) */
+
+.lesson-detail__summary {
+  display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
+  font-size: var(--text-body); color: var(--app-text);
+}
+.lesson-detail__summary .badge { flex: none; }
+
+.attendance-row {
+  display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap;
+  padding: var(--space-3) var(--space-5);
+}
+.attendance-row + .attendance-row { border-top: 1px solid var(--app-border); }
+.attendance-row__person { display: flex; align-items: center; gap: var(--space-3); min-width: 12rem; flex: 1; }
+.attendance-row__name { font-weight: 600; color: var(--app-ink); }
+.attendance-row__form { display: flex; align-items: center; gap: var(--space-2); margin-left: auto; }
+.attendance-row__form select { min-width: 8.5rem; }
+@media (max-width: 40rem) {
+  .attendance-row__form { margin-left: 0; width: 100%; }
+  .attendance-row__form select { flex: 1; }
+}
+
+/* Report: parent-visible content and private notes must never blur together (section 64). */
+.report-block + .report-block { margin-top: var(--space-4); }
+.report-block__label {
+  margin: 0 0 0.3rem;
+  font-size: var(--text-label); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--app-muted);
+}
+.report-block__body { margin: 0; color: var(--app-ink); white-space: pre-wrap; }
+
+.report-private {
+  margin-top: var(--space-5); padding: var(--space-4);
+  background: #fdf7ed; border: 1px dashed #dfc9a3; border-radius: var(--app-radius);
+}
+.report-private__heading {
+  display: flex; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-3);
+  font-size: var(--text-small); font-weight: 700; color: #7a5a1d;
+}
+.report-private .report-block__label { color: #96713a; }
+.report-private .report-block__body { color: #4f3c1c; }
+
+/* ============================================================ Alerts */
+
+.alert {
+  display: flex; align-items: flex-start; gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--app-radius); border: 1px solid;
+  font-size: var(--text-small);
+}
+.alert p { margin: 0; }
+.alert--info { background: #eef4fb; border-color: #cfe0f4; color: #1d4e87; }
+.alert--warning { background: #fdf7ea; border-color: #f0dcb4; color: #7a5a1d; }
+.alert--error { background: var(--colour-error-bg); border-color: #edc9cd; color: var(--colour-error); }
+.alert--success { background: #eaf6ef; border-color: #c8e6d6; color: #1d6b42; }
+
+/* ============================================================ Error / 403 / 404 pages */
+
+.status-page {
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-3);
+  max-width: 34rem; margin: var(--space-7) auto; padding: var(--space-7) var(--space-5);
+  background: var(--app-surface); border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-lg); box-shadow: var(--app-shadow-sm); text-align: center;
+}
+.status-page__icon { display: grid; place-items: center; width: 3.25rem; height: 3.25rem; border-radius: 50%; background: var(--app-surface-accent); color: var(--app-accent); }
+.status-page__code { margin: 0; font-size: var(--text-label); font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--app-muted); }
+.status-page__title { margin: 0; font-family: var(--font-heading); font-size: var(--text-h1); font-weight: 700; color: var(--app-ink); }
+.status-page__description { margin: 0; max-width: 42ch; color: var(--app-muted); }
+.status-page__actions { display: flex; gap: var(--space-2); flex-wrap: wrap; justify-content: center; margin-top: var(--space-2); }
+
+/* ============================================================ Skeletons (section 69) */
+
+.skeleton {
+  background: linear-gradient(90deg, #eef1f4 25%, #f6f8f9 37%, #eef1f4 63%);
+  background-size: 400% 100%;
+  border-radius: var(--app-radius-sm);
+  animation: skeleton-shimmer 1.4s ease infinite;
+}
+.skeleton--text { height: 0.85rem; margin-bottom: 0.5rem; }
+.skeleton--title { height: 1.5rem; width: 40%; margin-bottom: var(--space-4); }
+.skeleton--row { height: 3.25rem; margin-bottom: var(--space-2); }
+.skeleton--tile { height: 5.5rem; }
+.skeleton-grid { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); margin-bottom: var(--space-5); }
+
+@keyframes skeleton-shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+  .quick-create__panel { animation: none; }
+}
+
+/* ============================================================ Calendar (sections 55-56) */
+
+/* FullCalendar ships its own layout CSS via its plugins; this maps LearnThrive's own tokens onto
+   its theming custom properties and restyles the toolbar/events by hand — never left at its
+   default look (section 55). */
+.calendar-wrap {
+  --fc-border-color: var(--app-border);
+  --fc-neutral-bg-color: var(--app-surface-sunken);
+  --fc-page-bg-color: var(--app-surface);
+  --fc-button-bg-color: var(--app-surface);
+  --fc-button-border-color: var(--app-border-strong);
+  --fc-button-text-color: var(--app-ink);
+  --fc-button-hover-bg-color: var(--app-surface-accent);
+  --fc-button-hover-border-color: var(--app-accent);
+  --fc-button-active-bg-color: var(--app-accent-strong);
+  --fc-button-active-border-color: var(--app-accent-strong);
+  --fc-today-bg-color: var(--app-surface-accent);
+  --fc-list-event-hover-bg-color: var(--app-surface-sunken);
+  padding: var(--space-5);
+  font-family: var(--font-sans);
+  font-size: var(--text-small);
+}
+
+.calendar-wrap .fc-toolbar { gap: var(--space-3); flex-wrap: wrap; }
+.calendar-wrap .fc-toolbar-title { font-family: var(--font-heading); font-size: var(--text-h2); font-weight: 700; color: var(--app-ink); }
+.calendar-wrap .fc-button {
+  box-shadow: none !important; text-transform: capitalize; font-weight: 600;
+  padding: 0.4rem 0.85rem; border-radius: var(--app-radius-sm) !important;
+}
+.calendar-wrap .fc-button:focus { box-shadow: var(--app-focus-ring) !important; }
+.calendar-wrap .fc-button-primary:not(:disabled).fc-button-active { box-shadow: none !important; }
+.calendar-wrap .fc-col-header-cell-cushion { color: var(--app-muted); font-weight: 650; font-size: var(--text-label); text-transform: uppercase; letter-spacing: 0.05em; text-decoration: none; }
+.calendar-wrap .fc-daygrid-day-number { color: var(--app-text); font-size: var(--text-small); text-decoration: none; padding: var(--space-2); }
+.calendar-wrap .fc-day-today .fc-daygrid-day-number { color: var(--app-accent-strong); font-weight: 700; }
+.calendar-wrap .fc-daygrid-day.fc-day-today { border: 1px solid var(--app-accent); }
+.calendar-wrap .fc-timegrid-slot-label-cushion { color: var(--app-muted); font-size: var(--text-label); }
+.calendar-wrap .fc-list-day-cushion { background: var(--app-surface-sunken) !important; }
+.calendar-wrap a { text-decoration: none; }
+
+/* Event cards, colour-matched to the same status vocabulary as StatusBadge everywhere else in
+   the product (Badge.tsx's STATUS_TONES) — a lesson looks the same colour on the calendar as it
+   does on its own detail page. */
+.calendar-wrap .fc-event {
+  border: none; border-radius: 5px; padding: 1px 5px;
+  background: #e4eefb; color: #1d4e87; font-weight: 650;
+  cursor: pointer; transition: filter var(--duration-fast) var(--app-ease);
+}
+.calendar-wrap .fc-daygrid-event { padding: 2px 5px; }
+.calendar-wrap .fc-event:hover { filter: brightness(0.96); }
+.calendar-wrap .fc-event:focus-visible { outline: none; box-shadow: var(--app-focus-ring); }
+.calendar-wrap .fc-event.lesson-status-in_progress { background: #fdf0d9; color: #8a5a06; }
+.calendar-wrap .fc-event.lesson-status-completed { background: #e2f3e9; color: #1d6b42; }
+.calendar-wrap .fc-event.lesson-status-cancelled {
+  background: transparent; border: 1px dashed var(--app-border-strong);
+  color: var(--app-muted); text-decoration: line-through;
+}
+.calendar-wrap .fc-event.lesson-status-no_show { background: var(--colour-error-bg); color: var(--colour-error); }
+/* Selected state: the peek panel is open for this event — a visible ring so it's clear which
+   card the panel belongs to while it's up. */
+.calendar-wrap .fc-event.is-selected { box-shadow: 0 0 0 2px var(--app-surface), 0 0 0 4px var(--app-accent); }
+
+.calendar-reschedule-confirm {
+  position: fixed; z-index: 60; right: var(--space-5); bottom: var(--space-5);
+  max-width: 24rem; padding: var(--space-4) var(--space-5);
+  background: var(--app-surface); border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-lg); box-shadow: var(--app-shadow-lg);
+  animation: app-pop var(--duration-fast) var(--app-ease);
+}
+.calendar-reschedule-confirm p { margin: 0; color: var(--app-ink); font-size: var(--text-small); }
+.calendar-reschedule-confirm__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
+
+/* ============================================================ Lesson peek panel (section 56) */
+
+.lesson-peek { position: fixed; inset: 0; z-index: 70; display: flex; justify-content: flex-end; }
+.lesson-peek__scrim { position: absolute; inset: 0; border: 0; background: rgb(9 29 49 / 40%); cursor: pointer; padding: 0; }
+.lesson-peek__panel {
+  position: relative; z-index: 1; width: min(26rem, 100%); height: 100%; overflow-y: auto;
+  background: var(--app-surface); box-shadow: var(--app-shadow-lg);
+  padding: var(--space-5); display: flex; flex-direction: column; gap: var(--space-4);
+  animation: lesson-peek-in var(--duration-medium) var(--app-ease);
+}
+@keyframes lesson-peek-in { from { transform: translateX(1.5rem); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+.lesson-peek__header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
+.lesson-peek__eyebrow { margin: 0 0 0.2rem; font-size: var(--text-label); font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--app-accent); }
+.lesson-peek__title { margin: 0; font-family: var(--font-heading); font-size: var(--text-h2); font-weight: 700; color: var(--app-ink); }
+.lesson-peek__meta { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.lesson-peek__actions { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); }
+.lesson-peek__manage { display: flex; gap: var(--space-2); justify-content: center; margin-top: var(--space-1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .calendar-reschedule-confirm, .lesson-peek__panel { animation: none; }
+}
+
+@media (max-width: 30rem) {
+  .lesson-peek__panel { width: 100%; }
+}
+
+/* ============================================================ Small form controls shared by
+   the peek panel's inline reschedule form (radio choice between series scopes) */
+
+.radio-group { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); }
+.radio-option { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-small); color: var(--app-text); cursor: pointer; }
+.radio-option input { accent-color: var(--app-accent); width: 1rem; height: 1rem; }

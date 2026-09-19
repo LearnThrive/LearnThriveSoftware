@@ -1,6 +1,7 @@
 "use client";
 
 import './styles.css';
+import Image from 'next/image';
 import { lazy, Suspense, useEffect, useRef, useState, type FormEvent, type ReactElement } from 'react';
 import { MAX_NAME_LENGTH, MAX_PARTICIPANTS, ROOM_PATTERN, type ReactionEmoji } from '@learnthrive/shared/protocol';
 import { useMeeting } from './useMeeting';
@@ -36,7 +37,9 @@ type LayoutMode = 'focus' | 'sideBySide' | 'gallery';
 type WorkspaceMode = 'call' | 'board' | 'present';
 
 function Brand() {
-  return <div className="brand" aria-label="LearnThrive Tuition"><img src="/brand/learnthrive-mark.png" alt="" /><div className="wordmark">Learn<span>Thrive</span><small>TUITION</small></div></div>;
+  // Sized here at the largest the stylesheet ever renders it (47×42); the media queries scale it
+  // down from there, and `next/image` serves an appropriately sized file either way.
+  return <div className="brand" aria-label="LearnThrive Tuition"><Image src="/brand/learnthrive-mark.png" alt="" width={47} height={42} priority /><div className="wordmark">Learn<span>Thrive</span><small>TUITION</small></div></div>;
 }
 
 function candidatePathLabel(local: string | null, remote: string | null) {

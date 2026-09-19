@@ -30,10 +30,39 @@ const marketingRoutes = [
   ...subjectLandingRoutes.map(([route]) => route),
 ];
 
-function routeFile(route) {
-  return route === "/"
-    ? join(appDir, "page.tsx")
-    : join(appDir, route.slice(1), "page.tsx");
+/** Every `page.tsx` under src/app, keyed by the URL path it actually serves.
+ *
+ * Route groups — `(public)`, `(app)`, `(auth)`, `(classroom)` — are organisational only: they
+ * pick which shell wraps a page and never appear in the URL. A dynamic segment (`[id]`) matches
+ * any single path segment. Both have to be accounted for here or this check would report every
+ * real, working link as broken.
+ */
+function buildRouteMap(directory = appDir, urlSegments = []) {
+  const routes = new Map();
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const fullPath = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      const isRouteGroup = entry.name.startsWith("(") && entry.name.endsWith(")");
+      const nextSegments = isRouteGroup ? urlSegments : [...urlSegments, entry.name];
+      for (const [route, file] of buildRouteMap(fullPath, nextSegments)) routes.set(route, file);
+    } else if (entry.name === "page.tsx") {
+      routes.set(`/${urlSegments.join("/")}`.replace(/\/$/, "") || "/", fullPath);
+    }
+  }
+  return routes;
+}
+
+const routeMap = buildRouteMap();
+
+function routeExists(route) {
+  if (routeMap.has(route)) return true;
+  // Fall back to matching a dynamic segment, e.g. /dashboard/lessons/abc -> /dashboard/lessons/[id].
+  const wanted = route.split("/").filter(Boolean);
+  return [...routeMap.keys()].some((candidate) => {
+    const parts = candidate.split("/").filter(Boolean);
+    if (parts.length !== wanted.length) return false;
+    return parts.every((part, index) => (part.startsWith("[") && part.endsWith("]")) || part === wanted[index]);
+  });
 }
 
 function sourceFiles(directory) {
@@ -46,7 +75,7 @@ function sourceFiles(directory) {
 
 test("every primary marketing route has a page", () => {
   for (const route of marketingRoutes) {
-    assert.ok(existsSync(routeFile(route)), `Missing page for ${route}`);
+    assert.ok(routeExists(route), `Missing page for ${route}`);
   }
 });
 
@@ -57,7 +86,7 @@ test("navigation exposes the requested primary routes", () => {
 });
 
 test("removed tutor directory routes redirect permanently without public links", () => {
-  assert.equal(existsSync(routeFile("/our-tutors")), false);
+  assert.equal(routeExists("/our-tutors"), false);
   assert.equal(existsSync(join(root, "src", "components", "TutorDirectory.tsx")), false);
 
   for (const route of ["/our-tutors", "/ourTutors"]) {
@@ -103,7 +132,7 @@ test("internal links resolve to a route or page anchor", () => {
       }
       const route = `/${captured}`.replace(/\/$/, "") || "/";
       if (route.includes("${") || route.startsWith("/http")) continue;
-      if (!existsSync(routeFile(route))) {
+      if (!routeExists(route)) {
         missing.push(`${relative(root, file)} -> ${route}`);
       }
     }
