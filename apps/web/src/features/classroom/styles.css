@@ -119,3 +119,11 @@
 @media(max-width:800px){.whiteboard-toolbar{flex-direction:column;align-items:stretch}.board-page-tab-button{max-width:90px}}
 .announcement-banner{display:flex;align-items:center;gap:10px;background:#0e2a3d;color:#fff;padding:13px 16px;border-radius:12px;margin:0 0 12px;font-size:13px;font-weight:550;box-shadow:0 8px 24px #091d3122}.announcement-banner p{flex:1;line-height:1.5}.announcement-banner button{background:none;border:0;color:#c7d6de;flex-shrink:0;padding:2px}.announcement-banner button:hover{color:#fff}
 .help-queue-panel{background:#fff;border:1px solid #e2e5de;border-radius:12px;padding:12px 14px;margin:0 0 12px;align-self:flex-start;width:100%;max-width:520px}.help-queue-panel ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}.help-queue-panel li{display:flex;align-items:center;gap:10px;font-size:12px}.help-queue-position{flex:1;color:var(--navy);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.help-queue-elapsed{color:#8a6d23;font-variant-numeric:tabular-nums;flex-shrink:0}.help-queue-panel .inline-action{flex-shrink:0}
+
+/* The confirm popover was sized for "Yes, leave"; the tutor variant ("Yes, end class", plus a
+   warning line) overflowed 260px and wrapped its destructive button onto two lines, leaving the
+   two actions visibly mismatched at the exact moment the wording matters most. Widened to fit
+   both labels on one line, and the question itself now carries the weight of a heading. */
+.leave-confirm{width:min(304px,calc(100vw - 32px))}
+.leave-confirm>p:first-of-type{font-weight:650}
+.leave-confirm-actions>button{white-space:nowrap}

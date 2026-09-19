@@ -73,6 +73,15 @@
 
 /* ============================================================ Shell */
 
+/* Headings inside the product inherit their surface's colour unless a component says otherwise.
+   globals.css styles bare `h1, h2, h3 { color: var(--colour-ink) }` for the marketing site, and a
+   rule matching the element beats an inherited value — which is why the next-lesson card, the one
+   dark surface in the dashboard, rendered its lesson title in dark navy on navy and left the most
+   important thing on a Tutor's or Student's home screen unreadable. `:where()` contributes no
+   specificity, so this lands at plain `.app-shell` weight: enough to beat a bare element selector,
+   but low enough that every component rule setting its own heading colour still wins. */
+.app-shell :where(h1, h2, h3) { color: inherit; }
+
 /* One focus treatment across the product. globals.css gives the whole document the marketing
    site's focus ring (a 3px brown outline inside a yellow halo), which is right for those pages
    but meant a keyboard user moving through a single dashboard screen met two unrelated focus
@@ -401,10 +410,15 @@
 
 /* ============================================================ Empty state */
 
+/* Default spacing is for an empty section *inside* a card that also holds other sections — a
+   dashboard stacks several of these, and at the page-level padding each "nothing here" claimed
+   almost 300px, so three quiet sections filled a screen with void. The page-level variant below
+   keeps the generous version, where the message really is the whole page. */
 .empty-state {
   display: flex; flex-direction: column; align-items: center; gap: var(--space-2);
-  padding: var(--space-7) var(--space-5); text-align: center;
+  padding: var(--space-5) var(--space-5); text-align: center;
 }
+.card--empty .empty-state { padding: var(--space-7) var(--space-5); }
 .empty-state__icon {
   display: grid; place-items: center; width: 3rem; height: 3rem;
   margin-bottom: var(--space-1); border-radius: 50%;

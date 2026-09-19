@@ -143,7 +143,6 @@
 .alert--info { background: #eef4fb; border-color: #cfe0f4; color: #1d4e87; }
 .alert--warning { background: #fdf7ea; border-color: #f0dcb4; color: #7a5a1d; }
 .alert--error { background: var(--colour-error-bg); border-color: #edc9cd; color: var(--colour-error); }
-.alert--success { background: #eaf6ef; border-color: #c8e6d6; color: #1d6b42; }
 
 /* ============================================================ Error / 403 / 404 pages */
 

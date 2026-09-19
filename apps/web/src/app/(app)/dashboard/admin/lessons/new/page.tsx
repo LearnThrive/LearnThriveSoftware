@@ -21,7 +21,7 @@ export default async function NewLessonPage() {
   const assignments = (await data.assignments.list()).filter((a) => a.status === "ACTIVE");
 
   return (
-    <>
+    <div className="page--narrow">
       <PageHeader
         title="Schedule a lesson"
         description="One-off or repeating. Everyone on the assignment is notified once it's booked."
@@ -53,6 +53,6 @@ export default async function NewLessonPage() {
           )}
         </CardBody>
       </Card>
-    </>
+    </div>
   );
 }

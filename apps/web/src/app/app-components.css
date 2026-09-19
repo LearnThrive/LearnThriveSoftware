@@ -209,7 +209,6 @@
 .fieldset__body { display: flex; flex-direction: column; gap: var(--space-4); }
 
 .form-actions { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-1); }
-.form-actions--split { justify-content: space-between; }
 
 .checkbox-field { display: flex; align-items: flex-start; gap: var(--space-3); }
 .checkbox-field input { margin-top: 0.2rem; width: 1rem; height: 1rem; accent-color: var(--app-accent); }
@@ -233,6 +232,11 @@
 .field-row { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); }
 
 /* Forms are the one place a card should stay readable rather than stretch the full width. */
+/* A focused single-task page (scheduling a lesson): header and form share one measure and sit
+   together, rather than a 46rem card pinned to the left of a 71rem content area — which read as
+   a page that had failed to finish loading its right-hand side. Constraining the whole page
+   rather than just the card keeps the heading aligned with the fields it introduces. */
+.page--narrow { max-width: 46rem; margin-inline: auto; }
 .card--form { max-width: 46rem; }
 
 /* The app's own message tone overrides the marketing-page .form-message spacing. */
