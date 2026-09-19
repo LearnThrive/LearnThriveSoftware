@@ -36,10 +36,10 @@ test('a valid login reaches the dashboard with role-appropriate content', async 
   await login(page, ACCOUNTS.tutor.email, ACCOUNTS.tutor.password);
   await expect(page).toHaveURL(/\/dashboard$/);
   // The greeting on TutorDashboard is "Good morning/afternoon/evening, {first name}." — the seeded
-  // Tutor account's profile name is Jamie Patel. The topbar's account trigger (always rendered,
+  // Tutor account's profile name is Tahasin Hasan. The topbar's account trigger (always rendered,
   // not only once the menu is opened) carries the role label, proving this is the Tutor's own
   // dashboard content and not some generic shell.
-  await expect(page.locator('#main-content')).toContainText('Jamie');
+  await expect(page.locator('#main-content')).toContainText('Tahasin');
   await expect(page.locator('.app-usermenu__role')).toContainText('Tutor');
 });
 

@@ -18,7 +18,7 @@ Today there is exactly one implementation, `DevelopmentAuthProvider` (`apps/web/
 
 ## Development credential store
 
-A server-side, in-memory `Map<string, DevelopmentUser>`, seeded once per server process with five fictional accounts (see `docs/DEVELOPMENT_ACCOUNTS.md`). It resets on every server restart — there is no persistence, by design (this is a prototype, not a place to accumulate real account state).
+A server-side, in-memory `Map<string, DevelopmentUser>`, seeded once per server process with five development-only accounts (see `docs/DEVELOPMENT_ACCOUNTS.md`). It resets on every server restart — there is no persistence, by design (this is a prototype, not a place to accumulate real account state).
 
 ```ts
 interface DevelopmentUser {

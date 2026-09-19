@@ -7,9 +7,9 @@ test("seed data: the demo Tutor, Client, and Student exist with the expected fix
   const tutor = await data.tutors.get(SEED_IDS.tutorJamiePatel);
   const client = await data.clients.get(SEED_IDS.clientSarahAhmed);
   const student = await data.students.get(SEED_IDS.studentAyaanAhmed);
-  assert.equal(tutor?.name, "Jamie Patel");
-  assert.equal(client?.name, "Sarah Ahmed");
-  assert.equal(student?.name, "Ayaan Ahmed");
+  assert.equal(tutor?.name, "Tahasin Hasan");
+  assert.equal(client?.name, "Abdurrahman Mustafa");
+  assert.equal(student?.name, "Brian James Khalawon");
 });
 
 test("seed data: the demo Client-Student link resolves in both directions", async () => {

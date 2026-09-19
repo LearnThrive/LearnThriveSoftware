@@ -43,7 +43,7 @@ rather than reverse-engineering a message from a before/after diff:
 | `CREATED` | `schedulingService.ts`'s `createLessonOrSeries` | "Lesson created for 3 Nov 2026, 15:00" |
 | `RESCHEDULED` | `rescheduleLesson` | "Rescheduled from Tuesday 17:00 to Thursday 18:00" (plan section 65's exact format) |
 | `CANCELLED` | `cancelLesson` | "Lesson cancelled — Testing cancellation" |
-| `ATTENDANCE_MARKED` | `attendanceService.ts`'s `markAttendance` | "Attendance marked for Ayaan Ahmed: ATTENDED" |
+| `ATTENDANCE_MARKED` | `attendanceService.ts`'s `markAttendance` | "Attendance marked for Brian James Khalawon: ATTENDED" |
 | `COMPLETED` | `completeLesson` | "Lesson marked complete" |
 | `REPORT_SUBMITTED` | *(Phase G, not built yet)* | |
 

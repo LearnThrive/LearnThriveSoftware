@@ -46,14 +46,14 @@ test('Admin navigation journey: Dashboard, People (Tutor/Student profiles), Cale
 
   await nav.getByRole('link', { name: 'Tutors' }).click();
   await expect(page).toHaveURL(/\/dashboard\/admin\/people\/tutors$/);
-  await page.getByRole('link', { name: /Jamie Patel/ }).click();
+  await page.getByRole('link', { name: /Tahasin Hasan/ }).click();
   await expect(page).toHaveURL(/\/dashboard\/admin\/tutors\/.+/);
   await page.getByRole('link', { name: 'Back to tutors' }).click();
   await expect(page).toHaveURL(/\/dashboard\/admin\/people\/tutors$/);
 
   await nav.getByRole('link', { name: 'Students' }).click();
   await expect(page).toHaveURL(/\/dashboard\/admin\/people\/students$/);
-  await page.getByRole('link', { name: /Ayaan Ahmed/ }).click();
+  await page.getByRole('link', { name: /Brian James Khalawon/ }).click();
   await expect(page).toHaveURL(/\/dashboard\/admin\/students\/.+/);
   await page.getByRole('link', { name: 'Back to students' }).click();
   await expect(page).toHaveURL(/\/dashboard\/admin\/people\/students$/);
@@ -98,7 +98,7 @@ test('Tutor navigation journey: nav is teaching-scoped, no Admin sections, Overv
   const { date, time } = londonDateTimeFieldsIn(20);
   const lessonTitle = uniqueLabel('Tutor nav journey lesson');
   await page.goto('/dashboard/admin/lessons/new');
-  await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Ayaan' });
+  await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Brian' });
   await page.locator('#lesson-title').fill(lessonTitle);
   await page.locator('#lesson-date').fill(date);
   await page.locator('#lesson-time').fill(time);
@@ -132,7 +132,7 @@ test('Tutor navigation journey: nav is teaching-scoped, no Admin sections, Overv
 
   await nav.getByRole('link', { name: 'Students' }).click();
   await expect(page).toHaveURL(/\/dashboard\/students$/);
-  await expect(page.locator('.person-list')).toContainText('Ayaan Ahmed');
+  await expect(page.locator('.person-list')).toContainText('Brian James Khalawon');
 
   await nav.getByRole('link', { name: 'Lessons' }).click();
   await expect(page).toHaveURL(/\/dashboard\/lessons$/);

@@ -145,7 +145,7 @@
    time, status badge and chevron, all of which refuse to shrink — so the lesson title gets
    whatever is left. On a tablet the viewport is 834px, which is nowhere near the 48rem above, but
    each card in the two-column dashboard grid is only ~390px: measured, that left the title column
-   3.7px wide, erasing "GCSE Mathematics — Ayaan" entirely while the row still looked deliberate.
+   3.7px wide, erasing "GCSE Mathematics — Brian" entirely while the row still looked deliberate.
    A viewport query can't see that, because the viewport isn't what ran out of room. Below ~32rem
    of card width there isn't space for a title worth reading beside those columns, so the row
    stacks, exactly as it does on a phone. */

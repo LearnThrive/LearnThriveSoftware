@@ -72,7 +72,7 @@ test('the one-dev-server regression test: Home, Login, Admin dashboard, a Lesson
   const { date, time } = londonDateTimeFieldsIn(12);
   const lessonTitle = uniqueLabel('Single-server regression lesson');
   await page.goto('/dashboard/admin/lessons/new');
-  await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Ayaan' });
+  await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Brian' });
   await page.locator('#lesson-title').fill(lessonTitle);
   await page.locator('#lesson-date').fill(date);
   await page.locator('#lesson-time').fill(time);

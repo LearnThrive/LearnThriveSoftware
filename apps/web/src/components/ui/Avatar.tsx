@@ -9,7 +9,7 @@ const TINTS = ["a", "b", "c", "d", "e"] as const;
 function initialsFor(name: string): string {
   // Strip anything that isn't a letter or digit from each word before taking its first character
   // — filtering only *whole* words meant a parenthesised suffix still counted, so the seeded
-  // "Ade Okafor (Admin)" rendered as "A(" everywhere an avatar appeared.
+  // "Alvi Hossain (Admin)" rendered as "A(" everywhere an avatar appeared.
   const words = name
     .trim()
     .split(/\s+/)
