@@ -339,7 +339,11 @@
 
 /* ============================================================ Cards, stats */
 
+/* A query container, so the rows inside a card can respond to how much room the *card* has rather
+   than how wide the window is. A dashboard card in the two-column grid is roughly 390px wide on a
+   tablet whose viewport is 834px — see the container query in app-components.css. */
 .card {
+  container-type: inline-size;
   background: var(--app-surface);
   border: 1px solid var(--app-border);
   border-radius: var(--app-radius);

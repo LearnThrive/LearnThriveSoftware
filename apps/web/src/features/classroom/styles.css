@@ -124,6 +124,20 @@
    warning line) overflowed 260px and wrapped its destructive button onto two lines, leaving the
    two actions visibly mismatched at the exact moment the wording matters most. Widened to fit
    both labels on one line, and the question itself now carries the weight of a heading. */
+/* The device status sat beside the mic/camera/devices buttons without ever claiming the space
+   between them, so it was sized to its narrowest possible width and "Camera & mic are off" broke
+   across three lines with an orphaned "off" — while 240px of empty space sat next to it on a
+   1440px screen. Letting it take the free space is all it needed. */
+.device-status{flex:1 1 auto}
+
+/* Below a 800px *viewport* the pre-join controls stack, giving the device status a row of its
+   own. But what decides whether they fit side by side is the width of the preview column, not the
+   window: on a tablet the viewport is 834px — comfortably past that breakpoint — while the column
+   itself is only ~388px, too narrow for both. So ask the column. Same reasoning as the card
+   container query in app-components.css: the viewport wasn't what ran out of room. */
+.preview-panel{container-type:inline-size}
+@container (max-width:460px){.preview-controls{flex-direction:column-reverse;align-items:stretch;gap:17px;padding-top:16px}}
+
 .leave-confirm{width:min(304px,calc(100vw - 32px))}
 .leave-confirm>p:first-of-type{font-weight:650}
 .leave-confirm-actions>button{white-space:nowrap}
