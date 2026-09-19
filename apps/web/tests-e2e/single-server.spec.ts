@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { uniqueLabel } from './support';
 
 // Plan6.md section 89's "one-dev-server regression test" and section 90's "stale URL regression
 // test": proves the single-origin architecture (custom apps/web/server.ts hosting Next.js +
@@ -69,9 +70,10 @@ test('the one-dev-server regression test: Home, Login, Admin dashboard, a Lesson
   // so this test can prove the classroom route (not just the disabled-button state already
   // covered elsewhere) actually loads.
   const { date, time } = londonDateTimeFieldsIn(12);
+  const lessonTitle = uniqueLabel('Single-server regression lesson');
   await page.goto('/dashboard/admin/lessons/new');
   await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Ayaan' });
-  await page.locator('#lesson-title').fill('Single-server regression lesson');
+  await page.locator('#lesson-title').fill(lessonTitle);
   await page.locator('#lesson-date').fill(date);
   await page.locator('#lesson-time').fill(time);
   await page.getByRole('button', { name: 'Schedule lesson' }).click();
@@ -90,13 +92,13 @@ test('the one-dev-server regression test: Home, Login, Admin dashboard, a Lesson
   await expect(page).toHaveURL(/\/dashboard\/calendar$/, { timeout: 10_000 });
 
   await page.goto('/dashboard/calendar');
-  await openLessonFromCalendar(page, 'Single-server regression lesson');
+  await openLessonFromCalendar(page, lessonTitle);
   await expect(page).toHaveURL(/\/dashboard\/lessons\/(.+)/);
   const lessonUrl = page.url();
   const origin = new URL(lessonUrl).origin;
 
   // 4: the Lesson itself is reachable.
-  await expect(page.locator('#main-content')).toContainText('Single-server regression lesson');
+  await expect(page.locator('#main-content')).toContainText(lessonTitle);
 
   await login(page, TUTOR.email, TUTOR.password);
   await page.goto(lessonUrl);
@@ -139,7 +141,7 @@ test('the one-dev-server regression test: Home, Login, Admin dashboard, a Lesson
   await expect(page.getByRole('link', { name: /Return to Lesson/ })).toBeVisible();
   await page.getByRole('link', { name: /Return to Lesson/ }).click();
   await expect(page).toHaveURL(new RegExp(`^${origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/dashboard/lessons/[^/]+$`));
-  await expect(page.locator('#main-content')).toContainText('Single-server regression lesson');
+  await expect(page.locator('#main-content')).toContainText(lessonTitle);
 
   // 9, restated as an assertion: across this entire Lesson -> Join -> Classroom -> back flow, the
   // browser's main frame never navigated to any origin other than the one this test started at.

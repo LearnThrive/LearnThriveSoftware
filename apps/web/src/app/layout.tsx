@@ -82,8 +82,17 @@ const organisationData = {
 // authenticated pages get AppShell via (app). Putting SiteHeader/SiteFooter here (as this file
 // used to) is what made every dashboard page render the public marketing navbar above it.
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+  // data-scroll-behavior tells Next.js this document really does opt into `scroll-behavior:
+  // smooth` (globals.css, for the marketing pages' in-page anchor links) so it can suspend it for
+  // the duration of a route change and restore it afterwards. Without the attribute Next leaves
+  // it alone and warns: every dashboard navigation then animated its scroll-to-top, so the new
+  // page visibly slid up from wherever the previous one had been scrolled to.
   return (
-    <html lang="en-GB" className={`${bricolage.variable} ${publicSans.variable} ${ibmPlexMono.variable}`}>
+    <html
+      lang="en-GB"
+      data-scroll-behavior="smooth"
+      className={`${bricolage.variable} ${publicSans.variable} ${ibmPlexMono.variable}`}
+    >
       <body>
         {children}
         <Script

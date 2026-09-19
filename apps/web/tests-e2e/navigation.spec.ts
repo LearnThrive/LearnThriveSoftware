@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { uniqueLabel } from './support';
 
 // Plan6 sections 91-94: one full sidebar-driven navigation journey per role, using only real
 // clicks (nav links, row links, back links, buttons) — never page.goto() mid-journey. Each role's
@@ -95,9 +96,10 @@ test('Tutor navigation journey: nav is teaching-scoped, no Admin sections, Overv
   // itself works) rather than chased away with a longer retry loop that only ate further into
   // this test's own time budget without addressing the actual slowness.
   const { date, time } = londonDateTimeFieldsIn(20);
+  const lessonTitle = uniqueLabel('Tutor nav journey lesson');
   await page.goto('/dashboard/admin/lessons/new');
   await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Ayaan' });
-  await page.locator('#lesson-title').fill('Tutor nav journey lesson');
+  await page.locator('#lesson-title').fill(lessonTitle);
   await page.locator('#lesson-date').fill(date);
   await page.locator('#lesson-time').fill(time);
   await page.getByRole('button', { name: 'Schedule lesson' }).click();
@@ -134,7 +136,7 @@ test('Tutor navigation journey: nav is teaching-scoped, no Admin sections, Overv
 
   await nav.getByRole('link', { name: 'Lessons' }).click();
   await expect(page).toHaveURL(/\/dashboard\/lessons$/);
-  await page.getByRole('link', { name: /Tutor nav journey lesson/ }).click();
+  await page.getByRole('link', { name: lessonTitle }).click();
   await expect(page).toHaveURL(/\/dashboard\/lessons\/.+/);
 
   await Promise.all([
