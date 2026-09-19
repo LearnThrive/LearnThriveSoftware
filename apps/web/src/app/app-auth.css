@@ -27,7 +27,10 @@
 .auth-brand__body { max-width: 30rem; }
 .auth-brand__mark {
   display: grid; place-items: center; width: 3rem; height: 3rem; margin-bottom: var(--space-5);
-  border-radius: 0.9rem; background: var(--colour-green-600); color: #fff;
+  border-radius: 0.9rem;
+  /* green-600 clears only 4.36:1 against white text here — under AA's 4.5:1 (16px bold doesn't
+     reach the 18.66px+ bold "large text" threshold). green-700 clears it (5.76:1). */
+  background: var(--colour-green-700); color: #fff;
   font-weight: 700; font-size: 1rem; letter-spacing: 0.02em;
 }
 .auth-brand__tagline {

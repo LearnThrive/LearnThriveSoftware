@@ -7,7 +7,7 @@ import listPlugin from "@fullcalendar/list";
 import interactionPlugin from "@fullcalendar/interaction";
 import type { EventDropArg } from "@fullcalendar/core";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { rescheduleLessonAction } from "@/lib/actions/lessons";
 import { LessonPeekPanel, type PeekLesson } from "@/components/lessons/LessonPeekPanel";
 import { formatLongDate } from "@/lib/format";
@@ -44,6 +44,17 @@ export function CalendarView({ lessons, canManage }: { lessons: CalendarLesson[]
   const router = useRouter();
   const [pendingDrop, setPendingDrop] = useState<EventDropArg | null>(null);
   const [peekId, setPeekId] = useState<string | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  // FullCalendar's own prev/next buttons render their chevron as a bare <span role="img"> with
+  // no accessible name of its own (the *button* has a real title, but axe correctly flags the
+  // inner role="img" separately) — nothing in FullCalendar's public props controls this markup,
+  // so it's corrected here instead of accepted as an unfixable third-party gap. The toolbar's
+  // buttons are stable DOM nodes across date/view changes, so a mount-only pass is enough.
+  useEffect(() => {
+    const icons = wrapRef.current?.querySelectorAll('.fc-icon-chevron-left, .fc-icon-chevron-right') ?? [];
+    icons.forEach((icon) => icon.setAttribute("aria-hidden", "true"));
+  }, []);
 
   const events = lessons.map((lesson) => ({
     id: lesson.id,
@@ -75,7 +86,7 @@ export function CalendarView({ lessons, canManage }: { lessons: CalendarLesson[]
   const peekLesson = peekId ? lessonById.get(peekId) : undefined;
 
   return (
-    <div className="calendar-wrap">
+    <div className="calendar-wrap" ref={wrapRef}>
       <FullCalendar
         plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
         initialView="dayGridMonth"
