@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import * as m from "framer-motion/m";
-import { AnimatePresence, useMotionValueEvent, useReducedMotion, useTransform, type MotionValue } from "framer-motion";
-import { useScene } from "@/lib/motion/scroll";
+import { AnimatePresence, useReducedMotion, useTransform, type MotionValue } from "framer-motion";
+import { useDiscreteProgress, useScene } from "@/lib/motion/scroll";
 import styles from "./ProductStoryScene.module.css";
 
 /**
@@ -125,12 +124,10 @@ function StageDotFill({ progress, index }: { progress: MotionValue<number>; inde
 export function ProductStoryScene() {
   const { ref, smoothProgress } = useScene(["start start", "end end"]);
   const reduceMotion = useReducedMotion();
-  const [activeScene, setActiveScene] = useState(0);
-
-  useMotionValueEvent(smoothProgress, "change", (latest) => {
-    const index = Math.min(SCENES.length - 1, Math.max(0, Math.floor(latest * SCENES.length)));
-    setActiveScene(index);
-  });
+  // Which scene is showing is discrete UI state; how far through the story we are is not. The step
+  // is derived from the scroll progress and React hears only when it changes (lib/motion/thresholds.ts),
+  // not on every frame of the spring — the progress bar below reads the MotionValue directly.
+  const activeScene = useDiscreteProgress(smoothProgress, SCENES.length);
 
   const scene = SCENES[activeScene];
 
