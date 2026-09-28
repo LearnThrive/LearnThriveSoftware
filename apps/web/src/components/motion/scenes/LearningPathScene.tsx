@@ -1,7 +1,7 @@
 "use client";
 
 import * as m from "framer-motion/m";
-import { LazyMotion, domAnimation, useTransform } from "framer-motion";
+import { useTransform } from "framer-motion";
 import type { ReactNode } from "react";
 import { useScene } from "@/lib/motion/scroll";
 import styles from "@/app/(public)/home.module.css";
@@ -29,43 +29,41 @@ export function LearningPathScene({ children }: { children: ReactNode }) {
   const pathLength = useTransform(smoothProgress, [0, 1], [0, 1]);
 
   return (
-    <LazyMotion features={domAnimation}>
-      <div
-        ref={ref as React.RefObject<HTMLDivElement>}
-        className={styles.howStepsPathWrap}
-        data-motion-scene="learning-path"
-      >
-        <div className={styles.howStepsPathTrack}>
-          <svg
-            className={styles.howStepsPathSvg}
-            viewBox="0 0 2 100"
-            preserveAspectRatio="none"
-            aria-hidden="true"
-          >
-            <m.line
-              x1="1"
-              y1="0"
-              x2="1"
-              y2="100"
-              stroke="var(--lt-border)"
-              strokeWidth="2"
-              vectorEffect="non-scaling-stroke"
-            />
-            <m.line
-              x1="1"
-              y1="0"
-              x2="1"
-              y2="100"
-              stroke="var(--lt-green-dark)"
-              strokeWidth="2"
-              strokeDasharray="5 6"
-              vectorEffect="non-scaling-stroke"
-              style={{ pathLength }}
-            />
-          </svg>
-        </div>
-        {children}
+    <div
+      ref={ref as React.RefObject<HTMLDivElement>}
+      className={styles.howStepsPathWrap}
+      data-motion-scene="learning-path"
+    >
+      <div className={styles.howStepsPathTrack}>
+        <svg
+          className={styles.howStepsPathSvg}
+          viewBox="0 0 2 100"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <m.line
+            x1="1"
+            y1="0"
+            x2="1"
+            y2="100"
+            stroke="var(--lt-border)"
+            strokeWidth="2"
+            vectorEffect="non-scaling-stroke"
+          />
+          <m.line
+            x1="1"
+            y1="0"
+            x2="1"
+            y2="100"
+            stroke="var(--lt-green-dark)"
+            strokeWidth="2"
+            strokeDasharray="5 6"
+            vectorEffect="non-scaling-stroke"
+            style={{ pathLength }}
+          />
+        </svg>
       </div>
-    </LazyMotion>
+      {children}
+    </div>
   );
 }
