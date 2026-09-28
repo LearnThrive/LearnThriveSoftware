@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
-import { AnimatePresence, LazyMotion, domAnimation, useReducedMotion } from "framer-motion";
+import { AnimatePresence, useReducedMotion } from "framer-motion";
 import * as m from "framer-motion/m";
 import { motionDuration, motionEase, motionSpring } from "@/lib/motion/tokens";
 import styles from "./ProductTabs.module.css";
@@ -120,59 +120,57 @@ export function ProductTabs() {
   const ActivePanel = PANELS[active];
 
   return (
-    <LazyMotion features={domAnimation}>
-      <div className={styles.wrapper}>
-        <div role="tablist" aria-label="See LearnThrive from each side" className={styles.tabList}>
-          {AUDIENCES.map((audience, i) => {
-            const selected = audience.key === active;
-            return (
-              <button
-                key={audience.key}
-                ref={(el) => {
-                  tabRefs.current[audience.key] = el;
-                }}
-                role="tab"
-                id={`${baseId}-tab-${audience.key}`}
-                aria-selected={selected}
-                aria-controls={`${baseId}-panel-${audience.key}`}
-                tabIndex={selected ? 0 : -1}
-                className={styles.tab}
-                onClick={() => setActive(audience.key)}
-                onKeyDown={(e) => onKeyDown(e, i)}
-              >
-                {audience.label}
-                {selected && (
-                  <m.span
-                    layoutId={`${baseId}-tab-indicator`}
-                    className={styles.tabIndicator}
-                    transition={reduceMotion ? { duration: 0 } : motionSpring.tactile}
-                  />
-                )}
-              </button>
-            );
-          })}
-        </div>
-        {/* initial/exit's y values stay constant regardless of reduceMotion, matching Reveal.tsx
-            and ProductStoryScene.tsx's fix for the same underlying issue: Motion bakes the
-            initial value into SSR'd HTML, and reduceMotion() can read differently between server
-            and a real reduced-motion client's first render, so branching these specific values
-            risks a hydration mismatch. The duration branch below is enough on its own. */}
-        <AnimatePresence mode="wait" initial={false}>
-          <m.div
-            key={active}
-            id={`${baseId}-panel-${active}`}
-            role="tabpanel"
-            aria-labelledby={`${baseId}-tab-${active}`}
-            tabIndex={0}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: reduceMotion ? 0.08 : motionDuration.standard, ease: motionEase.gentle }}
-          >
-            <ActivePanel />
-          </m.div>
-        </AnimatePresence>
+    <div className={styles.wrapper}>
+      <div role="tablist" aria-label="See LearnThrive from each side" className={styles.tabList}>
+        {AUDIENCES.map((audience, i) => {
+          const selected = audience.key === active;
+          return (
+            <button
+              key={audience.key}
+              ref={(el) => {
+                tabRefs.current[audience.key] = el;
+              }}
+              role="tab"
+              id={`${baseId}-tab-${audience.key}`}
+              aria-selected={selected}
+              aria-controls={`${baseId}-panel-${audience.key}`}
+              tabIndex={selected ? 0 : -1}
+              className={styles.tab}
+              onClick={() => setActive(audience.key)}
+              onKeyDown={(e) => onKeyDown(e, i)}
+            >
+              {audience.label}
+              {selected && (
+                <m.span
+                  layoutId={`${baseId}-tab-indicator`}
+                  className={styles.tabIndicator}
+                  transition={reduceMotion ? { duration: 0 } : motionSpring.tactile}
+                />
+              )}
+            </button>
+          );
+        })}
       </div>
-    </LazyMotion>
+      {/* initial/exit's y values stay constant regardless of reduceMotion, matching Reveal.tsx
+          and ProductStoryScene.tsx's fix for the same underlying issue: Motion bakes the
+          initial value into SSR'd HTML, and reduceMotion() can read differently between server
+          and a real reduced-motion client's first render, so branching these specific values
+          risks a hydration mismatch. The duration branch below is enough on its own. */}
+      <AnimatePresence mode="wait" initial={false}>
+        <m.div
+          key={active}
+          id={`${baseId}-panel-${active}`}
+          role="tabpanel"
+          aria-labelledby={`${baseId}-tab-${active}`}
+          tabIndex={0}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          transition={{ duration: reduceMotion ? 0.08 : motionDuration.standard, ease: motionEase.gentle }}
+        >
+          <ActivePanel />
+        </m.div>
+      </AnimatePresence>
+    </div>
   );
 }

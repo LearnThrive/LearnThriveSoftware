@@ -19,3 +19,24 @@ export function uniqueLabel(base: string): string {
   const { retry } = test.info();
   return retry === 0 ? base : `${base} (retry ${retry})`;
 }
+
+/** Every public marketing route — shared by the motion specs, which all sweep the whole site. */
+export const PUBLIC_ROUTES = [
+  '/',
+  '/subjects',
+  '/maths-tuition',
+  '/english-tuition',
+  '/science-tuition',
+  '/11-plus-tuition',
+  '/about',
+  '/book',
+  '/contact',
+  '/faq',
+  '/safeguarding',
+  '/privacy',
+  '/cookies',
+  '/terms',
+  '/tuition-terms',
+  '/complaints',
+  '/accessibility',
+];
