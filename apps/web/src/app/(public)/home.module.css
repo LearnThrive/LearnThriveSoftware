@@ -908,6 +908,12 @@
   color: #fff !important;
 }
 
+/* The shared eyebrow colour is the dark green used on light surfaces (1.9:1 against this navy card).
+   The site's on-navy accent is the mint used everywhere else on dark backgrounds (8.3:1). */
+.trustCard .eyebrow {
+  color: #8ed2ad;
+}
+
 .trustText {
   margin: 14px 0 20px;
   font-size: 16px;

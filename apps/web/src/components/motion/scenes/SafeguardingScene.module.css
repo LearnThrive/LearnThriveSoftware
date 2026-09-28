@@ -73,6 +73,16 @@
   transition: opacity 0.3s ease;
 }
 
+/* Dimmed, not disabled: it is still the text of a step the visitor needs to read. White at 0.55 on
+   this navy is 5.4:1; the previous 0.45 measured 4.1:1, under the 4.5:1 minimum for body text. */
 .stageTitleInactive {
-  opacity: 0.45;
+  opacity: 0.55;
+}
+
+/* Dimming is a scroll cue. With reduced motion there is no scroll cue, and the scene's React state
+   only catches up after hydration, so the CSS states the outcome directly: every stage reads in full. */
+@media (prefers-reduced-motion: reduce) {
+  .stageTitleInactive {
+    opacity: 1;
+  }
 }
