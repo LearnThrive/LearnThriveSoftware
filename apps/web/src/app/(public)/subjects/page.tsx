@@ -178,7 +178,8 @@ export default function SubjectsPage() {
 
       {/* ── Early years callout ────────────────────────── */}
       <div className={styles.calloutWrap}>
-        <Reveal variant="soft">
+        {/* First content below the hero on a phone, so its text is the LCP candidate there. */}
+        <Reveal variant="static">
           <div className={styles.callout}>
             <svg viewBox="0 0 24 24" fill="none" width={22} height={22} style={{ color: "#075f52", flexShrink: 0, marginTop: 2 }} aria-hidden="true">
               <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
@@ -196,9 +197,12 @@ export default function SubjectsPage() {
       </div>
 
       {/* ── Subject Sections ──────────────────────────── */}
-      {subjects.map((subject) => (
+      {subjects.map((subject, subjectIndex) => (
         <section key={subject.id} id={subject.id} className={styles.subjectSection}>
-          <Reveal variant="soft">
+          {/* The first subject is on the first screen, and its photograph is the page's largest
+              paint. A reveal would hold it at opacity 0 until the script has loaded and the animation
+              has run (LCP 204 -> 864 ms in the profile), so it is simply there; later ones reveal. */}
+          <Reveal variant={subjectIndex === 0 ? "static" : "soft"}>
             <div className={`${styles.subjectHeader} ${subject.reverse ? styles.subjectHeaderReverse : ""}`}>
               {subject.reverse ? (
                 <>

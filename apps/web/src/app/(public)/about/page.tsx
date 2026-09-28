@@ -53,7 +53,10 @@ export default function AboutPage() {
 
       {/* ── Story ─────────────────────────────────────── */}
       <section id="story" className={styles.storySection}>
-        <Reveal variant="editorial">
+        {/* First content after the hero: on a desktop screen it is above the fold, and its lead
+            paragraph is the LCP element. A reveal held it at opacity 0 until the script had run
+            (LCP 184 -> 1072 ms in the profile), so it is static; everything below still reveals. */}
+        <Reveal variant="static">
           <p className={`${styles.eyebrow} ${styles.eyebrowDark}`}>Our story</p>
           <h2 className={styles.storyTitle}>Why we started LearnThrive</h2>
           <p className={styles.storyText}>

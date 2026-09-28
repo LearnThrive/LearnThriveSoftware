@@ -234,6 +234,20 @@ test.describe('reveals on real pages', () => {
       expect(stuck, `${route} has reveals stuck in their start state under reduced motion`).toEqual([]);
     }
   });
+
+  // A reveal's start state is in the server-rendered HTML, so whatever it wraps is invisible until the
+  // script has loaded and the animation has run. On the first screen that is the page's LCP: profiling
+  // found /subjects and /about at ~900-1000 ms (against ~200 ms before) and /contact, /faq at ~870 ms
+  // for exactly this reason. The first reveal on each of these pages is the first-screen content, so
+  // it must be the explicit opt-out; reveals further down are where the choreography belongs.
+  for (const route of ['/subjects', '/about', '/contact', '/faq']) {
+    test(`${route}: the first block after the hero is never held back by a reveal`, async ({ request }) => {
+      const html = await (await request.get(route)).text();
+      const first = html.match(/data-reveal="(\w+)"/)?.[1];
+      expect(first, `${route} has no reveal at all`).toBeDefined();
+      expect(first, `${route}'s first reveal hides first-screen content until the script runs (LCP)`).toBe('static');
+    });
+  }
 });
 
 test.describe('reveals without JavaScript', () => {
