@@ -178,7 +178,7 @@ ${profilerSource}
     })(profilerModule.exports, profilerModule);
     window.__ltProfiler = profilerModule.exports;
 
-    const perf = (window.__ltPerf = { fcp: 0, lcp: 0, cls: 0, longTasks: 0, longTaskBlockingMs: 0 });
+    const perf = (window.__ltPerf = { fcp: 0, lcp: 0, lcpElement: null, cls: 0, longTasks: 0, longTaskBlockingMs: 0 });
     const observe = (type, onEntry) => {
       try {
         new PerformanceObserver((list) => list.getEntries().forEach(onEntry)).observe({ type, buffered: true });
@@ -187,7 +187,16 @@ ${profilerSource}
       }
     };
     observe("paint", (entry) => { if (entry.name === "first-contentful-paint") perf.fcp = entry.startTime; });
-    observe("largest-contentful-paint", (entry) => { perf.lcp = entry.startTime; });
+    observe("largest-contentful-paint", (entry) => {
+      perf.lcp = entry.startTime;
+      // Which element is the LCP candidate matters as much as when: an LCP that moves later because
+      // a reveal held the headline at opacity 0 is a regression this number alone cannot explain.
+      const element = entry.element;
+      const classes = element && typeof element.className === "string" ? element.className.trim().split(/\s+/)[0] : "";
+      perf.lcpElement = element
+        ? \`\${element.tagName.toLowerCase()}\${classes ? "." + classes : ""}: \${(element.textContent || entry.url || "").trim().slice(0, 40)}\`
+        : entry.url || null;
+    });
     observe("layout-shift", (entry) => { if (!entry.hadRecentInput) perf.cls += entry.value; });
     observe("longtask", (entry) => {
       perf.longTasks += 1;
@@ -415,6 +424,7 @@ async function readLoadMetrics(page) {
     return {
       fcpMs: perf.fcp,
       lcpMs: perf.lcp,
+      lcpElement: perf.lcpElement,
       cls: perf.cls,
       longTasks: perf.longTasks,
       longTaskBlockingMs: perf.longTaskBlockingMs,
@@ -548,6 +558,10 @@ function aggregate(runs) {
       decodedKB: round(median(runs.map((run) => run.load[bucket].decodedBytes)) / 1024, 1),
     };
   }
+  // The element that was the LCP candidate in the run whose LCP was the median one is not knowable
+  // from medians of numbers; the first run's is representative unless the runs disagree, in which
+  // case the distinct answers are listed so the disagreement is visible rather than averaged away.
+  load.lcpElement = [...new Set(runs.map((run) => run.load.lcpElement).filter(Boolean))].join(" | ") || null;
   load.clsAfterScroll = round(median(runs.map((run) => run.clsAfterScroll)), 3);
   load.jsHeapMB = round(median(runs.map((run) => run.jsHeapMB)), 1);
   return {
