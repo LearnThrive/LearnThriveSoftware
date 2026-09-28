@@ -54,6 +54,11 @@
   pointer-events: none;
 }
 
+/* A soft green glow behind the hero. It used to be a flat disc put through `filter: blur(10px)` and
+   floated by an infinite animation: a filtered layer re-applying its blur on every frame, forever,
+   whether or not the hero was on screen (plan11.md task 5). The soft edge is now baked into a radial
+   gradient, so there is no filter to re-apply, and the layer is static — motion on it, where a page
+   wants any, comes from scrolling (a bounded parallax), never from a loop. */
 .heroGlow {
   position: absolute;
   right: -90px;
@@ -61,10 +66,8 @@
   width: 340px;
   height: 340px;
   border-radius: 50%;
-  background: rgba(7, 95, 82, 0.18);
-  filter: blur(10px);
+  background: radial-gradient(closest-side, rgba(7, 95, 82, 0.18) calc(100% - 22px), rgba(7, 95, 82, 0) 100%);
   pointer-events: none;
-  animation: lt-float 11s ease-in-out infinite;
 }
 
 .heroInner {
@@ -531,11 +534,6 @@
 @keyframes lt-rise {
   from { opacity: 0; transform: translateY(26px); }
   to { opacity: 1; transform: none; }
-}
-
-@keyframes lt-float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-9px); }
 }
 
 @keyframes lt-mark {

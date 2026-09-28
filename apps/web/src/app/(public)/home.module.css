@@ -6,16 +6,6 @@
   to { opacity: 1; transform: none; }
 }
 
-@keyframes lt-marquee {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
-}
-
-@keyframes lt-float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-9px); }
-}
-
 @keyframes lt-mark {
   from { transform: scaleX(0); }
   to { transform: scaleX(1); }
@@ -98,6 +88,11 @@
   pointer-events: none;
 }
 
+/* A soft green glow behind the hero. It used to be a flat disc put through `filter: blur(10px)` and
+   floated by an infinite animation: a filtered layer re-applying its blur on every frame, forever,
+   whether or not the hero was on screen (plan11.md task 5). The soft edge is now baked into a radial
+   gradient, so there is no filter to re-apply, and the layer is static — motion on it, where a page
+   wants any, comes from scrolling (a bounded parallax), never from a loop. */
 .heroGlow {
   position: absolute;
   left: -120px;
@@ -105,10 +100,8 @@
   width: 380px;
   height: 380px;
   border-radius: 50%;
-  background: rgba(7, 95, 82, 0.18);
-  filter: blur(10px);
+  background: radial-gradient(closest-side, rgba(7, 95, 82, 0.18) calc(100% - 22px), rgba(7, 95, 82, 0) 100%);
   pointer-events: none;
-  animation: lt-float 11s ease-in-out infinite;
 }
 
 .heroGrid {
@@ -334,31 +327,6 @@
   margin-top: 3px;
 }
 
-/* ── Marquee ───────────────────────────────────────────── */
-:global(.lt-marquee) {
-  background: var(--lt-green);
-  color: #fff;
-  overflow: hidden;
-  padding: 14px 0;
-  white-space: nowrap;
-  border-block: 1px solid rgba(0, 0, 0, 0.08);
-}
-
-:global(.lt-marquee:hover .lt-marquee__track) {
-  animation-play-state: paused;
-}
-
-:global(.lt-marquee__track) {
-  display: inline-flex;
-  gap: 44px;
-  font-family: var(--font-bricolage), sans-serif;
-  font-weight: 700;
-  font-size: 16px;
-  letter-spacing: 0.04em;
-  animation: lt-marquee 26s linear infinite;
-  padding-right: 44px;
-}
-
 /* ── Why Us Cards ──────────────────────────────────────── */
 .whySection {
   padding: 64px 40px;
@@ -393,13 +361,34 @@
   gap: 20px;
 }
 
+/* The hover shadow lives on a pseudo-element that is drawn once and only fades in. Interpolating
+   `box-shadow` itself repaints the whole 44px-blurred region on every frame of the transition;
+   an opacity change on an already-painted layer is compositor work (plan11.md task 5). The colour
+   comes from --lift-shadow so each variant only has to name its shadow. */
 .whyCard {
+  position: relative;
   border-radius: 22px;
   padding: 28px;
   min-height: 230px;
   display: flex;
   flex-direction: column;
-  transition: transform 0.3s var(--ease-snappy), box-shadow 0.3s var(--ease-snappy);
+  --lift-shadow: 0 26px 44px -28px rgba(20, 49, 82, 0.5);
+  transition: transform 0.3s var(--ease-snappy);
+}
+
+.whyCard::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: var(--lift-shadow);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s var(--ease-snappy);
+}
+
+.whyCard:hover::after {
+  opacity: 1;
 }
 
 .whyCard:hover {
@@ -413,10 +402,7 @@
 .whyCardNavy {
   background: var(--lt-navy);
   color: #fff;
-}
-
-.whyCardNavy:hover {
-  box-shadow: 0 26px 44px -28px rgba(20, 49, 82, 0.85);
+  --lift-shadow: 0 26px 44px -28px rgba(20, 49, 82, 0.85);
 }
 
 .whyCardNavy h3 {
@@ -426,19 +412,13 @@
 .whyCardWhite {
   background: #fff;
   border: 1px solid var(--lt-border);
-}
-
-.whyCardWhite:hover {
-  box-shadow: 0 26px 44px -28px rgba(20, 49, 82, 0.5);
+  --lift-shadow: 0 26px 44px -28px rgba(20, 49, 82, 0.5);
 }
 
 .whyCardGreen {
   background: var(--lt-green);
   color: #fff;
-}
-
-.whyCardGreen:hover {
-  box-shadow: 0 26px 44px -28px rgba(7, 95, 82, 0.85);
+  --lift-shadow: 0 26px 44px -28px rgba(7, 95, 82, 0.85);
 }
 
 .whyCardGreen h3 {
@@ -664,18 +644,33 @@
 }
 
 .subjectCard {
+  position: relative;
   background: #fff;
   border: 1px solid var(--lt-border);
   border-radius: 22px;
-  overflow: hidden;
-  transition: box-shadow 0.3s var(--ease-snappy), transform 0.3s var(--ease-snappy), border-color 0.3s var(--ease-snappy);
+  --lift-shadow: 0 26px 44px -28px rgba(20, 49, 82, 0.55);
+  transition: transform 0.3s var(--ease-snappy), border-color 0.3s var(--ease-snappy);
   text-decoration: none;
   color: inherit;
   display: block;
 }
 
+.subjectCard::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: var(--lift-shadow);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s var(--ease-snappy);
+}
+
+.subjectCard:hover::after {
+  opacity: 1;
+}
+
 .subjectCard:hover {
-  box-shadow: 0 26px 44px -28px rgba(20, 49, 82, 0.55);
   transform: translateY(-5px);
   border-color: var(--lt-green);
   color: inherit;
@@ -693,6 +688,8 @@
   position: relative;
   height: 132px;
   overflow: hidden;
+  /* The card's own radius (22px) minus its 1px border. */
+  border-radius: 21px 21px 0 0;
 }
 
 .subjectCardImage img {

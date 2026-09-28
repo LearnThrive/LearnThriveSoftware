@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import * as m from "framer-motion/m";
-import { AnimatePresence, useMotionValueEvent, useReducedMotion } from "framer-motion";
+import { AnimatePresence, useMotionValueEvent, useReducedMotion, useTransform, type MotionValue } from "framer-motion";
 import { useScene } from "@/lib/motion/scroll";
 import styles from "./ProductStoryScene.module.css";
 
@@ -109,6 +109,19 @@ function SceneVisual({ index }: { index: number }) {
   );
 }
 
+/**
+ * One segment of the stage's progress bar. It fills as the scroll moves through *its* sixth of the
+ * scene (plan11.md task 5): a `scaleX` driven straight from the scroll MotionValue, so the fill
+ * follows the visitor's scroll smoothly, never touches layout, and never goes through React. It used
+ * to be an inline `width` of 0% or 100% chosen by the active-scene state — a layout property, changed
+ * by a re-render, that snapped instead of filling. (It was also an inline `<span>`, and inline boxes
+ * ignore `width` and `transform` altogether, so the CSS now makes it a block.)
+ */
+function StageDotFill({ progress, index }: { progress: MotionValue<number>; index: number }) {
+  const scaleX = useTransform(progress, [index / SCENES.length, (index + 1) / SCENES.length], [0, 1]);
+  return <m.span className={styles.stageDotFill} style={{ scaleX }} />;
+}
+
 export function ProductStoryScene() {
   const { ref, smoothProgress } = useScene(["start start", "end end"]);
   const reduceMotion = useReducedMotion();
@@ -162,10 +175,7 @@ export function ProductStoryScene() {
               <div className={styles.stageProgress}>
                 {SCENES.map((s, i) => (
                   <span key={s.label} className={styles.stageDot}>
-                    <span
-                      className={styles.stageDotFill}
-                      style={{ width: i <= activeScene ? "100%" : "0%" }}
-                    />
+                    <StageDotFill progress={smoothProgress} index={i} />
                   </span>
                 ))}
               </div>

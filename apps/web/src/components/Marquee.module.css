@@ -1,0 +1,42 @@
+/* The marquee's styles live with the marquee. They used to be `:global` rules inside
+   home.module.css, which meant they only reached a page that happened to load the homepage's
+   stylesheet: on a direct visit to /subjects or /about the marquee rendered unstyled — plain
+   run-together text — and only looked right after navigating there from the homepage.
+
+   `transform` is compositor work, but an infinite animation never lets the page idle, so
+   Marquee.tsx also pauses it (data-paused) whenever it is well off screen or the tab is hidden. */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.marquee {
+  background: var(--lt-green, #075f52);
+  color: #fff;
+  overflow: hidden;
+  padding: 14px 0;
+  white-space: nowrap;
+  border-block: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.track {
+  display: inline-flex;
+  gap: 44px;
+  font-family: var(--font-bricolage), sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  animation: marquee 26s linear infinite;
+  padding-right: 44px;
+}
+
+.marquee:hover .track,
+.marquee[data-paused="true"] .track {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .track {
+    animation: none;
+  }
+}
