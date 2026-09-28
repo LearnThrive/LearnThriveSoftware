@@ -45,3 +45,4 @@ LearnThrive Premium Marketing Site_ Motion, Design Intelligence and Visual Story
 # regenerable build artifact (`/graphify .` or `graphify update .` rebuilds it), not source, and
 # graph.json alone is multi-megabyte.
 graphify-out/
+plan11.md
