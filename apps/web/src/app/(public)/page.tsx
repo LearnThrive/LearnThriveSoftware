@@ -7,6 +7,10 @@ import { Marquee } from "@/components/Marquee";
 import { StatCounter } from "@/components/StatCounter";
 import { EnquiryForm } from "@/components/EnquiryForm";
 import { ProductTabs } from "@/components/ProductTabs";
+import { HeroScene } from "@/components/motion/scenes/HeroScene";
+import { LearningPathScene } from "@/components/motion/scenes/LearningPathScene";
+import { ProductStoryScene } from "@/components/motion/scenes/ProductStoryScene";
+import { SafeguardingScene } from "@/components/motion/scenes/SafeguardingScene";
 import { SubjectIcon, SubjectMotif, SUBJECT_ACCENT, type SubjectKey } from "@/components/SubjectIcon";
 import { createMetadata } from "@/lib/metadata";
 import { siteConfig, testimonials } from "@/lib/site";
@@ -94,63 +98,7 @@ export default function HomePage() {
     <div className={styles.page}>
       <BodyClass className="is-homepage" />
       {/* ── Hero ──────────────────────────────────────── */}
-      <section className={styles.hero}>
-        <div className={styles.heroDots} aria-hidden="true" />
-        <div className={styles.heroGlow} aria-hidden="true" />
-        <div className={styles.heroGrid}>
-          <div className={styles.heroCopy}>
-            <div className={styles.heroChip}>
-              <span className={styles.heroChipDot} aria-hidden="true" />
-              Online &middot; one-to-one &middot; Y1 to A-Level
-            </div>
-            <h1 className={styles.heroTitle}>
-              Strong foundations.
-              <br />
-              <span className={styles.heroMark}>
-                <span className={styles.heroMarkBg} aria-hidden="true" />
-                <span className={styles.heroMarkText}>Brighter futures.</span>
-              </span>
-            </h1>
-            <p className={styles.heroLead}>
-              Tailored tuition that helps your child learn, grow and thrive
-              &mdash; from the early years right through to their A-Level exams.
-            </p>
-            <div className={styles.heroButtons}>
-              <a href="#enquire" className={styles.btnPrimary}>
-                Send an enquiry &rarr;
-              </a>
-              <a href="#how" className={styles.btnSecondary}>
-                How it works
-              </a>
-            </div>
-            <ul className={styles.heroAssurances} aria-label="Tuition overview">
-              <li>40+ students supported</li>
-              <li>Through our first academic year</li>
-              <li>Never in groups</li>
-            </ul>
-          </div>
-          <div className={styles.heroPhoto}>
-            <div className={styles.heroPhotoImg}>
-              <Image
-                src="/images/hero-tutor-student.jpg"
-                alt="Tutor and student working together during an online one-to-one lesson"
-                fill
-                sizes="(max-width: 1100px) 100vw, 50vw"
-                priority
-                style={{ objectFit: "cover" }}
-              />
-            </div>
-            <div className={styles.heroFloatChip}>
-              <div className={styles.heroFloatChipTitle}>One-to-one, 60 min</div>
-              <div className={styles.heroFloatChipSub}>TIMED AROUND SCHOOL</div>
-            </div>
-            <div className={styles.heroFloatChipSecondary}>
-              <div className={styles.heroFloatChipTitle}>Lesson report, every time</div>
-              <div className={styles.heroFloatChipSub}>PROGRESS YOU CAN SEE</div>
-            </div>
-          </div>
-        </div>
-      </section>
+      <HeroScene />
 
       {/* ── Level Marquee ─────────────────────────────── */}
       <Marquee items={marqueeItems} />
@@ -228,20 +176,21 @@ export default function HomePage() {
         <ScrollReveal delay={120}>
           <p className={styles.eyebrow}>How it works</p>
           <h2 className={styles.howTitle}>Four steps, no obligation</h2>
-          <div className={styles.howSteps}>
-            <div className={styles.howStepsLine} aria-hidden="true" />
-            {howSteps.map((step, i) => (
-              <div key={step.title} className={styles.howStep}>
-                <span className={`${styles.howStepNumber} ${step.last ? styles.howStepNumberNavy : styles.howStepNumberGreen}`}>
-                  {i + 1}
-                </span>
-                <div className={styles.howStepContent}>
-                  <h4 className={styles.howStepTitle}>{step.title}</h4>
-                  <p className={styles.howStepText}>{step.text}</p>
+          <LearningPathScene>
+            <div className={styles.howSteps}>
+              {howSteps.map((step, i) => (
+                <div key={step.title} className={styles.howStep}>
+                  <span className={`${styles.howStepNumber} ${step.last ? styles.howStepNumberNavy : styles.howStepNumberGreen}`}>
+                    {i + 1}
+                  </span>
+                  <div className={styles.howStepContent}>
+                    <h4 className={styles.howStepTitle}>{step.title}</h4>
+                    <p className={styles.howStepText}>{step.text}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </LearningPathScene>
         </ScrollReveal>
       </section>
 
@@ -304,6 +253,9 @@ export default function HomePage() {
           <ProductTabs />
         </ScrollReveal>
       </section>
+
+      {/* ── Inside a LearnThrive lesson (sticky story) ── */}
+      <ProductStoryScene />
 
       {/* ── Levels ────────────────────────────────────── */}
       <section id="levels" className={styles.levelsSection}>
@@ -376,20 +328,7 @@ export default function HomePage() {
                 Read our full safeguarding commitment <span aria-hidden="true">&rarr;</span>
               </Link>
             </div>
-            <ul className={styles.trustList}>
-              {[
-                "DBS-checked before teaching",
-                "Thorough hiring process, every tutor",
-                "Clear route to raise any concern",
-              ].map((item) => (
-                <li key={item} className={styles.trustListItem}>
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M4 12l5 5 11-11" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  {item}
-                </li>
-              ))}
-            </ul>
+            <SafeguardingScene />
           </div>
         </ScrollReveal>
       </section>

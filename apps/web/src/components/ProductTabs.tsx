@@ -152,6 +152,11 @@ export function ProductTabs() {
             );
           })}
         </div>
+        {/* initial/exit's y values stay constant regardless of reduceMotion, matching Reveal.tsx
+            and ProductStoryScene.tsx's fix for the same underlying issue: Motion bakes the
+            initial value into SSR'd HTML, and reduceMotion() can read differently between server
+            and a real reduced-motion client's first render, so branching these specific values
+            risks a hydration mismatch. The duration branch below is enough on its own. */}
         <AnimatePresence mode="wait" initial={false}>
           <m.div
             key={active}
@@ -159,9 +164,9 @@ export function ProductTabs() {
             role="tabpanel"
             aria-labelledby={`${baseId}-tab-${active}`}
             tabIndex={0}
-            initial={{ opacity: 0, y: reduceMotion ? 0 : 8 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: reduceMotion ? 0 : -4 }}
+            exit={{ opacity: 0, y: -4 }}
             transition={{ duration: reduceMotion ? 0.08 : motionDuration.standard, ease: motionEase.gentle }}
           >
             <ActivePanel />

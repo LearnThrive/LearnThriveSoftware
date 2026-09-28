@@ -25,9 +25,15 @@ export function Reveal({
 
   return (
     <LazyMotion features={domAnimation}>
+      {/* initial's y stays a constant 14 regardless of reduceMotion — Motion bakes the initial
+          value into SSR'd HTML, and reduceMotion() itself can read differently between the
+          server (always false) and a real reduced-motion client's first render, so branching
+          the numeric value the way transition's duration/delay do below causes a genuine
+          hydration mismatch (found in ProductStoryScene.tsx / SafeguardingScene.tsx during
+          plan10's work). A near-zero duration alone is enough for this to read as instant. */}
       <m.div
         className={className}
-        initial={{ opacity: 0, y: reduceMotion ? 0 : 14 }}
+        initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{
           duration: reduceMotion ? 0.08 : motionDuration.standard + 0.06,
