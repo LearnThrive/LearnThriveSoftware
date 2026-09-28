@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as m from "framer-motion/m";
 import { useMotionValueEvent, useReducedMotion, useTransform } from "framer-motion";
 import { useScene } from "@/lib/motion/scroll";
+import { indexForProgress } from "@/lib/motion/thresholds";
 import styles from "./SafeguardingScene.module.css";
 
 /**
@@ -29,6 +30,15 @@ export function SafeguardingScene() {
   // browser-only API and syncing state from it is the legitimate use of an effect, as opposed to
   // recomputing a value already derivable during render.
   const [activeStage, setActiveStage] = useState(0);
+  // The stage React is already showing, mirrored in a ref so the scroll handler can compare against
+  // it without a render or a setState dispatch. `select` is the only place either is written, which
+  // keeps them in step: the scroll path and the reduced-motion path both go through it.
+  const shownStage = useRef(0);
+  const select = useCallback((stage: number) => {
+    if (shownStage.current === stage) return;
+    shownStage.current = stage;
+    setActiveStage(stage);
+  }, []);
   // Always the same [0, 1] -> [0, 1] range regardless of reduceMotion, unlike activeStage above:
   // Motion renders a useTransform value's computed result directly into the SSR'd HTML (e.g. the
   // resulting `transform: scaleY(...)`), so branching the range itself on a client-differing
@@ -49,13 +59,14 @@ export function SafeguardingScene() {
     // only happen after mount. Routing it through a callback satisfies the same "subscribe for
     // updates, setState in the callback" shape the rule expects, while still resolving before
     // the next paint.
-    queueMicrotask(() => setActiveStage(STAGES.length - 1));
-  }, [reduceMotion]);
+    queueMicrotask(() => select(STAGES.length - 1));
+  }, [reduceMotion, select]);
 
+  // Runs on every frame the progress spring is settling, but only ever reaches React when the stage
+  // actually changes (plan11.md task 7; lib/motion/thresholds.ts).
   useMotionValueEvent(smoothProgress, "change", (latest) => {
     if (reduceMotion) return;
-    const index = Math.min(STAGES.length - 1, Math.floor(latest * STAGES.length));
-    setActiveStage(index);
+    select(indexForProgress(latest, STAGES.length));
   });
 
   return (

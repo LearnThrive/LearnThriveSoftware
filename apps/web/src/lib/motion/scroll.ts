@@ -1,8 +1,9 @@
 "use client";
 
-import { useRef } from "react";
-import { useScroll, useSpring } from "framer-motion";
+import { useRef, useState } from "react";
+import { useMotionValueEvent, useScroll, useSpring, type MotionValue } from "framer-motion";
 import type { RefObject } from "react";
+import { indexForProgress } from "./thresholds";
 
 type ScrollOffset = NonNullable<Parameters<typeof useScroll>[0]>["offset"];
 
@@ -35,4 +36,23 @@ export function useScene(offset?: Parameters<typeof useSceneProgress>[1]) {
   const ref = useRef<HTMLElement | null>(null);
   const progress = useSceneProgress(ref, offset);
   return { ref, ...progress };
+}
+
+/**
+ * The discrete step (0 to count-1) a scene's scroll progress is in, as React state that changes only
+ * when the step does. Use it for "which of these is showing"; anything continuous — an opacity, a
+ * fill, an offset — should stay on a MotionValue instead. The previous step is held in a ref, so a
+ * progress value that updates every frame (and does, while a spring settles) costs a comparison,
+ * not a `setState` dispatch — see lib/motion/thresholds.ts.
+ */
+export function useDiscreteProgress(progress: MotionValue<number>, count: number): number {
+  const [index, setIndex] = useState(0);
+  const previous = useRef(0);
+  useMotionValueEvent(progress, "change", (latest) => {
+    const next = indexForProgress(latest, count);
+    if (next === previous.current) return;
+    previous.current = next;
+    setIndex(next);
+  });
+  return index;
 }
