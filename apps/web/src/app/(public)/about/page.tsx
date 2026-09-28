@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { BodyClass } from "@/components/BodyClass";
-import { ScrollReveal } from "@/components/ScrollReveal";
+import { Reveal } from "@/components/motion/primitives/Reveal";
 import { Marquee } from "@/components/Marquee";
 import { createMetadata } from "@/lib/metadata";
 import styles from "./about.module.css";
@@ -53,7 +53,7 @@ export default function AboutPage() {
 
       {/* ── Story ─────────────────────────────────────── */}
       <section id="story" className={styles.storySection}>
-        <ScrollReveal>
+        <Reveal variant="editorial">
           <p className={`${styles.eyebrow} ${styles.eyebrowDark}`}>Our story</p>
           <h2 className={styles.storyTitle}>Why we started LearnThrive</h2>
           <p className={styles.storyText}>
@@ -69,17 +69,17 @@ export default function AboutPage() {
             how each student learns, rather than expecting every child to learn
             the same way. That belief still drives everything we do.
           </p>
-        </ScrollReveal>
+        </Reveal>
       </section>
 
       {/* ── Founders ──────────────────────────────────── */}
       <section className={styles.foundersSection}>
-        <ScrollReveal>
+        <Reveal variant="editorial">
           <p className={`${styles.eyebrow} ${styles.eyebrowDark}`}>Meet the founders</p>
           <h2 className={styles.foundersTitle}>The people behind LearnThrive</h2>
-        </ScrollReveal>
+        </Reveal>
         <div className={styles.foundersGrid}>
-          <ScrollReveal>
+          <Reveal variant="scale">
             <article className={styles.founderCard}>
               <div className={styles.founderCardInner}>
                 <Image
@@ -117,8 +117,8 @@ export default function AboutPage() {
                 </div>
               </div>
             </article>
-          </ScrollReveal>
-          <ScrollReveal delay={110}>
+          </Reveal>
+          <Reveal variant="scale" delay={0.11}>
             <article className={styles.founderCard}>
               <div className={styles.founderCardInner}>
                 <Image
@@ -157,14 +157,14 @@ export default function AboutPage() {
                 </div>
               </div>
             </article>
-          </ScrollReveal>
+          </Reveal>
         </div>
       </section>
 
       {/* ── Mission ───────────────────────────────────── */}
       <section className={styles.missionSection}>
         <div className={styles.missionDots} aria-hidden="true" />
-        <ScrollReveal>
+        <Reveal variant="soft">
           <div className={styles.missionInner}>
             <p className={styles.eyebrow}>Our mission</p>
             <h2 className={styles.missionTitle}>
@@ -177,12 +177,12 @@ export default function AboutPage() {
               whatever they need, we want the right support to be within reach.
             </p>
           </div>
-        </ScrollReveal>
+        </Reveal>
       </section>
 
       {/* ── CTA ───────────────────────────────────────── */}
       <section className={styles.ctaSection}>
-        <ScrollReveal>
+        <Reveal variant="soft">
           <h2>Want to be part of it?</h2>
           <p>
             Tell us about your child and we&apos;ll help them learn, grow and
@@ -191,7 +191,7 @@ export default function AboutPage() {
           <Link href="/#enquire" className={styles.btnPrimary}>
             Get in touch &rarr;
           </Link>
-        </ScrollReveal>
+        </Reveal>
       </section>
     </div>
   );

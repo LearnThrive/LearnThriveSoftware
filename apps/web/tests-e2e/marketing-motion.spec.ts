@@ -144,3 +144,108 @@ test.describe('hydration — no console mismatch warnings', () => {
     });
   }
 });
+
+// ── Reveal vocabulary (plan11.md task 6) ─────────────────────────────────────────────────────
+// Driven through /dev/motion, a fixed bench with one of each variant far below the fold, so the
+// assertions are about the primitive and not about whatever a real page says this week.
+
+const REVEAL_VARIANTS = ['soft', 'mask', 'scale', 'side', 'editorial', 'static'] as const;
+const IDENTITY_TRANSFORM = /^(none|matrix\(1, 0, 0, 1, 0, 0\))$/;
+
+/** Where a variant's opacity/transform lives: `mask` moves an inner child; the rest move themselves. */
+const revealTarget = (page: Page, variant: (typeof REVEAL_VARIANTS)[number]) =>
+  page.locator(variant === 'mask' ? '[data-reveal="mask"] [data-reveal-inner]' : `[data-reveal="${variant}"]`);
+
+test.describe('reveal vocabulary', () => {
+  test('each animated variant waits below the fold, then arrives at a readable final state', async ({ page }) => {
+    await pinCapabilities(page);
+    await page.goto('/dev/motion');
+    await tierOf(page); // hydrated
+
+    // Before anything scrolls: hidden by opacity — except `mask`, which hides by translating its
+    // content out of a clip, and `static`, which never hides at all.
+    for (const variant of REVEAL_VARIANTS) {
+      const target = revealTarget(page, variant);
+      if (variant === 'static') await expect(target).toHaveCSS('opacity', '1');
+      else if (variant === 'mask') await expect(target).not.toHaveCSS('transform', IDENTITY_TRANSFORM);
+      else await expect(target).toHaveCSS('opacity', '0');
+    }
+
+    for (const variant of REVEAL_VARIANTS) {
+      await page.locator(`[data-testid="reveal-${variant}"]`).scrollIntoViewIfNeeded();
+      const target = revealTarget(page, variant);
+      await expect(target).toHaveCSS('opacity', '1');
+      await expect(target).toHaveCSS('transform', IDENTITY_TRANSFORM);
+      await expect(page.locator(`[data-testid="reveal-${variant}"]`)).toBeVisible();
+    }
+    // The editorial variant also draws a rule; it must end fully drawn.
+    await expect(page.locator('[data-reveal-rule]')).toHaveCSS('transform', IDENTITY_TRANSFORM);
+  });
+
+  test('a revealed block stays revealed when scrolled away and back (once)', async ({ page }) => {
+    await pinCapabilities(page);
+    await page.goto('/dev/motion');
+    const heading = page.locator('[data-testid="reveal-soft"]');
+    await heading.scrollIntoViewIfNeeded();
+    await expect(revealTarget(page, 'soft')).toHaveCSS('opacity', '1');
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+    await page.waitForTimeout(400);
+    await expect(revealTarget(page, 'soft')).toHaveCSS('opacity', '1');
+  });
+
+  test('with reduced motion every variant is readable at once, without scrolling to it', async ({ page }) => {
+    await pinCapabilities(page);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/dev/motion');
+    for (const variant of REVEAL_VARIANTS) {
+      const target = revealTarget(page, variant);
+      await expect(target).toHaveCSS('opacity', '1');
+      await expect(target).toHaveCSS('transform', IDENTITY_TRANSFORM);
+    }
+    await expect(page.locator('[data-reveal-rule]')).toHaveCSS('transform', IDENTITY_TRANSFORM);
+  });
+
+  test('every variant is server-rendered with its content in the HTML', async ({ request }) => {
+    // React separates adjacent text nodes with <!-- --> markers; they are not content.
+    const html = (await (await request.get('/dev/motion')).text()).replace(/<!-- -->/g, '');
+    for (const variant of REVEAL_VARIANTS) {
+      expect(html).toContain(`data-reveal="${variant}"`);
+      expect(html).toContain(`Readable final content for the ${variant} variant.`);
+    }
+  });
+});
+
+test.describe('reveals on real pages', () => {
+  test('reduced motion: nothing on any public route is left hidden or displaced by a reveal', async ({ page }) => {
+    test.slow();
+    await pinCapabilities(page);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    for (const route of PUBLIC_ROUTES) {
+      await page.goto(route);
+      await tierOf(page);
+      const stuck = await page.evaluate(() =>
+        [...document.querySelectorAll('[data-reveal], [data-reveal-inner]')]
+          .filter((el) => {
+            const style = getComputedStyle(el);
+            return style.opacity !== '1' || !/^(none|matrix\(1, 0, 0, 1, 0, 0\))$/.test(style.transform);
+          })
+          .map((el) => el.getAttribute('data-reveal') ?? 'inner'),
+      );
+      expect(stuck, `${route} has reveals stuck in their start state under reduced motion`).toEqual([]);
+    }
+  });
+});
+
+test.describe('reveals without JavaScript', () => {
+  test.use({ javaScriptEnabled: false });
+
+  test('the homepage shows everything below the fold, because <noscript> forces the final state', async ({ page }) => {
+    await page.goto('/');
+    const revealed = page.locator('[data-reveal]');
+    expect(await revealed.count()).toBeGreaterThan(10);
+    for (const index of [0, 5, 10, await revealed.count() - 1]) {
+      await expect(revealed.nth(index)).toHaveCSS('opacity', '1');
+    }
+    await expect(page.getByRole('heading', { name: /Let.s help your child thrive/ })).toBeVisible();
+  });
+});
