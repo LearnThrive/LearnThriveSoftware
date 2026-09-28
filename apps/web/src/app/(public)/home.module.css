@@ -29,8 +29,14 @@
 
 /* ── Wrapper — resets global heading/body overrides ────── */
 .page {
-  --lt-navy: #143152;
-  --lt-navy-deep: #0E2540;
+  /* Previously a hardcoded #143152/#0E2540 pair that drifted from the sitewide navy
+     (globals.css's --colour-navy-900/--colour-navy-950, used on every other page — header,
+     footer, dashboard, subject-landing, book). Referencing those tokens directly instead of a
+     near-duplicate hex makes this page's navy match the rest of the site again; both replacement
+     values are darker than what they replace, so every existing contrast pairing (white text on
+     navy, navy text on cream) only improves, never regresses. */
+  --lt-navy: var(--colour-navy-900);
+  --lt-navy-deep: var(--colour-navy-950);
   --lt-green: #075f52;
   --lt-green-dark: #075f52;
   --lt-green-light: #087363;
@@ -193,7 +199,12 @@
   font-weight: 600;
   font-size: 16.5px;
   padding: 16px 30px;
-  border-radius: 999px;
+  /* Matches globals.css's .button (the shared CTA used sitewide via ButtonLink) rather than a
+     full pill — the two button implementations still can't be merged outright (.btnSecondary's
+     on-dark-background treatment covers a case .button--secondary doesn't), but converging the
+     shape closes the most visible "two systems" tell, and this only touches the homepage/subjects
+     pages where these two classes are used — no other page's buttons are affected. */
+  border-radius: 0.62rem;
   text-decoration: none;
   box-shadow: 0 14px 30px -16px rgba(7, 95, 82, 0.9);
   transition: transform 0.2s var(--ease-snappy), background 0.2s var(--ease-snappy);
@@ -218,7 +229,7 @@
   font-weight: 600;
   font-size: 16px;
   padding: 15px 22px;
-  border-radius: 999px;
+  border-radius: 0.62rem;
   text-decoration: none;
   border: 2px solid rgba(255, 255, 255, 0.35);
   transition: background 0.2s var(--ease-snappy), transform 0.2s var(--ease-snappy);
@@ -274,6 +285,11 @@
   object-fit: cover;
 }
 
+/* One-time settle, not a perpetual bob — a floating card that never stops moving reads as
+   decoration rather than product, and plan9.md section 6 explicitly rules it out ("DO NOT make
+   the hero continuously float... after approximately the first second, the hero should largely
+   settle"). Reuses lt-rise (the same keyframe the hero copy already settles with) rather than
+   inventing a second one-shot animation for the same job. */
 .heroFloatChip {
   position: absolute;
   left: -30px;
@@ -282,8 +298,25 @@
   border-radius: 14px;
   padding: 12px 16px;
   box-shadow: 0 18px 34px -20px rgba(0, 0, 0, 0.45);
-  animation: lt-float 8s ease-in-out infinite;
+  animation: lt-rise 0.7s both 0.6s;
   z-index: 1;
+}
+
+.heroFloatChipSecondary {
+  position: absolute;
+  right: -22px;
+  top: 36px;
+  background: #fff;
+  border-radius: 14px;
+  padding: 11px 15px;
+  box-shadow: 0 18px 34px -20px rgba(0, 0, 0, 0.45);
+  animation: lt-rise 0.7s both 0.72s;
+  z-index: 1;
+  max-width: 168px;
+}
+
+.heroFloatChipSecondary .heroFloatChipTitle {
+  font-size: 13.5px;
 }
 
 .heroFloatChipTitle {
@@ -505,13 +538,24 @@
   position: relative;
 }
 
+/* plan9.md section 7's "learning path" brand motif — a thin LearnThrive-green line connecting
+   the steps as they're read — applied here rather than the plain grey divider this used to be.
+   A repeating-gradient dash pattern instead of an SVG path: the connector's exact length depends
+   on each step's wrapped text height, which an SVG can't know statically, while a CSS background
+   naturally stretches to whatever height the absolutely-positioned top/bottom offsets resolve to. */
 .howStepsLine {
   position: absolute;
   left: 17px;
   top: 12px;
   bottom: 22px;
   width: 2px;
-  background: var(--lt-border);
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--lt-green-dark) 0,
+    var(--lt-green-dark) 5px,
+    transparent 5px,
+    transparent 11px
+  );
 }
 
 .howStep {
@@ -621,6 +665,7 @@
 .subjectCard:hover .subjectCardArrow { transform: translateX(4px); }
 
 .subjectCardImage {
+  position: relative;
   height: 132px;
   overflow: hidden;
 }
@@ -629,6 +674,31 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* plan9.md section 13: a subtle, abstract per-subject motif (coordinate grid / editorial curves /
+   molecular diagram / pathway dots — see SubjectIcon.tsx's SubjectMotif) rather than four
+   identical generic cards. Sits over the image's bottom-right corner at low opacity so it reads
+   as texture, not as a second competing graphic. */
+.subjectCardMotif {
+  position: absolute;
+  right: -10px;
+  bottom: -10px;
+  width: 90px;
+  height: 90px;
+  opacity: 0.55;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+.subjectCardIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 0.7rem;
+  margin-bottom: 14px;
 }
 
 .subjectCardBody {
@@ -653,6 +723,20 @@
   font-size: 11px;
   color: var(--lt-green-dark);
   text-decoration: none;
+}
+
+/* ── Product Demonstration ────────────────────────────────
+   Section chrome only — ProductTabs.module.css (co-located with the component) owns the tabs/
+   panel styling itself, since that component isn't homepage-only in principle even though it's
+   currently only used here. */
+.productSection {
+  padding: 64px 40px;
+  text-align: center;
+}
+
+.productSectionHeader {
+  max-width: 42ch;
+  margin: 0 auto 40px;
 }
 
 /* ── Levels Ladder ─────────────────────────────────────── */
@@ -790,6 +874,133 @@
 .statLabel {
   font-size: 14px;
   color: rgba(255, 255, 255, 0.72);
+}
+
+/* ── Tutor standards / safeguarding ──────────────────────────
+   Only claims plan9.md was explicitly told are true (a DBS check as part of every tutor's hiring
+   process) — not the fuller "identity checked / qualifications reviewed" checklist an earlier
+   draft of this section used, which nothing on the site actually substantiates. */
+.trustSection {
+  padding: 64px 40px;
+}
+
+.trustCard {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 40px;
+  align-items: center;
+  padding: 44px;
+  border-radius: 1.5rem;
+  background: var(--lt-navy);
+  color: #fff;
+}
+
+.trustCard .sectionTitle {
+  color: #fff !important;
+}
+
+.trustText {
+  margin: 14px 0 20px;
+  font-size: 16px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.8);
+  max-width: 48ch;
+}
+
+.trustLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #8ed2ad;
+  font-weight: 600;
+  font-size: 15px;
+  text-decoration: none;
+}
+
+.trustList {
+  display: grid;
+  gap: 14px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.trustListItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 15.5px;
+  color: #fff;
+}
+
+.trustListItem svg {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  margin-top: 1px;
+  color: #8ed2ad;
+}
+
+@media (max-width: 900px) {
+  .trustCard {
+    grid-template-columns: 1fr;
+    padding: 32px 26px;
+  }
+}
+
+/* ── Testimonials ──────────────────────────────────────────
+   Real, attributed parent quotes from src/lib/site.ts's `testimonials` export (already covered
+   by tests/site.test.mjs's "testimonial attributions are preserved" test) — not previously
+   rendered anywhere on the site. globals.css has an older .testimonial-grid/.testimonial-card
+   system, but it's unused by any page and built on the sitewide --colour-* tokens rather than
+   this page's --lt-* ones, so a fresh, homepage-native treatment here avoids mixing two card
+   languages on one page rather than resurrecting dead CSS wholesale. */
+.testimonialsSection {
+  padding: 64px 40px;
+}
+
+.testimonialsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.testimonialCard {
+  padding: 28px 26px;
+  border: 1px solid var(--lt-border);
+  border-radius: 1rem;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+.testimonialQuote {
+  margin: 0 0 16px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--lt-ink);
+}
+
+.testimonialQuote::before {
+  content: "\201C";
+  color: var(--lt-green-dark);
+}
+
+.testimonialQuote::after {
+  content: "\201D";
+  color: var(--lt-green-dark);
+}
+
+.testimonialAttribution {
+  font-family: var(--lt-font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.03em;
+  color: var(--lt-text);
+}
+
+@media (max-width: 900px) {
+  .testimonialsGrid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ── Enquiry Section ───────────────────────────────────── */

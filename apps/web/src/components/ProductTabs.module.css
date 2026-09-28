@@ -1,0 +1,154 @@
+.wrapper {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.tabList {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 32px;
+}
+
+.tab {
+  position: relative;
+  padding: 10px 22px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: var(--lt-font-body);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--lt-text);
+  transition: color var(--duration-fast) ease;
+}
+
+.tab[aria-selected="true"] {
+  color: var(--lt-navy);
+}
+
+.tab:focus-visible {
+  outline: 3px solid var(--colour-focus);
+  outline-offset: 2px;
+  border-radius: 0.4rem;
+}
+
+.tabIndicator {
+  position: absolute;
+  inset: auto 10px -2px 10px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--lt-green-dark);
+}
+
+.panelGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mockCard {
+  padding: 22px;
+  border: 1px solid var(--lt-border);
+  border-radius: 1rem;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+.mockCardDark {
+  background: var(--lt-navy);
+  border-color: var(--lt-navy);
+  color: #fff;
+}
+
+.mockCardLabel {
+  font-family: var(--lt-font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--lt-green-dark);
+  margin-bottom: 8px;
+}
+
+.mockCardDark .mockCardLabel {
+  color: #8ed2ad;
+}
+
+.mockCardTitle {
+  font-family: var(--lt-font-heading);
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--lt-navy);
+}
+
+.mockCardDark .mockCardTitle {
+  color: #fff;
+}
+
+.mockCardSub {
+  margin-top: 4px;
+  font-size: 13.5px;
+  color: var(--lt-text);
+}
+
+.mockCardDark .mockCardSub {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.mockCardBody {
+  margin: 0 0 12px;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--lt-ink);
+}
+
+.mockCardMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mockPill,
+.mockPillMuted {
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.mockPill {
+  background: var(--lt-green-dark);
+  color: #fff;
+}
+
+.mockPillMuted {
+  background: var(--lt-cream);
+  color: var(--lt-text);
+  border: 1px solid var(--lt-border);
+}
+
+.mockLessonRow {
+  display: flex;
+  gap: 10px;
+}
+
+.mockTile {
+  flex: 1;
+  padding: 18px 0;
+  text-align: center;
+  border-radius: 0.6rem;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.mockBoard {
+  flex: 2;
+  padding: 18px 0;
+  text-align: center;
+  border-radius: 0.6rem;
+  background: rgba(255, 255, 255, 0.14);
+  font-size: 13px;
+  color: #fff;
+}
+

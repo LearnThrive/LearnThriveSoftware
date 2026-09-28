@@ -16,6 +16,7 @@ export default function PrivacyPage() {
       eyebrow="Privacy"
       title="Privacy notice"
       intro="This notice explains what personal information is involved when you browse this website or contact LearnThrive Tuition, and the choices and rights available to you."
+      reviewedOn="10 September 2026"
       scope={
         <>
           <p>
@@ -68,10 +69,11 @@ export default function PrivacyPage() {
               </ul>
               <p>
                 The form keeps these answers temporarily in your browser while
-                you complete it. It then prepares a draft email on your device.
-                The website does not send or store the answers. If you choose
-                to send the email, your email service and ours will handle the
-                message and its contents as part of normal email delivery.
+                you complete it. Submitting the form sends them directly to
+                LearnThrive by email, and you will receive a confirmation email
+                once it has been received. The answers pass through our email
+                delivery provider as part of sending those messages, and are
+                not otherwise stored in a database by this website.
               </p>
               <p>
                 Our website host and the networks used to deliver the site may

@@ -16,6 +16,7 @@ export default function SafeguardingPage() {
       eyebrow="Safeguarding"
       title="Safeguarding information"
       intro="Children’s welfare comes first. This page explains how to raise a concern and the safety considerations that matter around online tuition."
+      reviewedOn="28 September 2026"
       scope={
         <p>
           This information is for parents, guardians, students and anyone
@@ -41,6 +42,29 @@ export default function SafeguardingPage() {
                 exploitation, inappropriate behaviour or online harm. No adult
                 working with a child should inflict physical or psychological harm.
               </p>
+            </>
+          ),
+        },
+        {
+          id: "tutor-recruitment",
+          title: "Tutor recruitment and DBS checks",
+          content: (
+            <>
+              <p>
+                Every tutor goes through a thorough hiring process before
+                teaching a LearnThrive student, including a Disclosure and
+                Barring Service (DBS) check. No tutor begins teaching until
+                this process is complete.
+              </p>
+              <p>This matters because it helps LearnThrive to:</p>
+              <ul>
+                <li>make safe recruitment decisions;</li>
+                <li>
+                  protect children and adults at risk from harm, and minimise
+                  threats to staff, clients, assets, data and reputation; and
+                </li>
+                <li>meet its legal and regulatory obligations.</li>
+              </ul>
             </>
           ),
         },

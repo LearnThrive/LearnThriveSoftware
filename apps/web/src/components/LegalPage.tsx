@@ -8,6 +8,10 @@ export interface LegalPageProps {
   eyebrow: string;
   title: string;
   intro: string;
+  /** Every LegalPage usage passes its own real date — previously this was one date hardcoded
+      inside this component and shown, incorrectly, as the "last reviewed" date on every legal
+      page regardless of when that page's own content last actually changed. */
+  reviewedOn: string;
   scope: ReactNode;
   sections: Array<{
     id: string;
@@ -20,6 +24,7 @@ export function LegalPage({
   eyebrow,
   title,
   intro,
+  reviewedOn,
   scope,
   sections,
 }: LegalPageProps) {
@@ -32,7 +37,7 @@ export function LegalPage({
         aside={
           <div className="document-card">
             <span>Last reviewed</span>
-            <strong>10 September 2026</strong>
+            <strong>{reviewedOn}</strong>
             <p>Written for the services and features available on this website.</p>
           </div>
         }

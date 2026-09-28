@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
-import { ButtonLink } from "@/components/ButtonLink";
-import { Container } from "@/components/Container";
-import { CtaSection } from "@/components/CtaSection";
-import { PageHero } from "@/components/PageHero";
-import { PhoneContacts } from "@/components/PhoneContacts";
+import Link from "next/link";
+import { BodyClass } from "@/components/BodyClass";
+import { ScrollReveal } from "@/components/ScrollReveal";
 import { createMetadata } from "@/lib/metadata";
 import { siteConfig } from "@/lib/site";
+import styles from "./contact.module.css";
 
 export const metadata: Metadata = createMetadata({
   title: "Contact",
@@ -14,61 +13,135 @@ export const metadata: Metadata = createMetadata({
   path: "/contact",
 });
 
+const guidanceItems = [
+  "The student’s current year group",
+  "The subject or subjects they need help with",
+  "Any current challenges or near-term goals",
+  "Your preferred way to be contacted",
+];
+
 export default function ContactPage() {
   return (
-    <>
-      <PageHero
-        eyebrow="Contact LearnThrive"
-        title="Start with a straightforward conversation"
-        intro="Whether you know the subject support you need or are still working it out, contact LearnThrive using the published details below."
-        aside={
-          <div className="tagline-card tagline-card--compact">
-            <span>LearnThrive Tuition</span>
-            <strong>Learn. Grow. Thrive.</strong>
-          </div>
-        }
-      />
+    <div className={styles.page}>
+      <BodyClass className="is-contact" />
 
-      <section className="section contact-section">
-        <Container>
-          <div className="contact-cards">
-            <article className="contact-card">
-              <span className="contact-card__label">Email</span>
-              <h2>Write to LearnThrive</h2>
-              <a href={`mailto:${siteConfig.email}`}>{siteConfig.email}</a>
-              <p>
-                Useful for sharing the student’s year group, subject and a brief
-                outline of the support required.
-              </p>
-            </article>
-            <article className="contact-card contact-card--green">
-              <span className="contact-card__label">Phone</span>
-              <h2>Call LearnThrive</h2>
-              <PhoneContacts layout="stacked" />
-              <p>Use either published number to discuss an initial enquiry directly.</p>
-            </article>
-          </div>
-
-          <div className="contact-guidance">
-            <div>
-              <p className="eyebrow">Helpful information</p>
-              <h2>What to include in an enquiry</h2>
-            </div>
-            <ul className="check-list">
-              <li>The student’s current year group</li>
-              <li>The subject or subjects they need help with</li>
-              <li>Any current challenges or near-term goals</li>
-              <li>Your preferred way to be contacted</li>
-            </ul>
-            <ButtonLink href="/book">Prepare a consultation enquiry</ButtonLink>
-          </div>
-        </Container>
+      {/* ── Hero ──────────────────────────────────────── */}
+      <section className={styles.hero}>
+        <div className={styles.heroDots} aria-hidden="true" />
+        <div className={styles.heroGlow} aria-hidden="true" />
+        <div className={styles.heroInner}>
+          <p className={styles.eyebrow}>Contact LearnThrive</p>
+          <h1 className={styles.heroTitle}>
+            Start with a{" "}
+            <span className={styles.heroMark}>
+              <span className={styles.heroMarkBg} aria-hidden="true" />
+              <span className={styles.heroMarkText}>conversation</span>
+            </span>
+          </h1>
+          <p className={styles.heroLead}>
+            Whether you know the subject support you need or are still working
+            it out, get in touch using the details below.
+          </p>
+        </div>
       </section>
 
-      <CtaSection
-        title="Prefer a guided enquiry?"
-        text="Use the consultation form to gather the key details in one place and prepare an email to LearnThrive."
-      />
-    </>
+      {/* ── Contact Cards ─────────────────────────────── */}
+      <section className={styles.cardsSection}>
+        <div className={styles.cardsGrid}>
+          <ScrollReveal>
+            <article className={`${styles.card} ${styles.cardWhite}`}>
+              <span className={styles.cardLabel}>Email</span>
+              <h2>Write to LearnThrive</h2>
+              <a
+                className={styles.cardLink}
+                href={`mailto:${siteConfig.email}`}
+              >
+                {siteConfig.email}
+              </a>
+              <p>
+                Useful for sharing the student&apos;s year group, subject and a
+                brief outline of the support required.
+              </p>
+            </article>
+          </ScrollReveal>
+          <ScrollReveal delay={110}>
+            <article className={`${styles.card} ${styles.cardNavy}`}>
+              <span className={styles.cardLabel}>Phone</span>
+              <h2>Call LearnThrive</h2>
+              <div className={styles.phoneList}>
+                {siteConfig.phoneContacts.map((contact) => (
+                  <div key={contact.phoneHref} className={styles.phoneItem}>
+                    <span className={styles.phoneName}>{contact.name}</span>
+                    <a
+                      className={styles.phoneNumber}
+                      href={`tel:${contact.phoneHref}`}
+                    >
+                      {contact.phoneDisplay}
+                    </a>
+                  </div>
+                ))}
+              </div>
+              <p>
+                Use either published number to discuss an initial enquiry
+                directly.
+              </p>
+            </article>
+          </ScrollReveal>
+        </div>
+      </section>
+
+      {/* ── Guidance ──────────────────────────────────── */}
+      <section className={styles.guidanceSection}>
+        <div className={styles.guidanceInner}>
+          <ScrollReveal>
+            <div>
+              <p className={`${styles.eyebrow} ${styles.eyebrowDark}`}>
+                Helpful information
+              </p>
+              <h2 className={styles.guidanceTitle}>
+                What to include in an enquiry
+              </h2>
+            </div>
+          </ScrollReveal>
+          <ScrollReveal delay={120}>
+            <ul className={styles.checkList}>
+              {guidanceItems.map((item) => (
+                <li key={item} className={styles.checkItem}>
+                  <svg
+                    className={styles.checkIcon}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M4 12l5 5 11-11"
+                      stroke="currentColor"
+                      strokeWidth="2.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </ScrollReveal>
+        </div>
+      </section>
+
+      {/* ── CTA ───────────────────────────────────────── */}
+      <section className={styles.ctaSection}>
+        <ScrollReveal>
+          <h2>Prefer a guided enquiry?</h2>
+          <p>
+            Use the consultation form to share the key details in one place
+            &mdash; we&apos;ll take it from there.
+          </p>
+          <Link href="/book" className={styles.btnPrimary}>
+            Book a free consultation &rarr;
+          </Link>
+        </ScrollReveal>
+      </section>
+    </div>
   );
 }

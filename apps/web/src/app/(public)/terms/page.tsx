@@ -14,6 +14,7 @@ export default function TermsPage() {
       eyebrow="Website terms"
       title="Terms for using this website"
       intro="The ground rules for using LearnThrive’s public information and enquiry features."
+      reviewedOn="28 September 2026"
       scope={
         <>
           <p>
@@ -55,10 +56,9 @@ export default function TermsPage() {
           content: (
             <>
               <p>
-                The consultation form prepares an email draft on your device.
-                The website does not send the enquiry: you review and send it
-                using your email app. Preparing a draft alone does not contact
-                LearnThrive.
+                Submitting the consultation form sends your enquiry directly to
+                LearnThrive by email, and you will receive a confirmation email
+                once it has been received.
               </p>
               <p>
                 Sending an enquiry starts a discussion. It does not itself
