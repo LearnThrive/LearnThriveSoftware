@@ -1,41 +1,54 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
+import { startMicLevel } from '../micLevel';
 
-/** Live mic activity meter for the pre-join screen. Never records; owns its own AudioContext lifecycle. */
+/**
+ * Live mic activity meter for the pre-join screen. Never records; owns its own AudioContext lifecycle
+ * (see micLevel.ts).
+ *
+ * Deliberately holds no React state for the level: it changes every display frame and only one
+ * element depends on it, so the analyser loop writes the bar's `transform` directly (a compositor
+ * property) and the component renders once per prop change, not once per frame. The accessible name
+ * is refreshed by the same loop at a human pace, not per frame.
+ */
 export function MicLevelMeter({ stream, active }: { stream: MediaStream | null; active: boolean }) {
-  const [level, setLevel] = useState(0);
-  const frameRef = useRef<number | null>(null);
+  const meterRef = useRef<HTMLDivElement>(null);
+  const fillRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setLevel(0);
-    const track = stream?.getAudioTracks().find((candidate) => candidate.readyState === 'live');
-    if (!active || !track || typeof AudioContext === 'undefined') return undefined;
+    const meter = meterRef.current;
+    const fill = fillRef.current;
+    if (!meter || !fill) return undefined;
 
-    const audioContext = new AudioContext();
-    const analyser = audioContext.createAnalyser();
-    analyser.fftSize = 512;
-    const source = audioContext.createMediaStreamSource(new MediaStream([track]));
-    source.connect(analyser);
-    const data = new Uint8Array(analyser.frequencyBinCount);
-
-    const tick = () => {
-      analyser.getByteTimeDomainData(data);
-      let sumSquares = 0;
-      for (const value of data) { const normalized = (value - 128) / 128; sumSquares += normalized * normalized; }
-      setLevel(Math.min(1, Math.sqrt(sumSquares / data.length) * 4));
-      frameRef.current = requestAnimationFrame(tick);
+    const setLevel = (level: number) => {
+      fill.style.transform = `scaleX(${level})`;
     };
-    frameRef.current = requestAnimationFrame(tick);
+    setLevel(0);
 
+    const track = stream?.getAudioTracks().find((candidate) => candidate.readyState === 'live');
+    if (!active || !track) {
+      meter.setAttribute('aria-label', 'Microphone is off');
+      return undefined;
+    }
+
+    meter.setAttribute('aria-label', 'Microphone level 0 percent');
+    const stop = startMicLevel(track, {
+      onFrame: setLevel,
+      onLabel: (percent) => meter.setAttribute('aria-label', `Microphone level ${percent} percent`),
+    });
     return () => {
-      if (frameRef.current != null) cancelAnimationFrame(frameRef.current);
-      source.disconnect();
-      void audioContext.close();
+      stop();
+      setLevel(0);
     };
   }, [stream, active]);
 
   return (
-    <div className="mic-meter" role="img" aria-label={active ? `Microphone level ${Math.round(level * 100)} percent` : 'Microphone is off'}>
-      <div className="mic-meter-fill" style={{ transform: `scaleX(${active ? level : 0})` }} />
+    <div
+      ref={meterRef}
+      className="mic-meter"
+      role="img"
+      aria-label={active ? 'Microphone level 0 percent' : 'Microphone is off'}
+    >
+      <div ref={fillRef} className="mic-meter-fill" style={{ transform: 'scaleX(0)' }} />
     </div>
   );
 }
