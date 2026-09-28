@@ -404,9 +404,4 @@
   .page :global(*) {
     animation: none !important;
   }
-
-  :global(.rv) {
-    opacity: 1;
-    transform: none;
-  }
 }

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { BodyClass } from "@/components/BodyClass";
-import { ScrollReveal } from "@/components/ScrollReveal";
+import { Reveal } from "@/components/motion/primitives/Reveal";
 import { Marquee } from "@/components/Marquee";
 import { StatCounter } from "@/components/StatCounter";
 import { EnquiryForm } from "@/components/EnquiryForm";
@@ -105,13 +105,13 @@ export default function HomePage() {
 
       {/* ── Why Us ────────────────────────────────────── */}
       <section id="why" className={styles.whySection}>
-        <ScrollReveal>
+        <Reveal variant="editorial">
           <p className={styles.eyebrow}>Why families choose us</p>
           <h2 className={styles.sectionTitle}>Three things we won&apos;t compromise on</h2>
           <p className={styles.sectionSubtitle}>Every session, every student.</p>
-        </ScrollReveal>
+        </Reveal>
         <div className={styles.whyGrid}>
-          <ScrollReveal>
+          <Reveal variant="scale">
             <div className={`${styles.whyCard} ${styles.whyCardNavy}`}>
               <div className={styles.whyCardHeader}>
                 <div className={`${styles.whyCardIcon} ${styles.whyCardIconNavy}`}>
@@ -128,8 +128,8 @@ export default function HomePage() {
               <h3 className={styles.whyCardTitle}>Truly one-to-one</h3>
               <p className={styles.whyCardText}>No groups, no shared screens. The whole session belongs to your child.</p>
             </div>
-          </ScrollReveal>
-          <ScrollReveal delay={110}>
+          </Reveal>
+          <Reveal variant="scale" delay={0.11}>
             <div className={`${styles.whyCard} ${styles.whyCardWhite}`}>
               <div className={styles.whyCardHeader}>
                 <div className={`${styles.whyCardIcon} ${styles.whyCardIconWhite}`}>
@@ -142,8 +142,8 @@ export default function HomePage() {
               <h3 className={styles.whyCardTitle}>Built around your child</h3>
               <p className={styles.whyCardText}>We start from where they are now and what they feel stuck on, then plan from there.</p>
             </div>
-          </ScrollReveal>
-          <ScrollReveal delay={220}>
+          </Reveal>
+          <Reveal variant="scale" delay={0.22}>
             <div className={`${styles.whyCard} ${styles.whyCardGreen}`}>
               <div className={styles.whyCardHeader}>
                 <div className={`${styles.whyCardIcon} ${styles.whyCardIconGreen}`}>
@@ -156,13 +156,13 @@ export default function HomePage() {
               <h3 className={styles.whyCardTitle}>Progress you can see</h3>
               <p className={styles.whyCardText}>Confidence first, then the results that follow it.</p>
             </div>
-          </ScrollReveal>
+          </Reveal>
         </div>
       </section>
 
       {/* ── How It Works ──────────────────────────────── */}
       <section id="how" className={styles.howSection}>
-        <ScrollReveal>
+        <Reveal variant="side">
           <div className={styles.howImage}>
             <Image
               src="/images/parent-child-homework.jpg"
@@ -172,8 +172,8 @@ export default function HomePage() {
               style={{ objectFit: "cover" }}
             />
           </div>
-        </ScrollReveal>
-        <ScrollReveal delay={120}>
+        </Reveal>
+        <Reveal variant="soft" delay={0.12}>
           <p className={styles.eyebrow}>How it works</p>
           <h2 className={styles.howTitle}>Four steps, no obligation</h2>
           <LearningPathScene>
@@ -191,20 +191,20 @@ export default function HomePage() {
               ))}
             </div>
           </LearningPathScene>
-        </ScrollReveal>
+        </Reveal>
       </section>
 
       {/* ── Subjects ──────────────────────────────────── */}
       <section id="subjects" className={styles.subjectsSection}>
-        <ScrollReveal>
+        <Reveal variant="mask">
           <div className={styles.subjectsSectionHeader}>
             <h2>Four subjects, every stage</h2>
             <span className={styles.subjectsSectionRange}>KS2 &rarr; A-LEVEL</span>
           </div>
-        </ScrollReveal>
+        </Reveal>
         <div className={styles.subjectsGrid}>
           {subjectCards.map((subject, i) => (
-            <ScrollReveal key={subject.slug} delay={i * 90}>
+            <Reveal variant="scale" key={subject.slug} delay={i * 0.09}>
               <Link href={`/${subject.slug}`} className={styles.subjectCard}>
                 <div className={styles.subjectCardImage}>
                   <Image
@@ -231,14 +231,14 @@ export default function HomePage() {
                   <span className={styles.subjectCardLink}>{subject.range} <span className={styles.subjectCardArrow} aria-hidden="true">&rarr;</span></span>
                 </div>
               </Link>
-            </ScrollReveal>
+            </Reveal>
           ))}
         </div>
       </section>
 
       {/* ── Product demonstration ────────────────────── */}
       <section id="platform" className={styles.productSection}>
-        <ScrollReveal>
+        <Reveal variant="editorial">
           <div className={styles.productSectionHeader}>
             <p className={styles.eyebrow}>See it in action</p>
             <h2 className={styles.sectionTitle} style={{ marginInline: "auto" }}>
@@ -248,10 +248,10 @@ export default function HomePage() {
               A live lesson, a report your family can see, progress that carries through to the next one.
             </p>
           </div>
-        </ScrollReveal>
-        <ScrollReveal delay={100}>
+        </Reveal>
+        <Reveal variant="soft" delay={0.1}>
           <ProductTabs />
-        </ScrollReveal>
+        </Reveal>
       </section>
 
       {/* ── Inside a LearnThrive lesson (sticky story) ── */}
@@ -259,15 +259,15 @@ export default function HomePage() {
 
       {/* ── Levels ────────────────────────────────────── */}
       <section id="levels" className={styles.levelsSection}>
-        <ScrollReveal>
+        <Reveal variant="editorial">
           <p className={styles.eyebrow}>Levels we cover</p>
           <h2 className={styles.sectionTitle} style={{ marginBottom: 28 }}>
             From first steps to final exams
           </h2>
-        </ScrollReveal>
+        </Reveal>
         <div className={styles.levelsGrid}>
           {levels.map((level, i) => (
-            <ScrollReveal key={level.name} delay={i * 80}>
+            <Reveal variant="side" key={level.name} delay={i * 0.08}>
               <div className={`${styles.levelRow} ${level.dark ? styles.levelRowDark : ""}`}>
                 <div>
                   <div className={styles.levelName}>{level.name}</div>
@@ -278,42 +278,42 @@ export default function HomePage() {
                   <div className={styles.levelBarFill} style={{ width: `${level.fill}%` }} />
                 </div>
               </div>
-            </ScrollReveal>
+            </Reveal>
           ))}
         </div>
       </section>
 
       {/* ── Stats ─────────────────────────────────────── */}
       <div className={styles.statsStrip}>
-        <ScrollReveal>
+        <Reveal variant="soft">
           <div className={`${styles.stat} ${styles.statFirst}`}>
             <StatCounter target={40} suffix="+" className={styles.statValue} />
             <span className={styles.statLabel}>students supported</span>
           </div>
-        </ScrollReveal>
-        <ScrollReveal delay={80}>
+        </Reveal>
+        <Reveal variant="soft" delay={0.08}>
           <div className={`${styles.stat} ${styles.statOther}`}>
             <b className={styles.statValue}>1</b>
             <span className={styles.statLabel}>full academic year</span>
           </div>
-        </ScrollReveal>
-        <ScrollReveal delay={160}>
+        </Reveal>
+        <Reveal variant="soft" delay={0.16}>
           <div className={`${styles.stat} ${styles.statOther}`}>
             <b className={styles.statValue}>Y1&ndash;A2</b>
             <span className={styles.statLabel}>every stage covered</span>
           </div>
-        </ScrollReveal>
-        <ScrollReveal delay={240}>
+        </Reveal>
+        <Reveal variant="soft" delay={0.24}>
           <div className={`${styles.stat} ${styles.statOther}`}>
             <b className={`${styles.statValue} ${styles.statValueGreen}`}>1:1</b>
             <span className={styles.statLabel}>always, never groups</span>
           </div>
-        </ScrollReveal>
+        </Reveal>
       </div>
 
       {/* ── Tutor standards ───────────────────────────── */}
       <section className={styles.trustSection}>
-        <ScrollReveal>
+        <Reveal variant="scale">
           <div className={styles.trustCard}>
             <div>
               <p className={styles.eyebrow}>Tutor standards</p>
@@ -330,32 +330,32 @@ export default function HomePage() {
             </div>
             <SafeguardingScene />
           </div>
-        </ScrollReveal>
+        </Reveal>
       </section>
 
       {/* ── Testimonials ──────────────────────────────── */}
       <section className={styles.testimonialsSection}>
-        <ScrollReveal>
+        <Reveal variant="editorial">
           <p className={styles.eyebrow}>What families say</p>
           <h2 className={styles.sectionTitle} style={{ marginBottom: 28 }}>
             Real progress, in their words
           </h2>
-        </ScrollReveal>
+        </Reveal>
         <div className={styles.testimonialsGrid}>
           {testimonials.slice(0, 3).map((testimonial, i) => (
-            <ScrollReveal key={testimonial.attribution} delay={i * 90}>
+            <Reveal variant="soft" key={testimonial.attribution} delay={i * 0.09}>
               <figure className={styles.testimonialCard}>
                 <blockquote className={styles.testimonialQuote}>{testimonial.quote}</blockquote>
                 <figcaption className={styles.testimonialAttribution}>{testimonial.attribution}</figcaption>
               </figure>
-            </ScrollReveal>
+            </Reveal>
           ))}
         </div>
       </section>
 
       {/* ── Enquiry ───────────────────────────────────── */}
       <section id="enquire" className={styles.enquirySection}>
-        <ScrollReveal>
+        <Reveal variant="soft">
           <div className={styles.enquiryCopy}>
             <p className={styles.eyebrow}>Get in touch today</p>
             <h2>Let&apos;s help your child thrive</h2>
@@ -367,12 +367,12 @@ export default function HomePage() {
               <a href={`mailto:${siteConfig.email}`}>{siteConfig.email}</a>
             </div>
           </div>
-        </ScrollReveal>
-        <ScrollReveal delay={120}>
+        </Reveal>
+        <Reveal variant="soft" delay={0.12}>
           <div className={styles.enquiryFormWrapper}>
             <EnquiryForm />
           </div>
-        </ScrollReveal>
+        </Reveal>
       </section>
     </div>
   );
