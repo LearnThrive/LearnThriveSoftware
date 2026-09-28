@@ -1,0 +1,196 @@
+.section {
+  padding: 80px 40px;
+  background: var(--lt-navy);
+  color: #fff;
+}
+
+.header {
+  max-width: 46ch;
+  margin: 0 auto 56px;
+  text-align: center;
+}
+
+.headerTitle {
+  color: #fff !important;
+}
+
+.headerLead {
+  margin-top: 14px;
+  font-size: 16.5px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 60px;
+  max-width: 1240px;
+  margin: 0 auto;
+  align-items: start;
+}
+
+.stickyCol {
+  position: sticky;
+  top: 100px;
+}
+
+.stage {
+  position: relative;
+  height: 420px;
+  border-radius: 1.5rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.stageInner {
+  position: absolute;
+  inset: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.stageLabel {
+  font-family: var(--lt-font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8ed2ad;
+}
+
+.stageProgress {
+  display: flex;
+  gap: 6px;
+  margin-top: auto;
+}
+
+.stageDot {
+  flex: 1;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+}
+
+.stageDotFill {
+  height: 100%;
+  background: #8ed2ad;
+}
+
+.mockRow {
+  display: flex;
+  gap: 10px;
+}
+
+.mockTile {
+  flex: 1;
+  padding: 16px 0;
+  text-align: center;
+  border-radius: 0.6rem;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.mockCard {
+  padding: 18px;
+  border-radius: 0.8rem;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--lt-navy);
+}
+
+.mockCardLabel {
+  font-family: var(--lt-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--lt-green-dark);
+  margin-bottom: 6px;
+}
+
+.mockCardTitle {
+  font-family: var(--lt-font-heading);
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.mockPillRow {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.mockPill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.mockPillActive {
+  background: #8ed2ad;
+  color: var(--lt-navy);
+}
+
+.storyCol {
+  display: flex;
+  flex-direction: column;
+}
+
+.beat {
+  min-height: 62vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 32px 0;
+}
+
+.beat:last-child {
+  min-height: 40vh;
+}
+
+.beatNumber {
+  font-family: var(--lt-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: #8ed2ad;
+  margin-bottom: 10px;
+}
+
+.beatTitle {
+  color: #fff !important;
+  font-size: 28px !important;
+  margin: 0 0 10px !important;
+}
+
+.beatText {
+  font-size: 16px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.72);
+  max-width: 40ch;
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+
+  .stickyCol {
+    position: relative;
+    top: 0;
+  }
+
+  .stage {
+    height: 320px;
+  }
+
+  .beat {
+    min-height: 0;
+    padding: 20px 0;
+  }
+}

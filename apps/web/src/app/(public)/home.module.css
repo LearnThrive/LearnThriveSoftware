@@ -539,10 +539,10 @@
 }
 
 /* plan9.md section 7's "learning path" brand motif — a thin LearnThrive-green line connecting
-   the steps as they're read — applied here rather than the plain grey divider this used to be.
-   A repeating-gradient dash pattern instead of an SVG path: the connector's exact length depends
-   on each step's wrapped text height, which an SVG can't know statically, while a CSS background
-   naturally stretches to whatever height the absolutely-positioned top/bottom offsets resolve to. */
+   the steps as they're read. plan10.md section 5 takes it further: LearningPathScene.tsx now
+   drives this as a real SVG path that draws in on scroll instead of always being fully drawn.
+   .howStepsLine (the flat CSS version) is kept as the reduced-motion fallback the scene renders
+   instead of the SVG — same visual result, no motion. */
 .howStepsLine {
   position: absolute;
   left: 17px;
@@ -556,6 +556,31 @@
     transparent 5px,
     transparent 11px
   );
+}
+
+.howStepsPathWrap {
+  position: relative;
+}
+
+/* Same absolute box the CSS fallback above uses — top+bottom (no explicit height) lets the box
+   stretch to match however tall the steps actually render, which varies with wrapped text. This
+   has to be a plain div, not the <svg> itself: SVG is a CSS replaced element, and top+bottom
+   implying an auto height reliably resolves for ordinary boxes but not for replaced elements,
+   which fall back to their own intrinsic size (here, the viewBox's literal 100 units → 100px)
+   instead of stretching. The inner SVG (width/height 100%, preserveAspectRatio="none") then
+   fills this already-correctly-sized track via ordinary percentage sizing. */
+.howStepsPathTrack {
+  position: absolute;
+  left: 17px;
+  top: 12px;
+  bottom: 22px;
+  width: 2px;
+}
+
+.howStepsPathSvg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .howStep {
