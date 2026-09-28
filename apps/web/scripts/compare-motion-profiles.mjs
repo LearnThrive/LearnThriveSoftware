@@ -45,6 +45,8 @@ function cell(pick, digits = 0, { absolute = false } = {}) {
 const phaseFrames = (phase, field) => (row) => row.phases[phase]?.frames[field] ?? NaN;
 const phaseCdp = (phase, field) => (row) => row.phases[phase]?.cdp[field] ?? NaN;
 
+const tracePick = (phase, name, field) => (row) => row.phases[phase]?.trace?.[name]?.[field] ?? NaN;
+
 const tables = [
   {
     title: "Load and size",
@@ -85,6 +87,27 @@ const tables = [
     ],
   },
 ];
+
+// A --trace run also counts the rendering work itself. Frame timings from such a run are inflated by
+// tracing, so this table is about how much work was done, and the others about a normal run.
+if (before.results.some((row) => row.phases.scrollDown?.trace)) {
+  for (const [phase, title] of [
+    ["scrollDown", "Rendering work while scrolling down (traced run)"],
+    ["idle", "Rendering work at rest (traced run)"],
+  ]) {
+    tables.push({
+      title,
+      columns: [
+        ["Paints", cell(tracePick(phase, "Paint", "count"))],
+        ["Paint ms", cell(tracePick(phase, "Paint", "ms"), 1)],
+        ["Raster tasks", cell(tracePick(phase, "RasterTask", "count"))],
+        ["Raster ms", cell(tracePick(phase, "RasterTask", "ms"), 1)],
+        ["Layouts", cell(tracePick(phase, "Layout", "count"))],
+        ["Style recalcs", cell(tracePick(phase, "UpdateLayoutTree", "count"))],
+      ],
+    });
+  }
+}
 
 const out = [];
 out.push(`_${before.meta.label}${after ? ` vs ${after.meta.label}` : ""} · Chromium ${before.meta.chromium} · ${before.meta.glRenderer}_`);
