@@ -64,6 +64,7 @@ test("the (public) layout's <noscript> forces the final state for a visitor with
   const noscript = layout.match(/<noscript>[\s\S]*?<\/noscript>/)[0];
   assert.match(noscript, /\[data-reveal\]/);
   assert.match(noscript, /\[data-reveal-inner\]/);
+  assert.match(noscript, /\[data-underline-draw\]/);
   assert.match(noscript, /opacity: 1 !important/);
   assert.match(noscript, /transform: none !important/);
 });
