@@ -15,6 +15,7 @@ export default function CookiesPage() {
       eyebrow="Website information"
       title="Cookie notice"
       intro="A plain-language explanation of the cookies and similar technologies used by the current LearnThrive Tuition website."
+      reviewedOn="10 September 2026"
       scope={
         <>
           <p>
@@ -51,9 +52,10 @@ export default function CookiesPage() {
               </p>
               <p>
                 The enquiry form holds your answers temporarily while the page is
-                open. It prepares a draft email on your device and does not use
-                cookies or browser storage to save the answers. Closing or
-                reloading the page clears those in-page values.
+                open, and sends them directly to LearnThrive by email when you
+                submit. It does not use cookies or browser storage to save the
+                answers. Closing or reloading the page before submitting clears
+                those in-page values.
               </p>
             </>
           ),

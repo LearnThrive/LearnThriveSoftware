@@ -4,11 +4,17 @@ import { Container } from "@/components/Container";
 import { PhoneContacts } from "@/components/PhoneContacts";
 import { navigation, siteConfig, subjects } from "@/lib/site";
 
+// Kept "Privacy" ahead of the requested Cookies/Website Terms/Tuition Terms/Safeguarding/
+// Complaints/Accessibility row rather than dropping it: EnquiryForm already links to it
+// ("you agree to our privacy notice"), and UK GDPR expects a visible privacy notice link.
 const legalLinks = [
   { href: "/privacy", label: "Privacy" },
   { href: "/cookies", label: "Cookies" },
-  { href: "/terms", label: "Terms" },
+  { href: "/terms", label: "Website Terms" },
+  { href: "/tuition-terms", label: "Tuition Terms" },
   { href: "/safeguarding", label: "Safeguarding" },
+  { href: "/complaints", label: "Complaints" },
+  { href: "/accessibility", label: "Accessibility" },
 ] as const;
 
 export function SiteFooter() {
@@ -84,6 +90,11 @@ export function SiteFooter() {
             ))}
           </nav>
         </div>
+        <p className="footer-registration">
+          {siteConfig.legalName} &middot; Company No. {siteConfig.companyNumber} &middot;
+          registered in {siteConfig.registeredIn} &middot; Correspondence address:{" "}
+          {siteConfig.correspondenceAddress}
+        </p>
       </Container>
     </footer>
   );

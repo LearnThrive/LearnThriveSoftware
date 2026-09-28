@@ -20,9 +20,16 @@
   --colour-focus: #813900;
   --colour-focus-outer: #fff2b8;
 
-  --font-sans: "Aptos", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system,
-    BlinkMacSystemFont, sans-serif;
-  --font-heading: "Aptos Display", "Segoe UI Variable Display", "Segoe UI",
+  /* Both variables resolve through next/font (loaded sitewide on <html> in layout.tsx), with the
+     same system-font fallback chain either way. "Aptos"/"Aptos Display" (Microsoft 365's default)
+     used to be first in this chain but nothing actually loads that font — it silently fell back
+     to Segoe UI/system-ui on any machine without Office installed, on every route except the
+     homepage/subjects pages, which already override to this same Bricolage/Public Sans pairing
+     via home.module.css's .page. Using it here instead makes the rest of the site match what
+     those two pages already do, at no extra font-loading cost since the variables are global. */
+  --font-sans: var(--font-public-sans), "Segoe UI Variable", "Segoe UI", system-ui,
+    -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-heading: var(--font-bricolage), "Segoe UI Variable Display", "Segoe UI",
     system-ui, sans-serif;
 
   --container: 75rem;
@@ -2847,6 +2854,15 @@ ol {
 .footer-bottom a {
   color: #b9cbd5;
   text-decoration: none;
+}
+
+.footer-registration {
+  margin: 0.9rem 0 0;
+  padding-top: 0.9rem;
+  border-top: 1px solid rgb(255 255 255 / 8%);
+  color: #7a8f9c;
+  font-size: 0.72rem;
+  line-height: 1.6;
 }
 
 @media (hover: hover) and (pointer: fine) {

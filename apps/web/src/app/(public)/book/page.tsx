@@ -19,7 +19,7 @@ export default function BookPage() {
       <PageHero
         eyebrow="Free consultation"
         title="Tell us how we can support your child"
-        intro="Share a few practical details and prepare an email enquiry for LearnThrive. You will review and send it from your own email app."
+        intro="Share a few practical details and we'll be in touch to arrange a free consultation."
         aside={
           <div className="contact-mini-card">
             <span>Prefer to speak directly?</span>
@@ -55,8 +55,8 @@ export default function BookPage() {
               <li>
                 <span>2</span>
                 <div>
-                  <strong>Review your email</strong>
-                  <p>Your device will open a pre-addressed draft for you to send.</p>
+                  <strong>You get a confirmation email</strong>
+                  <p>Your details go straight to LearnThrive, and we&apos;ll email you to confirm it arrived.</p>
                 </div>
               </li>
               <li>
@@ -68,11 +68,10 @@ export default function BookPage() {
               </li>
             </ol>
             <div className="honesty-note">
-              <strong>Why email?</strong>
+              <strong>What happens to your details?</strong>
               <p>
-                This marketing site does not store or send form data. It prepares
-                a draft in your email app so you can review the details before
-                choosing to send them.
+                Your enquiry is sent directly to LearnThrive by email — nothing is
+                stored on this website beyond what&apos;s needed to deliver that message.
               </p>
             </div>
           </aside>

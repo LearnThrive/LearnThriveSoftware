@@ -28,8 +28,8 @@ export const faqSections: readonly FaqSection[] = [
         id: "how-to-get-started",
         question: "How do I get started with LearnThrive Tuition?",
         answer:
-          "Begin with a free consultation enquiry. You can share the student’s year group, subject and a brief outline of the support required. The booking form prepares an email on your device for you to review and send.",
-        link: { href: "/book", label: "Prepare a consultation enquiry" },
+          "Begin with a free consultation enquiry. You can share the student’s year group, subject and a brief outline of the support required. The booking form sends your enquiry directly to LearnThrive, and you'll get a confirmation email once it's received.",
+        link: { href: "/book", label: "Start a consultation enquiry" },
       },
       {
         id: "after-enquiry",

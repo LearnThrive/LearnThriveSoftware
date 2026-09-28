@@ -6,8 +6,10 @@ import { ScrollReveal } from "@/components/ScrollReveal";
 import { Marquee } from "@/components/Marquee";
 import { StatCounter } from "@/components/StatCounter";
 import { EnquiryForm } from "@/components/EnquiryForm";
+import { ProductTabs } from "@/components/ProductTabs";
+import { SubjectIcon, SubjectMotif, SUBJECT_ACCENT, type SubjectKey } from "@/components/SubjectIcon";
 import { createMetadata } from "@/lib/metadata";
-import { siteConfig } from "@/lib/site";
+import { siteConfig, testimonials } from "@/lib/site";
 import styles from "./home.module.css";
 
 export const metadata: Metadata = createMetadata({
@@ -33,9 +35,18 @@ const howSteps = [
   { title: "You see progress", text: "In confidence first, then in results.", last: true },
 ];
 
-const subjectCards = [
+const subjectCards: {
+  title: string;
+  subject: SubjectKey;
+  slug: string;
+  description: string;
+  image: string;
+  imageAlt: string;
+  range: string;
+}[] = [
   {
     title: "Maths",
+    subject: "maths",
     slug: "maths-tuition",
     description: "From number confidence at KS2 to calculus, statistics and mechanics at A-Level.",
     image: "/images/subject-maths.jpg",
@@ -44,6 +55,7 @@ const subjectCards = [
   },
   {
     title: "English",
+    subject: "english",
     slug: "english-tuition",
     description: "Reading, writing and analysis that build clear, confident communicators.",
     image: "/images/subject-english.jpg",
@@ -52,6 +64,7 @@ const subjectCards = [
   },
   {
     title: "Science",
+    subject: "science",
     slug: "science-tuition",
     description: "Biology, chemistry and physics — curious, hands-on and clearly explained.",
     image: "/images/subject-science.jpg",
@@ -60,6 +73,7 @@ const subjectCards = [
   },
   {
     title: "11+ Preparation",
+    subject: "eleven-plus",
     slug: "11-plus-tuition",
     description: "Maths, English and reasoning, with the exam technique that counts.",
     image: "/images/subject-elevenplus.jpg",
@@ -129,6 +143,10 @@ export default function HomePage() {
             <div className={styles.heroFloatChip}>
               <div className={styles.heroFloatChipTitle}>One-to-one, 60 min</div>
               <div className={styles.heroFloatChipSub}>TIMED AROUND SCHOOL</div>
+            </div>
+            <div className={styles.heroFloatChipSecondary}>
+              <div className={styles.heroFloatChipTitle}>Lesson report, every time</div>
+              <div className={styles.heroFloatChipSub}>PROGRESS YOU CAN SEE</div>
             </div>
           </div>
         </div>
@@ -248,8 +266,17 @@ export default function HomePage() {
                     sizes="(max-width: 1100px) 100vw, 50vw"
                     style={{ width: "100%", height: "100%", objectFit: "cover" }}
                   />
+                  <div className={styles.subjectCardMotif}>
+                    <SubjectMotif subject={subject.subject} />
+                  </div>
                 </div>
                 <div className={styles.subjectCardBody}>
+                  <div
+                    className={styles.subjectCardIcon}
+                    style={{ color: SUBJECT_ACCENT[subject.subject], background: `${SUBJECT_ACCENT[subject.subject]}14` }}
+                  >
+                    <SubjectIcon subject={subject.subject} />
+                  </div>
                   <h3>{subject.title}</h3>
                   <p>{subject.description}</p>
                   <span className={styles.subjectCardLink}>{subject.range} <span className={styles.subjectCardArrow} aria-hidden="true">&rarr;</span></span>
@@ -258,6 +285,24 @@ export default function HomePage() {
             </ScrollReveal>
           ))}
         </div>
+      </section>
+
+      {/* ── Product demonstration ────────────────────── */}
+      <section id="platform" className={styles.productSection}>
+        <ScrollReveal>
+          <div className={styles.productSectionHeader}>
+            <p className={styles.eyebrow}>See it in action</p>
+            <h2 className={styles.sectionTitle} style={{ marginInline: "auto" }}>
+              One platform, built around every lesson
+            </h2>
+            <p className={styles.sectionSubtitle}>
+              A live lesson, a report your family can see, progress that carries through to the next one.
+            </p>
+          </div>
+        </ScrollReveal>
+        <ScrollReveal delay={100}>
+          <ProductTabs />
+        </ScrollReveal>
       </section>
 
       {/* ── Levels ────────────────────────────────────── */}
@@ -313,6 +358,61 @@ export default function HomePage() {
           </div>
         </ScrollReveal>
       </div>
+
+      {/* ── Tutor standards ───────────────────────────── */}
+      <section className={styles.trustSection}>
+        <ScrollReveal>
+          <div className={styles.trustCard}>
+            <div>
+              <p className={styles.eyebrow}>Tutor standards</p>
+              <h2 className={styles.sectionTitle}>Every tutor is DBS-checked</h2>
+              <p className={styles.trustText}>
+                Every tutor goes through a thorough hiring process before
+                teaching a LearnThrive student, including a Disclosure and
+                Barring Service (DBS) check. No tutor begins teaching until
+                this process is complete.
+              </p>
+              <Link href="/safeguarding" className={styles.trustLink}>
+                Read our full safeguarding commitment <span aria-hidden="true">&rarr;</span>
+              </Link>
+            </div>
+            <ul className={styles.trustList}>
+              {[
+                "DBS-checked before teaching",
+                "Thorough hiring process, every tutor",
+                "Clear route to raise any concern",
+              ].map((item) => (
+                <li key={item} className={styles.trustListItem}>
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M4 12l5 5 11-11" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </ScrollReveal>
+      </section>
+
+      {/* ── Testimonials ──────────────────────────────── */}
+      <section className={styles.testimonialsSection}>
+        <ScrollReveal>
+          <p className={styles.eyebrow}>What families say</p>
+          <h2 className={styles.sectionTitle} style={{ marginBottom: 28 }}>
+            Real progress, in their words
+          </h2>
+        </ScrollReveal>
+        <div className={styles.testimonialsGrid}>
+          {testimonials.slice(0, 3).map((testimonial, i) => (
+            <ScrollReveal key={testimonial.attribution} delay={i * 90}>
+              <figure className={styles.testimonialCard}>
+                <blockquote className={styles.testimonialQuote}>{testimonial.quote}</blockquote>
+                <figcaption className={styles.testimonialAttribution}>{testimonial.attribution}</figcaption>
+              </figure>
+            </ScrollReveal>
+          ))}
+        </div>
+      </section>
 
       {/* ── Enquiry ───────────────────────────────────── */}
       <section id="enquire" className={styles.enquirySection}>

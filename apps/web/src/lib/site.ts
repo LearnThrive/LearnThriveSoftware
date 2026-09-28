@@ -23,6 +23,10 @@ export const siteConfig = {
     linkedin: "https://www.linkedin.com/company/learnthrive-tuition/",
   },
   tutorLoginUrl: "/login",
+  legalName: "LearnThrive Tuition Ltd",
+  companyNumber: "16680738",
+  registeredIn: "England and Wales",
+  correspondenceAddress: "71-75 Shelton Street, Covent Garden, London, United Kingdom, WC2H 9JQ",
 } as const;
 
 export const navigation = [

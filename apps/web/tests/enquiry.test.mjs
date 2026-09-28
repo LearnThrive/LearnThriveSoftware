@@ -77,14 +77,43 @@ test("email credentials are read at request time and a configured enquiry can su
   setApiKey(t, undefined);
   const { POST } = loadRoute();
   process.env.RESEND_API_KEY = "re_test_not_a_real_key";
-  let sentEmail;
+  const sentEmails = [];
   t.mock.method(globalThis, "fetch", async (_url, options) => {
-    sentEmail = JSON.parse(options.body);
+    sentEmails.push(JSON.parse(options.body));
     return Response.json({ id: "test-email-id" });
   });
   const response = await POST(request());
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { success: true });
-  assert.equal(sentEmail.reply_to, "parent@example.com");
-  assert.match(sentEmail.html, /fractions and algebra/);
+
+  // Two emails now, not one: an admin notification and an auto-reply confirmation to the
+  // parent, both awaited (not fire-and-forget) so this ordering is deterministic.
+  assert.equal(sentEmails.length, 2);
+  const [adminEmail, autoReply] = sentEmails;
+  assert.equal(adminEmail.reply_to, "parent@example.com");
+  assert.match(adminEmail.html, /fractions and algebra/);
+  assert.deepEqual(adminEmail.to, ["info@learnthrivetuition.co.uk"]);
+
+  assert.deepEqual(autoReply.to, ["parent@example.com"]);
+  assert.equal(autoReply.reply_to, "info@learnthrivetuition.co.uk");
+  assert.match(autoReply.html, /Thank you for your enquiry, Test Parent/);
+});
+
+test("a failed auto-reply does not fail the overall enquiry submission", async (t) => {
+  setApiKey(t, undefined);
+  const { POST } = loadRoute();
+  process.env.RESEND_API_KEY = "re_test_not_a_real_key";
+  let calls = 0;
+  t.mock.method(globalThis, "fetch", async (_url, options) => {
+    calls += 1;
+    const parsed = JSON.parse(options.body);
+    // Fail only the second call (the auto-reply) — the admin notification must still succeed.
+    if (calls === 2) throw new Error("simulated Resend outage");
+    void parsed;
+    return Response.json({ id: "test-email-id" });
+  });
+  const response = await POST(request());
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { success: true });
+  assert.equal(calls, 2);
 });

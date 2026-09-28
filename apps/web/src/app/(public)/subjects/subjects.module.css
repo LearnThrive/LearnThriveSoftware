@@ -1,8 +1,14 @@
 /* ── Subjects page redesign — scoped styles ─────────────── */
 
 .page {
-  --lt-navy: #143152;
-  --lt-navy-deep: #0E2540;
+  /* --lt-navy/--lt-navy-deep: see home.module.css's matching comment — reconciled to the
+     sitewide --colour-navy-900/950 tokens instead of a drifted local hex.
+     --lt-text: was #64727E, which only cleared 4.43:1 on this page's cream background (just
+     under WCAG AA's 4.5:1 minimum for normal text) — the same bug home.module.css's own comment
+     already documented and fixed there (darkened to #586573) but that fix never made it to this
+     page's separate copy of the same token block. Matching it here closes that gap. */
+  --lt-navy: var(--colour-navy-900);
+  --lt-navy-deep: var(--colour-navy-950);
   --lt-green: #075f52;
   --lt-green-dark: #075f52;
   --lt-green-light: #087363;
@@ -10,7 +16,7 @@
   --lt-cream-light: #FBF8F1;
   --lt-border: #E7DFCD;
   --lt-ink: #26333F;
-  --lt-text: #64727E;
+  --lt-text: #586573;
   --lt-font-heading: var(--font-bricolage), sans-serif;
   --lt-font-body: var(--font-public-sans), system-ui, sans-serif;
   --lt-font-mono: var(--font-ibm-plex-mono), monospace;
@@ -466,7 +472,7 @@
   font-weight: 600;
   font-size: 16.5px;
   padding: 16px 30px;
-  border-radius: 999px;
+  border-radius: 0.62rem; /* matches globals.css's .button — see home.module.css's .btnPrimary comment */
   text-decoration: none;
   box-shadow: 0 14px 30px -16px rgba(7, 95, 82, 0.9);
   transition: transform 0.2s, background 0.2s;
