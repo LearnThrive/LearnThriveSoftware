@@ -60,7 +60,11 @@ export function SafeguardingScene() {
 
   return (
     <LazyMotion features={domAnimation}>
-      <div ref={ref as React.RefObject<HTMLDivElement>} className={styles.pipeline}>
+      <div
+        ref={ref as React.RefObject<HTMLDivElement>}
+        className={styles.pipeline}
+        data-motion-scene="safeguarding-pipeline"
+      >
         {STAGES.map((stage, i) => {
           const active = i <= activeStage;
           return (

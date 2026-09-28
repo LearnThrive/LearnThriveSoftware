@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/*.test.mjs",
     "test:browser": "node scripts/browser-check.mjs",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "profile:motion": "node scripts/profile-motion.mjs"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.1",

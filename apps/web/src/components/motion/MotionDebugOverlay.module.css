@@ -1,0 +1,54 @@
+/* plan11.md task 1's debug overlay. Never interactive: it must be possible to click, scroll and
+   tab straight through it, because a debug panel that intercepts input changes the thing being
+   measured. No backdrop-filter or blur — the tool that reports paint cost shouldn't add any. */
+.panel {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  z-index: 2147483000;
+  min-width: 200px;
+  max-width: calc(100vw - 24px);
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgb(8 20 34 / 88%);
+  color: #d7e6f4;
+  font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  pointer-events: none;
+  user-select: none;
+}
+
+.title {
+  margin: 0 0 6px;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8ed2ad;
+}
+
+.list {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.row dt {
+  color: #8aa4bd;
+}
+
+.row dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* Toggled from the readout when dropped frames exceed the plan's 2% target. */
+.warn dd {
+  color: #ffb4a8;
+}
