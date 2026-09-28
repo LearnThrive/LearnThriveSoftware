@@ -19,6 +19,10 @@
  *   --out <dir>          output directory
  *   --cpu-throttle <n>   slow the main thread n-fold (CDP), approximating a midrange phone; a
  *                        fast machine hides main-thread cost that a 4x throttle exposes    [1]
+ *   --trace              also record Chromium's trace and count paint / raster / layout events per
+ *                        phase. Tracing slows the page down, so a --trace run's frame timings are
+ *                        not comparable to a normal run's — use it for *how much work*, not *how
+ *                        fast*, and keep the two kinds of run separate.
  *   --reduced            emulate prefers-reduced-motion: reduce
  *   --quick              one short run, for smoke-testing the script itself
  *
@@ -81,6 +85,7 @@ function parseArgs(argv) {
     port: 3200,
     out: resolve(root, "artifacts", "motion-profile"),
     cpuThrottle: 1,
+    trace: false,
     reduced: false,
     quick: false,
   };
@@ -115,6 +120,9 @@ function parseArgs(argv) {
         break;
       case "--cpu-throttle":
         options.cpuThrottle = Number(value());
+        break;
+      case "--trace":
+        options.trace = true;
         break;
       case "--reduced":
         options.reduced = true;
@@ -250,8 +258,41 @@ function diffMetrics(before, after) {
   return delta;
 }
 
+// The trace events that say how much rendering work a phase caused. `Paint` is Blink recording a
+// layer's display list on the main thread; `RasterTask` is the compositor turning display lists into
+// pixels on worker threads (the cost a needlessly repainted layer really pays); the rest are the
+// other stages a frame can be dragged through.
+const TRACE_EVENTS = ["Paint", "PrePaint", "RasterTask", "UpdateLayoutTree", "Layout", "CompositeLayers"];
+
+async function startTrace(cdp) {
+  const events = [];
+  const onData = ({ value }) => {
+    for (const event of value) if (TRACE_EVENTS.includes(event.name) && event.ph === "X") events.push(event);
+  };
+  cdp.on("Tracing.dataCollected", onData);
+  await cdp.send("Tracing.start", {
+    transferMode: "ReportEvents",
+    categories: "devtools.timeline,disabled-by-default-devtools.timeline,cc,gpu",
+  });
+  return { events, onData };
+}
+
+async function stopTrace(cdp, trace) {
+  const complete = new Promise((done) => cdp.once("Tracing.tracingComplete", done));
+  await cdp.send("Tracing.end");
+  await complete;
+  cdp.off("Tracing.dataCollected", trace.onData);
+  const summary = {};
+  for (const name of TRACE_EVENTS) {
+    const matching = trace.events.filter((event) => event.name === name);
+    summary[name] = { count: matching.length, ms: round(matching.reduce((total, event) => total + (event.dur || 0), 0) / 1000, 1) };
+  }
+  return summary;
+}
+
 /** Runs `action` while the real frame profiler samples the page, and returns what it saw. */
-async function measurePhase(page, cdp, action) {
+async function measurePhase(page, cdp, action, options = {}) {
+  const trace = options.trace ? await startTrace(cdp) : null;
   const before = await cdpMetrics(cdp);
   await page.evaluate(() => {
     const profiler = window.__ltProfiler.createFrameProfiler({ windowSize: 200_000 });
@@ -265,8 +306,14 @@ async function measurePhase(page, cdp, action) {
     return profiler.snapshot();
   });
   const after = await cdpMetrics(cdp);
+  const traced = trace ? { trace: await stopTrace(cdp, trace) } : {};
   // A scroll phase returns how far it actually moved the page; keep it as evidence in the output.
-  return { frames, cdp: diffMetrics(before, after), ...(typeof detail === "number" ? { scrolledPx: detail } : {}) };
+  return {
+    frames,
+    cdp: diffMetrics(before, after),
+    ...traced,
+    ...(typeof detail === "number" ? { scrolledPx: detail } : {}),
+  };
 }
 
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
@@ -432,13 +479,13 @@ async function profileOnce(browser, baseUrl, route, viewport, options) {
     const load = await readLoadMetrics(page);
 
     const phases = {};
-    phases.idle = await measurePhase(page, cdp, () => page.waitForTimeout(options.quick ? 1000 : 2500));
+    phases.idle = await measurePhase(page, cdp, () => page.waitForTimeout(options.quick ? 1000 : 2500), options);
     if (!viewport.hasTouch) {
-      phases.pointer = await measurePhase(page, cdp, () => sweepPointer(page, viewport, options.quick ? 800 : 1800));
+      phases.pointer = await measurePhase(page, cdp, () => sweepPointer(page, viewport, options.quick ? 800 : 1800), options);
     }
-    phases.scrollDown = await measurePhase(page, cdp, () => scrollThrough(page, cdp, viewport, "down"));
+    phases.scrollDown = await measurePhase(page, cdp, () => scrollThrough(page, cdp, viewport, "down"), options);
     // Scene state must survive a fast reverse scroll (plan11.md review focus 5), so measure it.
-    phases.scrollUp = await measurePhase(page, cdp, () => scrollThrough(page, cdp, viewport, "up"));
+    phases.scrollUp = await measurePhase(page, cdp, () => scrollThrough(page, cdp, viewport, "up"), options);
 
     const finalMetrics = await cdpMetrics(cdp);
     const clsAfterScroll = await page.evaluate(() => window.__ltPerf.cls);
@@ -476,6 +523,15 @@ function aggregate(runs) {
     for (const key of FRAME_KEYS) entry.frames[key] = round(median(runs.map((run) => run.phases[phase].frames[key])));
     for (const key of [...CDP_COUNTERS, ...CDP_DURATIONS]) {
       entry.cdp[key] = round(median(runs.map((run) => run.phases[phase].cdp[key])), 1);
+    }
+    if (runs[0].phases[phase].trace) {
+      entry.trace = {};
+      for (const name of TRACE_EVENTS) {
+        entry.trace[name] = {
+          count: Math.round(median(runs.map((run) => run.phases[phase].trace[name].count))),
+          ms: round(median(runs.map((run) => run.phases[phase].trace[name].ms)), 1),
+        };
+      }
     }
     if (runs[0].phases[phase].scrolledPx !== undefined) {
       entry.scrolledPx = Math.round(median(runs.map((run) => run.phases[phase].scrolledPx)));
@@ -611,6 +667,7 @@ async function main() {
         baseUrl,
         runsPerRoute: options.runs,
         cpuThrottle: options.cpuThrottle,
+        traced: options.trace,
         reducedMotion: options.reduced,
         quick: options.quick,
         note:
