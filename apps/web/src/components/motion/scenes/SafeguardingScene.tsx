@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import * as m from "framer-motion/m";
-import { LazyMotion, domAnimation, useMotionValueEvent, useReducedMotion, useTransform } from "framer-motion";
+import { useMotionValueEvent, useReducedMotion, useTransform } from "framer-motion";
 import { useScene } from "@/lib/motion/scroll";
 import styles from "./SafeguardingScene.module.css";
 
@@ -59,33 +59,31 @@ export function SafeguardingScene() {
   });
 
   return (
-    <LazyMotion features={domAnimation}>
-      <div ref={ref as React.RefObject<HTMLDivElement>} className={styles.pipeline}>
-        {STAGES.map((stage, i) => {
-          const active = i <= activeStage;
-          return (
-            <div key={stage} className={styles.stage}>
-              {i < STAGES.length - 1 && (
-                <div className={styles.stageLine}>
-                  <m.div className={styles.stageLineFill} style={{ scaleY: lineFillScale }} />
-                </div>
+    <div ref={ref as React.RefObject<HTMLDivElement>} className={styles.pipeline}>
+      {STAGES.map((stage, i) => {
+        const active = i <= activeStage;
+        return (
+          <div key={stage} className={styles.stage}>
+            {i < STAGES.length - 1 && (
+              <div className={styles.stageLine}>
+                <m.div className={styles.stageLineFill} style={{ scaleY: lineFillScale }} />
+              </div>
+            )}
+            <span className={`${styles.stageDot} ${active ? styles.stageDotActive : ""}`}>
+              {active && (
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M4 12l5 5 11-11" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               )}
-              <span className={`${styles.stageDot} ${active ? styles.stageDotActive : ""}`}>
-                {active && (
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M4 12l5 5 11-11" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
+            </span>
+            <span className={styles.stageBody}>
+              <span className={`${styles.stageTitle} ${active ? "" : styles.stageTitleInactive}`}>
+                {stage}
               </span>
-              <span className={styles.stageBody}>
-                <span className={`${styles.stageTitle} ${active ? "" : styles.stageTitleInactive}`}>
-                  {stage}
-                </span>
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    </LazyMotion>
+            </span>
+          </div>
+        );
+      })}
+    </div>
   );
 }

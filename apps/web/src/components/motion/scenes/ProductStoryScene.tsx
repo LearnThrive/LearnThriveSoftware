@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import * as m from "framer-motion/m";
-import { AnimatePresence, LazyMotion, domAnimation, useMotionValueEvent, useReducedMotion } from "framer-motion";
+import { AnimatePresence, useMotionValueEvent, useReducedMotion } from "framer-motion";
 import { useScene } from "@/lib/motion/scroll";
 import styles from "./ProductStoryScene.module.css";
 
@@ -122,69 +122,67 @@ export function ProductStoryScene() {
   const scene = SCENES[activeScene];
 
   return (
-    <LazyMotion features={domAnimation}>
-      <section
-        ref={ref as React.RefObject<HTMLElement>}
-        id="lesson-story"
-        className={styles.section}
-      >
-        <div className={styles.header}>
-          <p className={styles.stageLabel}>Inside a LearnThrive lesson</p>
-          <h2 className={styles.headerTitle}>One lesson, followed all the way through</h2>
-          <p className={styles.headerLead}>
-            From finding a tutor to the report a parent actually reads afterwards.
-          </p>
-        </div>
-        <div className={styles.grid}>
-          <div className={styles.stickyCol}>
-            <div className={styles.stage}>
-              <div className={styles.stageInner}>
-                <span className={styles.stageLabel}>{scene.label}</span>
-                <AnimatePresence mode="wait">
-                  {/* initial/exit stay the same {opacity, y} shape regardless of reduceMotion —
-                      conditionally passing undefined instead caused a real hydration mismatch:
-                      Motion bakes the initial values into the SSR'd HTML, and reduceMotion itself
-                      can read differently between server (always false) and a real reduced-
-                      motion client's first render, so the two disagreed on whether opacity/
-                      transform should be present at all. The duration alone (already branched)
-                      is enough to make this read as near-instant under reduced motion. */}
-                  <m.div
-                    key={activeScene}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    transition={{ duration: reduceMotion ? 0.08 : 0.28 }}
-                    style={{ display: "flex", flexDirection: "column", gap: 12 }}
-                  >
-                    <SceneVisual index={activeScene} />
-                  </m.div>
-                </AnimatePresence>
-                <div className={styles.stageProgress}>
-                  {SCENES.map((s, i) => (
-                    <span key={s.label} className={styles.stageDot}>
-                      <span
-                        className={styles.stageDotFill}
-                        style={{ width: i <= activeScene ? "100%" : "0%" }}
-                      />
-                    </span>
-                  ))}
-                </div>
+    <section
+      ref={ref as React.RefObject<HTMLElement>}
+      id="lesson-story"
+      className={styles.section}
+    >
+      <div className={styles.header}>
+        <p className={styles.stageLabel}>Inside a LearnThrive lesson</p>
+        <h2 className={styles.headerTitle}>One lesson, followed all the way through</h2>
+        <p className={styles.headerLead}>
+          From finding a tutor to the report a parent actually reads afterwards.
+        </p>
+      </div>
+      <div className={styles.grid}>
+        <div className={styles.stickyCol}>
+          <div className={styles.stage}>
+            <div className={styles.stageInner}>
+              <span className={styles.stageLabel}>{scene.label}</span>
+              <AnimatePresence mode="wait">
+                {/* initial/exit stay the same {opacity, y} shape regardless of reduceMotion —
+                    conditionally passing undefined instead caused a real hydration mismatch:
+                    Motion bakes the initial values into the SSR'd HTML, and reduceMotion itself
+                    can read differently between server (always false) and a real reduced-
+                    motion client's first render, so the two disagreed on whether opacity/
+                    transform should be present at all. The duration alone (already branched)
+                    is enough to make this read as near-instant under reduced motion. */}
+                <m.div
+                  key={activeScene}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: reduceMotion ? 0.08 : 0.28 }}
+                  style={{ display: "flex", flexDirection: "column", gap: 12 }}
+                >
+                  <SceneVisual index={activeScene} />
+                </m.div>
+              </AnimatePresence>
+              <div className={styles.stageProgress}>
+                {SCENES.map((s, i) => (
+                  <span key={s.label} className={styles.stageDot}>
+                    <span
+                      className={styles.stageDotFill}
+                      style={{ width: i <= activeScene ? "100%" : "0%" }}
+                    />
+                  </span>
+                ))}
               </div>
             </div>
           </div>
-          <div className={styles.storyCol}>
-            {SCENES.map((s, i) => (
-              <div key={s.label} className={styles.beat}>
-                <span className={styles.beatNumber}>
-                  {String(i + 1).padStart(2, "0")} &middot; {s.label}
-                </span>
-                <h3 className={styles.beatTitle}>{s.title}</h3>
-                <p className={styles.beatText}>{s.text}</p>
-              </div>
-            ))}
-          </div>
         </div>
-      </section>
-    </LazyMotion>
+        <div className={styles.storyCol}>
+          {SCENES.map((s, i) => (
+            <div key={s.label} className={styles.beat}>
+              <span className={styles.beatNumber}>
+                {String(i + 1).padStart(2, "0")} &middot; {s.label}
+              </span>
+              <h3 className={styles.beatTitle}>{s.title}</h3>
+              <p className={styles.beatText}>{s.text}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
