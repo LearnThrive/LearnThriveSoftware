@@ -48,7 +48,9 @@ export default function ContactPage() {
       {/* ── Contact Cards ─────────────────────────────── */}
       <section className={styles.cardsSection}>
         <div className={styles.cardsGrid}>
-          <Reveal variant="scale">
+          {/* Both cards are on the first screen at desktop widths and hold the page's largest text
+              paint; revealing them delayed LCP to ~880 ms in the profile, so they are static. */}
+          <Reveal variant="static">
             <article className={`${styles.card} ${styles.cardWhite}`}>
               <span className={styles.cardLabel}>Email</span>
               <h2>Write to LearnThrive</h2>
@@ -64,7 +66,7 @@ export default function ContactPage() {
               </p>
             </article>
           </Reveal>
-          <Reveal variant="scale" delay={0.11}>
+          <Reveal variant="static">
             <article className={`${styles.card} ${styles.cardNavy}`}>
               <span className={styles.cardLabel}>Phone</span>
               <h2>Call LearnThrive</h2>

@@ -96,9 +96,15 @@ test("every <Reveal> on the marketing pages names a real variant, and generic so
   const used = [];
   for (const file of pages) {
     for (const match of read(...file).matchAll(/<Reveal\b([^>]*)>/g)) {
-      const variant = match[1].match(/variant="(\w+)"/)?.[1];
-      assert.ok(VARIANTS.includes(variant), `${file.join("/")}: <Reveal${match[1]}> has no valid variant`);
-      used.push(variant);
+      // A literal (`variant="soft"`) or a choice between literals (`variant={i < 2 ? "static" : "soft"}`,
+      // used for first-screen content that must not wait for a reveal). Every literal must be real.
+      const attribute = match[1].match(/variant=(?:"(\w+)"|\{([^}]*)\})/);
+      const names = attribute?.[1] ? [attribute[1]] : [...(attribute?.[2] ?? "").matchAll(/"(\w+)"/g)].map((found) => found[1]);
+      assert.ok(
+        names.length > 0 && names.every((name) => VARIANTS.includes(name)),
+        `${file.join("/")}: <Reveal${match[1]}> has no valid variant`,
+      );
+      used.push(...names);
     }
   }
   assert.ok(used.length >= 30, `expected the migrated call sites, found ${used.length}`);

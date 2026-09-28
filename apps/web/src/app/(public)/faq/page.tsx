@@ -57,7 +57,9 @@ export default function FaqPage() {
       {/* ── Category cards ───────────────────────────── */}
       <div className={styles.faqSections}>
         {faqSections.map((section, i) => (
-          <Reveal variant="soft" key={section.id} delay={(i % 2) * 0.08}>
+          // The first row of categories is on the first screen and holds the page's largest text
+          // paint (LCP ~870 ms when revealed); it is static, and the rows below reveal.
+          <Reveal variant={i < 2 ? "static" : "soft"} key={section.id} delay={(i % 2) * 0.08}>
             <section
               className={styles.category}
               id={section.id}
