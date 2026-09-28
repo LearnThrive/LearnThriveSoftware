@@ -1,0 +1,45 @@
+.root {
+  position: relative;
+  display: inline-block;
+}
+
+/* Sits on the text's baseline area, inside the root's own box, so it can never add scroll or
+   overflow. Drawn from the left; opacity is not animated, only the scale. */
+.line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -0.12em;
+  height: var(--underline-thickness, 2px);
+  border-radius: 2px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left center;
+  pointer-events: none;
+  transition: transform var(--duration-slow, 380ms) var(--ease-snappy, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+/* Hover and keyboard focus (anything focusable inside), and the explicit active state. */
+.root:hover .line,
+.root:focus-within .line,
+.root[data-active="true"] .line {
+  transform: scaleX(1);
+}
+
+/* A drawOnView line is driven by Motion, not by hover: it starts at scaleX(0) inline and ends at 1.
+   The hover rule still applies, harmlessly, once it is drawn. */
+.onView .line {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .line {
+    transition: none;
+  }
+
+  /* A line that is only drawn by scrolling would otherwise never appear. Hover-only lines have no
+     data-underline-draw and are left exactly as they are. */
+  :global([data-underline-draw]) {
+    transform: none !important;
+  }
+}

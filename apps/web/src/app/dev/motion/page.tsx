@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { MotionRuntime } from "@/components/motion/MotionRuntime";
 import { Reveal, type RevealVariant } from "@/components/motion/primitives/Reveal";
+import { MotionLabPrimitives } from "./MotionLabPrimitives";
 
 export const metadata: Metadata = {
   title: "Motion Lab | LearnThrive",
@@ -11,7 +12,7 @@ export const metadata: Metadata = {
 const VARIANTS: RevealVariant[] = ["soft", "mask", "scale", "side", "editorial", "static"];
 
 /**
- * A development-only bench for the marketing motion primitives (plan11.md task 6). Real
+ * A development-only bench for the marketing motion primitives (plan11.md tasks 6 and 8). Real
  * pages come and go and reword themselves; a bench with fixed, known content lets tests assert on
  * one primitive at a time — "does every reveal variant end readable", "is pointer depth inert on
  * touch" — without depending on what any page happens to say this week. Same convention as
@@ -42,6 +43,8 @@ export default function DevMotionPage() {
             </Reveal>
           </section>
         ))}
+
+        <MotionLabPrimitives />
       </main>
     </MotionRuntime>
   );
