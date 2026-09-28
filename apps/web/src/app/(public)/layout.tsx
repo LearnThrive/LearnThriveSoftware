@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { MotionDebugOverlay } from "@/components/motion/MotionDebugOverlay";
 import { PublicShell } from "@/components/shell/PublicShell";
 
 export default function PublicLayout({ children }: { children: ReactNode }) {
@@ -15,6 +16,9 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
         <style>{`.rv { opacity: 1 !important; transform: none !important; }`}</style>
       </noscript>
       <PublicShell>{children}</PublicShell>
+      {/* Renders nothing unless `?motionDebug=1` is present in a development build (or a build
+          made with NEXT_PUBLIC_MOTION_DEBUG=1) — see lib/motion/debug.ts. */}
+      <MotionDebugOverlay />
     </>
   );
 }

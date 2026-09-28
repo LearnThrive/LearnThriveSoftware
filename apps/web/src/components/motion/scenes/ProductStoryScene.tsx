@@ -127,6 +127,7 @@ export function ProductStoryScene() {
         ref={ref as React.RefObject<HTMLElement>}
         id="lesson-story"
         className={styles.section}
+        data-motion-scene="product-story"
       >
         <div className={styles.header}>
           <p className={styles.stageLabel}>Inside a LearnThrive lesson</p>

@@ -38,7 +38,7 @@ export function HeroScene() {
 
   return (
     <LazyMotion features={domAnimation}>
-      <section ref={ref as React.RefObject<HTMLElement>} className={styles.hero}>
+      <section ref={ref as React.RefObject<HTMLElement>} className={styles.hero} data-motion-scene="hero">
         <m.div className={styles.heroDots} style={{ y: gridY }} aria-hidden="true" />
         <div className={styles.heroGlow} aria-hidden="true" />
         <div className={styles.heroGrid}>
