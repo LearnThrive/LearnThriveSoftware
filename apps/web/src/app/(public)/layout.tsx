@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { PublicShell } from "@/components/shell/PublicShell";
+import { MotionDebugOverlay } from "@/components/motion/MotionDebugOverlay";
 
 export default function PublicLayout({ children }: { children: ReactNode }) {
   return (
@@ -15,6 +16,13 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
         <style>{`.rv { opacity: 1 !important; transform: none !important; }`}</style>
       </noscript>
       <PublicShell>{children}</PublicShell>
+      {/* Suspense, not a bare render: MotionDebugOverlay reads useSearchParams() for the
+          ?motionDebug=1 opt-in, and Next's App Router requires that hook to sit under a Suspense
+          boundary — otherwise the whole page tree bails out of static generation to render it,
+          which would silently undo every marketing page's Server Component default. */}
+      <Suspense fallback={null}>
+        <MotionDebugOverlay />
+      </Suspense>
     </>
   );
 }
