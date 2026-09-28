@@ -43,6 +43,70 @@ async function leaveMeeting(page: Page, isTutor = false) {
   await page.getByRole('button', { name: isTutor ? 'Yes, end class' : 'Yes, leave' }).click();
 }
 
+// plan11.md task 4: the pre-join mic meter used to `setState` on every animation frame — a React
+// commit per frame, plus a rewrite of its accessible name per frame. It now writes the fill's
+// transform directly and refreshes the name a few times a second. Counting the commits React
+// performs (it reports each one to __REACT_DEVTOOLS_GLOBAL_HOOK__ if a hook is installed before it
+// loads) turns "does it re-render per frame?" into a number: ~120 over two seconds before, a handful
+// after.
+test('the pre-join mic meter is driven without a React render per frame', async ({ browser }) => {
+  const isChromium = browser.browserType().name() === 'chromium';
+  const context = await browser.newContext(isChromium ? { permissions: ['camera', 'microphone'] } : {});
+  await context.addInitScript(() => {
+    const w = window as unknown as { __reactCommits: number; __REACT_DEVTOOLS_GLOBAL_HOOK__: unknown };
+    w.__reactCommits = 0;
+    const renderers = new Map();
+    w.__REACT_DEVTOOLS_GLOBAL_HOOK__ = {
+      supportsFiber: true,
+      renderers,
+      isDisabled: false,
+      inject(renderer: unknown) {
+        const id = renderers.size + 1;
+        renderers.set(id, renderer);
+        return id;
+      },
+      onCommitFiberRoot() {
+        w.__reactCommits += 1;
+      },
+      onPostCommitFiberRoot() {},
+      onCommitFiberUnmount() {},
+      checkDCE() {},
+    };
+  });
+  const page = await context.newPage();
+  await page.goto('/meeting');
+  await page.getByLabel('Your name').fill('Meter Tester');
+  await enableDevices(page);
+
+  const meter = page.locator('.mic-meter');
+  await expect(meter).toHaveAttribute('aria-label', /^Microphone level \d+ percent$/);
+  await page.waitForTimeout(500);
+
+  await page.evaluate(() => {
+    const w = window as unknown as { __reactCommits: number; __labelWrites: number; __fillWrites: number };
+    w.__reactCommits = 0;
+    w.__labelWrites = 0;
+    w.__fillWrites = 0;
+    new MutationObserver((records) => {
+      w.__labelWrites += records.length;
+    }).observe(document.querySelector('.mic-meter')!, { attributes: true, attributeFilter: ['aria-label'] });
+    new MutationObserver((records) => {
+      w.__fillWrites += records.length;
+    }).observe(document.querySelector('.mic-meter-fill')!, { attributes: true, attributeFilter: ['style'] });
+  });
+  await page.waitForTimeout(2000);
+
+  const counts = await page.evaluate(() => {
+    const w = window as unknown as { __reactCommits: number; __labelWrites: number; __fillWrites: number };
+    return { commits: w.__reactCommits, labelWrites: w.__labelWrites, fillWrites: w.__fillWrites };
+  });
+  expect(counts.fillWrites, 'the fill should be moving with the fake microphone').toBeGreaterThan(0);
+  expect(counts.commits, `React committed ${counts.commits} times in two seconds`).toBeLessThan(15);
+  // 250 ms refresh, and only when the rounded percentage changes: at most 8 in two seconds.
+  expect(counts.labelWrites, 'the accessible name should be refreshed at a human pace').toBeLessThanOrEqual(9);
+  await context.close();
+});
+
 async function connectTutorAndOneStudent(browser: Browser, tutorName = 'Tutor', studentName = 'Student') {
   const { context: contextA, page: pageA } = await openParticipant(browser, tutorName);
   await pageA.getByRole('button', { name: 'Create meeting' }).click();

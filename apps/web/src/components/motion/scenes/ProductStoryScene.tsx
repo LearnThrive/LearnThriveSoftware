@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import * as m from "framer-motion/m";
-import { AnimatePresence, useMotionValueEvent, useReducedMotion } from "framer-motion";
-import { useScene } from "@/lib/motion/scroll";
+import { AnimatePresence, useReducedMotion, useTransform, type MotionValue } from "framer-motion";
+import { useDiscreteProgress, useScene } from "@/lib/motion/scroll";
 import styles from "./ProductStoryScene.module.css";
 
 /**
@@ -109,15 +108,26 @@ function SceneVisual({ index }: { index: number }) {
   );
 }
 
+/**
+ * One segment of the stage's progress bar. It fills as the scroll moves through *its* sixth of the
+ * scene (plan11.md task 5): a `scaleX` driven straight from the scroll MotionValue, so the fill
+ * follows the visitor's scroll smoothly, never touches layout, and never goes through React. It used
+ * to be an inline `width` of 0% or 100% chosen by the active-scene state — a layout property, changed
+ * by a re-render, that snapped instead of filling. (It was also an inline `<span>`, and inline boxes
+ * ignore `width` and `transform` altogether, so the CSS now makes it a block.)
+ */
+function StageDotFill({ progress, index }: { progress: MotionValue<number>; index: number }) {
+  const scaleX = useTransform(progress, [index / SCENES.length, (index + 1) / SCENES.length], [0, 1]);
+  return <m.span className={styles.stageDotFill} style={{ scaleX }} />;
+}
+
 export function ProductStoryScene() {
   const { ref, smoothProgress } = useScene(["start start", "end end"]);
   const reduceMotion = useReducedMotion();
-  const [activeScene, setActiveScene] = useState(0);
-
-  useMotionValueEvent(smoothProgress, "change", (latest) => {
-    const index = Math.min(SCENES.length - 1, Math.max(0, Math.floor(latest * SCENES.length)));
-    setActiveScene(index);
-  });
+  // Which scene is showing is discrete UI state; how far through the story we are is not. The step
+  // is derived from the scroll progress and React hears only when it changes (lib/motion/thresholds.ts),
+  // not on every frame of the spring — the progress bar below reads the MotionValue directly.
+  const activeScene = useDiscreteProgress(smoothProgress, SCENES.length);
 
   const scene = SCENES[activeScene];
 
@@ -126,6 +136,7 @@ export function ProductStoryScene() {
       ref={ref as React.RefObject<HTMLElement>}
       id="lesson-story"
       className={styles.section}
+      data-motion-scene="product-story"
     >
       <div className={styles.header}>
         <p className={styles.stageLabel}>Inside a LearnThrive lesson</p>
@@ -161,10 +172,7 @@ export function ProductStoryScene() {
               <div className={styles.stageProgress}>
                 {SCENES.map((s, i) => (
                   <span key={s.label} className={styles.stageDot}>
-                    <span
-                      className={styles.stageDotFill}
-                      style={{ width: i <= activeScene ? "100%" : "0%" }}
-                    />
+                    <StageDotFill progress={smoothProgress} index={i} />
                   </span>
                 ))}
               </div>

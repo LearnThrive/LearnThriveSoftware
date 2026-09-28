@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { BodyClass } from "@/components/BodyClass";
-import { ScrollReveal } from "@/components/ScrollReveal";
+import { Reveal } from "@/components/motion/primitives/Reveal";
 import { FaqList } from "@/components/FaqList";
 import { FaqHashOpener } from "@/components/FaqHashOpener";
 import { createMetadata } from "@/lib/metadata";
@@ -57,7 +57,9 @@ export default function FaqPage() {
       {/* ── Category cards ───────────────────────────── */}
       <div className={styles.faqSections}>
         {faqSections.map((section, i) => (
-          <ScrollReveal key={section.id} delay={(i % 2) * 80}>
+          // The first row of categories is on the first screen and holds the page's largest text
+          // paint (LCP ~870 ms when revealed); it is static, and the rows below reveal.
+          <Reveal variant={i < 2 ? "static" : "soft"} key={section.id} delay={(i % 2) * 0.08}>
             <section
               className={styles.category}
               id={section.id}
@@ -81,7 +83,7 @@ export default function FaqPage() {
                 <FaqList items={section.items} />
               </div>
             </section>
-          </ScrollReveal>
+          </Reveal>
         ))}
       </div>
 
@@ -91,7 +93,7 @@ export default function FaqPage() {
 
       {/* ── CTA ───────────────────────────────────────── */}
       <section className={styles.ctaSection}>
-        <ScrollReveal>
+        <Reveal variant="soft">
           <h2>Still have a question?</h2>
           <p>
             Contact LearnThrive directly or share a few practical details in a
@@ -103,7 +105,7 @@ export default function FaqPage() {
           <Link href="/contact" className={styles.ctaAlt}>
             Or contact us another way
           </Link>
-        </ScrollReveal>
+        </Reveal>
       </section>
     </div>
   );

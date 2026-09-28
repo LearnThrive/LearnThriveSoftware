@@ -1,0 +1,45 @@
+/* `mask`: the clip line the content slides up from behind. The padding/negative-margin pair grows
+   the clip box by 12px top and bottom without moving anything else on the page — without it
+   `overflow: hidden` slices the descenders off tightly-set headings as they arrive. */
+.mask {
+  overflow: hidden;
+  padding-block: 12px;
+  margin-block: -12px;
+}
+
+/* `editorial`: a short rule drawn in above the block. Absolutely positioned inside the block's own
+   top padding, so the reveal changes nothing about where the content sits. */
+.editorial {
+  position: relative;
+  padding-top: 18px;
+}
+
+.rule {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 56px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.55;
+  transform-origin: left center;
+}
+
+/* Reduced motion: every variant shows its final state at once. Motion server-renders each
+   element's *start* state as an inline style, and a rule with !important is the one thing that
+   beats an inline style — so this needs no JavaScript and no per-component branching, and it cannot
+   differ between the server and the client (which is what makes a `useReducedMotion()` branch in
+   markup a hydration hazard). The animation still runs underneath; it just isn't visible. */
+@media (prefers-reduced-motion: reduce) {
+  :global([data-reveal]),
+  :global([data-reveal-inner]),
+  :global([data-reveal-rule]) {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  :global([data-reveal-rule]) {
+    opacity: 0.55 !important;
+  }
+}

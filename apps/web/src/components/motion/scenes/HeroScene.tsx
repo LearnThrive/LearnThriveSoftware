@@ -37,7 +37,7 @@ export function HeroScene() {
   const gridY = useTransform(smoothProgress, [0, 1], active ? [0, 40] : [0, 0]);
 
   return (
-    <section ref={ref as React.RefObject<HTMLElement>} className={styles.hero}>
+    <section ref={ref as React.RefObject<HTMLElement>} className={styles.hero} data-motion-scene="hero">
       <m.div className={styles.heroDots} style={{ y: gridY }} aria-hidden="true" />
       <div className={styles.heroGlow} aria-hidden="true" />
       <div className={styles.heroGrid}>
