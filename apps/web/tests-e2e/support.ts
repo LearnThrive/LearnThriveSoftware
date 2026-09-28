@@ -19,3 +19,65 @@ export function uniqueLabel(base: string): string {
   const { retry } = test.info();
   return retry === 0 ? base : `${base} (retry ${retry})`;
 }
+
+/** Every public marketing route — shared by the motion specs, which all sweep the whole site. */
+export const PUBLIC_ROUTES = [
+  '/',
+  '/subjects',
+  '/maths-tuition',
+  '/english-tuition',
+  '/science-tuition',
+  '/11-plus-tuition',
+  '/about',
+  '/book',
+  '/contact',
+  '/faq',
+  '/safeguarding',
+  '/privacy',
+  '/cookies',
+  '/terms',
+  '/tuition-terms',
+  '/complaints',
+  '/accessibility',
+];
+
+/**
+ * Counts React commits. React reports every commit to `__REACT_DEVTOOLS_GLOBAL_HOOK__` if one is
+ * installed before it loads, so a stub hook is enough to answer "did this animation go through React
+ * on every frame?" — the question plan11.md is built around — with a number instead of an opinion.
+ * A count-up that used to `setState` on each frame commits ~50 times; one that writes the DOM
+ * directly commits a handful of times at most. Install before navigation.
+ */
+export async function installReactCommitCounter(page: import('@playwright/test').Page) {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __reactCommits: number; __REACT_DEVTOOLS_GLOBAL_HOOK__: unknown };
+    w.__reactCommits = 0;
+    const renderers = new Map();
+    w.__REACT_DEVTOOLS_GLOBAL_HOOK__ = {
+      supportsFiber: true,
+      renderers,
+      isDisabled: false,
+      inject(renderer: unknown) {
+        const id = renderers.size + 1;
+        renderers.set(id, renderer);
+        return id;
+      },
+      onCommitFiberRoot() {
+        w.__reactCommits += 1;
+      },
+      onPostCommitFiberRoot() {},
+      onCommitFiberUnmount() {},
+      checkDCE() {},
+    };
+  });
+}
+
+export async function reactCommits(page: import('@playwright/test').Page): Promise<number> {
+  return page.evaluate(() => (window as unknown as { __reactCommits: number }).__reactCommits);
+}
+
+export async function resetReactCommits(page: import('@playwright/test').Page) {
+  await page.evaluate(() => {
+    (window as unknown as { __reactCommits: number }).__reactCommits = 0;
+  });
+}

@@ -29,7 +29,11 @@ export function LearningPathScene({ children }: { children: ReactNode }) {
   const pathLength = useTransform(smoothProgress, [0, 1], [0, 1]);
 
   return (
-    <div ref={ref as React.RefObject<HTMLDivElement>} className={styles.howStepsPathWrap}>
+    <div
+      ref={ref as React.RefObject<HTMLDivElement>}
+      className={styles.howStepsPathWrap}
+      data-motion-scene="learning-path"
+    >
       <div className={styles.howStepsPathTrack}>
         <svg
           className={styles.howStepsPathSvg}

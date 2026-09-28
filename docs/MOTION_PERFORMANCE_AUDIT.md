@@ -1,258 +1,510 @@
-# Motion & Rendering Performance Audit
+# Motion and rendering performance audit
 
-plan11.md Task 2. Findings are classified `KEEP` / `OPTIMISE` / `REMOVE` / `ISOLATE` / `MEASURE FIRST`,
-each with the concrete path, cost, proposed fix, and how to validate the fix. This audit directly
-informs Tasks 4, 5, and 7 — it doesn't attempt to catalogue every CSS transition in the codebase,
-only continuous/high-frequency work and the plan's own named suspects.
+Plan 11, task 2. Audited at base commit `554013b` (the last commit before any Plan 11 work) across
+`apps/web/src` and `apps/classroom/src`.
 
-**Baseline for comparison**: `apps/web/scripts/profile-motion.mjs`, first captured 28 September
-2026 (saved locally under gitignored `artifacts/motion-profile/`, not committed — re-run to
-reproduce). Homepage showed the highest dropped-frame rate (~8%) of the tested routes.
+The point of this document is to decide, finding by finding, what gets fixed, what stays, and what
+needs a measurement before anyone touches it — and to leave a record that later tasks can be checked
+against. `docs/MOTION_PERFORMANCE_REPORT.md` (task 20) closes each finding with a before/after number.
 
----
+## How this was done
 
-## Named suspects (plan11.md Task 2's explicit checklist)
+- Searched the repository for: scroll / resize / pointer / wheel listeners; `requestAnimationFrame`
+  and `cancelAnimationFrame`; `setInterval`; `IntersectionObserver` / `ResizeObserver` /
+  `MutationObserver`; `@keyframes` and every `animation:`; every `transition:`; `transition: all`;
+  animated `width` / `height` / `top` / `left` / `margin` / `padding`; `box-shadow`; `filter`;
+  `backdrop-filter`; `background-position`; `will-change`; canvas and WebGL; React state written
+  from frame, audio and timer callbacks.
+- Read every hit rather than trusting the pattern. `requestAnimationFrame(() => el.focus())` is a
+  one-shot scheduling trick, not an animation loop, and is listed separately below.
+- Measured the production build of the base commit with `apps/web/scripts/profile-motion.mjs`
+  (task 1). Those numbers are in [Baseline measurements](#baseline-measurements). Anything not
+  measured is labelled **unmeasured** and its cost is stated as reasoning, not fact.
 
-### 1. `.heroGlow` — REMOVE the infinite loop, keep the visual
+### Classification
 
-**Where**: `apps/web/src/app/(public)/home.module.css:101-111`, and — this is the actual
-finding — **the identical pattern repeated on four other pages**, each with its own copy-pasted
-`@keyframes lt-float`:
+| Label | Meaning |
+| --- | --- |
+| **KEEP** | Cheap, bounded, or already correct. Left alone, with the reason. |
+| **OPTIMISE** | Worth doing; the fix is known. |
+| **REMOVE** | Costs more than it is worth, or is dead. |
+| **ISOLATE** | Fine in itself but does work it should not (offscreen, hidden, on the wrong tier); needs a boundary. |
+| **MEASURE FIRST** | Plausibly expensive, but the fix has a visual cost, so it is measured before it is changed. |
 
-- `apps/web/src/app/(public)/about/about.module.css:60-67`
-- `apps/web/src/app/(public)/contact/contact.module.css:62-69`
-- `apps/web/src/app/(public)/faq/faq.module.css:61-68`
-- `apps/web/src/app/(public)/subjects/subjects.module.css:67-74`
+### What was searched for and not found
 
-**Cost**: `filter: blur(10px)` combined with `animation: lt-float 11s ease-in-out infinite` on a
-380px element. A moving blurred layer generally cannot be composited as cheaply as a moving
-sharp one — many browsers must re-rasterize the blur at each new position rather than just
-repositioning a cached layer — and it runs *forever*, on every page load, whether or not the
-element is ever scrolled past or the tab is backgrounded. This directly violates the plan's own
-global constraint ("every continuing animation must pause/suspend when offscreen or when the
-document is hidden") on five separate pages at once.
+- `transition: all` / `transition-property: all`: **none**, in any stylesheet or inline style.
+- `will-change`: **none**. Nothing is promoted to its own layer by hint today; task 7/8 introduces it, and only
+  on layers measured as hot and only while they are on screen.
+- `scroll`, `resize`, `pointermove`, `mousemove`, `touchmove` or `wheel` listeners: **none**. All scroll
+  work is Motion's `useScroll`, which shares one observer path.
+- Canvas / WebGL: **none** in the product code.
+- `background-position` animation: **one** (the skeleton shimmer, [A-01](#a-01-skeleton-shimmer-animates-background-position)).
 
-**Proposed fix** (Task 5/7): either (a) drop the `filter: blur()` and fake the soft edge with a
-radial-gradient's own alpha falloff instead — zero rasterization cost, same visual — or (b) keep
-the blur but stop the perpetual loop: settle once on load (matching the rest of each hero's
-entrance choreography) rather than animating indefinitely. Given five duplicated copies of the
-same `@keyframes lt-float`, this is also a real candidate for the shared motion runtime (Task 3)
-to own once, rather than five independent copies drifting further apart over time.
+## The nine named suspects
 
-**Validation**: re-run `profile-motion.mjs` on `/`, `/about`, `/faq` before/after; the perpetual
-loop's removal should show in reduced long-task/paint activity even on pages with no other scroll
-choreography (`/faq`, `/contact` currently have none of the newer scene work, so any measured
-improvement there isolates this specific fix).
+| Suspect | Verdict | Finding |
+| --- | --- | --- |
+| `.heroGlow` | **OPTIMISE** (effectively REMOVE the perpetual motion) | [M-01](#m-01-hero-glow-heroglow-on-five-pages) |
+| Animated card shadows | **OPTIMISE** | [M-04](#m-04-hover-shadow-interpolation-on-cards) |
+| Product Story progress width | **OPTIMISE** | [M-06](#m-06-product-story-progress-toggles-width-from-react-state) |
+| Product Story scroll → state | **OPTIMISE** | [M-07](#m-07-product-story-scroll--setstate-on-every-spring-tick) |
+| Safeguarding scroll → state | **OPTIMISE** | [M-08](#m-08-safeguarding-scroll--setstate-on-every-spring-tick) |
+| `ScrollReveal` | **OPTIMISE** | [M-05](#m-05-scrollreveal-one-observer-and-one-timer-per-instance) |
+| Marquee | **ISOLATE** | [M-02](#m-02-marquee-never-pauses-offscreen-or-hidden) |
+| Skeleton shimmer | **OPTIMISE** | [A-01](#a-01-skeleton-shimmer-animates-background-position) |
+| Both `MicLevelMeter` implementations | **OPTIMISE** | [C-01](#c-01-miclevelmeter-two-identical-copies-setstate-per-animation-frame) |
 
----
+## Marketing site
 
-### 2. Animated card shadows — OPTIMISE
+### M-01 Hero glow (`.heroGlow`) on five pages
 
-**Where**:
-- `apps/web/src/app/(public)/home.module.css:402` (`.btnPrimary:hover`), `:671`
-  (`.subjectCard:hover`), and several static `box-shadow` values used as hover *targets* for
-  those transitions (`:300`, `:312`, `:419`, `:432`, `:441`).
-- `apps/web/src/app/(public)/subjects/subjects.module.css:283` (`.card:hover`).
+- **Where:** `(public)/home.module.css:102` and the same block copied into `subjects/subjects.module.css:63`,
+  `about/about.module.css`, `contact/contact.module.css`, `faq/faq.module.css` (each owns a private copy).
+- **What it does:** a 340–380 px circle with `filter: blur(10px)` and `animation: lt-float 11s ease-in-out infinite`
+  (a 9 px vertical drift) — forever, on every page that has a hero, whether or not it is on screen.
+- **Cost (measured):** at rest, every page with a hero glow does **1.01 style recalculations per frame**;
+  the two pages without one do **0** ([baseline](#baseline-measurements)). The animation is not
+  running on the compositor — it is a main-thread animation, on a filtered layer, on every frame, for as
+  long as the tab is open. A 10 px blur on a 380 px circle at 18% opacity is also visually
+  indistinguishable from a soft-edged radial gradient, so the filter buys nothing.
+- **Verdict:** OPTIMISE, in practice REMOVE the perpetual motion.
+- **Fix:** replace the filtered circle with a `radial-gradient` background whose soft edge is baked in (no
+  `filter`), delete the infinite float, and — on the homepage only — give it bounded, scroll-linked drift
+  through `ParallaxLayer` (task 7/8) so it moves *because the visitor scrolled*, never on its own.
+- **Validate:** `runningAnimationsAtRest` in the profile no longer lists `lt-float`; idle
+  `RecalcStyleCount` per frame drops; before/after screenshots at 1440/834/390.
 
-**Cost**: `transition: box-shadow 0.3s` on hover/press. `box-shadow` is a paint property, not a
-compositor one — every frame of the 300ms transition forces a repaint of the element (and,
-depending on layering, potentially more). This is real but *bounded*: it only runs while a
-pointer is actively hovering/pressing a card, not continuously, so the cost is real per-interaction
-but not a standing tax on the page like the hero glow above.
+### M-02 Marquee never pauses offscreen or hidden
 
-**Proposed fix** (Task 5): the common technique — two overlapping shadow layers (or a
-pseudo-element carrying the "hover" shadow at `opacity: 0`), cross-fading `opacity` on hover
-instead of interpolating the `box-shadow` value itself. Opacity is compositor-only.
+- **Where:** `home.module.css:338-360` (`.lt-marquee`, `.lt-marquee__track`), rendered by
+  `components/Marquee.tsx` on `/` and `/subjects`.
+- **What it does:** `animation: lt-marquee 26s linear infinite` on `transform: translateX`. It pauses on
+  hover and nothing else.
+- **Cost:** low per frame — `transform` is compositor work — but it never stops. It runs while the marquee
+  is scrolled far out of view and while the tab is in the background, so the page can never fully idle.
+- **Also found — a visual bug.** The marquee's rules were `:global` selectors inside `home.module.css`,
+  a stylesheet only the homepage loads. On a direct visit to `/subjects` or `/about` (which render the same
+  `<Marquee>`) the strip was unstyled. The baseline shows it: `lt-marquee` is running on `/` and on
+  neither of the other two.
+- **Verdict:** ISOLATE, and fix the bug.
+- **Fix:** move the styles into a CSS module owned by `Marquee` (so every page that renders it gets them);
+  keep the transform animation; pause it (`data-paused`) while the marquee is more than 160 px off screen or
+  the document is hidden, from the shared viewport observer and visibility listener — task 3's activity layer.
+- **Validate:** e2e asserts the marquee's `CSSAnimation.playState` is `paused` when scrolled away and
+  `running` when returned to; profile `runningAnimationsAtRest` at the bottom of the page.
 
-**Validation**: profile a hover-heavy interaction pass (rapid hover in/out across the subject
-grid) before/after; expect measurably fewer paint events in the DevTools timeline for the same
-interaction.
+### M-03 Hero entrance keyframes (`lt-rise`, `lt-mark`)
 
----
+- **Where:** the `lt-rise` / `lt-mark` blocks in `home`, `subjects`, `about`, `contact` and `faq` modules.
+- **What it does:** finite (`both`, one iteration) opacity + transform and a `scaleX` underline draw.
+- **Cost:** compositor properties only; one-shot.
+- **Verdict:** KEEP. (The five per-module copies of the same three keyframes are duplicated source, not
+  duplicated runtime cost; CSS Modules scope each copy. Not worth a cross-module abstraction.)
 
-### 3. Product Story progress — width animation — OPTIMISE
+### M-04 Hover shadow interpolation on cards
 
-**Where**: `apps/web/src/components/motion/scenes/ProductStoryScene.tsx:166-167`
-(`.stageDotFill`, `style={{ width: i <= activeScene ? "100%" : "0%" }}`).
+- **Where:** `home.module.css:402` (`.whyCard*`), `:666-690` (`.subjectCard`); `subjects.module.css:283`
+  (`.levelCard`, `.levelCardDark`); `about.module.css:184`; `contact.module.css:145`; `faq.module.css:251`.
+  Same pattern in the app: `app-shell.css:466` (`.stat-tile--link`).
+- **What it does:** `transition: box-shadow 0.3s` between no shadow and `0 26px 44px -28px …` (a 44 px blur,
+  26 px offset), together with a `translateY` lift.
+- **Cost:** `box-shadow` is a paint property. Interpolating a large blurred shadow repaints its whole
+  expanded region on every frame of the 300 ms transition, while the `transform` beside it is free.
+  Bounded to hover, so it is a hitch, not a steady tax. **Unmeasured** (the profile does not hover cards).
+- **Verdict:** OPTIMISE.
+- **Fix:** draw the resting-state-invisible shadow once, on a pseudo-element, and transition its `opacity`
+  (a compositor property). Cards with `overflow: hidden` (`.subjectCard`) move the clip to an inner
+  wrapper so the shadow layer is not clipped.
+- **Validate:** Chrome trace / paint count around a hover; no `box-shadow` in any `transition` list on a
+  marketing card.
 
-**Cost**: `width` is a layout property — animating it forces layout recalculation, unlike
-`transform: scaleX()`, which achieves the identical visual result on the compositor only. Low
-absolute cost here (a handful of small 3px-tall bars), but a completely free fix, and exactly the
-example the plan names by title.
+### M-05 `ScrollReveal`: one observer and one timer per instance
 
-**Proposed fix** (Task 5): `transform: scaleX(...)` with `transform-origin: left`, driven by the
-same `i <= activeScene` boolean.
+- **Where:** `components/ScrollReveal.tsx`; 39 call sites (`page.tsx` 21, `about` 6, `subjects` 5, `contact` 5,
+  `faq` 2), several inside `.map()`, so about 29 instances render on the homepage and 18 on `/subjects`.
+- **What it does:** every instance constructs its own `IntersectionObserver` (one per instance, so ~29
+  observers on the homepage) and calls `setTimeout(add class, delay)`. Content is `opacity: 0` (`:global(.rv)`) until JavaScript adds `.rv--in`.
+- **Cost:** dozens of observers and pending timers, each a separate registration to service on scroll;
+  and content that stays invisible if the script is slow or blocked (the `<noscript>` override in the
+  `(public)` layout exists for exactly that). One style, one direction, one duration for everything —
+  the "generic fade-up" the plan calls out.
+- **Verdict:** OPTIMISE.
+- **Fix:** task 6's `Reveal` — Motion's viewport observation (shared), six variants, compositor-only
+  properties. `ScrollReveal` is deleted only after every import is migrated.
+- **Validate:** observer count on `/` before/after; reduced-motion test renders every variant's final
+  content; the `.rv` class and the `<noscript>` workaround disappear together.
 
----
+### M-06 Product Story progress toggles `width` from React state
 
-### 4. Product Story scroll → state, and 5. Safeguarding scroll → state — OPTIMISE
+- **Where:** `components/motion/scenes/ProductStoryScene.tsx:171-175` (`stageDotFill`,
+  `style={{ width: i <= activeScene ? "100%" : "0%" }}`), `ProductStoryScene.module.css:.stageDotFill`.
+- **What it does:** six progress segments; segment *i* jumps between `0%` and `100%` width when the
+  active scene changes. There is no CSS transition, so it does not animate — it snaps.
+- **Cost:** `width` is a layout property, changed via React re-render. Small element, small cost, but it is
+  the wrong property, and it snaps where a scroll-linked fill would read as motion.
+- **Verdict:** OPTIMISE.
+- **Fix:** `transform: scaleX()` with `transform-origin: left`, driven by a `MotionValue` derived from the
+  scene's scroll progress — a smooth fill that never touches layout and never goes through React.
+- **Validate:** no `width` written to the segment; segment fill tracks scroll progress.
 
-**Where**:
-- `apps/web/src/components/motion/scenes/ProductStoryScene.tsx:117-120`
-  (`useMotionValueEvent(smoothProgress, "change", ...)` → `setActiveScene(index)`)
-- `apps/web/src/components/motion/scenes/SafeguardingScene.tsx:55-59` (same shape,
-  `setActiveStage(index)`)
+### M-07 Product Story: scroll → `setState` on every spring tick
 
-**Cost**: both call their setState **on every "change" event of a spring-smoothed motion value**
-— which fires on essentially every animation frame while the spring is still settling during
-scroll — even when the derived discrete index hasn't actually changed. React's own same-value
-bail-out (`Object.is` check) prevents the wasted *re-render*, but the callback invocation, the
-`Math.min`/`Math.floor` recomputation, and the setState call overhead still happen every frame.
-Not catastrophic (the actual work per call is tiny), but exactly the pattern the plan names by
-title as worth fixing.
+- **Where:** `ProductStoryScene.tsx:130-134` (`useMotionValueEvent(smoothProgress, "change", …)`).
+- **What it does:** `smoothProgress` is a spring over scroll progress. Its `change` event fires every frame
+  while scrolling and while the spring settles, and each event calls `setActiveScene(index)` — usually with
+  the value it already holds.
+- **Cost:** React short-circuits an identical `useState` update, so most calls do not re-render, but every
+  frame still dispatches into React's scheduler, and each *real* change re-renders the whole scene
+  (`AnimatePresence` subtree included). **Unmeasured** in isolation.
+- **Verdict:** OPTIMISE.
+- **Fix:** keep the previous discrete index in a ref; call `setActiveScene` only when the index crosses a
+  threshold. Discrete state for discrete UI; nothing per frame.
+- **Validate:** unit test of the threshold logic (setter called once per crossing, including fast reverse
+  scroll); profile `scrollDown` `ScriptDuration` on `/`.
 
-**Proposed fix** (Task 7, exactly as specified): track the previously-emitted index in a `ref`;
-only call `setActiveScene`/`setActiveStage` when the newly-computed index differs from the ref's
-current value, updating the ref alongside.
+### M-08 Safeguarding: scroll → `setState` on every spring tick
 
----
+- **Where:** `components/motion/scenes/SafeguardingScene.tsx:70-74`.
+- **What / cost / fix / validate:** identical to M-07 (four stages instead of six). Same threshold-crossing
+  fix. The existing hydration safeguards (state seeded to `0`, corrected after mount) must stay exactly as
+  they are.
 
-### 6. `ScrollReveal` — OPTIMISE (not urgent)
+### M-09 Hero scroll choreography
 
-**Where**: `apps/web/src/components/ScrollReveal.tsx`.
+- **Where:** `components/motion/scenes/HeroScene.tsx` — eight `useTransform`s off one spring-smoothed scroll
+  progress, applied to the headline, lead, CTAs, the product photo (`scale` + `y`), two chips and the
+  dot grid.
+- **Cost:** MotionValue → style writes each frame, which is the right architecture (no React per frame).
+  What is **unmeasured** is whether the large photo layer repaints or merely re-composites as it scales:
+  without a promoted layer, changing `transform` from JavaScript on an unpromoted element can repaint its
+  parent layer.
+- **Verdict:** MEASURE FIRST.
+- **Fix:** measure, then promote only what the trace shows repainting, via `will-change: transform` set
+  while the hero is on screen and removed after (task 7/8). Add bounded layered parallax at the plan's
+  ranges (8–20 / 10–24 / 18–34 px) scaled by tier.
+- **Validate:** `scrollDown` frame stats and `LayoutCount` / `RecalcStyleCount` on `/`, 1× and 4× throttle.
 
-**Cost**: creates one `IntersectionObserver` **per component instance**, not a shared observer.
-The homepage alone has 15+ `<ScrollReveal>` usages. Each observer unobserves itself immediately
-after firing once, so this is a one-time setup/teardown cost per instance on mount, not a
-continuous runtime cost — genuinely low-severity, but the plan's Task 6 explicitly asks for
-"Motion viewport/shared observation where practical," and consolidating N observers into one
-shared one (or Motion's own `whileInView`, which does exactly this internally) is a real,
-if modest, win — and reduces the total object/listener count on pages with many reveals.
+### M-10 Learning-path SVG line
 
-**Proposed fix**: Task 6's new `Reveal` primitive vocabulary should replace `ScrollReveal`'s
-per-instance observer with Motion's shared viewport observation, migrated incrementally.
+- **Where:** `components/motion/scenes/LearningPathScene.tsx` (`pathLength` from scroll progress).
+- **Cost:** a 2 px dashed SVG line redrawn per frame; tiny.
+- **Verdict:** KEEP. Moves to the shared `ScrollProgressPath` primitive in task 8 without changing behaviour.
 
----
+### M-11 `StatCounter`: React state on every animation frame
 
-### 7. Marquee — KEEP, with one caveat
+- **Where:** `components/StatCounter.tsx:48-53`.
+- **What it does:** on first scroll into view, counts up over 900 ms by calling `setDisplay(string)` inside a
+  `requestAnimationFrame` loop — about 54 React renders for one number.
+- **Verdict:** OPTIMISE (the same class of problem as C-01, on the marketing site).
+- **Fix:** drive the text node directly from Motion's `animate(0, target, { onUpdate })` writing
+  `textContent` — no React per frame. Keep the exact hydration-safe contract in the file's own comment
+  (the server and first client render always show the real value).
+- **Validate:** the served HTML still contains the real value; unit test that the loop does not call `setState`.
 
-**Where**: `apps/web/src/components/Marquee.tsx` + `.lt-marquee__track` (pure CSS
-`@keyframes lt-marquee`, `transform: translateX(...)`, home.module.css).
+### M-12 Sticky header `backdrop-filter`
 
-**Cost**: already compositor-only (`transform`), already pure CSS with no JS runtime loop at
-all — this is close to the ideal implementation. The one real gap: it runs `infinite`, including
-while scrolled far offscreen. Browsers are generally efficient about not compositing genuinely
-offscreen content, but the animation timer itself keeps ticking regardless. Low priority.
+- **Where:** `globals.css:422-430` (`.site-header`: `position: sticky`, `background: rgb(255 255 255 / 96%)`,
+  `backdrop-filter: blur(16px)`).
+- **Cost:** a sticky element with a backdrop blur must re-sample and re-blur whatever scrolls beneath it on
+  every scroll frame. At 96% opacity the blur is close to invisible, so the cost buys almost nothing.
+  **Unmeasured.**
+- **Verdict:** MEASURE FIRST, expected REMOVE.
+- **Fix:** task 13 redesigns header state anyway (airy at top → compact and solid when scrolled). The
+  scrolled state is an opaque background with no `backdrop-filter`.
 
-**Proposed fix** (optional, low priority): pause via `animation-play-state: paused` when the
-marquee leaves the viewport (IntersectionObserver-gated) or document is hidden, if profiling
-shows any measurable cost — otherwise leave as-is; this is already a good implementation.
+### M-13 Dead legacy hero CSS with a `backdrop-filter`
 
----
+- **Where:** `globals.css:721-737` (`.hero-image-frame__label`, `backdrop-filter: blur(10px)`), and its
+  siblings `.hero-image-frame`, `.hero-subject-note`, `.live-dot`.
+- **Finding:** none of these class names is referenced by any `.tsx` file. The rules ship in the global
+  stylesheet and are never applied.
+- **Verdict:** REMOVE (dead code).
+- **Validate:** `grep` for the class names finds nothing outside the deleted block; the CSS bundle shrinks.
 
-### 8. Skeleton shimmer — REMOVE the paint cost
+### M-14 `ProductTabs`, motion `Reveal`, nested `LazyMotion`
 
-**Where**: `apps/web/src/app/app-dashboard.css:182` (`@keyframes skeleton-shimmer`,
-`background-position: 100% 50%` → `0 50%`).
+- **Where:** six components each wrap themselves in their own `<LazyMotion features={domAnimation}>`
+  (`HeroScene`, `LearningPathScene`, `ProductStoryScene`, `SafeguardingScene`, `ProductTabs`,
+  `motion/Reveal`).
+- **Cost:** none at runtime beyond a few context providers — the `domAnimation` bundle is shared. The cost is
+  architectural: no component can assume a runtime exists, and a new island has to remember to bring one.
+- **Verdict:** REMOVE the nested wrappers once a shared boundary is proven (task 3's `MotionRuntime`).
+- **Related:** `components/motion/Reveal.tsx` has **no call sites**. It is unused code from the Plan 9/10
+  passes, superseded by task 6's `Reveal`.
 
-**Cost**: `background-position` is a paint property. Every skeleton tile shown during a loading
-state repaints on every animation frame for as long as it's visible. Loading states can persist
-for a real, unpredictable duration (network-dependent), so this isn't as bounded as the card-hover
-case above.
+### M-15 `useMotionTier` read `matchMedia` during the first client render
 
-**Proposed fix** (Task 5, exactly as specified): replace with a translated pseudo-element
-gradient (`transform: translateX(...)` sweeping across a fixed background), which is
-compositor-only.
+- **Where:** `lib/motion/capabilities.ts` (before task 3): `useState(computeTier)`.
+- **Cost:** not performance — correctness. A first-render read of a browser-only API can differ from the
+  server's answer; the file leaned on "the server returns full and hope". Also three tiers, not four.
+- **Verdict:** OPTIMISE (task 3): one module-level store, subscribed to `matchMedia` once, read through
+  `useSyncExternalStore` with a fixed server snapshot, four tiers.
 
----
+### M-16 Springs on scroll progress
 
-### 9 & 10. `MicLevelMeter` (both implementations) — REMOVE React from the frame loop
+- **Where:** `lib/motion/scroll.ts` (`useSpring(scrollYProgress, {stiffness: 240, damping: 40, mass: 0.4})`),
+  one per scene.
+- **Cost:** each spring runs on Motion's shared frame loop until it settles, so a few scenes on screen means
+  a few springs ticking during and just after every scroll. Cheap arithmetic; the cost is what each
+  spring's output *drives* (M-09).
+- **Verdict:** KEEP the smoothing (it absorbs Safari's coarser scroll steps, per the file's own note);
+  MEASURE FIRST if a profile ever shows the frame loop, not the style writes, on top.
 
-**Where**:
-- `apps/web/src/features/classroom/components/MicLevelMeter.tsx:20-27`
-- `apps/classroom/src/components/MicLevelMeter.tsx:20-27` (byte-for-byte identical — confirmed
-  duplication, matching the documented "ported from the original apps/classroom" history)
+## Authenticated app
 
-**Cost**: this is the clearest, most severe finding in the audit. `setLevel(...)` — a React
-`useState` setter — is called **inside the `requestAnimationFrame` tick itself**, meaning the
-whole `MicLevelMeter` component (and, depending on how it's mounted, potentially triggers
-reconciliation of parent state) re-renders at full animation-frame cadence for as long as the
-microphone is active — which could be the entire duration of a lesson, not a bounded window like
-the count-up animations below. The visual technique this drives is already correct
-(`transform: scaleX(level)`, compositor-friendly) — only the *delivery mechanism* is wrong.
+### A-01 Skeleton shimmer animates `background-position`
 
-**Proposed fix** (Task 4, exactly as specified): keep the analyser sampling in the rAF loop, but
-write the level to a ref pointing at the `.mic-meter-fill` DOM node and set
-`ref.current.style.transform` directly, bypassing React entirely for the per-frame value. The
-`aria-label`'s percentage text can still use React state, but should be throttled independently
-(e.g. updated every ~300-500ms) rather than on every frame — assistive tech doesn't need
-frame-accurate mic level announcements, and decoupling it removes the last reason this component
-would still re-render at animation-frame cadence.
+- **Where:** `app-dashboard.css:174-182` (`.skeleton`, `@keyframes skeleton-shimmer`); used by
+  `(app)/dashboard/loading.tsx`.
+- **What it does:** `background-size: 400% 100%` and an infinite `background-position` animation.
+- **Cost:** `background-position` is a paint property — every skeleton on screen repaints every frame for as
+  long as the page is loading. Bounded by load time, but it is exactly when the main thread is busiest.
+- **Verdict:** OPTIMISE.
+- **Fix:** a `::after` pseudo-element carrying the gradient, moved with `transform: translateX()`, clipped by
+  the skeleton's own `overflow: hidden`. Reduced-motion rule stays.
+- **Validate:** no `background-position` keyframes remain.
 
-**Validation**: React DevTools Profiler (or a render-count logger) confirms zero re-renders of
-`MicLevelMeter` while the level visibly animates during a live mic test.
+### A-02 Filter-tab indicator transitions `width`
 
----
+- **Where:** `app-components.css:118-122` (`.filter-tabs__indicator`: `transition: transform, width, opacity`),
+  positioned by `components/ui/FilterTabs.tsx`.
+- **Cost:** a 2 px absolutely positioned bar; animating `width` re-lays out only itself. Negligible, but
+  it is the one place the app animates a layout property for movement.
+- **Verdict:** OPTIMISE (small, and consistent with the rule): `translateX` + `scaleX` from the left origin.
 
-## Additional findings beyond the named checklist
+### A-03 Stat-tile hover shadow
 
-### 11. `filter`/`backdrop-filter` inventory — mostly KEEP
+- **Where:** `app-shell.css:466-472` (`.stat-tile--link`). Same shape as M-04, on a small tile.
+- **Verdict:** OPTIMISE with the same pseudo-element technique, or KEEP if a paint trace shows it under
+  budget — a 160 ms transition on a ~10 rem tile is far cheaper than M-04's 44 px shadows. **Unmeasured.**
 
-Full repo search for `filter:`/`backdrop-filter:` outside the five `.heroGlow`-pattern instances
-already covered above:
+### A-04 Calendar event hover: `filter` + `box-shadow`
 
-- `apps/web/src/app/app-shell.css:240` and `apps/web/src/app/globals.css:429` — **static**
-  `backdrop-filter: blur()` on sticky headers (app topbar, site header). One-time compositing
-  cost for a fixed-position element, not animated per-frame. **KEEP.**
-- `apps/web/src/app/globals.css:736` — same pattern, another sticky/overlay surface. **KEEP**,
-  not independently verified as animated; worth a quick look in Task 5 but not flagged as urgent.
-- `apps/web/src/app/app-dashboard.css:258` — `.fc-event:hover { filter: brightness(0.96); ... }`
-  (FullCalendar event hover). Bounded to hover interaction, same cost profile as the card-shadow
-  finding above. **OPTIMISE** alongside Task 16's calendar hover audit, not urgent.
-- `apps/web/src/features/classroom/styles.css:80` — `.floating-reaction.mine { filter:
-  drop-shadow(...) }`, combined with a **bounded** 2.2s `reaction-rise` animation (an emoji
-  reaction that rises and fades once, not a loop). Bounded duration, small element, low
-  frequency (one per user reaction click). **KEEP** — flagged only for completeness.
+- **Where:** `app-dashboard.css:245-260` (`.calendar-wrap .fc-event:hover { filter: brightness(0.96); box-shadow }`).
+- **Cost:** per hovered event only, but FullCalendar month views hold dozens; `filter` forces a separate
+  render surface for the element while it transitions.
+- **Verdict:** OPTIMISE — an `::after` overlay whose `opacity` changes replaces the filter; the shadow is
+  dropped in favour of the existing border/background change. **Unmeasured.**
 
-### 12. `transition: all` / global `will-change` — clean
+### A-05 Sticky topbar `backdrop-filter`
 
-No matches anywhere in `src/**/*.css` or `*.module.css`. Nothing to fix here; noted so this
-doesn't need re-auditing in a later pass.
+- **Where:** `app-shell.css:234-242` (`.app-topbar`, `blur(10px)` over `rgb(255 255 255 / 86%)`).
+- **Cost:** as M-12, over a smaller area (one topbar-height strip) but with a visible blur (86%).
+  **Unmeasured.**
+- **Verdict:** MEASURE FIRST. The authenticated app is "precise UI motion only"; an opaque topbar loses
+  almost nothing and cannot cost anything on scroll.
 
-### 13. Raw `scroll`/`resize`/`pointermove` listeners — clean
+### A-06 `AnimatedNumber`: React state on every animation frame
 
-No component attaches these directly outside the `lib/motion/` scroll/capability infrastructure
-already built in plan10/11 Task 1-3, which goes through Motion's own `useScroll`/media-query
-listeners rather than hand-rolled ones. Nothing to fix.
+- **Where:** `components/ui/AnimatedNumber.tsx:43-49` (380 ms count between two values).
+- **Verdict:** OPTIMISE — same fix as M-11 (direct text write from `animate()`), keeping the "first render is
+  never animated" rule the file documents.
 
-### 14. `requestAnimationFrame` inventory — mostly benign, one real finding beyond MicLevelMeter
+### A-07 Sidebar collapse transitions `max-width`
 
-Full repo search for `requestAnimationFrame` outside `lib/motion/frameProfiler.ts` (the profiler
-itself, exempt by definition) and the two `MicLevelMeter`s (already covered above):
+- **Where:** `app-shell.css:153-157` and `:186-190` (`.app-brand__word`, `.app-nav__label`).
+- **Cost:** two short text spans re-lay out for 220 ms when the user toggles the sidebar. Rare, user-initiated.
+- **Verdict:** KEEP. The alternative (measuring each label and animating a transform) is more machinery than
+  a once-in-a-session toggle is worth. Revisit only if a trace shows it.
 
-- `apps/web/src/components/ui/Dialog.tsx:71`, `apps/web/src/components/SiteHeader.tsx:41`,
-  `apps/web/src/components/EnquiryForm.tsx:97,115` — all `requestAnimationFrame(() =>
-  element.focus())`, a one-shot "wait one paint, then move focus" pattern. This is exactly the
-  "benign scheduling" the plan's Task 2 explicitly says to distinguish from a real loop.
-  **KEEP**, not a loop at all.
-- `apps/web/src/components/ui/AnimatedNumber.tsx:43-51` and (previously audited, same shape)
-  `apps/web/src/components/StatCounter.tsx` — both call `setState` inside a `tick` rAF callback,
-  technically the same "React state as per-frame transport" pattern MicLevelMeter has. The
-  difference is severity: both are **bounded, one-shot count-up animations** (380ms / ~900ms),
-  triggered rarely (a value changing while mounted, or scrolling a stat into view once), not a
-  standing loop that runs for an entire lesson's duration. **MEASURE FIRST** — technically
-  imperfect against the letter of the plan's constraint, but the real-world cost is small and
-  rare enough that fixing MicLevelMeter first and re-profiling before touching these is the
-  better order of operations; if profiling shows no measurable cost, leave as-is rather than
-  rewriting working, already-carefully-commented code for no measured benefit.
+### A-08 Focus-ring and input transitions
 
----
+- **Where:** `app-components.css:229, 274` and similar (`transition: border-color, box-shadow` on inputs and
+  buttons).
+- **Cost:** a few-pixel shadow on a small element for 160 ms on focus.
+- **Verdict:** KEEP.
 
-## Summary table
+### A-09 Dialog, dropdown, toast, drawer
 
-| # | Finding | Classification | Task |
-|---|---|---|---|
-| 1 | `.heroGlow` perpetual blur (×5 pages) | REMOVE (the loop) | 5, 7 |
-| 2 | Card shadow hover transitions | OPTIMISE | 5 |
-| 3 | Product Story progress `width` | OPTIMISE | 5 |
-| 4 | Product Story scroll→state every tick | OPTIMISE | 7 |
-| 5 | Safeguarding scroll→state every tick | OPTIMISE | 7 |
-| 6 | `ScrollReveal` per-instance observers | OPTIMISE | 6 |
-| 7 | Marquee (offscreen suspension only) | KEEP | — |
-| 8 | Skeleton shimmer `background-position` | REMOVE (the technique) | 5 |
-| 9 | `MicLevelMeter` (apps/web) | REMOVE (React from loop) | 4 |
-| 10 | `MicLevelMeter` (apps/classroom) | REMOVE (React from loop) | 4 |
-| 11 | `filter`/`backdrop-filter` inventory | mostly KEEP | 5 (spot-check only) |
-| 12 | `transition: all` / global `will-change` | clean, nothing found | — |
-| 13 | Raw scroll/resize/pointer listeners | clean, nothing found | — |
-| 14 | `AnimatedNumber`/`StatCounter` rAF+setState | MEASURE FIRST | — |
+- **Where:** `components/ui/Dialog.tsx`, `Toaster.tsx`, `dashboards/QuickCreateMenu.tsx`,
+  `shell/AppShellClient.tsx`, via `lib/motion/useDelayedUnmount.ts`.
+- **Finding:** each unmounts after its exit animation, and reduced motion unmounts immediately; nothing keeps
+  running while closed. Animations are opacity/transform keyframes (`app-pop`, `dialog-in`, `toast-in`,
+  `app-drawer-in`).
+- **Verdict:** KEEP. Confirmed for task 16's "stop work when closed" requirement.
+
+### A-10 One-shot and bounded keyframes
+
+- **Where:** `bell-ring`, `app-pop`, `stat-tile-in`, `empty-state-in`, `field-error-in`, `auth-enter`,
+  `lesson-peek-in`, `toast-check-in`, and `btn-spin` (infinite, but only while a button is loading).
+- **Verdict:** KEEP. All transform/opacity; none loop except the spinner, which exists only while busy.
+
+## Classroom
+
+Performance-first: no decorative motion is added here, only work removed.
+
+### C-01 `MicLevelMeter`: two identical copies, `setState` per animation frame
+
+- **Where:** `apps/web/src/features/classroom/components/MicLevelMeter.tsx` and
+  `apps/classroom/src/components/MicLevelMeter.tsx` (byte-identical).
+- **What it does:** an analyser sampled in `requestAnimationFrame`; every frame calls `setLevel(...)`, which
+  re-renders the component, rewrites the inline `transform` and rewrites an `aria-label` containing the
+  percentage.
+- **Cost:** a React commit per display frame for as long as the pre-join screen is open, plus a per-frame
+  change to an accessible name (`role="img"` with a changing label). The fill itself is already a
+  `scaleX`, which is right.
+- **Verdict:** OPTIMISE.
+- **Fix:** keep sampling in rAF, but write the level straight to the element (`style.transform`) from a ref;
+  keep the accessible name stable, updated at a low, human-readable cadence rather than per frame; stop the
+  loop while the page is hidden. Lifecycle tests for analyser and rAF cleanup.
+- **Validate:** unit tests (start/stop/hidden/unmount release every resource); no `setState` in the loop.
+
+### C-02 `useMeeting`: every snapshot change re-renders the whole app
+
+- **Where:** `features/classroom/useMeeting.ts` (`useSyncExternalStore(controller.subscribe, controller.getSnapshot)`),
+  `meeting.ts:659-664` (`board:cursor` and `board:laser` events call `this.update({ boardPointers: … })`).
+- **Cost:** every remote whiteboard pointer/laser event produces a new snapshot and re-renders `App` and
+  everything not memoised beneath it, while Excalidraw is also busy. **Unmeasured** — this is task 17's
+  first profile.
+- **Verdict:** MEASURE FIRST, then ISOLATE (a separate subscription for high-frequency board pointers so the
+  parent tree does not re-render).
+
+### C-03 Poll option bars transition `width`
+
+- **Where:** `features/classroom/styles.css` and `apps/classroom/src/styles.css` (`.poll-panel-option-bar`,
+  `transition: width .25s`).
+- **Cost:** a layout property on a bar inside a poll, changing when votes arrive. Small and infrequent.
+- **Verdict:** OPTIMISE (task 17): `scaleX` from the left origin.
+
+### C-04 Timers at visible cadence
+
+- **Where:** `ClassTimer.tsx`, `Timer.tsx`, `HelpQueuePanel.tsx` (1 s intervals), `peer.ts` (`STATS_INTERVAL_MS = 2500`).
+- **Finding:** each ticks at the rate the number visibly changes (seconds), and only while there is something
+  to show (`HelpQueuePanel` stops with an empty queue; `ClassTimer` stops when paused).
+- **Verdict:** KEEP.
+
+### C-05 Classroom keyframes
+
+- **Where:** `reaction-rise` (2.2 s, once), `tile-in`, `workspace-fade`, `timer-done` (once), and
+  `timer-tick` (infinite, final ten seconds of a countdown only).
+- **Verdict:** KEEP. All transform/opacity; the one loop is bounded to ten seconds by the class that
+  starts it. `prefers-reduced-motion` already disables each.
+
+### C-06 Global classroom button transition
+
+- **Where:** `styles.css`: `button { transition: background, border-color, box-shadow, transform .16s }`.
+- **Verdict:** KEEP. Small controls, 160 ms, discrete triggers.
+
+## Benign scheduling (not animation)
+
+| Where | What | Verdict |
+| --- | --- | --- |
+| `ui/Dialog.tsx:71`, `SiteHeader.tsx:41`, `EnquiryForm.tsx:97,115` | `requestAnimationFrame(() => el.focus())` — one call, moves focus after a render | KEEP |
+| `api/enquiry/route.ts:43` | server-side `setInterval` that prunes a rate-limit map | KEEP (not rendering) |
+| `ui/FilterTabs.tsx` | `ResizeObserver` → one `setState` when the tab row resizes | KEEP (discrete, not per frame) |
+| `shell/AppShellClient.tsx`, `dashboards/QuickCreateMenu.tsx`, `ui/Dialog.tsx` | `keydown` / `pointerdown` listeners, attached only while open | KEEP |
+
+## Baseline measurements
+
+Captured on the unmodified base commit `554013b` with `apps/web/scripts/profile-motion.mjs`, against a
+production build (`next build` + `next start`), three runs per row, medians shown. The complete JSON
+(including the scroll-back-up phase and the pointer sweep) is written under the git-ignored
+`apps/web/artifacts/motion-profile/`.
+
+**Read these with the environment in mind.** The browser was headless Chromium 141 rendering in
+software (SwiftShader) on a 4-core container, with a virtual 60 Hz display. Frame pacing is
+therefore saturated — every row reads a 16.7 ms p95 with almost nothing dropped — so on this
+machine the *discriminating* numbers are the main-thread counters (layouts, style recalculations,
+script and task time). Absolute values say little about a real phone or a 144 Hz monitor; the
+before/after difference on the same machine is the result. Cadence is also *inferred* from observed
+frames, not read from the display, so a page that never beats 60 fps on a faster panel would read as
+a healthy 60 Hz page (see `lib/motion/frameProfiler.ts`).
+
+_baseline · Chromium 141.0.7390.37 · ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)_
+_commit 554013b · 3 run(s) per row, medians · CPU throttle 1×_
+
+
+### Load and size
+
+| Route | Viewport | LCP ms | FCP ms | CLS | JS KB (gz) | CSS KB (gz) | Long tasks / blocking ms | DOM nodes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `/` | desktop-1440x900 | 180 | 180 | 0 | 192.4 | 34.4 | 1 / 36 | 609 |
+| `/subjects` | desktop-1440x900 | 204 | 144 | 0 | 192.4 | 34.4 | 0 / 0 | 352 |
+| `/maths-tuition` | desktop-1440x900 | 120 | 120 | 0 | 192.4 | 34.4 | 0 / 0 | 292 |
+| `/about` | desktop-1440x900 | 184 | 184 | 0 | 192.4 | 34.4 | 0 / 0 | 225 |
+| `/book` | desktop-1440x900 | 136 | 136 | 0 | 192.4 | 34.4 | 0 / 0 | 259 |
+| `/` | mobile-390x844 | 180 | 180 | 0 | 192.4 | 34.4 | 1 / 48 | 609 |
+| `/subjects` | mobile-390x844 | 132 | 132 | 0 | 192.4 | 34.4 | 0 / 0 | 352 |
+| `/maths-tuition` | mobile-390x844 | 104 | 104 | 0 | 192.4 | 34.4 | 0 / 0 | 292 |
+| `/about` | mobile-390x844 | 108 | 108 | 0 | 192.4 | 34.4 | 0 / 0 | 225 |
+| `/book` | mobile-390x844 | 132 | 132 | 0 | 192.4 | 34.4 | 0 / 0 | 259 |
+
+### Scrolling down the whole page
+
+| Route | Viewport | p95 frame ms | Dropped % | Layouts | Style recalcs | Script ms | Main-thread task ms |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `/` | desktop-1440x900 | 16.8 | 0.3 | 171 | 648 | 154 | 835 |
+| `/subjects` | desktop-1440x900 | 16.7 | 0 | 2 | 124 | 13 | 139 |
+| `/maths-tuition` | desktop-1440x900 | 16.7 | 0 | 0 | 0 | 15 | 93 |
+| `/about` | desktop-1440x900 | 16.8 | 1 | 2 | 99 | 13 | 122 |
+| `/book` | desktop-1440x900 | 16.8 | 0 | 0 | 0 | 10 | 67 |
+| `/` | mobile-390x844 | 16.7 | 0 | 154 | 645 | 151 | 830 |
+| `/subjects` | mobile-390x844 | 16.7 | 0 | 1 | 257 | 27 | 192 |
+| `/maths-tuition` | mobile-390x844 | 16.7 | 0 | 0 | 0 | 23 | 128 |
+| `/about` | mobile-390x844 | 16.7 | 0 | 1 | 178 | 20 | 145 |
+| `/book` | mobile-390x844 | 16.7 | 0 | 0 | 0 | 17 | 96 |
+
+### At rest (nothing scrolling, nothing moving the pointer)
+
+| Route | Viewport | Dropped % | Style recalcs per frame | Script ms | Animations still running |
+| --- | --- | --- | --- | --- | --- |
+| `/` | desktop-1440x900 | 0 | 1.01 | 6.9 | lt-float, lt-marquee |
+| `/subjects` | desktop-1440x900 | 0 | 1.01 | 7 | lt-float |
+| `/maths-tuition` | desktop-1440x900 | 0 | 0 | 7.4 | none |
+| `/about` | desktop-1440x900 | 0 | 1.01 | 7.3 | lt-float |
+| `/book` | desktop-1440x900 | 0 | 0 | 7.4 | none |
+| `/` | mobile-390x844 | 0 | 1.01 | 6.8 | lt-float, lt-marquee |
+| `/subjects` | mobile-390x844 | 0 | 1.01 | 6.6 | lt-float |
+| `/maths-tuition` | mobile-390x844 | 0 | 0 | 6.5 | none |
+| `/about` | mobile-390x844 | 0 | 1.01 | 6.3 | lt-float |
+| `/book` | mobile-390x844 | 0 | 0 | 6.6 | none |
+
+### What the baseline says
+
+1. **The hero glow costs a style recalculation on every frame, forever.** At rest, every page that has
+   one (`/`, `/subjects`, `/about`) does **1.01 style recalculations per frame**; the two pages
+   without it (`/maths-tuition`, `/book`) do **0**. `lt-float` is listed as still running on exactly
+   the pages that recalc. That is a main-thread animation, not the compositor-only motion a
+   `transform` animation is supposed to be — which makes [M-01](#m-01-hero-glow-heroglow-on-five-pages)
+   the cleanest win available.
+2. **The homepage's scroll cost is React, not the browser.** One scroll down `/` performs **171
+   layouts and 648 style recalculations** (154 layouts on mobile), against **0–2 layouts** on every
+   other route. The pages that scroll cleanly have no scroll-driven state; the homepage has the
+   Product Story and Safeguarding scenes ([M-07](#m-07-product-story-scroll--setstate-on-every-spring-tick),
+   [M-08](#m-08-safeguarding-scroll--setstate-on-every-spring-tick)), the `width`-toggled progress
+   segments ([M-06](#m-06-product-story-progress-toggles-width-from-react-state)), and the
+   `StatCounter` count-up ([M-11](#m-11-statcounter-react-state-on-every-animation-frame)).
+3. **The marquee is unstyled on a direct visit to `/subjects` and `/about`.** `/` lists
+   `lt-marquee` among its running animations; `/subjects` and `/about` — which render the same
+   `<Marquee>` — do not. Its rules were `:global` selectors inside `home.module.css`, a stylesheet
+   only the homepage loads. This was a real visual bug, found by the profile rather than by eye
+   (fixed in task 5 by giving the component its own stylesheet).
+4. **Every route ships the same 192 KB of JavaScript (gzipped)** — the framework, Motion and the
+   site chrome are shared — and `/` blocks the main thread for one long task at load (36 ms over
+   budget on desktop, 48 ms on mobile). CLS is 0 everywhere. These are the numbers "do not
+   materially regress LCP, INP or CLS" is measured against.
+5. **`/maths-tuition` and `/book` are the control group**: no scroll choreography, no glow, no
+   marquee, and they scroll with zero layouts and zero style recalculations. Everything above is
+   what a page pays for its motion today.
+
+## Implementation tracker
+
+| Finding | Task | Status |
+| --- | --- | --- |
+| M-01 hero glow | 5, 7 | pending |
+| M-02 marquee | 3, 5 | pending |
+| M-04 card shadows | 5 | pending |
+| M-05 `ScrollReveal` | 6 | pending |
+| M-06 progress width | 5, 7 | pending |
+| M-07 / M-08 scroll → state | 7 | pending |
+| M-09 hero choreography | 7, 8 | pending |
+| M-11 / A-06 counters | 4 | pending |
+| M-12 / A-05 sticky `backdrop-filter` | 13, 16 | pending |
+| M-13 dead CSS | 5 | pending |
+| M-14 / M-15 runtime | 3 | pending |
+| A-01 skeleton | 5, 16 | pending |
+| A-02 / A-03 / A-04 | 16 | pending |
+| C-01 mic meter | 4 | pending |
+| C-02 `useMeeting` | 17 | pending |
+| C-03 poll bars | 17 | pending |

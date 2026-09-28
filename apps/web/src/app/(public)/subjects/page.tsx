@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { BodyClass } from "@/components/BodyClass";
-import { ScrollReveal } from "@/components/ScrollReveal";
+import { Reveal } from "@/components/motion/primitives/Reveal";
 import { Marquee } from "@/components/Marquee";
 import { createMetadata } from "@/lib/metadata";
 import styles from "./subjects.module.css";
@@ -178,7 +178,8 @@ export default function SubjectsPage() {
 
       {/* ── Early years callout ────────────────────────── */}
       <div className={styles.calloutWrap}>
-        <ScrollReveal>
+        {/* First content below the hero on a phone, so its text is the LCP candidate there. */}
+        <Reveal variant="static">
           <div className={styles.callout}>
             <svg viewBox="0 0 24 24" fill="none" width={22} height={22} style={{ color: "#075f52", flexShrink: 0, marginTop: 2 }} aria-hidden="true">
               <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
@@ -192,13 +193,16 @@ export default function SubjectsPage() {
               sessions to where your child is.
             </p>
           </div>
-        </ScrollReveal>
+        </Reveal>
       </div>
 
       {/* ── Subject Sections ──────────────────────────── */}
-      {subjects.map((subject) => (
+      {subjects.map((subject, subjectIndex) => (
         <section key={subject.id} id={subject.id} className={styles.subjectSection}>
-          <ScrollReveal>
+          {/* The first subject is on the first screen, and its photograph is the page's largest
+              paint. A reveal would hold it at opacity 0 until the script has loaded and the animation
+              has run (LCP 204 -> 864 ms in the profile), so it is simply there; later ones reveal. */}
+          <Reveal variant={subjectIndex === 0 ? "static" : "soft"}>
             <div className={`${styles.subjectHeader} ${subject.reverse ? styles.subjectHeaderReverse : ""}`}>
               {subject.reverse ? (
                 <>
@@ -250,7 +254,7 @@ export default function SubjectsPage() {
                 </>
               )}
             </div>
-          </ScrollReveal>
+          </Reveal>
 
           <div className={styles.levelCards}>
             {subject.levels.map((level, i) => {
@@ -258,7 +262,7 @@ export default function SubjectsPage() {
               const isGcse = level.name === "GCSE" && isScience;
 
               return (
-                <ScrollReveal key={level.name} delay={i * 90}>
+                <Reveal variant="scale" key={level.name} delay={i * 0.09}>
                   <div className={`${styles.levelCard} ${level.dark ? styles.levelCardDark : ""}`}>
                     <div className={styles.levelCardHeader}>
                       <span className={styles.levelCardNumber}>{i + 1}</span>
@@ -274,7 +278,7 @@ export default function SubjectsPage() {
                       <p className={styles.levelCardText}>{level.text}</p>
                     )}
                   </div>
-                </ScrollReveal>
+                </Reveal>
               );
             })}
           </div>
@@ -283,7 +287,7 @@ export default function SubjectsPage() {
 
       {/* ── 11+ Preparation ───────────────────────────── */}
       <section id="eleven-plus" className={styles.elevenPlusSection}>
-        <ScrollReveal>
+        <Reveal variant="scale">
           <div className={styles.elevenPlusCard}>
             <div className={styles.elevenPlusDots} aria-hidden="true" />
             <div className={styles.elevenPlusInner}>
@@ -308,12 +312,12 @@ export default function SubjectsPage() {
               </p>
             </div>
           </div>
-        </ScrollReveal>
+        </Reveal>
       </section>
 
       {/* ── CTA ───────────────────────────────────────── */}
       <section className={styles.ctaSection}>
-        <ScrollReveal>
+        <Reveal variant="soft">
           <h2>Found the right fit for your child?</h2>
           <p>
             Tell us what they need and we&apos;ll match them with the right
@@ -322,7 +326,7 @@ export default function SubjectsPage() {
           <Link href="/#enquire" className={styles.btnPrimary}>
             Send an enquiry &rarr;
           </Link>
-        </ScrollReveal>
+        </Reveal>
       </section>
     </div>
   );

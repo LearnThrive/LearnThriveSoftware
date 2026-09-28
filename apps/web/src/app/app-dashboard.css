@@ -167,10 +167,23 @@
 
 /* ============================================================ Skeletons (section 69) */
 
+/* The shimmer is a highlight band on a pseudo-element that *translates* across a flat placeholder.
+   It used to animate `background-position` on the placeholder itself — a paint property, so every
+   skeleton on screen repainted on every frame for as long as the page was loading, which is exactly
+   when the main thread is busiest (plan11.md task 5). A transform on an already-painted layer is
+   compositor work. `overflow: hidden` clips the band to the placeholder's own rounded box. */
 .skeleton {
-  background: linear-gradient(90deg, #eef1f4 25%, #f6f8f9 37%, #eef1f4 63%);
-  background-size: 400% 100%;
+  position: relative;
+  overflow: hidden;
+  background: #eef1f4;
   border-radius: var(--app-radius-sm);
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgb(255 255 255 / 70%) 50%, transparent 100%);
+  transform: translateX(-100%);
   animation: skeleton-shimmer 1.4s ease infinite;
 }
 .skeleton--text { height: 0.85rem; margin-bottom: 0.5rem; }
@@ -179,10 +192,10 @@
 .skeleton--tile { height: 5.5rem; }
 .skeleton-grid { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); margin-bottom: var(--space-5); }
 
-@keyframes skeleton-shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+@keyframes skeleton-shimmer { to { transform: translateX(100%); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .skeleton { animation: none; }
+  .skeleton::after { animation: none; }
   .quick-create__panel { animation: none; }
 }
 

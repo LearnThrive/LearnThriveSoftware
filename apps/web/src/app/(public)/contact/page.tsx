@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { BodyClass } from "@/components/BodyClass";
-import { ScrollReveal } from "@/components/ScrollReveal";
+import { Reveal } from "@/components/motion/primitives/Reveal";
 import { createMetadata } from "@/lib/metadata";
 import { siteConfig } from "@/lib/site";
 import styles from "./contact.module.css";
@@ -48,7 +48,9 @@ export default function ContactPage() {
       {/* ── Contact Cards ─────────────────────────────── */}
       <section className={styles.cardsSection}>
         <div className={styles.cardsGrid}>
-          <ScrollReveal>
+          {/* Both cards are on the first screen at desktop widths and hold the page's largest text
+              paint; revealing them delayed LCP to ~880 ms in the profile, so they are static. */}
+          <Reveal variant="static">
             <article className={`${styles.card} ${styles.cardWhite}`}>
               <span className={styles.cardLabel}>Email</span>
               <h2>Write to LearnThrive</h2>
@@ -63,8 +65,8 @@ export default function ContactPage() {
                 brief outline of the support required.
               </p>
             </article>
-          </ScrollReveal>
-          <ScrollReveal delay={110}>
+          </Reveal>
+          <Reveal variant="static">
             <article className={`${styles.card} ${styles.cardNavy}`}>
               <span className={styles.cardLabel}>Phone</span>
               <h2>Call LearnThrive</h2>
@@ -86,14 +88,14 @@ export default function ContactPage() {
                 directly.
               </p>
             </article>
-          </ScrollReveal>
+          </Reveal>
         </div>
       </section>
 
       {/* ── Guidance ──────────────────────────────────── */}
       <section className={styles.guidanceSection}>
         <div className={styles.guidanceInner}>
-          <ScrollReveal>
+          <Reveal variant="editorial">
             <div>
               <p className={`${styles.eyebrow} ${styles.eyebrowDark}`}>
                 Helpful information
@@ -102,8 +104,8 @@ export default function ContactPage() {
                 What to include in an enquiry
               </h2>
             </div>
-          </ScrollReveal>
-          <ScrollReveal delay={120}>
+          </Reveal>
+          <Reveal variant="soft" delay={0.12}>
             <ul className={styles.checkList}>
               {guidanceItems.map((item) => (
                 <li key={item} className={styles.checkItem}>
@@ -125,13 +127,13 @@ export default function ContactPage() {
                 </li>
               ))}
             </ul>
-          </ScrollReveal>
+          </Reveal>
         </div>
       </section>
 
       {/* ── CTA ───────────────────────────────────────── */}
       <section className={styles.ctaSection}>
-        <ScrollReveal>
+        <Reveal variant="soft">
           <h2>Prefer a guided enquiry?</h2>
           <p>
             Use the consultation form to share the key details in one place
@@ -140,7 +142,7 @@ export default function ContactPage() {
           <Link href="/book" className={styles.btnPrimary}>
             Book a free consultation &rarr;
           </Link>
-        </ScrollReveal>
+        </Reveal>
       </section>
     </div>
   );
