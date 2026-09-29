@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { BodyClass } from "@/components/BodyClass";
 import { Reveal } from "@/components/motion/primitives/Reveal";
+import { PointerDepth } from "@/components/motion/primitives/PointerDepth";
 import { Marquee } from "@/components/Marquee";
 import { createMetadata } from "@/lib/metadata";
 import styles from "./about.module.css";
@@ -83,83 +84,87 @@ export default function AboutPage() {
         </Reveal>
         <div className={styles.foundersGrid}>
           <Reveal variant="scale">
-            <article className={styles.founderCard}>
-              <div className={styles.founderCardInner}>
-                <Image
-                  className={styles.founderPortrait}
-                  src="/images/abdurrahman-mustafa.jpg"
-                  alt="Abdurrahman Mustafa, co-founder"
-                  width={190}
-                  height={253}
-                  sizes="(max-width: 560px) 100vw, 190px"
-                />
-                <div>
+            <PointerDepth>
+              <article className={styles.founderCard}>
+                <div className={styles.founderCardInner}>
+                  <Image
+                    className={styles.founderPortrait}
+                    src="/images/abdurrahman-mustafa.jpg"
+                    alt="Abdurrahman Mustafa, co-founder"
+                    width={190}
+                    height={253}
+                    sizes="(max-width: 560px) 100vw, 190px"
+                  />
                   <div>
-                    <h3 className={styles.founderName}>Abdurrahman Mustafa</h3>
-                    <div className={styles.founderRole}>Co-founder</div>
-                  </div>
-                  <div className={styles.founderBio}>
-                    <p>
-                      I&apos;m Abdurrahman Mustafa, co-founder of LearnThrive
-                      Tuition. Ever since I was young, I despised the idea of
-                      tutoring and dreaded attending sessions every Sunday. Then,
-                      at 17, I became the very thing I&apos;d dreaded &mdash;
-                      and realised that teaching and helping people who are
-                      struggling to progress is one of the most beautiful things
-                      in life.
-                    </p>
-                    <p>
-                      Over the years, as I questioned what I wanted to do and
-                      how I wanted to build my future, my childhood friend
-                      Tahasin and I decided to start our own tutoring service. At
-                      LearnThrive, you&apos;ll do more than raise your grades
-                      &mdash; you&apos;ll grow, and learn to love the very
-                      subject you&apos;re studying.
-                    </p>
+                    <div>
+                      <h3 className={styles.founderName}>Abdurrahman Mustafa</h3>
+                      <div className={styles.founderRole}>Co-founder</div>
+                    </div>
+                    <div className={styles.founderBio}>
+                      <p>
+                        I&apos;m Abdurrahman Mustafa, co-founder of LearnThrive
+                        Tuition. Ever since I was young, I despised the idea of
+                        tutoring and dreaded attending sessions every Sunday. Then,
+                        at 17, I became the very thing I&apos;d dreaded &mdash;
+                        and realised that teaching and helping people who are
+                        struggling to progress is one of the most beautiful things
+                        in life.
+                      </p>
+                      <p>
+                        Over the years, as I questioned what I wanted to do and
+                        how I wanted to build my future, my childhood friend
+                        Tahasin and I decided to start our own tutoring service. At
+                        LearnThrive, you&apos;ll do more than raise your grades
+                        &mdash; you&apos;ll grow, and learn to love the very
+                        subject you&apos;re studying.
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </article>
+              </article>
+            </PointerDepth>
           </Reveal>
           <Reveal variant="scale" delay={0.11}>
-            <article className={styles.founderCard}>
-              <div className={styles.founderCardInner}>
-                <Image
-                  className={`${styles.founderPortrait} ${styles.founderPortraitTahasin}`}
-                  src="/images/tahasin-hasan.jpg"
-                  alt="Tahasin Hasan, co-founder"
-                  width={190}
-                  height={253}
-                  sizes="(max-width: 560px) 100vw, 190px"
-                />
-                <div>
+            <PointerDepth>
+              <article className={styles.founderCard}>
+                <div className={styles.founderCardInner}>
+                  <Image
+                    className={`${styles.founderPortrait} ${styles.founderPortraitTahasin}`}
+                    src="/images/tahasin-hasan.jpg"
+                    alt="Tahasin Hasan, co-founder"
+                    width={190}
+                    height={253}
+                    sizes="(max-width: 560px) 100vw, 190px"
+                  />
                   <div>
-                    <h3 className={styles.founderName}>Tahasin Hasan</h3>
-                    <div className={styles.founderRole}>Co-founder</div>
-                  </div>
-                  <div className={styles.founderBio}>
-                    <p>
-                      Hi, I&apos;m Tahasin Hasan &mdash; and yes, Hasan is
-                      actually my surname, not me introducing myself twice 😂. I
-                      started tutoring at 16, carried it through A-levels,
-                      survived university while still tutoring, and somehow ended
-                      up making mock exams for students while stressing over my
-                      own exams too.
-                    </p>
-                    <p>
-                      Over the years, I realised that most students don&apos;t
-                      struggle because they &quot;can&apos;t do it&quot;
-                      &mdash; sometimes they just need it explained in a way
-                      that actually makes sense to them. Now, as co-founder of
-                      LearnThrive Tuition, I get to take everything I&apos;ve
-                      learned from tutoring, studying and many questionable sleep
-                      schedules, and use it to make education more personal,
-                      enjoyable and effective.
-                    </p>
+                    <div>
+                      <h3 className={styles.founderName}>Tahasin Hasan</h3>
+                      <div className={styles.founderRole}>Co-founder</div>
+                    </div>
+                    <div className={styles.founderBio}>
+                      <p>
+                        Hi, I&apos;m Tahasin Hasan &mdash; and yes, Hasan is
+                        actually my surname, not me introducing myself twice 😂. I
+                        started tutoring at 16, carried it through A-levels,
+                        survived university while still tutoring, and somehow ended
+                        up making mock exams for students while stressing over my
+                        own exams too.
+                      </p>
+                      <p>
+                        Over the years, I realised that most students don&apos;t
+                        struggle because they &quot;can&apos;t do it&quot;
+                        &mdash; sometimes they just need it explained in a way
+                        that actually makes sense to them. Now, as co-founder of
+                        LearnThrive Tuition, I get to take everything I&apos;ve
+                        learned from tutoring, studying and many questionable sleep
+                        schedules, and use it to make education more personal,
+                        enjoyable and effective.
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </article>
+              </article>
+            </PointerDepth>
           </Reveal>
         </div>
       </section>
@@ -167,8 +172,8 @@ export default function AboutPage() {
       {/* ── Mission ───────────────────────────────────── */}
       <section className={styles.missionSection}>
         <div className={styles.missionDots} aria-hidden="true" />
-        <Reveal variant="soft">
-          <div className={styles.missionInner}>
+        <div className={styles.missionGrid}>
+          <Reveal variant="soft" className={styles.missionSticky}>
             <p className={styles.eyebrow}>Our mission</p>
             <h2 className={styles.missionTitle}>
               A global platform where every student is understood
@@ -179,8 +184,22 @@ export default function AboutPage() {
               around how that student learns best. Wherever a child is, and
               whatever they need, we want the right support to be within reach.
             </p>
-          </div>
-        </Reveal>
+          </Reveal>
+          {/* The connected-experience column the sticky value statement scrolls alongside — the
+              same four taglines already shown in the marquee above, restated as a short list
+              rather than new copy. Not aria-hidden, unlike the marquee itself (Marquee.tsx):
+              that one already hides its text from assistive tech as decorative, so this list is
+              the only place these four short statements are actually announced on this page. */}
+          <Reveal variant="side" delay={0.1}>
+            <ul className={styles.missionValues}>
+              {marqueeItems.map((item) => (
+                <li key={item} className={styles.missionValueItem}>
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </Reveal>
+        </div>
       </section>
 
       {/* ── CTA ───────────────────────────────────────── */}
