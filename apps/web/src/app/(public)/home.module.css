@@ -284,7 +284,12 @@
 
 .heroFloatChipSecondary {
   position: absolute;
-  right: -22px;
+  /* Was -22px (overhanging past its own box, toward .heroPhoto's outer edge). .heroPhoto is the
+     hero grid's second/rightmost column, flush against .hero's own right edge (overflow: hidden,
+     no reserved margin on that side) — unlike .heroFloatChip's -30px on the opposite side, which
+     overhangs into the gap next to .heroCopy, where there's room. A positive inset keeps this card
+     inside .heroPhoto's box instead of past .hero's clipped boundary (plan11.md task 7). */
+  right: 4px;
   top: 36px;
   background: #fff;
   border-radius: 14px;
