@@ -2,6 +2,7 @@
 
 import * as m from "framer-motion/m";
 import { AnimatePresence, useReducedMotion, useTransform, type MotionValue } from "framer-motion";
+import { MaskedText } from "@/components/motion/primitives/MaskedText";
 import { useDiscreteProgress, useScene } from "@/lib/motion/scroll";
 import styles from "./ProductStoryScene.module.css";
 
@@ -148,22 +149,34 @@ export function ProductStoryScene() {
       <div className={styles.grid}>
         <div className={styles.stickyCol}>
           <div className={styles.stage}>
+            {/* plan12.md task 8: a persistent "device" frame that never itself swaps — only what's
+                inside it changes. Rearrangement within one continuous surface, not a panel being
+                replaced by a different panel, is the whole point of "spatial continuity" this task
+                asks for. */}
+            <div className={styles.stageChrome} aria-hidden="true">
+              <span className={styles.stageChromeDot} />
+              <span className={styles.stageChromeDot} />
+              <span className={styles.stageChromeDot} />
+            </div>
             <div className={styles.stageInner}>
               <span className={styles.stageLabel}>{scene.label}</span>
               <AnimatePresence mode="wait">
-                {/* initial/exit stay the same {opacity, y} shape regardless of reduceMotion —
+                {/* initial/exit stay the same {opacity, y, scale} shape regardless of reduceMotion —
                     conditionally passing undefined instead caused a real hydration mismatch:
                     Motion bakes the initial values into the SSR'd HTML, and reduceMotion itself
                     can read differently between server (always false) and a real reduced-
                     motion client's first render, so the two disagreed on whether opacity/
                     transform should be present at all. The duration alone (already branched)
-                    is enough to make this read as near-instant under reduced motion. */}
+                    is enough to make this read as near-instant under reduced motion.
+                    y/scale (not just opacity) is task 8's "spatial continuity" over a flat
+                    crossfade — the arriving scene visibly advances into the frame, the leaving one
+                    recedes, rather than one simply dissolving into the other in place. */}
                 <m.div
                   key={activeScene}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: reduceMotion ? 0.08 : 0.28 }}
+                  initial={{ opacity: 0, y: 22, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -22, scale: 0.96 }}
+                  transition={{ duration: reduceMotion ? 0.08 : 0.32 }}
                   style={{ display: "flex", flexDirection: "column", gap: 12 }}
                 >
                   <SceneVisual index={activeScene} />
@@ -185,7 +198,16 @@ export function ProductStoryScene() {
               <span className={styles.beatNumber}>
                 {String(i + 1).padStart(2, "0")} &middot; {s.label}
               </span>
-              <h3 className={styles.beatTitle}>{s.title}</h3>
+              {/* plan12.md task 8's "one oversized narrative statement... only if it remains
+                  factually accurate": this exact line is already this scene's own approved title,
+                  not new copy written for the effect. */}
+              {i === SCENES.length - 1 ? (
+                <h3 className={`${styles.beatTitle} ${styles.beatTitleStatement}`}>
+                  <MaskedText>{s.title}</MaskedText>
+                </h3>
+              ) : (
+                <h3 className={styles.beatTitle}>{s.title}</h3>
+              )}
               <p className={styles.beatText}>{s.text}</p>
             </div>
           ))}

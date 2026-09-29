@@ -686,6 +686,36 @@ test.describe('hero WebGL atmosphere', () => {
   // route's listed files there), not by an e2e test against the dev server this suite runs on.
 });
 
+// ── Product story: classroom-to-progress transformation (plan12.md task 8) ─────────────────────
+
+test.describe('ProductStoryScene', () => {
+  test('the device chrome persists while scenes advance through discrete, threshold-based state', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (err) => errors.push(String(err)));
+    await pinCapabilities(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+    await tierOf(page);
+    const section = page.locator('#lesson-story');
+    await section.scrollIntoViewIfNeeded();
+    await expect(section.locator('[class*="stageChrome"]').first()).toBeVisible();
+    await expect(section.locator('[class*="stageInner"] [class*="stageLabel"]')).toHaveText('Match');
+    expect(errors).toEqual([]);
+  });
+
+  test('the closing statement is real, pre-existing beat copy, present without scrolling to it', async ({ request }) => {
+    const html = await (await request.get('/')).text();
+    expect(html).toContain("Tuition doesn&#x27;t disappear when the call ends.");
+  });
+
+  test('mobile drops the sticky composition for a plain vertical story', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+    const stickyCol = page.locator('#lesson-story [class*="stickyCol"]');
+    await expect(stickyCol).toHaveCSS('position', 'relative');
+  });
+});
+
 test.describe('AnimatedUnderline', () => {
   const line = (page: Page, testId: string) =>
     page

@@ -44,6 +44,24 @@
   overflow: hidden;
 }
 
+/* plan12.md task 8: a persistent "device" chrome — sits in the margin above .stageInner's own
+   28px inset, so it never competes with .stageLabel for the same corner. Never re-rendered across
+   scene changes (it lives outside the AnimatePresence swap), reinforcing "one continuous surface". */
+.stageChrome {
+  position: absolute;
+  top: 13px;
+  left: 18px;
+  display: flex;
+  gap: 5px;
+}
+
+.stageChromeDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+}
+
 .stageInner {
   position: absolute;
   inset: 28px;
@@ -169,6 +187,12 @@
   color: #fff !important;
   font-size: 28px !important;
   margin: 0 0 10px !important;
+}
+
+/* plan12.md task 8's one oversized narrative statement — the final beat only. */
+.beatTitleStatement {
+  font-size: clamp(30px, 3.4vw, 40px) !important;
+  line-height: 1.08 !important;
 }
 
 .beatText {
