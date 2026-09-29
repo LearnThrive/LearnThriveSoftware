@@ -906,3 +906,26 @@ test.describe('FAQ active category nav (task 12)', () => {
     await expect.poll(() => lessons.getAttribute('aria-current')).toBeNull();
   });
 });
+
+// ── Route and section handoffs (plan12.md task 14) ──────────────────────────────────────────
+
+test.describe('route handoffs (task 14)', () => {
+  const HANDOFF_ROUTES = ['/about', '/contact', '/faq'];
+
+  for (const route of HANDOFF_ROUTES) {
+    test(`${route}: a SectionHandoff bridges the hard navy -> cream tone break`, async ({ page }) => {
+      await page.goto(route);
+      await expect(page.locator('[data-section-handoff]')).toHaveCount(1);
+    });
+  }
+
+  test('the footer has its own decorative atmosphere, inert to pointer events', async ({ page }) => {
+    await page.goto('/about');
+    const atmosphere = page.locator('.footer-atmosphere');
+    await atmosphere.scrollIntoViewIfNeeded();
+    await expect(atmosphere).toHaveAttribute('aria-hidden', 'true');
+    await expect(atmosphere).toHaveCSS('pointer-events', 'none');
+    const backgroundImage = await atmosphere.evaluate((el) => getComputedStyle(el).backgroundImage);
+    expect(backgroundImage).not.toBe('none');
+  });
+});

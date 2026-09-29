@@ -226,11 +226,19 @@ export default function SubjectsPage() {
                   </div>
                   <div>
                     <div className={styles.subjectTitleRow}>
-                      <SubjectIconScene range={[subjectIndex / subjects.length, (subjectIndex + 1) / subjects.length]}>
-                        <ViewTransition name={`subject-icon-${subject.id}-tuition`}>
+                      {/* plan12.md task 14: "strengthen subject-card -> subject-page continuity" —
+                          the badge's own coloured surface (SubjectIconScene's styles.subjectIcon,
+                          scale/opacity aside) is now inside the ViewTransition boundary, not just
+                          the bare glyph, matching the richer surface-expansion treatment the
+                          homepage's subjectCards already give this same navigation (page.tsx's own
+                          comment on subjectCardIcon). Same shared name either side (subject.id here
+                          equals the homepage/hero's slug-derived name), so the browser morphs
+                          whichever badge the visitor actually clicked from. */}
+                      <ViewTransition name={`subject-icon-${subject.id}-tuition`}>
+                        <SubjectIconScene range={[subjectIndex / subjects.length, (subjectIndex + 1) / subjects.length]}>
                           <SubjectSvg icon={subject.icon} />
-                        </ViewTransition>
-                      </SubjectIconScene>
+                        </SubjectIconScene>
+                      </ViewTransition>
                       <div>
                         <h2 className={styles.subjectTitle}>
                           {subject.id === "english" ? (
@@ -252,11 +260,11 @@ export default function SubjectsPage() {
                 <>
                   <div>
                     <div className={styles.subjectTitleRow}>
-                      <SubjectIconScene range={[subjectIndex / subjects.length, (subjectIndex + 1) / subjects.length]}>
-                        <ViewTransition name={`subject-icon-${subject.id}-tuition`}>
+                      <ViewTransition name={`subject-icon-${subject.id}-tuition`}>
+                        <SubjectIconScene range={[subjectIndex / subjects.length, (subjectIndex + 1) / subjects.length]}>
                           <SubjectSvg icon={subject.icon} />
-                        </ViewTransition>
-                      </SubjectIconScene>
+                        </SubjectIconScene>
+                      </ViewTransition>
                       <div>
                         <h2 className={styles.subjectTitle}>
                           {subject.id === "english" ? (

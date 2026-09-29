@@ -21,6 +21,13 @@ const legalLinks = [
 export function SiteFooter() {
   return (
     <footer className="site-footer">
+      {/* plan12.md task 14's "make footer feel like a visual landing point" — a static dot-grid +
+          soft glow, the same restrained language every cinematic hero on this site already carries
+          (About/Contact/FAQ's heroDots+heroGlow), so the one place every page ends shares that
+          signature too rather than being the single plain, undecorated navy block on the site. No
+          motion of its own (Reveal below already gives the footer a one-time settle) and no scroll
+          listener — this is a fixed decoration, not a scene. */}
+      <div className="footer-atmosphere" aria-hidden="true" />
       {/* plan11.md task 13's "small settle/handoff effect, no loop" — a one-time rise-and-fade as
           the footer scrolls into view, the same Reveal every other below-the-fold block on the
           site already uses. It's the last thing on every page, so there's no LCP concern here the
