@@ -3585,6 +3585,21 @@ ol {
     padding: 1rem;
   }
 
+  /* The two nowrap step labels + connecting line (task 11's stage indicator) don't fit a single
+     row once .enquiry-form's own padding and the enclosing card's padding are subtracted from a
+     360px viewport — stack the steps instead of shrinking text that would still overflow at
+     narrower widths or in a longer-word locale. The connecting line has no sensible vertical
+     equivalent, so it's dropped; each dot's is-complete state still carries the progress. */
+  .enquiry-form-progress {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .enquiry-form-progress-line {
+    display: none;
+  }
+
   .form-field--full {
     grid-column: auto;
   }
