@@ -634,6 +634,58 @@ test.describe('ProductLayer', () => {
   });
 });
 
+// ── Hero WebGL atmosphere (plan12.md task 4) ────────────────────────────────────────────────
+// The raw-WebGL interactive gradient is the one thing this suite can't run on /dev/motion (it
+// needs the real hero, not a lab section) — driven against / directly instead.
+
+test.describe('hero WebGL atmosphere', () => {
+  test('a capable desktop gets the canvas, not the static glow', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (err) => errors.push(String(err)));
+    await pinCapabilities(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+    expect(await tierOf(page)).toBe('full');
+    const hero = page.locator('[data-motion-scene="hero"]');
+    await expect(hero.locator('canvas')).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
+  test('a phone gets the static glow, never the canvas', async ({ page }) => {
+    await pinCapabilities(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+    expect(await tierOf(page)).toBe('light');
+    const hero = page.locator('[data-motion-scene="hero"]');
+    await expect(hero.locator('canvas')).toHaveCount(0);
+  });
+
+  test('reduced motion gets the static glow, never the canvas', async ({ page }) => {
+    await pinCapabilities(page);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+    expect(await tierOf(page)).toBe('reduced');
+    const hero = page.locator('[data-motion-scene="hero"]');
+    await expect(hero.locator('canvas')).toHaveCount(0);
+  });
+
+  test('the canvas is excluded from the accessibility tree', async ({ page }) => {
+    await pinCapabilities(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+    const canvas = page.locator('[data-motion-scene="hero"] canvas');
+    await expect(canvas).toBeVisible();
+    await expect(page.locator('[data-motion-scene="hero"] > div[aria-hidden="true"]').filter({ has: page.locator('canvas') })).toHaveCount(1);
+  });
+
+  // Code-splitting (whether the dynamic import actually keeps HeroWebGLAtmosphere/heroGradient
+  // out of the page's initial script payload) is a production-bundling question dev mode doesn't
+  // answer the same way — confirmed instead by inspecting a real `next build`'s
+  // .next/build-manifest.json directly (the chunk containing this code is absent from every
+  // route's listed files there), not by an e2e test against the dev server this suite runs on.
+});
+
 test.describe('AnimatedUnderline', () => {
   const line = (page: Page, testId: string) =>
     page

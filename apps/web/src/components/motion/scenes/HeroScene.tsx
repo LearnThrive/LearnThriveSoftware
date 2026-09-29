@@ -1,12 +1,26 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import * as m from "framer-motion/m";
 import { useReducedMotion, useTransform } from "framer-motion";
 import { useScene } from "@/lib/motion/scroll";
-import { useMotionTier } from "@/lib/motion/capabilities";
+import { useMotionCapabilities, useMotionTier } from "@/lib/motion/capabilities";
 import { ParallaxLayer } from "@/components/motion/primitives/ParallaxLayer";
 import styles from "@/app/(public)/home.module.css";
+
+/**
+ * plan12.md task 4: the raw-WebGL interactive gradient is dynamically imported, never part of the
+ * hero's own bundle — `ssr: false` because it touches `window`/canvas/WebGL, and the dynamic
+ * `import()` (not a static one) is what actually keeps `heroGradient.ts`'s shader source and GL
+ * code out of the critical path; a static import would still tree-shake into the same chunk as
+ * everything else here regardless of any runtime tier check. Nothing is rendered while it loads —
+ * the existing static `.heroGlow` (below) already covers that moment on every tier.
+ */
+const HeroWebGLAtmosphere = dynamic(
+  () => import("./HeroWebGLAtmosphere").then((mod) => mod.HeroWebGLAtmosphere),
+  { ssr: false },
+);
 
 /**
  * plan10.md section 3 ("Hero becomes the flagship experience") and its "Hero scroll behaviour":
@@ -31,6 +45,7 @@ import styles from "@/app/(public)/home.module.css";
 export function HeroScene() {
   const { ref, smoothProgress } = useScene(["start start", "end start"]);
   const tier = useMotionTier();
+  const { webgl } = useMotionCapabilities();
   const reduceMotion = useReducedMotion();
   const active = tier === "full" && !reduceMotion;
 
@@ -44,7 +59,10 @@ export function HeroScene() {
           relative to the plan's own layering scheme). ParallaxLayer's internal tier scaling
           replaces the old manual `active ? [0, 40] : [0, 0]` branch. */}
       <ParallaxLayer progress={smoothProgress} from={0} to={16} className={styles.heroDots} aria-hidden />
-      <div className={styles.heroGlow} aria-hidden="true" />
+      {/* plan12.md task 4: the interactive gradient replaces the static glow only on the one tier
+          it's built for — every other tier (including reduced motion, already excluded from
+          `webgl` by capabilities.ts) keeps the plain static glow it always had. */}
+      {webgl ? <HeroWebGLAtmosphere /> : <div className={styles.heroGlow} aria-hidden="true" />}
       <div className={styles.heroGrid}>
         <m.div style={{ y: headlineY }}>
           <div className={styles.heroCopy}>
