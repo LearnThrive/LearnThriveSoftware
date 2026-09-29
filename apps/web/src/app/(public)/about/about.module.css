@@ -90,7 +90,9 @@
 }
 
 .heroTitle {
-  font-size: clamp(34px, 4.4vw, 52px) !important;
+  /* plan12.md task 11: a higher ceiling (was 52px) so the opening statement reads with real
+     editorial scale on capable screens; the floor is untouched, small screens unaffected. */
+  font-size: clamp(34px, 5vw, 64px) !important;
   line-height: 1 !important;
   letter-spacing: -0.03em !important;
   color: #fff !important;
@@ -173,6 +175,16 @@
   grid-template-columns: 1fr 1fr;
   gap: 24px;
   margin-top: 30px;
+}
+
+/* plan12.md task 11: an asymmetric offset rather than two cards sitting in a perfectly even row —
+   a small, deliberate break from the grid, not a redesign of the cards themselves (still human,
+   still credible). Desktop only: a vertical offset on a narrow single column would just look like
+   uneven spacing rather than a considered layout choice. */
+@media (min-width: 901px) {
+  .foundersGrid > *:nth-child(2) {
+    margin-top: 36px;
+  }
 }
 
 /* The hover shadow lives on a pseudo-element that is drawn once and only fades in. Interpolating
