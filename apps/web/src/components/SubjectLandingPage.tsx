@@ -7,7 +7,10 @@ import { FeatureCard } from "@/components/FeatureCard";
 import { Icon } from "@/components/Icon";
 import { PageHero } from "@/components/PageHero";
 import { SectionHeading } from "@/components/SectionHeading";
+import { MaskedText } from "@/components/motion/primitives/MaskedText";
 import { Reveal, type RevealVariant } from "@/components/motion/primitives/Reveal";
+import { CinematicBackdrop } from "@/components/motion/primitives/CinematicBackdrop";
+import { SubjectHeroMotif } from "@/components/motion/scenes/SubjectHeroMotif";
 import { SubjectWorld } from "@/components/motion/scenes/SubjectWorld";
 import type { SubjectLandingConfig, SubjectLandingSlug } from "@/lib/site";
 
@@ -42,6 +45,11 @@ export function SubjectLandingPage({ subject }: SubjectLandingPageProps) {
         eyebrow={subject.hero.eyebrow}
         title={subject.hero.title}
         intro={subject.hero.intro}
+        backdrop={
+          <CinematicBackdrop>
+            <SubjectHeroMotif slug={subject.slug} />
+          </CinematicBackdrop>
+        }
         actions={
           <div className="button-group">
             <ButtonLink href="/book" variant="light">
@@ -107,7 +115,12 @@ export function SubjectLandingPage({ subject }: SubjectLandingPageProps) {
         <Container className="editorial-split">
           <Reveal variant={SPOTLIGHT_VARIANT[subject.slug]} className="subject-personalised__heading">
             <p className="eyebrow">{subject.spotlight.eyebrow}</p>
-            <h2>{subject.spotlight.title}</h2>
+            {/* plan12.md task 7: "use large type sparingly" — one oversized editorial moment per
+                page, not one per section; existing, already-approved copy (subject.spotlight.title),
+                never new text invented for the effect. */}
+            <h2>
+              <MaskedText>{subject.spotlight.title}</MaskedText>
+            </h2>
           </Reveal>
           <div className="subject-personalised__body">
             <p>{subject.spotlight.text}</p>
