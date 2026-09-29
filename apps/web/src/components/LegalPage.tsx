@@ -3,6 +3,7 @@ import { Container } from "@/components/Container";
 import { PageHero } from "@/components/PageHero";
 import { PhoneContacts } from "@/components/PhoneContacts";
 import { Reveal } from "@/components/motion/primitives/Reveal";
+import { CinematicBackdrop } from "@/components/motion/primitives/CinematicBackdrop";
 import { LegalContentsNav } from "@/components/motion/scenes/LegalPageMotion";
 import { siteConfig } from "@/lib/site";
 
@@ -37,6 +38,13 @@ export function LegalPage({
         title={title}
         intro={intro}
         className="page-hero--legal"
+        backdrop={
+          <CinematicBackdrop
+            lightChildren={<div className="legal-hero-atmosphere" aria-hidden="true" />}
+          >
+            <div className="legal-hero-atmosphere" aria-hidden="true" />
+          </CinematicBackdrop>
+        }
         aside={
           <div className="document-card">
             <span>Last reviewed</span>

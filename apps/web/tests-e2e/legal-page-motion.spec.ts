@@ -41,6 +41,26 @@ for (const route of ROUTES) {
   });
 }
 
+// plan12.md task 13: "very light path/background atmosphere" — PageHero's backdrop slot (task 7's
+// mechanism), shared by every LegalPage route via one change to LegalPage.tsx.
+test('the hero has a light, decorative atmosphere on the full tier, and none under reduced motion', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8, configurable: true });
+    Object.defineProperty(navigator, 'deviceMemory', { get: () => 8, configurable: true });
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/privacy');
+  const backdrop = page.locator('[data-cinematic-backdrop]').first();
+  await expect(backdrop).toHaveAttribute('data-backdrop-active', 'true');
+  await expect(backdrop.locator('.legal-hero-atmosphere')).toBeAttached();
+  await expect(backdrop).toHaveAttribute('aria-hidden', 'true');
+
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.reload();
+  await expect(page.locator('[data-cinematic-backdrop]')).toHaveCount(0);
+  await expect(page.locator('h1')).toBeVisible();
+});
+
 test('legal page word count is unchanged by the motion pass (no wording edited)', async ({ page }) => {
   // A structural, not textual, guard: the legal-prose article's total visible text should still
   // contain the same core legal terms it always has — a cheap smoke check that nothing in the
