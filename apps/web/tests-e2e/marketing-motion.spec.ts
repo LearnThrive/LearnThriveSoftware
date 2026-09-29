@@ -769,3 +769,52 @@ test.describe('AnimatedUnderline', () => {
     expect(await line(page, 'underline-hover')).toBe(UNDRAWN);
   });
 });
+
+// ── About page brand story (plan12.md task 11) ──────────────────────────────────────────────
+
+test.describe('about page composition (task 11)', () => {
+  test('the mission statement is real, masked text — present in the server HTML, not revealed only by script', async ({ request }) => {
+    const html = (await (await request.get('/about')).text()).replace(/<!-- -->/g, '');
+    expect(html).toContain('A global platform where every student is understood');
+  });
+
+  test('both founder portraits move on a shared scroll source as the section scrolls (full tier)', async ({ page }) => {
+    await pinCapabilities(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/about');
+    expect(await tierOf(page)).toBe('full');
+    const portraitTransform = (alt: string) =>
+      page.getByAltText(alt).evaluate((el) => getComputedStyle(el.parentElement as HTMLElement).transform);
+    const abdurrahman = page.getByAltText('Abdurrahman Mustafa, co-founder');
+    await abdurrahman.scrollIntoViewIfNeeded();
+    const before = await portraitTransform('Abdurrahman Mustafa, co-founder');
+    await page.evaluate(() => window.scrollBy({ top: 220, behavior: 'instant' }));
+    await expect.poll(() => portraitTransform('Abdurrahman Mustafa, co-founder')).not.toBe(before);
+    await expect.poll(() => portraitTransform('Tahasin Hasan, co-founder')).not.toBe('none');
+  });
+
+  test('with reduced motion neither portrait moves at all', async ({ page }) => {
+    await pinCapabilities(page);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/about');
+    expect(await tierOf(page)).toBe('reduced');
+    const abdurrahman = page.getByAltText('Abdurrahman Mustafa, co-founder');
+    await abdurrahman.scrollIntoViewIfNeeded();
+    await page.evaluate(() => window.scrollBy({ top: 220, behavior: 'instant' }));
+    await page.waitForTimeout(200);
+    const transform = await abdurrahman.evaluate((el) => getComputedStyle(el.parentElement as HTMLElement).transform);
+    expect(transform === 'none' || transform === 'matrix(1, 0, 0, 1, 0, 0)').toBe(true);
+  });
+
+  test('the second founder card is offset from the grid row on desktop, not on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/about');
+    const cards = page.locator('[class*="foundersGrid"] > *');
+    const desktopOffset = await cards.nth(1).evaluate((el) => getComputedStyle(el).marginTop);
+    expect(desktopOffset).not.toBe('0px');
+    await page.setViewportSize({ width: 390, height: 844 });
+    const mobileOffset = await cards.nth(1).evaluate((el) => getComputedStyle(el).marginTop);
+    expect(mobileOffset).toBe('0px');
+  });
+});

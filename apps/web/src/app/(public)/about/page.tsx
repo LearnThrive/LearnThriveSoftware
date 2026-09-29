@@ -4,6 +4,8 @@ import Link from "next/link";
 import { BodyClass } from "@/components/BodyClass";
 import { Reveal } from "@/components/motion/primitives/Reveal";
 import { PointerDepth } from "@/components/motion/primitives/PointerDepth";
+import { MaskedText } from "@/components/motion/primitives/MaskedText";
+import { AboutFoundersScene, FounderPortraitParallax } from "@/components/motion/scenes/AboutFoundersScene";
 import { Marquee } from "@/components/Marquee";
 import { createMetadata } from "@/lib/metadata";
 import styles from "./about.module.css";
@@ -82,11 +84,13 @@ export default function AboutPage() {
           <p className={`${styles.eyebrow} ${styles.eyebrowDark}`}>Meet the founders</p>
           <h2 className={styles.foundersTitle}>The people behind LearnThrive</h2>
         </Reveal>
+        <AboutFoundersScene>
         <div className={styles.foundersGrid}>
           <Reveal variant="scale">
             <PointerDepth>
               <article className={styles.founderCard}>
                 <div className={styles.founderCardInner}>
+                  <FounderPortraitParallax>
                   <Image
                     className={styles.founderPortrait}
                     src="/images/abdurrahman-mustafa.jpg"
@@ -95,6 +99,7 @@ export default function AboutPage() {
                     height={253}
                     sizes="(max-width: 560px) 100vw, 190px"
                   />
+                  </FounderPortraitParallax>
                   <div>
                     <div>
                       <h3 className={styles.founderName}>Abdurrahman Mustafa</h3>
@@ -128,6 +133,7 @@ export default function AboutPage() {
             <PointerDepth>
               <article className={styles.founderCard}>
                 <div className={styles.founderCardInner}>
+                  <FounderPortraitParallax>
                   <Image
                     className={`${styles.founderPortrait} ${styles.founderPortraitTahasin}`}
                     src="/images/tahasin-hasan.jpg"
@@ -136,6 +142,7 @@ export default function AboutPage() {
                     height={253}
                     sizes="(max-width: 560px) 100vw, 190px"
                   />
+                  </FounderPortraitParallax>
                   <div>
                     <div>
                       <h3 className={styles.founderName}>Tahasin Hasan</h3>
@@ -167,6 +174,7 @@ export default function AboutPage() {
             </PointerDepth>
           </Reveal>
         </div>
+        </AboutFoundersScene>
       </section>
 
       {/* ── Mission ───────────────────────────────────── */}
@@ -176,7 +184,7 @@ export default function AboutPage() {
           <Reveal variant="soft" className={styles.missionSticky}>
             <p className={styles.eyebrow}>Our mission</p>
             <h2 className={styles.missionTitle}>
-              A global platform where every student is understood
+              <MaskedText>A global platform where every student is understood</MaskedText>
             </h2>
             <p className={styles.missionText}>
               We&apos;re building a platform that matches students with tutors
