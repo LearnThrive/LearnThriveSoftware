@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
+import { ViewTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { BodyClass } from "@/components/BodyClass";
+import { AnimatedUnderline } from "@/components/motion/primitives/AnimatedUnderline";
 import { Reveal } from "@/components/motion/primitives/Reveal";
 import { PointerDepth } from "@/components/motion/primitives/PointerDepth";
 import { SubjectsHeroScene, SubjectsListScene, SubjectIconScene } from "@/components/motion/scenes/SubjectsScene";
+import { SubjectSectionMotif } from "@/components/motion/scenes/SubjectSectionMotif";
+import { ElevenPlusMotif } from "@/components/motion/scenes/ElevenPlusMotif";
 import { Marquee } from "@/components/Marquee";
 import { createMetadata } from "@/lib/metadata";
 import styles from "./subjects.module.css";
@@ -198,6 +202,12 @@ export default function SubjectsPage() {
       <SubjectsListScene>
       {subjects.map((subject, subjectIndex) => (
         <section key={subject.id} id={subject.id} className={styles.subjectSection}>
+          <div className={styles.subjectMotifLayer}>
+            <SubjectSectionMotif
+              kind={subject.id as "maths" | "english" | "science"}
+              range={[subjectIndex / subjects.length, (subjectIndex + 1) / subjects.length]}
+            />
+          </div>
           {/* The first subject is on the first screen, and its photograph is the page's largest
               paint. A reveal would hold it at opacity 0 until the script has loaded and the animation
               has run (LCP 204 -> 864 ms in the profile), so it is simply there; later ones reveal. */}
@@ -217,14 +227,25 @@ export default function SubjectsPage() {
                   <div>
                     <div className={styles.subjectTitleRow}>
                       <SubjectIconScene range={[subjectIndex / subjects.length, (subjectIndex + 1) / subjects.length]}>
-                        <SubjectSvg icon={subject.icon} />
+                        <ViewTransition name={`subject-icon-${subject.id}-tuition`}>
+                          <SubjectSvg icon={subject.icon} />
+                        </ViewTransition>
                       </SubjectIconScene>
                       <div>
-                        <h2 className={styles.subjectTitle}>{subject.title}</h2>
+                        <h2 className={styles.subjectTitle}>
+                          {subject.id === "english" ? (
+                            <AnimatedUnderline drawOnView>{subject.title}</AnimatedUnderline>
+                          ) : (
+                            subject.title
+                          )}
+                        </h2>
                         <div className={styles.subjectRange}>{subject.range}</div>
                       </div>
                     </div>
                     <p className={styles.subjectDesc}>{subject.description}</p>
+                    <Link href={`/${subject.id}-tuition`} className={styles.subjectExploreLink}>
+                      Explore {subject.title} in depth <span aria-hidden="true">&rarr;</span>
+                    </Link>
                   </div>
                 </>
               ) : (
@@ -232,14 +253,25 @@ export default function SubjectsPage() {
                   <div>
                     <div className={styles.subjectTitleRow}>
                       <SubjectIconScene range={[subjectIndex / subjects.length, (subjectIndex + 1) / subjects.length]}>
-                        <SubjectSvg icon={subject.icon} />
+                        <ViewTransition name={`subject-icon-${subject.id}-tuition`}>
+                          <SubjectSvg icon={subject.icon} />
+                        </ViewTransition>
                       </SubjectIconScene>
                       <div>
-                        <h2 className={styles.subjectTitle}>{subject.title}</h2>
+                        <h2 className={styles.subjectTitle}>
+                          {subject.id === "english" ? (
+                            <AnimatedUnderline drawOnView>{subject.title}</AnimatedUnderline>
+                          ) : (
+                            subject.title
+                          )}
+                        </h2>
                         <div className={styles.subjectRange}>{subject.range}</div>
                       </div>
                     </div>
                     <p className={styles.subjectDesc}>{subject.description}</p>
+                    <Link href={`/${subject.id}-tuition`} className={styles.subjectExploreLink}>
+                      Explore {subject.title} in depth <span aria-hidden="true">&rarr;</span>
+                    </Link>
                   </div>
                   <div className={styles.subjectImage}>
                     <Image
@@ -292,6 +324,7 @@ export default function SubjectsPage() {
         <Reveal variant="scale">
           <div className={styles.elevenPlusCard}>
             <div className={styles.elevenPlusDots} aria-hidden="true" />
+            <ElevenPlusMotif />
             <div className={styles.elevenPlusInner}>
               <p className={styles.eyebrow}>Entrance exams</p>
               <h2 className={styles.elevenPlusTitle}>11+ Preparation</h2>

@@ -1,7 +1,8 @@
 "use client";
 
 import * as m from "framer-motion/m";
-import type { ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
+import { useInViewport } from "@/lib/motion/activity";
 import { motionEase } from "@/lib/motion/tokens";
 import styles from "./AnimatedUnderline.module.css";
 
@@ -42,19 +43,31 @@ export function AnimatedUnderline({
   className,
 }: AnimatedUnderlineProps) {
   const root = [styles.root, drawOnView ? styles.onView : "", className ?? ""].filter(Boolean).join(" ");
+  const lineRef = useRef<HTMLSpanElement>(null);
+  // `useInViewport` (the same activity primitive CinematicBackdrop/MaskedText already use), not
+  // Framer's own `whileInView` — confirmed directly (a real bounding box, well inside the
+  // viewport, still never fires) that `whileInView` does not reliably trigger in this project's
+  // test environment; MaskedText.tsx's own comment has the fuller account. `once` isn't tracked
+  // (drawOnView never un-draws once true; this component has no reduced-motion/no-JS mismatch
+  // risk from that, since the CSS override below forces the same drawn state either way).
+  const inView = useInViewport(lineRef, "-20% 0px -20% 0px");
+  const [everSeen, setEverSeen] = useState(false);
+  if (inView && !everSeen) {
+    setEverSeen(true);
+  }
 
   return (
     <span className={root} data-underline="" data-active={active ? "true" : undefined} style={{ ["--underline-thickness" as string]: `${thickness}px` }}>
       {children}
       {drawOnView ? (
         <m.span
+          ref={lineRef}
           className={styles.line}
           data-underline-line=""
           data-underline-draw=""
           aria-hidden="true"
           initial={{ scaleX: 0 }}
-          whileInView={{ scaleX: 1 }}
-          viewport={{ once: true, amount: 0.6 }}
+          animate={{ scaleX: everSeen ? 1 : 0 }}
           transition={{ duration: 0.7, delay, ease: motionEase.gentle }}
         />
       ) : (

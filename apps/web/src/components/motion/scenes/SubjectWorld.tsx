@@ -80,7 +80,16 @@ export function SubjectWorld({ subject, kind }: SubjectWorldProps) {
   );
 }
 
-function PathTrack({ progress, active }: { progress: MotionValue<number>; active: boolean }) {
+/**
+ * Exported so plan12.md task 6 can reuse these exact motifs — not a re-skin, the same underlying
+ * idea — on /subjects, whose subject sections share one scroll progress source
+ * (`SubjectsScene.tsx`'s `SubjectsProgressContext`) rather than each owning its own `useScene()`
+ * the way `SubjectWorld` above does: three or four independent scroll listeners on one page is
+ * exactly the regression that file's own comment documents (1.6% -> 6.3% dropped frames), so
+ * `/subjects` derives each subject's windowed progress from the shared context first
+ * (`useSubjectWindowProgress`) and passes that into these same components instead.
+ */
+export function PathTrack({ progress, active }: { progress: MotionValue<number>; active: boolean }) {
   const pathLength = useTransform(progress, [0, 1], active ? [0, 1] : [1, 1]);
   return (
     <svg className="subject-world-track" viewBox="0 0 100 2" preserveAspectRatio="none" aria-hidden="true">
@@ -99,7 +108,7 @@ function PathTrack({ progress, active }: { progress: MotionValue<number>; active
   );
 }
 
-function Milestone({
+export function Milestone({
   progress,
   active,
   index,
@@ -116,7 +125,7 @@ function Milestone({
   return <m.span className="subject-world-milestone" aria-hidden="true" style={{ opacity: lit, scale }} />;
 }
 
-function ScienceNodes({ progress, active }: { progress: MotionValue<number>; active: boolean }) {
+export function ScienceNodes({ progress, active }: { progress: MotionValue<number>; active: boolean }) {
   const y1 = useTransform(progress, [0, 1], active ? [0, -6] : [0, 0]);
   const y2 = useTransform(progress, [0, 1], active ? [0, 6] : [0, 0]);
   const y3 = useTransform(progress, [0, 1], active ? [0, -3] : [0, 0]);
