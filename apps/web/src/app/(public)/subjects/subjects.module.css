@@ -194,8 +194,48 @@
 
 /* ── Subject Section ───────────────────────────────────── */
 .subjectSection {
+  position: relative;
   padding: 56px 40px 0;
   scroll-margin-top: 24px;
+}
+
+/* plan12.md task 6: the same per-subject motifs SubjectWorld.tsx draws on the dedicated subject
+   pages (a drawn path for maths/11+, connected nodes for science), reused here as a full-bleed
+   background layer rather than positioned against this page's own card layout — the global
+   .subject-world-track/-nodes classes those components render assume SubjectWorld's own
+   .subject-pathway-grid geometry (a fixed offset from a card header), which this page doesn't
+   share, so the two overrides below give them this section's own, simpler geometry instead: a
+   line straight across the vertical centre, node art free-floating near the top. Low z-index and
+   pointer-events: none keep it strictly decorative, under the real header/card content. */
+.subjectMotifLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0.5;
+  /* SubjectWorld.tsx's motifs read var(--subject-accent) — normally set per-subject by the
+     dedicated landing pages' .subject-landing--{slug} wrapper. This page has no such wrapper (it's
+     the overview, not one subject's own page), so one consistent brand green across every motif
+     here is the more appropriate choice anyway — four different hues would read as visual noise
+     on a page whose point is "one system, four subjects", not the reverse. */
+  --subject-accent: var(--lt-green-dark);
+}
+
+.subjectMotifLayer :global(.subject-world-track) {
+  top: 50%;
+}
+
+.subjectMotifLayer :global(.subject-world-nodes) {
+  width: 140px;
+  height: 70px;
+  margin: 24px auto 0;
+}
+
+.subjectHeader,
+.levelCards {
+  position: relative;
+  z-index: 1;
 }
 
 .subjectSection:last-of-type {
@@ -253,6 +293,24 @@
   line-height: 1.6;
   color: var(--lt-ink);
   max-width: 62ch;
+}
+
+/* plan12.md task 6: /subjects previously described each subject but never linked to its own
+   dedicated page — the "subject-card -> destination" continuity the task asks for had nothing to
+   navigate through. The icon this shares a ViewTransition name with is the one element with a real
+   counterpart on the destination page (matching page.tsx's own homepage-card precedent). */
+.subjectExploreLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 18px;
+  font-weight: 700;
+  color: var(--lt-green-dark);
+  text-decoration: none;
+}
+
+.subjectExploreLink:hover {
+  text-decoration: underline;
 }
 
 .subjectImage {
@@ -407,6 +465,11 @@
   border-radius: 26px;
   padding: 44px;
   overflow: hidden;
+  /* The dark green .subjectMotifLayer uses would be nearly invisible against this navy card;
+     the same brighter one-off used everywhere else on navy in this codebase (home.module.css's
+     .levelRowDark .levelYears etc.) stays visible and on-brand. Purely decorative art, not text,
+     so this is a legibility choice rather than a WCAG contrast requirement. */
+  --subject-accent: #13c2a0;
 }
 
 .elevenPlusDots {

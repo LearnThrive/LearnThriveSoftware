@@ -72,23 +72,31 @@ export function SubjectsListScene({ children }: { children: ReactNode }) {
   );
 }
 
-/** [start, end] slice of the shared progress (0..1) this icon should be considered "current" within. */
-export function SubjectIconScene({ range, children }: { range: [number, number]; children: ReactNode }) {
+/**
+ * plan12.md task 6: the same "derive a windowed sub-range from the one shared source" technique
+ * `SubjectIconScene` already used for the icon badge, factored out so other per-subject effects
+ * (a background motif, a surface expand) can reuse it too — never a second `useScene()` call, which
+ * is what caused the regression `SubjectsListScene`'s own comment documents.
+ */
+export function useSubjectWindowProgress(range: [number, number]): MotionValue<number> {
   const sharedProgress = useContext(SubjectsProgressContext);
-  // A stable, unused fallback so this never throws if SubjectIconScene is ever rendered outside
-  // SubjectsListScene — useTransform/useMotionValue must be called unconditionally either way
-  // (Rules of Hooks), so the fallback has to exist rather than being skipped.
+  // A stable, unused fallback so this never throws if called outside SubjectsListScene —
+  // useTransform/useMotionValue must run unconditionally either way (Rules of Hooks).
   const fallbackProgress = useMotionValue(0);
   const progress = sharedProgress ?? fallbackProgress;
+  const [start, end] = range;
+  return useTransform(progress, [start, end], [0, 1]);
+}
 
+/** [start, end] slice of the shared progress (0..1) this icon should be considered "current" within. */
+export function SubjectIconScene({ range, children }: { range: [number, number]; children: ReactNode }) {
+  const windowed = useSubjectWindowProgress(range);
   const tier = useMotionTier();
   const reduceMotion = useReducedMotion();
   const active = tier === "full" && !reduceMotion;
 
-  const [start, end] = range;
-  const mid = (start + end) / 2;
-  const scale = useTransform(progress, [start, mid, end], active ? [0.88, 1, 0.88] : [1, 1, 1]);
-  const opacity = useTransform(progress, [start, mid, end], active ? [0.7, 1, 0.7] : [1, 1, 1]);
+  const scale = useTransform(windowed, [0, 0.5, 1], active ? [0.88, 1, 0.88] : [1, 1, 1]);
+  const opacity = useTransform(windowed, [0, 0.5, 1], active ? [0.7, 1, 0.7] : [1, 1, 1]);
 
   return (
     <m.div className={styles.subjectIcon} style={{ scale, opacity }}>
