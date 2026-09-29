@@ -2907,6 +2907,21 @@ ol {
   background: var(--colour-mint-100);
 }
 
+/* plan12.md task 9: the one section on /safeguarding a reader might need in a hurry — same
+   established box shape as .legal-contact-box (consistency over inventing a second pattern), a
+   calmer navy border rather than red so it reads as "important" without reading as "alarm". */
+.safeguarding-urgent-box {
+  margin-top: 1.25rem;
+  padding: clamp(1.25rem, 3vw, 2rem);
+  border-left: 4px solid var(--colour-navy-800);
+  border-radius: var(--radius-sm);
+  background: var(--colour-mint-100);
+}
+
+.safeguarding-urgent-box ul {
+  margin-top: 0;
+}
+
 .legal-table-wrap table {
   width: 100%;
   table-layout: fixed;
