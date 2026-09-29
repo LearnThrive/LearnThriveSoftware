@@ -74,3 +74,26 @@ test.describe('subject card -> subject page transition', () => {
     }
   });
 });
+
+// plan12.md task 14: "strengthen subject-card -> subject-page continuity" moved the ViewTransition
+// boundary on /subjects to cover the icon's coloured surface (not just the bare glyph), reusing the
+// exact same shared name the homepage's cards already morph through. This is the same
+// actionability-after-transition guard as the describe block above, run from the *other* origin
+// that now participates in the same named transition.
+test.describe('/subjects section -> subject page transition', () => {
+  test('the explore link navigates and the destination is immediately interactive, no console/page errors', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') errors.push(msg.text());
+    });
+    page.on('pageerror', (err) => errors.push(String(err)));
+    await page.goto('/subjects');
+    await page.locator('#science').getByRole('link', { name: /Explore Science in depth/i }).click();
+    await expect(page).toHaveURL(/\/science-tuition$/);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await page.getByRole('link', { name: 'Book a free consultation' }).first().click();
+    await expect(page).toHaveURL(/\/book$/);
+    await page.waitForTimeout(400);
+    expect(errors, `console/page errors: ${JSON.stringify(errors, null, 2)}`).toEqual([]);
+  });
+});

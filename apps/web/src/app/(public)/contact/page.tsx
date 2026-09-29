@@ -4,6 +4,7 @@ import { BodyClass } from "@/components/BodyClass";
 import { Reveal } from "@/components/motion/primitives/Reveal";
 import { PointerDepth } from "@/components/motion/primitives/PointerDepth";
 import { MaskedText } from "@/components/motion/primitives/MaskedText";
+import { SectionHandoff } from "@/components/motion/primitives/SectionHandoff";
 import { createMetadata } from "@/lib/metadata";
 import { siteConfig } from "@/lib/site";
 import styles from "./contact.module.css";
@@ -46,6 +47,8 @@ export default function ContactPage() {
           </p>
         </div>
       </section>
+
+      <SectionHandoff from="navy" to="cream" />
 
       {/* ── Contact Cards ─────────────────────────────── */}
       <section className={styles.cardsSection}>

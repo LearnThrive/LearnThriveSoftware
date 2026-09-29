@@ -6,6 +6,7 @@ import { Reveal } from "@/components/motion/primitives/Reveal";
 import { PointerDepth } from "@/components/motion/primitives/PointerDepth";
 import { MaskedText } from "@/components/motion/primitives/MaskedText";
 import { AboutFoundersScene, FounderPortraitParallax } from "@/components/motion/scenes/AboutFoundersScene";
+import { SectionHandoff } from "@/components/motion/primitives/SectionHandoff";
 import { Marquee } from "@/components/Marquee";
 import { createMetadata } from "@/lib/metadata";
 import styles from "./about.module.css";
@@ -209,6 +210,8 @@ export default function AboutPage() {
           </Reveal>
         </div>
       </section>
+
+      <SectionHandoff from="navy" to="cream" />
 
       {/* ── CTA ───────────────────────────────────────── */}
       <section className={styles.ctaSection}>

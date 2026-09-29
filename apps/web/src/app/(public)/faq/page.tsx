@@ -5,6 +5,7 @@ import { Reveal } from "@/components/motion/primitives/Reveal";
 import { FaqList } from "@/components/FaqList";
 import { FaqHashOpener } from "@/components/FaqHashOpener";
 import { FaqJumpNav } from "@/components/motion/scenes/FaqJumpNav";
+import { SectionHandoff } from "@/components/motion/primitives/SectionHandoff";
 import { createMetadata } from "@/lib/metadata";
 import { faqSections } from "@/lib/faqs";
 import styles from "./faq.module.css";
@@ -50,6 +51,7 @@ export default function FaqPage() {
       </section>
 
       {/* ── Category cards ───────────────────────────── */}
+      <SectionHandoff from="navy" to="cream" />
       <div className={styles.faqSections}>
         {faqSections.map((section, i) => (
           // The first row of categories is on the first screen and holds the page's largest text

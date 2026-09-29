@@ -3061,9 +3061,33 @@ ol {
 
 /* Footer */
 .site-footer {
+  position: relative;
+  overflow: hidden;
   padding-top: clamp(4rem, 7vw, 6rem);
   background: var(--colour-navy-950);
   color: #b9cbd5;
+}
+
+/* plan12.md task 14: the footer's own dot-grid + soft glow — see SiteFooter.tsx's comment. Matches
+   the proportions of the marketing pages' heroDots/heroGlow pair (About/Contact/FAQ) without
+   sharing their CSS module, since this component is used site-wide, not scoped to one page. */
+.footer-atmosphere {
+  position: absolute;
+  inset: 0 45% 0 0;
+  background-image: radial-gradient(rgb(255 255 255 / 8%) 1px, transparent 1px);
+  background-size: 22px 22px;
+  pointer-events: none;
+}
+
+.footer-atmosphere::after {
+  content: "";
+  position: absolute;
+  left: -6rem;
+  top: -8rem;
+  width: 22rem;
+  height: 22rem;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(7 95 82 / 16%) calc(100% - 30px), rgb(7 95 82 / 0%) 100%);
 }
 
 .footer-grid {
