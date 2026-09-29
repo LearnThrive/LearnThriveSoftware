@@ -337,6 +337,15 @@
   font-weight: 800;
   font-size: 13px;
   flex: none;
+  /* plan11.md task 9's "internal motif movement": something inside the card moves distinctly from
+     the card's own hover lift (.levelCard:hover, translateY on the card itself) — a compositor-only
+     transform, no JS, so it costs nothing beyond what the card's existing hover transition already
+     pays for. */
+  transition: transform 0.3s;
+}
+
+.levelCard:hover .levelCardNumber {
+  transform: translateY(-2px) scale(1.08);
 }
 
 .levelCardDark .levelCardNumber {

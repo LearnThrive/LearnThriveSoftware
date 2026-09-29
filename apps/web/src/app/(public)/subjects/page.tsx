@@ -3,6 +3,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { BodyClass } from "@/components/BodyClass";
 import { Reveal } from "@/components/motion/primitives/Reveal";
+import { PointerDepth } from "@/components/motion/primitives/PointerDepth";
+import { SubjectsHeroScene, SubjectsListScene, SubjectIconScene } from "@/components/motion/scenes/SubjectsScene";
 import { Marquee } from "@/components/Marquee";
 import { createMetadata } from "@/lib/metadata";
 import styles from "./subjects.module.css";
@@ -142,36 +144,32 @@ export default function SubjectsPage() {
       <BodyClass className="is-subjects" />
 
       {/* ── Hero ──────────────────────────────────────── */}
-      <section className={styles.hero}>
-        <div className={styles.heroDots} aria-hidden="true" />
-        <div className={styles.heroGlow} aria-hidden="true" />
-        <div className={styles.heroInner}>
-          <p className={styles.eyebrow}>What we teach</p>
-          <h1 className={styles.heroTitle}>
-            Subjects we{" "}
-            <span className={styles.heroMark}>
-              <span className={styles.heroMarkBg} aria-hidden="true" />
-              <span className={styles.heroMarkText}>cover</span>
-            </span>
-          </h1>
-          <p className={styles.heroLead}>
-            Maths, English and Science from Key Stage 2 through to A-Level,
-            plus dedicated 11+ preparation. Here&apos;s how the support grows
-            with your child at each stage.
-          </p>
-          <nav aria-label="Jump to a subject">
-            <ul className={styles.heroJump}>
-              {jumpLinks.map((link) => (
-                <li key={link.href}>
-                  <a href={link.href} className={styles.heroJumpLink}>
-                    {link.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </nav>
-        </div>
-      </section>
+      <SubjectsHeroScene>
+        <p className={styles.eyebrow}>What we teach</p>
+        <h1 className={styles.heroTitle}>
+          Subjects we{" "}
+          <span className={styles.heroMark}>
+            <span className={styles.heroMarkBg} aria-hidden="true" />
+            <span className={styles.heroMarkText}>cover</span>
+          </span>
+        </h1>
+        <p className={styles.heroLead}>
+          Maths, English and Science from Key Stage 2 through to A-Level,
+          plus dedicated 11+ preparation. Here&apos;s how the support grows
+          with your child at each stage.
+        </p>
+        <nav aria-label="Jump to a subject">
+          <ul className={styles.heroJump}>
+            {jumpLinks.map((link) => (
+              <li key={link.href}>
+                <a href={link.href} className={styles.heroJumpLink}>
+                  {link.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      </SubjectsHeroScene>
 
       {/* ── Marquee ───────────────────────────────────── */}
       <Marquee items={marqueeItems} />
@@ -197,6 +195,7 @@ export default function SubjectsPage() {
       </div>
 
       {/* ── Subject Sections ──────────────────────────── */}
+      <SubjectsListScene>
       {subjects.map((subject, subjectIndex) => (
         <section key={subject.id} id={subject.id} className={styles.subjectSection}>
           {/* The first subject is on the first screen, and its photograph is the page's largest
@@ -217,9 +216,9 @@ export default function SubjectsPage() {
                   </div>
                   <div>
                     <div className={styles.subjectTitleRow}>
-                      <div className={styles.subjectIcon}>
+                      <SubjectIconScene range={[subjectIndex / subjects.length, (subjectIndex + 1) / subjects.length]}>
                         <SubjectSvg icon={subject.icon} />
-                      </div>
+                      </SubjectIconScene>
                       <div>
                         <h2 className={styles.subjectTitle}>{subject.title}</h2>
                         <div className={styles.subjectRange}>{subject.range}</div>
@@ -232,9 +231,9 @@ export default function SubjectsPage() {
                 <>
                   <div>
                     <div className={styles.subjectTitleRow}>
-                      <div className={styles.subjectIcon}>
+                      <SubjectIconScene range={[subjectIndex / subjects.length, (subjectIndex + 1) / subjects.length]}>
                         <SubjectSvg icon={subject.icon} />
-                      </div>
+                      </SubjectIconScene>
                       <div>
                         <h2 className={styles.subjectTitle}>{subject.title}</h2>
                         <div className={styles.subjectRange}>{subject.range}</div>
@@ -263,27 +262,30 @@ export default function SubjectsPage() {
 
               return (
                 <Reveal variant="scale" key={level.name} delay={i * 0.09}>
-                  <div className={`${styles.levelCard} ${level.dark ? styles.levelCardDark : ""}`}>
-                    <div className={styles.levelCardHeader}>
-                      <span className={styles.levelCardNumber}>{i + 1}</span>
-                      <b className={styles.levelCardName}>{level.name}</b>
-                    </div>
-                    {isGcse ? (
-                      <div className={styles.scienceBreakdown}>
-                        <p><b>Biology</b> &mdash; cells, genetics and ecosystems, understood clearly and confidently.</p>
-                        <p><b>Chemistry</b> &mdash; atoms, bonding and reactions, taught through simulations and visuals.</p>
-                        <p><b>Physics</b> &mdash; forces, energy and electricity, connected to real-world ideas.</p>
+                  <PointerDepth>
+                    <div className={`${styles.levelCard} ${level.dark ? styles.levelCardDark : ""}`}>
+                      <div className={styles.levelCardHeader}>
+                        <span className={styles.levelCardNumber}>{i + 1}</span>
+                        <b className={styles.levelCardName}>{level.name}</b>
                       </div>
-                    ) : (
-                      <p className={styles.levelCardText}>{level.text}</p>
-                    )}
-                  </div>
+                      {isGcse ? (
+                        <div className={styles.scienceBreakdown}>
+                          <p><b>Biology</b> &mdash; cells, genetics and ecosystems, understood clearly and confidently.</p>
+                          <p><b>Chemistry</b> &mdash; atoms, bonding and reactions, taught through simulations and visuals.</p>
+                          <p><b>Physics</b> &mdash; forces, energy and electricity, connected to real-world ideas.</p>
+                        </div>
+                      ) : (
+                        <p className={styles.levelCardText}>{level.text}</p>
+                      )}
+                    </div>
+                  </PointerDepth>
                 </Reveal>
               );
             })}
           </div>
         </section>
       ))}
+      </SubjectsListScene>
 
       {/* ── 11+ Preparation ───────────────────────────── */}
       <section id="eleven-plus" className={styles.elevenPlusSection}>
