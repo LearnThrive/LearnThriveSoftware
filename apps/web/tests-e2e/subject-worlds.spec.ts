@@ -16,6 +16,24 @@ const SUBJECT_ROUTES: Array<{ path: string; heading: RegExp }> = [
   { path: '/11-plus-tuition', heading: /11\+/ },
 ];
 
+// plan12.md task 7: each subject page's hero now carries its own composition motif, and the
+// spotlight section's heading is an oversized MaskedText statement — checked once, sitewide, since
+// all four routes share the one SubjectLandingPage/PageHero component.
+test.describe('subject page composition (task 7)', () => {
+  for (const { path } of SUBJECT_ROUTES) {
+    test(`${path}: has a hero motif and a masked spotlight heading, with no console errors`, async ({ page }) => {
+      const errors: string[] = [];
+      page.on('pageerror', (err) => errors.push(String(err)));
+      await page.goto(path);
+      await expect(page.locator('.page-hero svg.subject-hero-motif')).toBeVisible();
+      const maskedHeading = page.locator('h2 [data-masked-text-inner]');
+      await maskedHeading.scrollIntoViewIfNeeded();
+      await expect(maskedHeading).toHaveCSS('opacity', '1', { timeout: 5000 });
+      expect(errors).toEqual([]);
+    });
+  }
+});
+
 for (const { path, heading } of SUBJECT_ROUTES) {
   test.describe(`${path}`, () => {
     test('renders its hero, coverage stages and a working CTA', async ({ page }) => {
