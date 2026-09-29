@@ -41,7 +41,7 @@ const VARIANTS = {
 };
 
 export function MaskedText({ children, className, delay = 0, once = true }: MaskedTextProps) {
-  const ref = useRef<HTMLSpanElement>(null);
+  const ref = useRef<HTMLDivElement>(null);
   const inView = useInViewport(ref, "-15% 0px -15% 0px");
   // "Adjusting state during render" (useDelayedUnmount.ts's own comment explains this project's
   // lint config's reasoning): a plain setState call inside a useEffect body is flagged as a
@@ -58,7 +58,7 @@ export function MaskedText({ children, className, delay = 0, once = true }: Mask
 
   return (
     <div className={[styles.wrap, className].filter(Boolean).join(" ")} data-masked-text="">
-      <m.span
+      <m.div
         ref={ref}
         className={styles.inner}
         data-masked-text-inner=""
@@ -68,7 +68,7 @@ export function MaskedText({ children, className, delay = 0, once = true }: Mask
         transition={{ duration: 0.9, ease: motionEase.gentle, delay }}
       >
         {children}
-      </m.span>
+      </m.div>
     </div>
   );
 }

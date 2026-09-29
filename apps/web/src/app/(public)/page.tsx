@@ -3,7 +3,10 @@ import { ViewTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { BodyClass } from "@/components/BodyClass";
+import { MaskedText } from "@/components/motion/primitives/MaskedText";
 import { Reveal } from "@/components/motion/primitives/Reveal";
+import { SceneShell } from "@/components/motion/primitives/SceneShell";
+import { SectionHandoff } from "@/components/motion/primitives/SectionHandoff";
 import { Marquee } from "@/components/Marquee";
 import { StatCounter } from "@/components/StatCounter";
 import { EnquiryForm } from "@/components/EnquiryForm";
@@ -104,8 +107,51 @@ export default function HomePage() {
       {/* ── Level Marquee ─────────────────────────────── */}
       <Marquee items={marqueeItems} />
 
+      {/* ── Trust / proof (plan12.md task 3: moved up from the bottom of the page — the
+          narrative's second beat, right after the hero, not an afterthought at the end) ──
+          Reveal variant="static" throughout, not "soft": on mobile the hero holds to its
+          existing 470px height (see .heroGrid's mobile override above), so this block now
+          sits inside the initial viewport on a typical phone — exactly the "reveal hides an
+          LCP candidate" defect docs/MOTION_PERFORMANCE_AUDIT.md's M-05 addendum documents.
+          It's also a natural fit here regardless: content this close to the hero reads as part
+          of the first-arrival moment, not a scroll-triggered reveal. */}
+      <SceneShell tone="navy" intensity="quiet">
+        <div className={styles.statsStrip}>
+          <Reveal variant="static">
+            <div className={`${styles.stat} ${styles.statFirst}`}>
+              <StatCounter target={40} suffix="+" className={styles.statValue} />
+              <span className={styles.statLabel}>students supported</span>
+            </div>
+          </Reveal>
+          <Reveal variant="static">
+            <div className={`${styles.stat} ${styles.statOther}`}>
+              <b className={styles.statValue}>1</b>
+              <span className={styles.statLabel}>full academic year</span>
+            </div>
+          </Reveal>
+          <Reveal variant="static">
+            <div className={`${styles.stat} ${styles.statOther}`}>
+              <b className={styles.statValue}>Y1&ndash;A2</b>
+              <span className={styles.statLabel}>every stage covered</span>
+            </div>
+          </Reveal>
+          <Reveal variant="static">
+            <div className={`${styles.stat} ${styles.statOther}`}>
+              <b className={`${styles.statValue} ${styles.statValueGreen}`}>1:1</b>
+              <span className={styles.statLabel}>always, never groups</span>
+            </div>
+          </Reveal>
+        </div>
+      </SceneShell>
+
+      <SectionHandoff from="navy" to="cream" />
+
       {/* ── Why Us ────────────────────────────────────── */}
       <section id="why" className={styles.whySection}>
+        <MaskedText className={styles.homeStatement}>
+          Every child learns differently. We build the tuition around them —
+          not the other way round.
+        </MaskedText>
         <Reveal variant="editorial">
           <p className={styles.eyebrow}>Why families choose us</p>
           <h2 className={styles.sectionTitle}>Three things we won&apos;t compromise on</h2>
@@ -295,35 +341,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── Stats ─────────────────────────────────────── */}
-      <div className={styles.statsStrip}>
-        <Reveal variant="soft">
-          <div className={`${styles.stat} ${styles.statFirst}`}>
-            <StatCounter target={40} suffix="+" className={styles.statValue} />
-            <span className={styles.statLabel}>students supported</span>
-          </div>
-        </Reveal>
-        <Reveal variant="soft" delay={0.08}>
-          <div className={`${styles.stat} ${styles.statOther}`}>
-            <b className={styles.statValue}>1</b>
-            <span className={styles.statLabel}>full academic year</span>
-          </div>
-        </Reveal>
-        <Reveal variant="soft" delay={0.16}>
-          <div className={`${styles.stat} ${styles.statOther}`}>
-            <b className={styles.statValue}>Y1&ndash;A2</b>
-            <span className={styles.statLabel}>every stage covered</span>
-          </div>
-        </Reveal>
-        <Reveal variant="soft" delay={0.24}>
-          <div className={`${styles.stat} ${styles.statOther}`}>
-            <b className={`${styles.statValue} ${styles.statValueGreen}`}>1:1</b>
-            <span className={styles.statLabel}>always, never groups</span>
-          </div>
-        </Reveal>
-      </div>
-
-      {/* ── Tutor standards ───────────────────────────── */}
+      {/* ── Tutor standards / safeguarding trust ───────── */}
       <section className={styles.trustSection}>
         <Reveal variant="scale">
           <div className={styles.trustCard}>
@@ -345,7 +363,7 @@ export default function HomePage() {
         </Reveal>
       </section>
 
-      {/* ── Testimonials ──────────────────────────────── */}
+      {/* ── Testimonials / parent stories ──────────────── */}
       <section className={styles.testimonialsSection}>
         <Reveal variant="editorial">
           <p className={styles.eyebrow}>What families say</p>
@@ -386,6 +404,30 @@ export default function HomePage() {
           </div>
         </Reveal>
       </section>
+
+      <SectionHandoff from="cream" to="navy" />
+
+      {/* ── Closing CTA ───────────────────────────────────
+          plan12.md task 3's narrative closer; task 10 owns the full cinematic build. */}
+      <SceneShell tone="navy" intensity="flagship" id="closing-cta">
+        <div className={styles.closingCta}>
+          <p className={styles.closingCtaEyebrow}>Ready when you are</p>
+          <MaskedText>
+            <h2 className={styles.closingCtaTitle}>Let&apos;s find the right tutor for your child.</h2>
+          </MaskedText>
+          <p className={styles.sectionSubtitle} style={{ color: "rgba(255,255,255,0.78)" }}>
+            One conversation is all it takes to get started &mdash; no pressure, no obligation.
+          </p>
+          <div className={styles.closingCtaActions}>
+            <a href="#enquire" className={styles.btnPrimary}>
+              Send an enquiry &rarr;
+            </a>
+            <a href={`mailto:${siteConfig.email}`} className={styles.btnSecondary}>
+              Email us directly
+            </a>
+          </div>
+        </div>
+      </SceneShell>
     </div>
   );
 }
