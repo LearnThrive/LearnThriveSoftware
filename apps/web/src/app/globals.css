@@ -2006,7 +2006,27 @@ ol {
 }
 
 /* Booking form */
+.booking-section {
+  /* plan12.md task 12: "subtle atmospheric background" — a CinematicBackdrop glow sits behind the
+     whole layout, clipped to this section rather than bleeding into the hero/footer above/below. */
+  position: relative;
+  overflow: clip;
+}
+
+.booking-atmosphere {
+  position: absolute;
+  left: 18%;
+  top: -6%;
+  width: 560px;
+  height: 560px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(7, 95, 82, 0.1) calc(100% - 30px), rgba(7, 95, 82, 0) 100%);
+  pointer-events: none;
+}
+
 .booking-layout {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(18rem, 0.55fr);
   align-items: start;
@@ -2014,7 +2034,35 @@ ol {
 }
 
 .booking-form-shell {
+  position: relative;
   min-width: 0;
+}
+
+/* plan12.md task 12: "strong visual framing" for the primary form — restrained corner brackets
+   around the form shell (the sidebar already has its own frame: a navy panel with a green top
+   border) rather than a second, heavier box duplicating .enquiry-form's own border and shadow. */
+.booking-form-frame-corner {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--colour-green-700);
+  pointer-events: none;
+}
+
+.booking-form-frame-corner--tl {
+  top: -12px;
+  left: -12px;
+  border-right: none;
+  border-bottom: none;
+  border-top-left-radius: 6px;
+}
+
+.booking-form-frame-corner--br {
+  bottom: -12px;
+  right: -12px;
+  border-left: none;
+  border-top: none;
+  border-bottom-right-radius: 6px;
 }
 
 .booking-form-heading {

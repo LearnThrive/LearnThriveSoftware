@@ -189,6 +189,23 @@
   color: #fff !important;
 }
 
+/* plan12.md task 12: "contact methods become compositional elements rather than generic cards" —
+   a per-method glyph, so the two cards read by shape/icon before the label text, not just as two
+   identically-shaped rectangles distinguished only by colour. */
+.cardIcon {
+  width: 34px;
+  height: 34px;
+  margin-bottom: 18px;
+}
+
+.cardWhite .cardIcon {
+  color: var(--lt-green-dark);
+}
+
+.cardNavy .cardIcon {
+  color: #13c2a0;
+}
+
 .cardLabel {
   display: inline-block;
   font-family: var(--lt-font-mono);

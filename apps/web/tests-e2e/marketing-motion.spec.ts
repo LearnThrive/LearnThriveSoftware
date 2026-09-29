@@ -818,3 +818,91 @@ test.describe('about page composition (task 11)', () => {
     expect(mobileOffset).toBe('0px');
   });
 });
+
+// ── Book, Contact and FAQ interaction craft (plan12.md task 12) ─────────────────────────────
+
+test.describe('book page composition (task 12)', () => {
+  test('the form shell has its corner frame, and a subtle atmosphere renders behind the layout (full tier)', async ({ page }) => {
+    await pinCapabilities(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/book');
+    expect(await tierOf(page)).toBe('full');
+    await expect(page.locator('.booking-form-frame-corner--tl')).toBeVisible();
+    await expect(page.locator('.booking-form-frame-corner--br')).toBeVisible();
+    const backdrop = page.locator('[data-cinematic-backdrop]').first();
+    await expect(backdrop).toHaveAttribute('data-backdrop-active', 'true');
+    await expect(backdrop.locator('.booking-atmosphere')).toBeAttached();
+  });
+
+  test('with reduced motion there is no backdrop, but the form and its frame are unaffected', async ({ page }) => {
+    await pinCapabilities(page);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/book');
+    expect(await tierOf(page)).toBe('reduced');
+    await expect(page.locator('[data-cinematic-backdrop]')).toHaveCount(0);
+    await expect(page.locator('.booking-form-frame-corner--tl')).toBeVisible();
+    await expect(page.locator('#email')).toBeVisible();
+  });
+
+  test('the form heading is real SSR text, not revealed only by script', async ({ request }) => {
+    const html = (await (await request.get('/book')).text()).replace(/<!-- -->/g, '');
+    expect(html).toContain('A few details to get started');
+  });
+});
+
+test.describe('contact page composition (task 12)', () => {
+  test('each contact method has its own glyph, and essential details are visible without hovering', async ({ page }) => {
+    await page.goto('/contact');
+    await expect(page.locator('[class*="cardWhite"] [class*="cardIcon"]')).toBeVisible();
+    await expect(page.locator('[class*="cardNavy"] [class*="cardIcon"]')).toBeVisible();
+    await expect(page.locator('[class*="cardLink"]')).toBeVisible();
+    await expect(page.locator('[class*="phoneNumber"]').first()).toBeVisible();
+  });
+
+  test('the guidance statement is real SSR text, not revealed only by script', async ({ request }) => {
+    const html = (await (await request.get('/contact')).text()).replace(/<!-- -->/g, '');
+    expect(html).toContain('What to include in an enquiry');
+  });
+});
+
+test.describe('FAQ active category nav (task 12)', () => {
+  test('the pills for the category row currently in view are marked active as the page scrolls', async ({ page }) => {
+    // The category grid is two columns (faq.module.css's .faqSections), so a row holds two
+    // categories at the same vertical position — getting-started/lessons in row 1, then
+    // subjects-and-stages/working-together in row 2.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/faq');
+    const gettingStarted = page.locator('a[href="#getting-started"]');
+    const lessons = page.locator('a[href="#lessons"]');
+    const subjects = page.locator('a[href="#subjects-and-stages"]');
+    const working = page.locator('a[href="#working-together"]');
+    // Before any scroll (the hero still fills the screen) nothing has entered the observer's band
+    // yet — getting-started's aria-current comes only from the component's initial placeholder.
+    await expect(gettingStarted).toHaveAttribute('aria-current', 'true');
+
+    // Scroll so a row's top sits inside the observer's active band (the top ~15-30% of the
+    // viewport — see FaqJumpNav.tsx's rootMargin) rather than relying on scrollIntoViewIfNeeded's
+    // "minimal scroll" default, which can leave the target at the very bottom edge of the viewport.
+    await page.evaluate(() => {
+      const el = document.getElementById('getting-started')!;
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      window.scrollTo({ top: top - window.innerHeight * 0.2, behavior: 'instant' });
+    });
+    await expect.poll(() => gettingStarted.getAttribute('aria-current')).toBe('true');
+    await expect.poll(() => lessons.getAttribute('aria-current')).toBe('true');
+
+    // Row 1 and row 2 are close together (a grid gap apart), so scrolling row 2's top to the same
+    // 20%-from-top offset used above would leave row 1's bottom edge still inside the band. Instead
+    // scroll until row 1's own bottom edge has just cleared the band's top, which — given the two
+    // rows are close together — reliably lands row 2's top inside the band too.
+    await page.evaluate(() => {
+      const bandTop = window.innerHeight * 0.15;
+      const prevBottom = document.getElementById('getting-started')!.getBoundingClientRect().bottom + window.scrollY;
+      window.scrollTo({ top: prevBottom - bandTop + 5, behavior: 'instant' });
+    });
+    await expect.poll(() => subjects.getAttribute('aria-current')).toBe('true');
+    await expect.poll(() => working.getAttribute('aria-current')).toBe('true');
+    await expect.poll(() => gettingStarted.getAttribute('aria-current')).toBeNull();
+    await expect.poll(() => lessons.getAttribute('aria-current')).toBeNull();
+  });
+});
