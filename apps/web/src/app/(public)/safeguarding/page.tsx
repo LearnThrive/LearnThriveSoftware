@@ -151,6 +151,10 @@ export default function SafeguardingPage() {
           title: "Urgent and independent help",
           content: (
             <>
+              {/* plan12.md task 9: "present real reporting routes more clearly" — the one section
+                  on this page a reader might need in a hurry gets a visually distinct, calm
+                  (not alarming-red) treatment rather than reading identically to the others. */}
+              <div className="safeguarding-urgent-box">
               <ul>
                 <li>
                   If a child is in immediate danger, <strong>call 999</strong>.
@@ -174,6 +178,7 @@ export default function SafeguardingPage() {
                 needed. You do not need our permission to contact an independent
                 or statutory safeguarding service.
               </p>
+              </div>
             </>
           ),
         },
