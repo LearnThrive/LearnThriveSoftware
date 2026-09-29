@@ -273,6 +273,28 @@ test.describe('reveals without JavaScript', () => {
   });
 });
 
+// ── Responsive (plan11.md task 18) ──────────────────────────────────────────────────────────
+// subject-worlds.spec.ts already covers this for the 4 subject-world routes, whose absolutely
+// positioned decorative elements (SubjectWorld's path/dots/nodes) made them the likeliest to
+// overflow; this is the same check for every other public route, at the narrowest common device
+// width.
+
+test.describe('no horizontal overflow at 360px', () => {
+  for (const route of PUBLIC_ROUTES) {
+    test(route, async ({ page }) => {
+      await page.setViewportSize({ width: 360, height: 800 });
+      await page.goto(route);
+      await page.waitForLoadState('networkidle');
+      const overflow = await page.evaluate(() => {
+        const docWidth = document.documentElement.scrollWidth;
+        const viewportWidth = document.documentElement.clientWidth;
+        return { docWidth, viewportWidth, overflows: docWidth > viewportWidth };
+      });
+      expect(overflow.overflows, `${route} overflows at 360px: scrollWidth ${overflow.docWidth} > clientWidth ${overflow.viewportWidth}`).toBe(false);
+    });
+  }
+});
+
 // ── Parallax, pointer depth, scroll path, underline (plan11.md task 8) ─────────────────────────
 // Also driven through /dev/motion.
 
