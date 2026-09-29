@@ -166,6 +166,23 @@
   color: #fff;
 }
 
+/* plan12.md task 12: "active category/navigation polish" — the pill for whichever category
+   section is currently scrolled into view, tracked by FaqJumpNav.tsx's IntersectionObserver. */
+.jumpPillActive {
+  background: var(--lt-green);
+  border-color: var(--lt-green);
+  color: #fff;
+}
+
+.jumpPillActive:hover {
+  background: var(--lt-green-light);
+  border-color: var(--lt-green-light);
+}
+
+.jumpPillActive .jumpCount {
+  color: rgba(255, 255, 255, 0.78);
+}
+
 .jumpCount {
   font-family: var(--lt-font-mono);
   font-weight: 500;

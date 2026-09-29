@@ -3,6 +3,7 @@ import Link from "next/link";
 import { BodyClass } from "@/components/BodyClass";
 import { Reveal } from "@/components/motion/primitives/Reveal";
 import { PointerDepth } from "@/components/motion/primitives/PointerDepth";
+import { MaskedText } from "@/components/motion/primitives/MaskedText";
 import { createMetadata } from "@/lib/metadata";
 import { siteConfig } from "@/lib/site";
 import styles from "./contact.module.css";
@@ -54,6 +55,10 @@ export default function ContactPage() {
           <Reveal variant="static">
             <PointerDepth>
               <article className={`${styles.card} ${styles.cardWhite}`}>
+                <svg className={styles.cardIcon} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v13a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5v-13Z" stroke="currentColor" strokeWidth="1.8" />
+                  <path d="m5 6 7 6 7-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
                 <span className={styles.cardLabel}>Email</span>
                 <h2>Write to LearnThrive</h2>
                 <a
@@ -72,6 +77,9 @@ export default function ContactPage() {
           <Reveal variant="static">
             <PointerDepth>
               <article className={`${styles.card} ${styles.cardNavy}`}>
+                <svg className={styles.cardIcon} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M6.6 10.5c1.3 2.6 3.4 4.7 6 6l2-2a1.5 1.5 0 0 1 1.5-.4c1.1.35 2.3.55 3.5.55a1.4 1.4 0 0 1 1.4 1.4V19.5a1.4 1.4 0 0 1-1.4 1.4C10.8 20.9 3.1 13.2 3.1 4.4A1.4 1.4 0 0 1 4.5 3H8c.77 0 1.4.63 1.4 1.4 0 1.2.2 2.4.55 3.5.13.5.02 1.05-.35 1.45l-2 2Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
                 <span className={styles.cardLabel}>Phone</span>
                 <h2>Call LearnThrive</h2>
                 <div className={styles.phoneList}>
@@ -106,7 +114,7 @@ export default function ContactPage() {
                 Helpful information
               </p>
               <h2 className={styles.guidanceTitle}>
-                What to include in an enquiry
+                <MaskedText>What to include in an enquiry</MaskedText>
               </h2>
             </div>
           </Reveal>

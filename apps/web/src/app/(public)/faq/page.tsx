@@ -4,6 +4,7 @@ import { BodyClass } from "@/components/BodyClass";
 import { Reveal } from "@/components/motion/primitives/Reveal";
 import { FaqList } from "@/components/FaqList";
 import { FaqHashOpener } from "@/components/FaqHashOpener";
+import { FaqJumpNav } from "@/components/motion/scenes/FaqJumpNav";
 import { createMetadata } from "@/lib/metadata";
 import { faqSections } from "@/lib/faqs";
 import styles from "./faq.module.css";
@@ -38,19 +39,13 @@ export default function FaqPage() {
             Find practical information about LearnThrive&apos;s online tuition,
             subjects, enquiries, privacy, bookings and safeguarding.
           </p>
-          <nav className={styles.jumpNav} aria-label="FAQ categories">
-            <span className={styles.jumpLabel}>Jump to a topic</span>
-            {faqSections.map((section) => (
-              <Link
-                href={`#${section.id}`}
-                key={section.id}
-                className={styles.jumpPill}
-              >
-                {section.title}
-                <span className={styles.jumpCount}>{section.items.length}</span>
-              </Link>
-            ))}
-          </nav>
+          <FaqJumpNav
+            sections={faqSections.map((section) => ({
+              id: section.id,
+              title: section.title,
+              count: section.items.length,
+            }))}
+          />
         </div>
       </section>
 

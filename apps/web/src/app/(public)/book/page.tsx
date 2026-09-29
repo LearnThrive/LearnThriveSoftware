@@ -3,6 +3,8 @@ import { Container } from "@/components/Container";
 import { EnquiryForm } from "@/components/EnquiryForm";
 import { PageHero } from "@/components/PageHero";
 import { PhoneContacts } from "@/components/PhoneContacts";
+import { CinematicBackdrop } from "@/components/motion/primitives/CinematicBackdrop";
+import { MaskedText } from "@/components/motion/primitives/MaskedText";
 import { createMetadata } from "@/lib/metadata";
 import { siteConfig } from "@/lib/site";
 
@@ -30,11 +32,20 @@ export default function BookPage() {
       />
 
       <section className="section booking-section">
+        <CinematicBackdrop
+          lightChildren={<div className="booking-atmosphere" aria-hidden="true" />}
+        >
+          <div className="booking-atmosphere" aria-hidden="true" />
+        </CinematicBackdrop>
         <Container className="booking-layout">
           <div className="booking-form-shell">
+            <span className="booking-form-frame-corner booking-form-frame-corner--tl" aria-hidden="true" />
+            <span className="booking-form-frame-corner booking-form-frame-corner--br" aria-hidden="true" />
             <div className="booking-form-heading">
               <p className="eyebrow">Consultation enquiry</p>
-              <h2>A few details to get started</h2>
+              <h2>
+                <MaskedText>A few details to get started</MaskedText>
+              </h2>
               <p>
                 All fields are required except the phone number, unless phone is
                 your preferred contact method.
