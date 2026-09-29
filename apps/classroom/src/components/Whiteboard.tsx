@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
   CaptureUpdateAction, Excalidraw, convertToExcalidrawElements, exportToBlob, reconcileElements, restoreElements,
 } from '@excalidraw/excalidraw';
@@ -23,7 +23,12 @@ interface WhiteboardProps {
   activePageId: string;
   elementsByPage: Record<string, BoardElement[]>;
   studentsCanDraw: boolean;
-  pointers: Record<string, BoardPointer>;
+  // plan11.md task 17 (audit C-02): a subscribe/getSnapshot pair, not the pointers value itself —
+  // this component calls useSyncExternalStore on it directly below, so a remote cursor/laser move
+  // re-renders only this component, never the parent App and everything else beneath it. See
+  // meeting.ts's subscribeBoardPointers comment.
+  subscribeBoardPointers: (listener: () => void) => () => void;
+  getBoardPointersSnapshot: () => Record<string, BoardPointer>;
   followMeSeq: number;
   onUpdate: (pageId: string, elements: BoardElement[]) => void;
   onCursor: (x: number, y: number) => void;
@@ -49,10 +54,11 @@ const TUTORING_SHORTCUTS = [
 ] as const;
 
 export function Whiteboard({
-  role, pages, activePageId, elementsByPage, studentsCanDraw, pointers, followMeSeq,
+  role, pages, activePageId, elementsByPage, studentsCanDraw, subscribeBoardPointers, getBoardPointersSnapshot, followMeSeq,
   onUpdate, onCursor, onLaser, onCommitLocal, onSwitchPage, onCreatePage, onRenamePage, onDuplicatePage,
   onDeletePage, onReorderPages, onBackground, onSetStudentsCanDraw, onClearPage, onFollowMe, onImport,
 }: WhiteboardProps) {
+  const pointers = useSyncExternalStore(subscribeBoardPointers, getBoardPointersSnapshot);
   const isTutor = role === 'tutor';
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
   const [viewedPageId, setViewedPageId] = useState(activePageId || pages[0]?.id || '');

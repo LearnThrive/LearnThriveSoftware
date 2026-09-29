@@ -35,13 +35,16 @@ export function PollPanel({ poll, isTutor, onVote, onClose, onClear }: PollPanel
               key={option.id} type="button" className={`poll-panel-option ${mine ? 'is-selected' : ''}`}
               onClick={() => onVote(option.id)} aria-pressed={mine}
             >
-              {showResults && <span className="poll-panel-option-bar" style={{ width: `${pct}%` }} />}
+              {/* plan11.md task 17 (audit C-03): scaleX from the left, not width — the bar is
+                  already inset:0 (100% of its row) in CSS, so scaling it down is the same visual
+                  fill without a layout property changing on every vote. */}
+              {showResults && <span className="poll-panel-option-bar" style={{ transform: `scaleX(${pct / 100})` }} />}
               <span className="poll-panel-option-label">{mine && <Icon name="check" size={13} />}{option.text}</span>
               {showResults && <span className="poll-panel-option-count">{count}</span>}
             </button>
           ) : (
             <div key={option.id} className={`poll-panel-option is-static ${mine ? 'is-selected' : ''}`}>
-              {showResults && <span className="poll-panel-option-bar" style={{ width: `${pct}%` }} />}
+              {showResults && <span className="poll-panel-option-bar" style={{ transform: `scaleX(${pct / 100})` }} />}
               <span className="poll-panel-option-label">{mine && <Icon name="check" size={13} />}{option.text}</span>
               {showResults && <span className="poll-panel-option-count">{count}</span>}
             </div>
