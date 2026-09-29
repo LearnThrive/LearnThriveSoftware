@@ -1959,6 +1959,71 @@ ol {
     0 16px 38px rgb(9 29 49 / 7%);
 }
 
+/* plan11.md task 11's "animated progress/section indicator" and "visually group form into clear
+   stages" — EnquiryForm.tsx. Two derived, read-only stages over the same fields; nothing here
+   changes what gets validated or submitted. */
+.enquiry-form-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1.5rem;
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: var(--colour-muted);
+}
+
+.enquiry-form-progress-step {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
+.enquiry-form-progress-dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  border: 1.5px solid var(--colour-muted);
+  background: transparent;
+  transition: background var(--duration-fast) ease, border-color var(--duration-fast) ease;
+}
+
+.enquiry-form-progress-dot.is-complete {
+  border-color: var(--colour-green-700);
+  background: var(--colour-green-700);
+}
+
+.enquiry-form-progress-line {
+  flex: 1;
+  min-width: 1.5rem;
+  height: 2px;
+  overflow: hidden;
+  background: var(--colour-border);
+}
+
+.enquiry-form-progress-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--colour-green-700);
+  transform-origin: left;
+  transition: transform 0.35s ease;
+}
+
+.form-stage + .form-stage {
+  margin-top: 1.75rem;
+  padding-top: 1.75rem;
+  border-top: 1px dashed var(--colour-border);
+}
+
+.form-stage-heading {
+  margin: 0 0 0.9rem;
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--colour-ink);
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2172,6 +2237,28 @@ ol {
 .form-message--prepared .button {
   width: fit-content;
   margin-top: 1rem;
+}
+
+/* EnquiryForm.tsx has used the class name "form-message--success" since before this pass, but no
+   rule matched it — the success panel rendered with only the plain .form-message base style, none
+   of the green treatment .form-message--error's red counterpart gets. Same colours as the (unused
+   by anything else) .form-message--prepared above, given the matching name. */
+.form-message--success {
+  border: 1px solid #a9d5bf;
+  background: #edf8f1;
+  color: var(--colour-ink);
+}
+
+.form-message--success .button {
+  width: fit-content;
+  margin-top: 1rem;
+}
+
+.form-success-check {
+  width: 2.25rem;
+  height: 2.25rem;
+  margin-bottom: 0.75rem;
+  color: var(--colour-green-700);
 }
 
 .login-panel {
@@ -2505,18 +2592,39 @@ ol {
   content: "";
 }
 
+/* plan11.md task 11's "icon morph": was an instant display:none toggle — the vertical bar of the
+   "+" simply vanished, rather than the "+" turning into a "-". Rotating it flush with the
+   horizontal bar (transform, so it's compositor-only) instead is the same shape change, animated. */
 .faq-item__marker::after {
   transform: rotate(90deg);
+  transition: transform 0.25s ease;
 }
 
 .faq-item[open] .faq-item__marker::after {
-  display: none;
+  transform: rotate(0deg);
 }
 
 .faq-item__answer {
   max-width: 66ch;
   padding: 0 2.75rem 1.5rem 0.25rem;
   overflow-wrap: anywhere;
+  /* plan11.md task 11's "smooth accordion content reveal". Only the opening transitions — native
+     <details> sets its non-summary content to display:none the instant it closes, which cuts off
+     any transition already in flight, so animating the close as well needs either the JS FaqHashOpener
+     does not currently do (out of scope: the plan asks to *preserve*, not extend, its hash-deep-link
+     behaviour) or the newer transition-behavior: allow-discrete + @starting-style pairing applied to
+     `display` itself, which is a bigger and less broadly-supported change for one direction of an
+     already-instant interaction. Opacity/translate are continuously animatable, so @starting-style
+     alone (no allow-discrete needed) is enough to animate the appearance; unsupported browsers simply
+     show the content immediately, exactly like today — never a regression. */
+  transition: opacity 0.3s ease, translate 0.3s ease;
+}
+
+@starting-style {
+  .faq-item[open] .faq-item__answer {
+    opacity: 0;
+    translate: 0 -6px;
+  }
 }
 
 .faq-item__answer .text-link {
@@ -2632,6 +2740,59 @@ ol {
 .legal-contents a {
   color: var(--colour-green-800);
   overflow-wrap: anywhere;
+}
+
+/* SafeguardingTrustPath.tsx (plan11.md task 11) — the same "drawn vertical line connecting
+   sequential items" shape as home.module.css's .howStepsPathWrap/.howStepsPathTrack, sized for a
+   plain prose column instead of a dark hero section. top+bottom (no explicit height) on the track
+   lets it stretch to match however tall the four stages render. */
+.safeguarding-trust-path {
+  position: relative;
+  margin: 1.5rem 0;
+}
+
+.safeguarding-trust-path-track {
+  position: absolute;
+  left: 17px;
+  top: 12px;
+  bottom: 22px;
+  width: 2px;
+}
+
+.safeguarding-trust-path-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.safeguarding-trust-path-list {
+  display: grid;
+  gap: 0;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.safeguarding-trust-path-item {
+  position: relative;
+  padding: 0.6rem 0 1.25rem 44px;
+  font-weight: 600;
+  color: var(--colour-ink);
+}
+
+.safeguarding-trust-path-item::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  top: 1rem;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--colour-green-600);
+}
+
+.safeguarding-trust-path-item:last-child {
+  padding-bottom: 0;
 }
 
 .legal-contact-box {

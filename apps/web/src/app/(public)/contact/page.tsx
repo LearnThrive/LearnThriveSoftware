@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { BodyClass } from "@/components/BodyClass";
 import { Reveal } from "@/components/motion/primitives/Reveal";
+import { PointerDepth } from "@/components/motion/primitives/PointerDepth";
 import { createMetadata } from "@/lib/metadata";
 import { siteConfig } from "@/lib/site";
 import styles from "./contact.module.css";
@@ -51,43 +52,47 @@ export default function ContactPage() {
           {/* Both cards are on the first screen at desktop widths and hold the page's largest text
               paint; revealing them delayed LCP to ~880 ms in the profile, so they are static. */}
           <Reveal variant="static">
-            <article className={`${styles.card} ${styles.cardWhite}`}>
-              <span className={styles.cardLabel}>Email</span>
-              <h2>Write to LearnThrive</h2>
-              <a
-                className={styles.cardLink}
-                href={`mailto:${siteConfig.email}`}
-              >
-                {siteConfig.email}
-              </a>
-              <p>
-                Useful for sharing the student&apos;s year group, subject and a
-                brief outline of the support required.
-              </p>
-            </article>
+            <PointerDepth>
+              <article className={`${styles.card} ${styles.cardWhite}`}>
+                <span className={styles.cardLabel}>Email</span>
+                <h2>Write to LearnThrive</h2>
+                <a
+                  className={styles.cardLink}
+                  href={`mailto:${siteConfig.email}`}
+                >
+                  {siteConfig.email}
+                </a>
+                <p>
+                  Useful for sharing the student&apos;s year group, subject and a
+                  brief outline of the support required.
+                </p>
+              </article>
+            </PointerDepth>
           </Reveal>
           <Reveal variant="static">
-            <article className={`${styles.card} ${styles.cardNavy}`}>
-              <span className={styles.cardLabel}>Phone</span>
-              <h2>Call LearnThrive</h2>
-              <div className={styles.phoneList}>
-                {siteConfig.phoneContacts.map((contact) => (
-                  <div key={contact.phoneHref} className={styles.phoneItem}>
-                    <span className={styles.phoneName}>{contact.name}</span>
-                    <a
-                      className={styles.phoneNumber}
-                      href={`tel:${contact.phoneHref}`}
-                    >
-                      {contact.phoneDisplay}
-                    </a>
-                  </div>
-                ))}
-              </div>
-              <p>
-                Use either published number to discuss an initial enquiry
-                directly.
-              </p>
-            </article>
+            <PointerDepth>
+              <article className={`${styles.card} ${styles.cardNavy}`}>
+                <span className={styles.cardLabel}>Phone</span>
+                <h2>Call LearnThrive</h2>
+                <div className={styles.phoneList}>
+                  {siteConfig.phoneContacts.map((contact) => (
+                    <div key={contact.phoneHref} className={styles.phoneItem}>
+                      <span className={styles.phoneName}>{contact.name}</span>
+                      <a
+                        className={styles.phoneNumber}
+                        href={`tel:${contact.phoneHref}`}
+                      >
+                        {contact.phoneDisplay}
+                      </a>
+                    </div>
+                  ))}
+                </div>
+                <p>
+                  Use either published number to discuss an initial enquiry
+                  directly.
+                </p>
+              </article>
+            </PointerDepth>
           </Reveal>
         </div>
       </section>

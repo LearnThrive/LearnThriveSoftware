@@ -1,5 +1,6 @@
 import { LegalPage } from "@/components/LegalPage";
 import { PhoneContacts } from "@/components/PhoneContacts";
+import { SafeguardingTrustPath } from "@/components/motion/scenes/SafeguardingTrustPath";
 import { createMetadata } from "@/lib/metadata";
 import { siteConfig } from "@/lib/site";
 
@@ -56,6 +57,7 @@ export default function SafeguardingPage() {
                 Barring Service (DBS) check. No tutor begins teaching until
                 this process is complete.
               </p>
+              <SafeguardingTrustPath />
               <p>This matters because it helps LearnThrive to:</p>
               <ul>
                 <li>make safe recruitment decisions;</li>

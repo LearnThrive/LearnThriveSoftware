@@ -300,6 +300,63 @@
   color: rgba(255, 255, 255, 0.85);
 }
 
+/* plan11.md task 11's "one desktop sticky value statement; ordinary vertical mobile flow": the
+   mission statement (eyebrow+title) stays pinned in view on the left while the "connected
+   experience" list on the right scrolls past it, then both return to plain stacked flow below
+   860px. The same shape as ProductStoryScene.module.css's .grid/.stickyCol (align-items: start is
+   what lets the sticky column stop stretching to match the taller one). */
+.missionGrid {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1fr);
+  gap: clamp(32px, 5vw, 64px);
+  align-items: start;
+  max-width: 1080px;
+  margin: 0 auto;
+  text-align: left;
+}
+
+.missionSticky {
+  position: sticky;
+  top: 120px;
+}
+
+.missionValues {
+  display: grid;
+  gap: 16px;
+  margin: 28px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.missionValueItem {
+  padding: 18px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  font-family: var(--lt-font-mono);
+  font-size: 12.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+@media (max-width: 860px) {
+  .missionGrid {
+    display: block;
+    text-align: center;
+  }
+
+  .missionSticky {
+    position: static;
+    top: auto;
+  }
+
+  .missionValues {
+    text-align: left;
+  }
+}
+
 /* ── CTA Section ───────────────────────────────────────── */
 .ctaSection {
   background: var(--lt-cream-light);
