@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { useMotionValueEvent, useScroll } from "framer-motion";
 import { Brand } from "@/components/Brand";
 import { ButtonLink } from "@/components/ButtonLink";
 import { Container } from "@/components/Container";
@@ -18,6 +19,22 @@ export function SiteHeader() {
   const [open, setOpen] = useState(false);
   const [session, setSession] = useState<SiteHeaderSession | null>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+
+  // plan11.md task 13's "airy at top -> compact/solid when scrolled, avoid per-pixel React scroll
+  // state": scrollY is read via Motion's own scroll listener (framework-optimised, not a raw
+  // `window.addEventListener("scroll", ...)`), and setState only fires when the boolean
+  // *threshold* actually flips — never once per pixel scrolled. The same "compare against a ref,
+  // setState only on a real change" shape as SafeguardingScene.tsx's select() and
+  // thresholds.ts's createThresholdTracker.
+  const { scrollY } = useScroll();
+  const [scrolled, setScrolled] = useState(false);
+  const scrolledRef = useRef(false);
+  useMotionValueEvent(scrollY, "change", (latest) => {
+    const next = latest > 24;
+    if (next === scrolledRef.current) return;
+    scrolledRef.current = next;
+    setScrolled(next);
+  });
 
   // Asked for after hydration rather than rendered on the server, so these pages stay statically
   // generated (plan6 section 99). Until it resolves the header shows "Login", which is the right
@@ -57,7 +74,7 @@ export function SiteHeader() {
   }
 
   return (
-    <header className="site-header">
+    <header className={`site-header${scrolled ? " site-header--scrolled" : ""}`}>
       <Container className="site-header__inner">
         <Brand />
         <button
@@ -115,6 +132,16 @@ export function SiteHeader() {
           </ButtonLink>
         </div>
       </Container>
+      {/* plan11.md task 13's "backdrop -> panel -> links -> CTA" mobile choreography: this dims the
+          page behind the open menu and gives touch/mouse users a large, obvious way to dismiss it
+          (keyboard users already have the Escape handler above). Only ever rendered with real
+          effect on narrow viewports — .navigation-backdrop is 0-opacity/non-interactive outside
+          the mobile menu's own breakpoint, see globals.css. */}
+      <div
+        className={`navigation-backdrop${open ? " navigation-backdrop--open" : ""}`}
+        aria-hidden="true"
+        onClick={() => setOpen(false)}
+      />
     </header>
   );
 }
