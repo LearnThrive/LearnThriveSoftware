@@ -6,10 +6,32 @@ import { FeatureCard } from "@/components/FeatureCard";
 import { Icon } from "@/components/Icon";
 import { PageHero } from "@/components/PageHero";
 import { SectionHeading } from "@/components/SectionHeading";
-import type { SubjectLandingConfig } from "@/lib/site";
+import { Reveal, type RevealVariant } from "@/components/motion/primitives/Reveal";
+import { SubjectWorld } from "@/components/motion/scenes/SubjectWorld";
+import type { SubjectLandingConfig, SubjectLandingSlug } from "@/lib/site";
 
 type SubjectLandingPageProps = {
   subject: SubjectLandingConfig;
+};
+
+/**
+ * plan11.md task 10's "non-repetitive" motion across the support/spotlight sections: a different
+ * Reveal variant per subject rather than the same one four times over. The coverage section's own
+ * distinct treatment lives in SubjectWorld.tsx; SubjectLandingSlug and SubjectWorldKind are the
+ * same four strings (checked by tests/site.test.mjs), so subject.slug is passed straight through.
+ */
+const SUPPORT_VARIANT: Record<SubjectLandingSlug, RevealVariant> = {
+  maths: "scale",
+  english: "soft",
+  science: "side",
+  "11-plus": "scale",
+};
+
+const SPOTLIGHT_VARIANT: Record<SubjectLandingSlug, RevealVariant> = {
+  maths: "editorial",
+  english: "mask",
+  science: "editorial",
+  "11-plus": "side",
 };
 
 export function SubjectLandingPage({ subject }: SubjectLandingPageProps) {
@@ -52,7 +74,12 @@ export function SubjectLandingPage({ subject }: SubjectLandingPageProps) {
           />
           <div className="subject-benefit-grid">
             {subject.support.items.map((item, index) => (
-              <FeatureCard key={item.title} {...item} index={index + 1} />
+              // The first card is the first block below the hero, so it stays static (LCP) —
+              // matching the same "first reveal is the explicit opt-out" convention marketing-
+              // motion.spec.ts already enforces for /subjects, /about, /contact and /faq.
+              <Reveal key={item.title} variant={index === 0 ? "static" : SUPPORT_VARIANT[subject.slug]} delay={index * 0.07}>
+                <FeatureCard {...item} index={index + 1} />
+              </Reveal>
             ))}
           </div>
         </Container>
@@ -65,31 +92,16 @@ export function SubjectLandingPage({ subject }: SubjectLandingPageProps) {
             title={subject.coverage.title}
             intro={subject.coverage.intro}
           />
-          <ol
-            className="subject-pathway-grid"
-            aria-label={`${subject.title} ${
-              subject.coverage.itemLabel === "Priority" ? "priorities" : "stages"
-            }`}
-          >
-            {subject.coverage.items.map((item, index) => (
-              <li className="subject-pathway-card" key={item.title}>
-                <span>
-                  {subject.coverage.itemLabel} {String(index + 1).padStart(2, "0")}
-                </span>
-                <h3>{item.title}</h3>
-                <p>{item.text}</p>
-              </li>
-            ))}
-          </ol>
+          <SubjectWorld subject={subject} kind={subject.slug} />
         </Container>
       </section>
 
       <section className="section subject-personalised-section">
         <Container className="editorial-split">
-          <div className="subject-personalised__heading">
+          <Reveal variant={SPOTLIGHT_VARIANT[subject.slug]} className="subject-personalised__heading">
             <p className="eyebrow">{subject.spotlight.eyebrow}</p>
             <h2>{subject.spotlight.title}</h2>
-          </div>
+          </Reveal>
           <div className="subject-personalised__body">
             <p>{subject.spotlight.text}</p>
             <ul className="subject-personalised__points">
@@ -112,7 +124,9 @@ export function SubjectLandingPage({ subject }: SubjectLandingPageProps) {
         </Container>
       </section>
 
-      <CtaSection title={subject.cta.title} text={subject.cta.text} />
+      <Reveal variant="soft">
+        <CtaSection title={subject.cta.title} text={subject.cta.text} />
+      </Reveal>
     </div>
   );
 }

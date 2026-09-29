@@ -1806,10 +1806,12 @@ ol {
 }
 
 .subject-pathway-grid {
+  position: relative;
   list-style: none;
 }
 
 .subject-pathway-card {
+  position: relative;
   min-width: 0;
   min-height: 17rem;
   padding: clamp(1.35rem, 2.5vw, 1.8rem);
@@ -1818,6 +1820,45 @@ ol {
   border-radius: var(--radius-md);
   background: var(--colour-white);
   box-shadow: var(--shadow-sm);
+}
+
+/* plan11.md task 10's per-subject "world" motifs (SubjectWorld.tsx): a drawn path + milestone dots
+   for maths/11-plus, a small connected-node accent for science. Absolutely positioned so the SVG
+   (subject-world-track) and the dots (subject-world-milestone) don't themselves become grid items
+   of .subject-pathway-grid's 4-column layout — an absolutely positioned grid child is taken out of
+   grid placement entirely, which is what keeps the card count at a clean four columns. */
+.subject-world-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 2.7rem;
+  height: 2px;
+  width: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.subject-world-milestone {
+  position: absolute;
+  left: 50%;
+  top: 2.7rem;
+  width: 10px;
+  height: 10px;
+  /* Centres the dot without touching `transform` — Motion sets `scale` via an inline
+     `transform` on this same element, and a CSS transform on the same property would be
+     overridden by it (the exact collision HeroScene.tsx's fix documents at length). */
+  margin-left: -5px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: var(--subject-accent);
+  pointer-events: none;
+}
+
+.subject-world-nodes {
+  display: block;
+  width: 96px;
+  height: 48px;
+  margin: 0 auto clamp(1.5rem, 3vw, 2.5rem);
 }
 
 .subject-pathway-card > span {
