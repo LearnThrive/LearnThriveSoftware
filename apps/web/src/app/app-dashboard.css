@@ -257,18 +257,29 @@
    the product (Badge.tsx's STATUS_TONES) — a lesson looks the same colour on the calendar as it
    does on its own detail page. */
 .calendar-wrap .fc-event {
+  position: relative;
   border: none; border-radius: 5px; padding: 1px 5px;
   background: #e4eefb; color: #1d4e87; font-weight: 650;
   cursor: pointer;
-  transition: filter var(--duration-fast) var(--app-ease), box-shadow var(--duration-fast) var(--app-ease),
-    transform var(--duration-fast) var(--app-ease);
+  transition: transform var(--duration-fast) var(--app-ease);
 }
 .calendar-wrap .fc-daygrid-event { padding: 2px 5px; }
-/* A very small lift, not a scale — FullCalendar lays events out in a tight grid with real
-   neighbours on every side; scaling one would visibly overlap the next cell (plan8 section 34's
-   own "do not make calendar blocks grow enough to shift layout"), so elevation reads through
-   filter + shadow instead of size. */
-.calendar-wrap .fc-event:hover { filter: brightness(0.96); box-shadow: 0 2px 6px rgb(9 29 49 / 18%); }
+/* plan11.md task 16 (audit A-04): FullCalendar month views can hold dozens of these at once, and
+   `filter` forces its own render surface per hovered event. A dark, low-opacity overlay fading in
+   reads as close to the same "slightly dimmed" feedback as filter: brightness(0.96) did, entirely
+   via opacity. The shadow is dropped rather than replaced — a very small lift, not a scale, was
+   already the elevation cue (plan8 section 34's "do not make calendar blocks grow enough to shift
+   layout"); the shadow was a second, redundant signal for the same thing. */
+.calendar-wrap .fc-event::after {
+  content: "";
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  background: rgb(9 29 49 / 8%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-fast) var(--app-ease);
+}
+.calendar-wrap .fc-event:hover::after { opacity: 1; }
 .calendar-wrap .fc-event:active { transform: scale(0.98); transition-duration: var(--duration-instant); }
 .calendar-wrap .fc-event.is-selected { transition: box-shadow var(--duration-fast) var(--app-ease); }
 .calendar-wrap .fc-event:focus-visible { outline: none; box-shadow: var(--app-focus-ring); }
