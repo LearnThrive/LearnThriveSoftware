@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { MotionRuntime } from "@/components/motion/MotionRuntime";
 import { Reveal, type RevealVariant } from "@/components/motion/primitives/Reveal";
+import { MotionLabCinematic } from "./MotionLabCinematic";
 import { MotionLabPrimitives } from "./MotionLabPrimitives";
 
 export const metadata: Metadata = {
@@ -45,6 +46,7 @@ export default function DevMotionPage() {
         ))}
 
         <MotionLabPrimitives />
+        <MotionLabCinematic />
       </main>
     </MotionRuntime>
   );

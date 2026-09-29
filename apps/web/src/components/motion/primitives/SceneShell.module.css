@@ -1,0 +1,49 @@
+.shell {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.toneNavy {
+  background: var(--colour-navy-900);
+  color: #fff;
+}
+
+.toneCream {
+  background: var(--colour-cream);
+  color: var(--colour-navy-950);
+}
+
+.toneWhite {
+  background: #fff;
+  color: var(--colour-navy-950);
+}
+
+.toneMint {
+  background: var(--colour-mint-100);
+  color: var(--colour-navy-950);
+}
+
+.intensityQuiet {
+  padding: clamp(48px, 6vw, 80px) clamp(20px, 4vw, 40px);
+}
+
+.intensityMedium {
+  padding: clamp(64px, 8vw, 120px) clamp(20px, 4vw, 40px);
+}
+
+/* Full-bleed, flagship-only sections (hero, product story, closing CTA) — min-height so the section
+   itself carries the cinematic scale, never a fixed height, so real content is never clipped. */
+.intensityFlagship {
+  padding: clamp(80px, 12vw, 180px) clamp(20px, 4vw, 40px);
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+@media (max-width: 640px) {
+  .intensityFlagship {
+    min-height: 0;
+  }
+}

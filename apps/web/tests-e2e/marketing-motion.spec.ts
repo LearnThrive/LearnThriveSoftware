@@ -520,6 +520,120 @@ test.describe('PointerDepth', () => {
   });
 });
 
+// ── Cinematic composition primitives (plan12.md task 2) ────────────────────────────────────────
+// Also driven through /dev/motion.
+
+test.describe('SceneShell', () => {
+  test('renders each tone with its data attribute, no client JS required to see the right one', async ({ page }) => {
+    await page.goto('/dev/motion');
+    await expect(page.locator('#lab-scene-navy')).toHaveAttribute('data-scene-tone', 'navy');
+    await expect(page.locator('#lab-scene-cream')).toHaveAttribute('data-scene-tone', 'cream');
+    await expect(page.locator('#lab-scene-mint')).toHaveAttribute('data-scene-tone', 'mint');
+  });
+});
+
+test.describe('CinematicBackdrop', () => {
+  test('the full-tier backdrop renders on a capable desktop', async ({ page }) => {
+    await pinCapabilities(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/dev/motion');
+    expect(await tierOf(page)).toBe('full');
+    await page.locator('[data-lab-section="cinematic-backdrop"]').scrollIntoViewIfNeeded();
+    await expect(page.locator('[data-testid="backdrop-full"]')).toBeVisible();
+  });
+
+  test('the light tier gets the cheaper stand-in, not the full backdrop', async ({ page }) => {
+    await pinCapabilities(page, { cores: 8, memory: 2 });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/dev/motion');
+    expect(await tierOf(page)).toBe('light');
+    await page.locator('[data-lab-section="cinematic-backdrop"]').scrollIntoViewIfNeeded();
+    await expect(page.locator('[data-testid="backdrop-light"]')).toBeVisible();
+    await expect(page.locator('[data-testid="backdrop-full"]')).toHaveCount(0);
+  });
+
+  test('reduced motion renders no atmosphere at all — the tone alone carries the section', async ({ page }) => {
+    await pinCapabilities(page);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/dev/motion');
+    expect(await tierOf(page)).toBe('reduced');
+    await page.locator('[data-lab-section="cinematic-backdrop"]').scrollIntoViewIfNeeded();
+    await expect(page.locator('[data-cinematic-backdrop]')).toHaveCount(0);
+  });
+
+  test('suspends (unmounts) once scrolled well away, and comes back on return', async ({ page }) => {
+    await pinCapabilities(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/dev/motion');
+    await page.locator('[data-lab-section="cinematic-backdrop"]').scrollIntoViewIfNeeded();
+    await expect(page.locator('[data-testid="backdrop-full"]')).toBeVisible();
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+    await expect(page.locator('[data-cinematic-backdrop][data-backdrop-active="false"]')).toBeVisible();
+    await expect(page.locator('[data-testid="backdrop-full"]')).toHaveCount(0);
+  });
+});
+
+test.describe('MaskedText', () => {
+  test('wipes in via clip-path/opacity, starting fully clipped, ending fully revealed', async ({ page }) => {
+    await pinCapabilities(page);
+    await page.goto('/dev/motion');
+    await tierOf(page);
+    const inner = page.locator('[data-masked-text-inner]');
+    await expect(inner).toHaveCSS('opacity', '0');
+    await inner.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+    await expect(inner).toHaveCSS('opacity', '1', { timeout: 5000 });
+    await expect.poll(() => inner.evaluate((el) => getComputedStyle(el).clipPath)).not.toMatch(/100%/);
+    await expect(page.locator('[data-testid="masked-text"]')).toHaveText('An oversized statement');
+  });
+
+  test('with reduced motion the text is already fully revealed, without scrolling to it', async ({ page }) => {
+    await pinCapabilities(page);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/dev/motion');
+    await expect(page.locator('[data-masked-text-inner]')).toHaveCSS('opacity', '1');
+  });
+
+  test('the statement is real text in the server HTML, not revealed only by script', async ({ request }) => {
+    const html = (await (await request.get('/dev/motion')).text()).replace(/<!-- -->/g, '');
+    expect(html).toContain('An oversized statement');
+  });
+});
+
+test.describe('SectionHandoff', () => {
+  test('renders a background bridging the two tones', async ({ page }) => {
+    await page.goto('/dev/motion');
+    const handoff = page.locator('[data-section-handoff]');
+    await expect(handoff).toBeVisible();
+    const background = await handoff.evaluate((el) => getComputedStyle(el).backgroundImage + getComputedStyle(el).backgroundColor);
+    expect(background).not.toBe('none rgba(0, 0, 0, 0)');
+  });
+
+  test('never intercepts scroll or clicks', async ({ page }) => {
+    await page.goto('/dev/motion');
+    await expect(page.locator('[data-section-handoff]')).toHaveCSS('pointer-events', 'none');
+  });
+});
+
+test.describe('ProductLayer', () => {
+  test('renders its content, and still leans toward the pointer like a plain PointerDepth card', async ({ page }) => {
+    await pinCapabilities(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/dev/motion');
+    expect(await tierOf(page)).toBe('full');
+    const content = page.locator('[data-testid="product-layer"]');
+    await content.scrollIntoViewIfNeeded();
+    await expect(content).toHaveText('Product surface');
+    const box = (await content.boundingBox())!;
+    // ProductLayer nests content > .surface (plain, unstyled wrapper) > PointerDepth's inner m.div
+    // (the actual transform target) > PointerDepth's outer listener div > ParallaxLayer's m.div —
+    // two levels up from `content` reaches the transform, not one.
+    const depthLayer = () => content.evaluate((el) => getComputedStyle(el.parentElement!.parentElement!).transform);
+    const before = await depthLayer();
+    await page.mouse.move(box.x + box.width * 0.9, box.y + box.height * 0.9);
+    await expect.poll(depthLayer).not.toBe(before);
+  });
+});
+
 test.describe('AnimatedUnderline', () => {
   const line = (page: Page, testId: string) =>
     page

@@ -1,0 +1,17 @@
+.wrap {
+  display: block;
+}
+
+.inner {
+  display: block;
+}
+
+/* Same mechanism as Reveal.module.css: a rule with !important beats Motion's server-rendered inline
+   start state, needing no JavaScript and no per-component branching. The (public) layout's
+   <noscript> covers the no-JS case the same way. */
+@media (prefers-reduced-motion: reduce) {
+  :global([data-masked-text-inner]) {
+    clip-path: none !important;
+    opacity: 1 !important;
+  }
+}
