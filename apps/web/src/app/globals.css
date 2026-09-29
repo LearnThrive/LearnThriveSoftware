@@ -418,15 +418,31 @@ ol {
   text-decoration: underline;
 }
 
-/* Header */
+/* Header. plan11.md task 13: "airy at top -> compact/solid when scrolled" — the audit's own M-12
+   finding on this block (docs/MOTION_PERFORMANCE_AUDIT.md) is that a sticky element with a
+   `backdrop-filter` must re-sample and re-blur whatever scrolls beneath it every frame, and at 96%
+   opacity the blur bought almost nothing visually — removed rather than kept "just in case". The
+   at-rest state below is a lighter, still-legible translucent background with no blur and no
+   shadow; .site-header--scrolled (SiteHeader.tsx, toggled from a Motion scroll listener, see that
+   file's comment) is the fully opaque, bordered, shadowed "solid" state the audit prescribed. Per-
+   page overrides (:global(body.is-* .site-header), five pages) only ever set the at-rest
+   background/border colour, so they keep working for the airy state; !important on the scrolled
+   rule is what makes the compact state look the same regardless of which page's tint it started
+   from, which is the whole point of a "now you've scrolled" state. */
 .site-header {
   position: sticky;
   z-index: 100;
   top: 0;
-  border-bottom: 1px solid rgb(14 42 71 / 10%);
-  background: rgb(255 255 255 / 96%);
-  box-shadow: 0 2px 18px rgb(9 29 49 / 4%);
-  backdrop-filter: blur(16px);
+  border-bottom: 1px solid transparent;
+  background: rgb(255 255 255 / 72%);
+  box-shadow: none;
+  transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.site-header.site-header--scrolled {
+  border-bottom: 1px solid rgb(14 42 71 / 10%) !important;
+  background: rgb(255 255 255 / 100%) !important;
+  box-shadow: 0 2px 18px rgb(9 29 49 / 4%) !important;
 }
 
 .site-header__inner {
@@ -435,6 +451,11 @@ ol {
   align-items: center;
   justify-content: space-between;
   gap: 1.5rem;
+  transition: min-height 0.25s ease;
+}
+
+.site-header--scrolled .site-header__inner {
+  min-height: 4.25rem;
 }
 
 .brand {
@@ -618,6 +639,27 @@ ol {
 
 .menu-toggle[aria-expanded="true"] span:nth-child(3) {
   transform: translateY(-6px) rotate(-45deg);
+}
+
+@keyframes lt-menu-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* plan11.md task 13's mobile menu "backdrop -> panel -> links -> CTA": this is the backdrop step.
+   0 opacity and non-interactive outside the mobile breakpoint (below, in that media query) is a
+   belt-and-braces guard — .navigation-shell's own open/close toggle only reaches the user via
+   .menu-toggle, itself display:none above that breakpoint, so this should never actually be
+   triggered on desktop, but a resize while open should not leave a stray full-viewport click-
+   catcher behind either. */
+.navigation-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgb(9 29 49 / 0%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, background-color 0.2s ease;
 }
 
 /* Home hero */
@@ -3159,6 +3201,11 @@ ol {
 
   .navigation-shell {
     position: absolute;
+    /* Above .navigation-backdrop's z-index: 90 — without this, the panel (an absolutely
+       positioned sibling with no explicit z-index of its own, so it stacked at the auto/0 level)
+       sat *underneath* the backdrop, which then intercepted every click meant for its own links —
+       a real bug a Playwright actionability failure caught, not a hypothetical one. */
+    z-index: 95;
     top: 100%;
     right: 0;
     left: 0;
@@ -3183,6 +3230,31 @@ ol {
     pointer-events: auto;
     transform: translateY(0);
     visibility: visible;
+  }
+
+  .navigation-backdrop--open {
+    opacity: 1;
+    background: rgb(9 29 49 / 45%);
+    pointer-events: auto;
+  }
+
+  /* "panel -> links -> CTA": the panel is .navigation-shell's own opacity/transform transition
+     above (already existed); primary-navigation/header-login/header-cta each replay a short
+     rise-and-fade with an increasing delay so they read as arriving one after another rather than
+     all at once, capped at 0.01ms by the sitewide prefers-reduced-motion rule like every other
+     animation on this site. */
+  .navigation-shell--open .primary-navigation,
+  .navigation-shell--open .header-login,
+  .navigation-shell--open .header-cta {
+    animation: lt-menu-rise 0.3s both;
+  }
+
+  .navigation-shell--open .header-login {
+    animation-delay: 0.06s;
+  }
+
+  .navigation-shell--open .header-cta {
+    animation-delay: 0.12s;
   }
 
   .primary-navigation {
