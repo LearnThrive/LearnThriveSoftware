@@ -1367,6 +1367,39 @@ ol {
   font-size: clamp(1.05rem, 1.6vw, 1.25rem);
 }
 
+/* plan11.md task 12's "subtle page-title reveal", scoped to legal pages only (PageHero.tsx's
+   className prop) rather than every page that renders the shared PageHero — a plain CSS @keyframes
+   on first paint, the same "lt-rise" shape the marketing pages' own hero copy already uses, not a
+   whileInView reveal: this content is always first-screen, and gating it behind JavaScript would
+   risk the exact LCP regression already documented elsewhere in this codebase (Reveal.tsx's own
+   comment, marketing-motion.spec.ts's "first block after the hero" guard). */
+@keyframes lt-page-hero-rise {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: none; }
+}
+
+.page-hero--legal .eyebrow {
+  animation: lt-page-hero-rise 0.6s both;
+}
+
+.page-hero--legal h1 {
+  animation: lt-page-hero-rise 0.7s both 0.08s;
+}
+
+.page-hero--legal .page-hero__intro {
+  animation: lt-page-hero-rise 0.7s both 0.18s;
+}
+
+@media print {
+  .page-hero--legal .eyebrow,
+  .page-hero--legal h1,
+  .page-hero--legal .page-hero__intro {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
 .page-hero__actions {
   margin-top: 1.75rem;
 }
@@ -2679,6 +2712,17 @@ ol {
   padding: 1.5rem;
   border-radius: var(--radius-sm);
   background: var(--colour-cream);
+}
+
+/* LegalContentsNav (plan11.md task 12): the currently-in-view section's link, tracked via
+   IntersectionObserver rather than a scroll listener — see that file's own comment. A left border
+   plus colour/weight, not a moving element, so this never fights the sticky sidebar's own layout. */
+.legal-contents a[aria-current="true"] {
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--colour-green-700);
+  color: var(--colour-green-800);
+  font-weight: 700;
+  transition: border-color var(--duration-fast) ease, padding-left var(--duration-fast) ease;
 }
 
 .legal-contents h2 {
