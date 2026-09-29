@@ -1385,6 +1385,19 @@ ol {
   content: "";
 }
 
+/* plan12.md task 13: "very light path/background atmosphere" for legal/support pages — the same
+   faint dot-grid language the other cinematic marketing pages use (About/Contact/FAQ), passed
+   through PageHero's `backdrop` slot (plan12.md task 7) so it's tier-gated and suspended off-screen
+   like every other CinematicBackdrop usage, rather than a second always-on decorative layer. A
+   notch fainter again than those pages' own dots: these are pages people read closely, not browse. */
+.legal-hero-atmosphere {
+  position: absolute;
+  inset: 0 45% 0 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 24px 24px;
+  pointer-events: none;
+}
+
 .page-hero__inner {
   position: relative;
   z-index: 1;
