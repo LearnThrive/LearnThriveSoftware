@@ -95,7 +95,12 @@
   position: relative;
   display: grid;
   grid-template-columns: 1.05fr 0.95fr;
-  min-height: 470px;
+  /* plan12.md task 3: "increase hero visual scale beyond a conventional split layout" — was a
+     fixed 470px, noticeably shorter than a real first-arrival scene on any screen taller than a
+     laptop. A viewport-relative min-height with a floor (so it never collapses on a short landscape
+     window) and a ceiling (so it never forces scrolling past what a tall 4K monitor needs) gives it
+     real presence without becoming a fixed, unreadable-on-some-screens height. */
+  min-height: clamp(470px, 86vh, 920px);
 }
 
 .heroCopy {
@@ -126,7 +131,9 @@
 }
 
 .heroTitle {
-  font-size: clamp(34px, 4.4vw, 56px) !important;
+  /* plan12.md task 3: larger ceiling (was 56px) so the headline actually uses the taller hero's
+     extra room on capable desktops; the floor is untouched, so small screens are unaffected. */
+  font-size: clamp(34px, 5vw, 68px) !important;
   line-height: 0.97 !important;
   letter-spacing: -0.03em !important;
   color: #fff !important;
@@ -341,15 +348,33 @@
   max-width: 24ch;
 }
 
+/* plan12.md task 3's "1-2 high-impact editorial statements": oversized, plain-text, no card or
+   eyebrow — the statement itself is the whole moment. */
+.homeStatement {
+  font-family: var(--lt-font-heading);
+  font-weight: 800;
+  font-size: clamp(28px, 4.2vw, 52px);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  color: var(--lt-navy);
+  max-width: 18ch;
+  margin: 0 0 44px;
+}
+
 .sectionSubtitle {
   margin: 0 0 34px;
   color: var(--lt-text);
   font-size: 16.5px;
 }
 
+/* plan12.md task 3's anti-generic rule: three equal cards is the exact
+   eyebrow/heading/paragraph/three-cards shape it calls out. The first differentiator ("truly
+   one-to-one") carries the section's real argument — everything else follows from it — so it gets
+   more room instead of matching its siblings; the asymmetry itself is the point, not just the
+   ratio. */
 .whyGrid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: 1.35fr 1fr 1fr;
   gap: 20px;
 }
 
@@ -849,13 +874,15 @@
 }
 
 /* ── Stats Strip ───────────────────────────────────────── */
+/* plan12.md task 3: now the first section after the hero, wrapped in <SceneShell tone="navy">
+   (its background/color/padding move there) rather than its own bespoke navy block — same
+   destination as before, just via the shared primitive every other cinematic scene now uses. */
 .statsStrip {
-  background: var(--lt-navy);
-  color: #fff;
-  padding: 56px 40px;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 20px;
+  max-width: 1080px;
+  margin: 0 auto;
 }
 
 .stat {
@@ -1060,6 +1087,42 @@
   box-shadow: 0 22px 44px -30px rgba(20, 49, 82, 0.5);
 }
 
+/* ── Closing CTA (plan12.md task 3) ───────────────────────
+   A deliberately light stub: task 10 owns the full "large cinematic closing scene, learning-path
+   motif converging into the final action" build. This exists so the page's narrative arc actually
+   completes instead of just stopping after the enquiry form — task 10 replaces the content, not
+   the section's place in the story. */
+.closingCta {
+  text-align: center;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.closingCtaEyebrow {
+  font-family: var(--lt-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  /* Same fix as contact.module.css's .cardNavy .cardLabel / home.module.css's own
+     .levelRowDark .levelYears: --lt-green-light only clears ~2.5:1 on navy, under AA. */
+  color: #13c2a0;
+  margin-bottom: 18px;
+}
+
+.closingCtaTitle {
+  color: #fff !important;
+  font-size: clamp(32px, 5.5vw, 64px) !important;
+  line-height: 1.03 !important;
+  margin: 0 0 28px !important;
+}
+
+.closingCtaActions {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
 /* ── Mini Footer ───────────────────────────────────────── */
 .miniFooter {
   background: var(--lt-navy-deep);
@@ -1090,6 +1153,13 @@
 
   .heroPhoto {
     min-height: 300px;
+  }
+
+  /* The 86vh scale above is a desktop-only "presence" figure — on a single stacked column
+     (headline + CTA + a 300px photo) it would force a lot of empty space rather than scale, so
+     mobile keeps the original, content-sized floor instead of inheriting the taller clamp. */
+  .heroGrid {
+    min-height: 470px;
   }
 
   .heroFloatChip {
@@ -1142,7 +1212,6 @@
   .whySection,
   .subjectsSection,
   .levelsSection,
-  .statsStrip,
   .enquirySection {
     padding-left: 16px;
     padding-right: 16px;
