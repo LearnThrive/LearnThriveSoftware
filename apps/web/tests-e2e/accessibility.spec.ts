@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
+import { PUBLIC_ROUTES } from './support';
 
 // Plan6 section 88: "Run available automated accessibility checks." axe-core is a real WCAG rule
 // engine run against the actual rendered DOM — a stronger check than eslint-plugin-jsx-a11y's
@@ -61,10 +62,13 @@ test.describe('automated accessibility (axe-core, WCAG 2 A/AA)', () => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
   });
 
-  test('marketing home', async ({ page }) => {
-    await page.goto('/');
-    await runAxe(page, '/');
-  });
+  // plan11.md task 19: "run axe over all public routes" — was just marketing home.
+  for (const route of PUBLIC_ROUTES) {
+    test(`public route: ${route}`, async ({ page }) => {
+      await page.goto(route);
+      await runAxe(page, route);
+    });
+  }
 
   test('login page', async ({ page }) => {
     await page.goto('/login');

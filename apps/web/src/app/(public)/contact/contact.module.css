@@ -203,7 +203,9 @@
 }
 
 .cardNavy .cardLabel {
-  color: var(--lt-green-light);
+  /* home.module.css's .levelRowDark .levelYears / .statValueGreen: --lt-green-light (#087363) only
+     clears ~2.5:1 on this navy background, under AA — the same brighter one-off fixes it here. */
+  color: #13c2a0;
 }
 
 .card h2 {
@@ -265,14 +267,15 @@
 .phoneNumber {
   font-size: 18px;
   font-weight: 600;
-  color: var(--lt-green-light);
+  /* Same fix as .cardNavy .cardLabel above: --lt-green-light fails AA on this navy card. */
+  color: #13c2a0;
   text-decoration: none;
   transition: opacity 0.2s;
 }
 
 .phoneNumber:hover {
   opacity: 0.8;
-  color: var(--lt-green-light);
+  color: #13c2a0;
 }
 
 /* ── Guidance Section ──────────────────────────────────── */
