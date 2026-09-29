@@ -604,6 +604,7 @@
   font-family: var(--lt-font-heading);
   font-weight: 800;
   font-size: 15px;
+  transition: background 0.3s var(--ease-snappy, ease), color 0.3s var(--ease-snappy, ease);
 }
 
 .howStepNumberGreen {
@@ -612,6 +613,16 @@
 
 .howStepNumberNavy {
   background: var(--lt-navy);
+}
+
+/* plan12.md task 5: the path now visibly "activates" stages as it draws, not just the line itself
+   — a step the scroll position hasn't reached yet reads as pending until it does. Only the number
+   badge's colour changes; the step's own title/text stay at full, unchanged contrast (an opacity
+   reduction on the step previously failed axe's color-contrast check — --lt-text on this
+   background already sits close to AA's floor with no margin to spend). */
+.howStepNumberPending {
+  background: var(--lt-border);
+  color: var(--lt-navy);
 }
 
 .howStepContent {
@@ -1096,6 +1107,45 @@
   text-align: center;
   max-width: 760px;
   margin: 0 auto;
+}
+
+/* plan12.md task 5: the recurring "sequential stages" device (dot + connecting line), horizontal
+   here rather than vertical — a closing summary rather than another scrollable scene. */
+.closingSpine {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 32px;
+  flex-wrap: wrap;
+}
+
+.closingSpineItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--lt-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.closingSpineItem:not(:last-child)::after {
+  content: "";
+  width: 28px;
+  height: 1px;
+  margin: 0 14px;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.closingSpineDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #13c2a0;
 }
 
 .closingCtaEyebrow {

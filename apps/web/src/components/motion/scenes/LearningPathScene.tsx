@@ -1,32 +1,39 @@
 "use client";
 
-import * as m from "framer-motion/m";
-import { useTransform } from "framer-motion";
-import type { ReactNode } from "react";
-import { useScene } from "@/lib/motion/scroll";
+import { ScrollProgressPath } from "@/components/motion/primitives/ScrollProgressPath";
+import { useDiscreteProgress, useScene } from "@/lib/motion/scroll";
 import styles from "@/app/(public)/home.module.css";
 
 /**
- * plan10.md section 5: the learning-path connector (previously a static repeating-gradient CSS
- * background, home.module.css's .howStepsLine) becomes a real SVG path that draws in as the
- * section scrolls through view, rather than always being fully drawn. Same position/colour as
- * the CSS version it replaces — this is the same visual device made scroll-reactive, not a
- * redesign of "How it works".
+ * plan10.md section 5's learning-path connector, elevated by plan12.md task 5 from "a line that
+ * draws in" to the site's recurring "sequential stages, spatially connected" device: the drawn
+ * line now shares its actual drawing code with `SafeguardingTrustPath.tsx` (both call
+ * `ScrollProgressPath`, plan11's own primitive for exactly this, rather than each keeping its own
+ * near-identical inline SVG), and — the part that was missing entirely — the stage list now
+ * highlights the one scroll has actually reached, so the drawn line isn't the only thing that
+ * visibly changes as you scroll.
  *
- * Always renders the same SVG structure, and pathLength always uses the same [0,1] -> [0,1]
- * range — neither branches on useReducedMotion(). Both used to (an element-tree branch, then a
- * range branch after the first fix), and both caused a real hydration mismatch: Motion renders a
- * useTransform value's computed result directly into the SSR'd HTML, and useReducedMotion()
- * itself can read differently between the server (no window, assumes not reduced) and a real
- * reduced-motion client's first render — so anything that branches on it, structure or value,
- * can disagree between the two. The "How it works" steps this connects are always fully present
- * in the DOM regardless (see page.tsx's howSteps.map, unconditional), so the line staying
- * technically scroll-reactive under reduced motion — a decorative 2px dashed line — costs
- * nothing a reduced-motion user actually needs.
+ * This component owns the stage list's rendering itself (`steps` is a plain, serializable prop),
+ * not a `children` render-prop: `page.tsx` is a Server Component, and a function cannot cross the
+ * server/client boundary as a prop — React throws "Functions are not valid as a child of Client
+ * Components" for exactly that shape, caught directly (a 500 on every request) rather than shipped.
+ *
+ * Still always renders the same SVG structure and the same [0,1] -> [0,1] pathLength range
+ * regardless of `useReducedMotion()` — branching either on that value is what caused this file's
+ * own hydration mismatch history (see the comment this replaced). `useDiscreteProgress` doesn't
+ * have that problem: it starts at index 0 on both server and client and only ever updates via a
+ * scroll event after hydration, so the highlighted stage can differ from the server's rendered
+ * state without ever *mismatching* it.
  */
-export function LearningPathScene({ children }: { children: ReactNode }) {
+export type LearningPathStep = {
+  title: string;
+  text: string;
+  last: boolean;
+};
+
+export function LearningPathScene({ steps }: { steps: readonly LearningPathStep[] }) {
   const { ref, smoothProgress } = useScene(["start 0.85", "end 0.4"]);
-  const pathLength = useTransform(smoothProgress, [0, 1], [0, 1]);
+  const activeIndex = useDiscreteProgress(smoothProgress, steps.length);
 
   return (
     <div
@@ -35,35 +42,35 @@ export function LearningPathScene({ children }: { children: ReactNode }) {
       data-motion-scene="learning-path"
     >
       <div className={styles.howStepsPathTrack}>
-        <svg
-          className={styles.howStepsPathSvg}
+        <ScrollProgressPath
+          progress={smoothProgress}
+          d="M1 0 L1 100"
           viewBox="0 0 2 100"
           preserveAspectRatio="none"
-          aria-hidden="true"
-        >
-          <m.line
-            x1="1"
-            y1="0"
-            x2="1"
-            y2="100"
-            stroke="var(--lt-border)"
-            strokeWidth="2"
-            vectorEffect="non-scaling-stroke"
-          />
-          <m.line
-            x1="1"
-            y1="0"
-            x2="1"
-            y2="100"
-            stroke="var(--lt-green-dark)"
-            strokeWidth="2"
-            strokeDasharray="5 6"
-            vectorEffect="non-scaling-stroke"
-            style={{ pathLength }}
-          />
-        </svg>
+          stroke="var(--lt-green-dark)"
+          trackStroke="var(--lt-border)"
+          strokeWidth={2}
+          dashArray="5 6"
+          className={styles.howStepsPathSvg}
+        />
       </div>
-      {children}
+      <div className={styles.howSteps}>
+        {steps.map((step, i) => (
+          <div key={step.title} className={styles.howStep}>
+            <span
+              className={`${styles.howStepNumber} ${
+                i > activeIndex ? styles.howStepNumberPending : step.last ? styles.howStepNumberNavy : styles.howStepNumberGreen
+              }`}
+            >
+              {i + 1}
+            </span>
+            <div className={styles.howStepContent}>
+              <h4 className={styles.howStepTitle}>{step.title}</h4>
+              <p className={styles.howStepText}>{step.text}</p>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
