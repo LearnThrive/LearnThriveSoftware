@@ -369,8 +369,17 @@ async function scrollThrough(page, cdp, viewport, direction) {
     return direction === "down" ? range - scrollY <= 2 : scrollY <= 1;
   };
 
+  // A page's practical scroll max is sometimes a few px short of scrollHeight - innerHeight
+  // (ordinary layout/subpixel rounding, not a bug in the page) — close enough that `finished()`'s
+  // tight 2px threshold never trips, but real enough that every further gesture moves nothing. Two
+  // consecutive no-progress gestures means the page has genuinely stopped, not that the next retry
+  // might work; without this, that gap spins the loop until the 90s deadline for no reason. The
+  // post-loop `moved < expected * 0.5` check below still catches the real failure mode (nothing
+  // scrolled at all) — this only shortcuts the "stalled a few px early" case.
+  let stalls = 0;
   while (!(await finished())) {
     if (Date.now() > deadline) throw new Error(`Scrolling ${direction} did not finish within 90s`);
+    const before = await position();
     if (viewport.gesture === "touch") {
       // A finger moving up scrolls the page down, and vice versa.
       const to = direction === "down" ? y - distance : y + distance;
@@ -385,6 +394,13 @@ async function scrollThrough(page, cdp, viewport, direction) {
         gestureSourceType: "mouse",
         preventFling: true,
       });
+    }
+    const after = await position();
+    if (after === before) {
+      stalls += 1;
+      if (stalls >= 2) break;
+    } else {
+      stalls = 0;
     }
   }
 
