@@ -371,6 +371,19 @@ test.describe('ParallaxLayer', () => {
     }
   });
 
+  test('a fast reverse jump (end straight to start) recovers correctly, not just forward scroll', async ({ page }) => {
+    // plan11.md task 19's "fast/reverse scroll does not corrupt scene state": the scene's position
+    // is a pure function of the current scrollY (framer-motion's useScroll), not an accumulator, so
+    // there is no state to corrupt — this is direct evidence for that, not just the architecture.
+    await pinCapabilities(page);
+    await page.goto('/dev/motion');
+    expect(await tierOf(page)).toBe('full');
+    await scrollSceneTo(page, 'parallax', 'end');
+    await expect.poll(() => layerOffset(page, 'parallax-layer')).toBeCloseTo(20, 0);
+    await scrollSceneTo(page, 'parallax', 'start');
+    await expect.poll(() => layerOffset(page, 'parallax-layer')).toBeCloseTo(-20, 0);
+  });
+
   test('a promoted layer is on its own compositor layer only while it is near the screen', async ({ page }) => {
     await pinCapabilities(page);
     await page.goto('/dev/motion');
