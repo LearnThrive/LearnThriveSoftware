@@ -52,6 +52,12 @@ export function useMeeting() {
     sendBoardUpdate: controller.sendBoardUpdate,
     sendBoardCursor: controller.sendBoardCursor,
     sendBoardLaser: controller.sendBoardLaser,
+    // Not read here — passed straight through to Whiteboard, which subscribes to these itself.
+    // Reading boardPointers via the main `snapshot` (as every other field above does) would
+    // re-render this whole tree on every remote cursor/laser move; see meeting.ts's comment on
+    // subscribeBoardPointers (plan11.md task 17, audit C-02).
+    subscribeBoardPointers: controller.subscribeBoardPointers,
+    getBoardPointersSnapshot: controller.getBoardPointersSnapshot,
     createBoardPage: controller.createBoardPage,
     renameBoardPage: controller.renameBoardPage,
     deleteBoardPage: controller.deleteBoardPage,

@@ -70,7 +70,7 @@ export function App({ lessonId, initialToken, isDevRoute }: ClassroomAppProps = 
     resumeTimer, stopTimer, sendBoardUpdate, sendBoardCursor, sendBoardLaser, createBoardPage, renameBoardPage,
     deleteBoardPage, reorderBoardPages, switchBoardPage, setBoardBackground, setStudentsCanDraw, clearBoardPage,
     followMe, importBoard, duplicateBoardPage, commitLocalPageElements, sendAnnouncement, setDataSaver, allowRejoin,
-    join, leave, reset, rejoin, copyInvite, retryConnection,
+    join, leave, reset, rejoin, copyInvite, retryConnection, subscribeBoardPointers, getBoardPointersSnapshot,
   } = useMeeting();
   const [name, setName] = useState('');
   const [room, setRoom] = useState(() => (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('room')?.trim().toLowerCase() || '' : ''));
@@ -329,7 +329,8 @@ export function App({ lessonId, initialToken, isDevRoute }: ClassroomAppProps = 
               <Whiteboard
                 role={snapshot.role ?? 'student'} pages={snapshot.board.pages} activePageId={snapshot.board.activePageId}
                 elementsByPage={snapshot.board.elementsByPage} studentsCanDraw={snapshot.board.studentsCanDraw}
-                pointers={snapshot.boardPointers} followMeSeq={snapshot.boardFollowMeSeq}
+                subscribeBoardPointers={subscribeBoardPointers} getBoardPointersSnapshot={getBoardPointersSnapshot}
+                followMeSeq={snapshot.boardFollowMeSeq}
                 onUpdate={sendBoardUpdate} onCursor={sendBoardCursor} onLaser={sendBoardLaser} onCommitLocal={commitLocalPageElements}
                 onSwitchPage={switchBoardPage} onCreatePage={createBoardPage} onRenamePage={renameBoardPage}
                 onDuplicatePage={duplicateBoardPage} onDeletePage={deleteBoardPage} onReorderPages={reorderBoardPages}

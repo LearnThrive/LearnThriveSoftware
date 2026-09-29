@@ -159,6 +159,27 @@ export class MeetingController {
     this.listeners.forEach((listener) => listener());
   }
 
+  // plan11.md task 17 (audit C-02): board:cursor/board:laser are the highest-frequency events this
+  // controller ever receives — one per remote pointer move during whiteboard collaboration — and
+  // going through the main update()/listeners pair re-rendered the whole classroom App on every
+  // one of them, while Whiteboard.tsx's own consumer of this value (its useEffect at [pointers])
+  // only ever feeds it into Excalidraw's *imperative* updateScene() call, never React's own
+  // reconciliation. A second, isolated useSyncExternalStore pair lets only Whiteboard's own
+  // subscription re-render for this, never the parent. this.snapshot's own reference is still
+  // replaced (so a legitimate, differently-triggered App render picks up the latest value instead
+  // of a stale one), but boardPointerListeners — not the main listeners set — is who gets told.
+  private boardPointerListeners = new Set<() => void>();
+  subscribeBoardPointers = (listener: () => void) => {
+    this.boardPointerListeners.add(listener);
+    return () => { this.boardPointerListeners.delete(listener); };
+  };
+  getBoardPointersSnapshot = () => this.snapshot.boardPointers;
+
+  private setBoardPointers(boardPointers: Record<string, BoardPointer>) {
+    this.snapshot = { ...this.snapshot, boardPointers };
+    this.boardPointerListeners.forEach((listener) => listener());
+  }
+
   private setPeers(peers: RemotePeer[]) {
     this.update({ peers, status: aggregateConnectionStatus(peers) });
     this.applyVideoBandwidthPolicy();
@@ -653,11 +674,11 @@ export class MeetingController {
       this.update({ board: { ...this.snapshot.board, elementsByPage: { ...this.snapshot.board.elementsByPage, [pageId]: [] } } });
     });
     socket.on('board:cursor', ({ id, name, x, y }) => {
-      this.update({ boardPointers: { ...this.snapshot.boardPointers, [id]: { id, name, x, y, tool: 'pointer', updatedAt: Date.now() } } });
+      this.setBoardPointers({ ...this.snapshot.boardPointers, [id]: { id, name, x, y, tool: 'pointer', updatedAt: Date.now() } });
     });
     socket.on('board:laser', ({ id, x, y }) => {
       const name = this.snapshot.boardPointers[id]?.name ?? this.snapshot.peers.find((peer) => peer.participant.id === id)?.participant.name ?? '';
-      this.update({ boardPointers: { ...this.snapshot.boardPointers, [id]: { id, name, x, y, tool: 'laser', updatedAt: Date.now() } } });
+      this.setBoardPointers({ ...this.snapshot.boardPointers, [id]: { id, name, x, y, tool: 'laser', updatedAt: Date.now() } });
     });
     socket.on('board:follow-me', () => this.update({ boardFollowMeSeq: this.snapshot.boardFollowMeSeq + 1 }));
     socket.on('announce:update', (announcement) => this.update({ announcement }));
