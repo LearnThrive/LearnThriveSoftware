@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { Container } from "@/components/Container";
 import { PageHero } from "@/components/PageHero";
 import { PhoneContacts } from "@/components/PhoneContacts";
+import { Reveal } from "@/components/motion/primitives/Reveal";
+import { LegalContentsNav } from "@/components/motion/scenes/LegalPageMotion";
 import { siteConfig } from "@/lib/site";
 
 export interface LegalPageProps {
@@ -34,6 +36,7 @@ export function LegalPage({
         eyebrow={eyebrow}
         title={title}
         intro={intro}
+        className="page-hero--legal"
         aside={
           <div className="document-card">
             <span>Last reviewed</span>
@@ -46,16 +49,7 @@ export function LegalPage({
       <section className="section">
         <Container className="legal-page-layout">
           <aside className="legal-contents">
-            <nav aria-labelledby="legal-contents-title">
-              <h2 id="legal-contents-title">On this page</h2>
-              <ol>
-                {sections.map((section) => (
-                  <li key={section.id}>
-                    <a href={`#${section.id}`}>{section.title}</a>
-                  </li>
-                ))}
-              </ol>
-            </nav>
+            <LegalContentsNav sections={sections.map(({ id, title }) => ({ id, title }))} />
           </aside>
 
           <article className="legal-prose">
@@ -71,16 +65,18 @@ export function LegalPage({
               </section>
             ))}
 
-            <div className="legal-contact-box">
-              <h2>Contact LearnThrive Tuition</h2>
-              <p>
-                If you have a question about this page, email{" "}
-                <a href={`mailto:${siteConfig.email}`}>{siteConfig.email}</a> or
-                call{" "}
-                <PhoneContacts />
-                .
-              </p>
-            </div>
+            <Reveal variant="soft">
+              <div className="legal-contact-box">
+                <h2>Contact LearnThrive Tuition</h2>
+                <p>
+                  If you have a question about this page, email{" "}
+                  <a href={`mailto:${siteConfig.email}`}>{siteConfig.email}</a> or
+                  call{" "}
+                  <PhoneContacts />
+                  .
+                </p>
+              </div>
+            </Reveal>
           </article>
         </Container>
       </section>
