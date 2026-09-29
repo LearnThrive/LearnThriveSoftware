@@ -5,6 +5,7 @@ import * as m from "framer-motion/m";
 import { useReducedMotion, useTransform } from "framer-motion";
 import { useScene } from "@/lib/motion/scroll";
 import { useMotionTier } from "@/lib/motion/capabilities";
+import { ParallaxLayer } from "@/components/motion/primitives/ParallaxLayer";
 import styles from "@/app/(public)/home.module.css";
 
 /**
@@ -15,11 +16,17 @@ import styles from "@/app/(public)/home.module.css";
  * this scene only adds scroll-linked behaviour on top of the existing "assembled, not faded in"
  * load choreography, it doesn't replace it.
  *
- * All scroll-linked transforms are skipped outright on "reduced"/"light" tiers (capabilities.ts):
- * under prefers-reduced-motion nothing here should move, and on touch/narrow devices plan10.md
- * section 32 asks for smaller-scale movement rather than the full desktop depth effect — "skip
- * it" is the simplest way to satisfy that for a first pass, rather than a second, smaller set of
- * transform ranges to maintain.
+ * The headline/copy/CTA transforms above are skipped outright on "reduced"/"light" tiers
+ * (capabilities.ts): under prefers-reduced-motion nothing here should move, and on touch/narrow
+ * devices plan10.md section 32 asks for smaller-scale movement rather than the full desktop depth
+ * effect — "skip it" is the simplest way to satisfy that for a first pass, rather than a second,
+ * smaller set of transform ranges to maintain.
+ *
+ * The background/product/chip layers below (plan11.md task 7) instead use the shared
+ * `ParallaxLayer` primitive, which already scales its own distance by tier internally
+ * (capabilities.ts's `parallaxScale`) — that's a second, independent gating mechanism from the
+ * `active` boolean above, not a conflict: `active` still governs the older headline/copy/CTA
+ * transforms exactly as before, ParallaxLayer governs only the layers built on it.
  */
 export function HeroScene() {
   const { ref, smoothProgress } = useScene(["start start", "end start"]);
@@ -30,15 +37,13 @@ export function HeroScene() {
   const headlineY = useTransform(smoothProgress, [0, 1], active ? [0, -34] : [0, 0]);
   const copyOpacity = useTransform(smoothProgress, [0, 1], active ? [1, 0.6] : [1, 1]);
   const ctaOpacity = useTransform(smoothProgress, [0, 0.6], active ? [1, 0.85] : [1, 1]);
-  const productScale = useTransform(smoothProgress, [0, 1], active ? [1, 1.04] : [1, 1]);
-  const productY = useTransform(smoothProgress, [0, 1], active ? [0, 18] : [0, 0]);
-  const chipPrimaryX = useTransform(smoothProgress, [0, 1], active ? [0, -14] : [0, 0]);
-  const chipSecondaryY = useTransform(smoothProgress, [0, 1], active ? [0, -22] : [0, 0]);
-  const gridY = useTransform(smoothProgress, [0, 1], active ? [0, 40] : [0, 0]);
 
   return (
     <section ref={ref as React.RefObject<HTMLElement>} className={styles.hero} data-motion-scene="hero">
-      <m.div className={styles.heroDots} style={{ y: gridY }} aria-hidden="true" />
+      {/* Background/detail layer: plan11.md task 7 asks for ~8-20px here (it was 40px, unbounded
+          relative to the plan's own layering scheme). ParallaxLayer's internal tier scaling
+          replaces the old manual `active ? [0, 40] : [0, 0]` branch. */}
+      <ParallaxLayer progress={smoothProgress} from={0} to={16} className={styles.heroDots} aria-hidden />
       <div className={styles.heroGlow} aria-hidden="true" />
       <div className={styles.heroGrid}>
         <m.div style={{ y: headlineY }}>
@@ -78,7 +83,13 @@ export function HeroScene() {
             </m.ul>
           </div>
         </m.div>
-        <m.div className={styles.heroPhoto} style={{ scale: productScale, y: productY }}>
+        {/* Main product layer: ~10-24px (task 7). Previously also carried a scale (1 -> 1.04) —
+            dropped, not rebalanced: `.heroFloatChip`/`.heroFloatChipSecondary` below are its DOM
+            children, so scaling this element scaled the floating cards' size along with it on
+            every scroll frame, an unintended side effect ("stop the photo's scale compounding onto
+            its child chips") no design brief asked for. A translate-only offset moves the photo and
+            its cards together as one rigid group with no distortion. */}
+        <ParallaxLayer progress={smoothProgress} from={0} to={18} className={styles.heroPhoto}>
           <div className={styles.heroPhotoImg}>
             <Image
               src="/images/hero-tutor-student.jpg"
@@ -89,15 +100,31 @@ export function HeroScene() {
               style={{ objectFit: "cover" }}
             />
           </div>
-          <m.div className={styles.heroFloatChip} style={{ x: chipPrimaryX }}>
-            <div className={styles.heroFloatChipTitle}>One-to-one, 60 min</div>
-            <div className={styles.heroFloatChipSub}>TIMED AROUND SCHOOL</div>
-          </m.div>
-          <m.div className={styles.heroFloatChipSecondary} style={{ y: chipSecondaryY }}>
-            <div className={styles.heroFloatChipTitle}>Lesson report, every time</div>
-            <div className={styles.heroFloatChipSub}>PROGRESS YOU CAN SEE</div>
-          </m.div>
-        </m.div>
+          {/* Foreground chip layer: ~18-34px, deeper than the product layer above — nesting a second
+              ParallaxLayer inside the product one composes the two offsets (total chip movement =
+              product's own offset + this chip's own additional offset), the standard way to build
+              layered depth.
+              This inner ParallaxLayer is also the actual fix for "the chip parallax has never run":
+              `.heroFloatChip`'s own `animation: lt-rise ... both` (home.module.css) targets
+              `transform`, and a CSS animation's value for an animated property wins over an inline
+              style on the *same element* for as long as it holds (its "both" fill mode holds
+              forever) — so putting Motion's own transform directly on `.heroFloatChip` never moved
+              it. Keeping the entrance animation on the outer, unanimated-by-Motion `.heroFloatChip`
+              and putting the scroll transform on a nested element sidesteps the collision entirely:
+              two different elements, two different transforms, both apply. */}
+          <div className={styles.heroFloatChip}>
+            <ParallaxLayer progress={smoothProgress} from={0} to={-26} axis="x">
+              <div className={styles.heroFloatChipTitle}>One-to-one, 60 min</div>
+              <div className={styles.heroFloatChipSub}>TIMED AROUND SCHOOL</div>
+            </ParallaxLayer>
+          </div>
+          <div className={styles.heroFloatChipSecondary}>
+            <ParallaxLayer progress={smoothProgress} from={0} to={-30}>
+              <div className={styles.heroFloatChipTitle}>Lesson report, every time</div>
+              <div className={styles.heroFloatChipSub}>PROGRESS YOU CAN SEE</div>
+            </ParallaxLayer>
+          </div>
+        </ParallaxLayer>
       </div>
     </section>
   );
