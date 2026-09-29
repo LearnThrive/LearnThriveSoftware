@@ -14,9 +14,11 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
           one mechanism that can answer that without JavaScript itself: it is parsed only when
           scripting is disabled, so it costs a scripted visitor nothing and never flashes, and
           `!important` is what beats an inline style. Reduced motion gets the same treatment from
-          Reveal.module.css. */}
+          Reveal.module.css; plan12.md's MaskedText (`data-masked-text-inner`, clip-path instead of
+          opacity/transform) needs the identical override for the identical reason and is covered
+          here too, from MaskedText.module.css. */}
       <noscript>
-        <style>{`[data-reveal], [data-reveal-inner] { opacity: 1 !important; transform: none !important; } [data-reveal-rule], [data-underline-draw] { transform: none !important; }`}</style>
+        <style>{`[data-reveal], [data-reveal-inner] { opacity: 1 !important; transform: none !important; } [data-reveal-rule], [data-underline-draw] { transform: none !important; } [data-masked-text-inner] { clip-path: none !important; opacity: 1 !important; }`}</style>
       </noscript>
       {/* The one Motion runtime for the whole public site (LazyMotion + MotionConfig). It wraps
           the pages without making them client-rendered — see MotionRuntime.tsx. */}

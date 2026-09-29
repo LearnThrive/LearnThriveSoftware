@@ -1,0 +1,5 @@
+.handoff {
+  position: relative;
+  height: clamp(48px, 8vw, 120px);
+  pointer-events: none;
+}
