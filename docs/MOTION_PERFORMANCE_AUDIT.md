@@ -134,6 +134,25 @@ against. `docs/MOTION_PERFORMANCE_REPORT.md` (task 20) closes each finding with 
   properties. `ScrollReveal` is deleted only after every import is migrated.
 - **Validate:** observer count on `/` before/after; reduced-motion test renders every variant's final
   content; the `.rv` class and the `<noscript>` workaround disappear together.
+- **Addendum (task 20):** the `.rv` reveal CSS this finding describes was itself inert on
+  `/subjects`, `/about`, `/contact` and `/faq` at the time of the baseline — its rules were
+  `:global` selectors inside `home.module.css`, a stylesheet only the homepage loads (the same bug
+  class as [M-02](#m-02-marquee-never-pauses-offscreen-or-hidden)'s marquee). Content on those four
+  pages was simply always visible; the "generic fade-up" M-05 describes was only actually running on
+  `/`. That masked a second, latent defect: once task 6's properly-scoped `Reveal` made reveals work
+  everywhere, the first block after the hero on each of those four pages — previously just visible —
+  started at `opacity: 0` in the server-rendered HTML until the script loaded, moving the page's LCP
+  element behind a client-side animation. Production-build profiling caught it directly: `/subjects`
+  204→864 ms, `/about` 184→1072 ms, `/contact` and `/faq` ~870 ms (`2a0ec0d`). Fixed by giving each
+  page's first-screen block the explicit `static` variant; content below the fold still reveals.
+  After: `/subjects` 196 ms desktop / 152 ms mobile, `/about` 176 / 148, `/contact` 116 / 120, `/faq`
+  148 / 140 — at or below their pre-reveal baseline, not just recovered.
+  **The lesson:** a reveal's hidden start state lives in the server-rendered HTML, so it always costs
+  something until the client script runs and decides otherwise — the cost is invisible in development
+  (fast refresh, warm cache) and only shows up in a *production* profile. Every task after this one
+  that added a reveal to first-screen content (9, 10, 11, 12) opted that block into `static` from the
+  start rather than discovering the same regression again; `marketing-motion.spec.ts`'s "the first
+  block after the hero is never held back by a reveal" test guards all eight routes together.
 
 ### M-06 Product Story progress toggles `width` from React state
 
@@ -490,21 +509,30 @@ _commit 554013b · 3 run(s) per row, medians · CPU throttle 1×_
 
 ## Implementation tracker
 
+All plan11 tasks (1–20; task 15 excepted, see below) are complete as of `26b3b8c`.
+
 | Finding | Task | Status |
 | --- | --- | --- |
-| M-01 hero glow | 5, 7 | pending |
-| M-02 marquee | 3, 5 | pending |
-| M-04 card shadows | 5 | pending |
-| M-05 `ScrollReveal` | 6 | pending |
-| M-06 progress width | 5, 7 | pending |
-| M-07 / M-08 scroll → state | 7 | pending |
-| M-09 hero choreography | 7, 8 | pending |
-| M-11 / A-06 counters | 4 | pending |
-| M-12 / A-05 sticky `backdrop-filter` | 13, 16 | pending |
-| M-13 dead CSS | 5 | pending |
-| M-14 / M-15 runtime | 3 | pending |
-| A-01 skeleton | 5, 16 | pending |
-| A-02 / A-03 / A-04 | 16 | pending |
-| C-01 mic meter | 4 | pending |
-| C-02 `useMeeting` | 17 | pending |
-| C-03 poll bars | 17 | pending |
+| M-01 hero glow | 5, 7 | done |
+| M-02 marquee | 3, 5 | done |
+| M-04 card shadows | 5 | done |
+| M-05 `ScrollReveal` | 6 | done (see addendum above) |
+| M-06 progress width | 5, 7 | done |
+| M-07 / M-08 scroll → state | 7 | done |
+| M-09 hero choreography | 7, 8 | done |
+| M-11 / A-06 counters | 4 | done |
+| M-12 / A-05 sticky `backdrop-filter` | 13, 16 | done |
+| M-13 dead CSS | 5 | done |
+| M-14 / M-15 runtime | 3 | done |
+| A-01 skeleton | 5, 16 | done |
+| A-02 / A-03 / A-04 | 16 | done |
+| C-01 mic meter | 4 | done |
+| C-02 `useMeeting` | 17 | done |
+| C-03 poll bars | 17 | done |
+
+Task 15 (an optional WebGL hero enhancement) was measured and deliberately not built — see
+`docs/MOTION_PERFORMANCE_REPORT.md` for why. Every other task, including the two checks added this
+task (the sitewide 360px reflow assertion and the full-site axe sweep, both of which found and
+fixed a real bug — see the report), is done and verified by `npm run lint/typecheck/test
+--workspaces`, `npm run build --workspace @learnthrive/web`, and `npm run test:e2e` for both the
+`@learnthrive/web` and `@learnthrive/classroom` workspaces.
