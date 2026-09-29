@@ -4,8 +4,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { BodyClass } from "@/components/BodyClass";
 import { MaskedText } from "@/components/motion/primitives/MaskedText";
+import { PointerDepth } from "@/components/motion/primitives/PointerDepth";
 import { Reveal } from "@/components/motion/primitives/Reveal";
 import { SceneShell } from "@/components/motion/primitives/SceneShell";
+import { CinematicBackdrop } from "@/components/motion/primitives/CinematicBackdrop";
 import { SectionHandoff } from "@/components/motion/primitives/SectionHandoff";
 import { Marquee } from "@/components/Marquee";
 import { StatCounter } from "@/components/StatCounter";
@@ -358,14 +360,22 @@ export default function HomePage() {
           </h2>
         </Reveal>
         <div className={styles.testimonialsGrid}>
-          {testimonials.slice(0, 3).map((testimonial, i) => (
-            <Reveal variant="soft" key={testimonial.attribution} delay={i * 0.09}>
-              <figure className={styles.testimonialCard}>
+          {testimonials.slice(0, 3).map((testimonial, i) => {
+            const featured = i === 1;
+            const figure = (
+              <figure
+                className={`${styles.testimonialCard} ${featured ? styles.testimonialCardFeatured : styles.testimonialCardSide}`}
+              >
                 <blockquote className={styles.testimonialQuote}>{testimonial.quote}</blockquote>
                 <figcaption className={styles.testimonialAttribution}>{testimonial.attribution}</figcaption>
               </figure>
-            </Reveal>
-          ))}
+            );
+            return (
+              <Reveal variant="soft" key={testimonial.attribution} delay={i * 0.09}>
+                {featured ? <PointerDepth>{figure}</PointerDepth> : figure}
+              </Reveal>
+            );
+          })}
         </div>
       </section>
 
@@ -394,8 +404,12 @@ export default function HomePage() {
       <SectionHandoff from="cream" to="navy" />
 
       {/* ── Closing CTA ───────────────────────────────────
-          plan12.md task 3's narrative closer; task 10 owns the full cinematic build. */}
+          plan12.md task 3's narrative closer, built out in task 10: a large cinematic closing
+          scene, the learning-path motif converging toward the primary action. */}
       <SceneShell tone="navy" intensity="flagship" id="closing-cta">
+        <CinematicBackdrop lightChildren={<div className={styles.closingCtaGlow} aria-hidden="true" />}>
+          <div className={styles.closingCtaGlow} aria-hidden="true" />
+        </CinematicBackdrop>
         <div className={styles.closingCta}>
           {/* plan12.md task 5: the site's recurring "sequential stages, spatially connected"
               language, converging here — the same dot-and-line device as the homepage's How It
@@ -410,6 +424,7 @@ export default function HomePage() {
               </li>
             ))}
           </ol>
+          <span className={styles.closingSpineConverge} aria-hidden="true" />
           <p className={styles.closingCtaEyebrow}>Ready when you are</p>
           <MaskedText>
             <h2 className={styles.closingCtaTitle}>Let&apos;s find the right tutor for your child.</h2>
