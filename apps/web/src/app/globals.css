@@ -1906,6 +1906,12 @@ ol {
   list-style: none;
 }
 
+/* plan12.md task 15's anti-generic audit: this shared border+top-accent+radius recipe used to also
+   carry --shadow-sm, making these cards read as a straight repeat of .feature-card just above them
+   (the support grid) rather than the coverage section's own waypoint-along-a-path idea (the drawn
+   PathTrack/Milestone this section already renders through maths/11-plus/science). No shadow keeps
+   these flatter than the lifted, gradient-backed support cards — a deliberate, cheap differentiator
+   rather than a new component, applied once here so it benefits every subject landing page. */
 .subject-pathway-card {
   position: relative;
   min-width: 0;
@@ -1915,7 +1921,6 @@ ol {
   border-top: 3px solid var(--subject-accent);
   border-radius: var(--radius-md);
   background: var(--colour-white);
-  box-shadow: var(--shadow-sm);
 }
 
 /* plan11.md task 10's per-subject "world" motifs (SubjectWorld.tsx): a drawn path + milestone dots
@@ -2461,6 +2466,10 @@ ol {
   height: 1.05rem;
 }
 
+/* plan12.md task 15's anti-generic audit: this page already has two other bordered surfaces (the
+   hero's .contact-mini-card and the form's own .enquiry-form, framed further still by Task 12's
+   corner brackets) — dropping this sidebar's own lift-shadow keeps its navy panel + green top
+   accent (a real echo of the hero above it) without making it read as a third competing card. */
 .booking-sidebar {
   position: sticky;
   top: 7rem;
@@ -2468,7 +2477,6 @@ ol {
   border-top: 4px solid var(--colour-green-600);
   border-radius: var(--radius-lg);
   background: var(--colour-navy-900);
-  box-shadow: 0 18px 42px rgb(9 29 49 / 15%);
   color: #d5e2e8;
 }
 

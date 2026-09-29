@@ -21,7 +21,7 @@ export function ElevenPlusMotif() {
 
   return (
     <div ref={ref as React.RefObject<HTMLDivElement>} style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
-      <PathTrack progress={smoothProgress} active={active} />
+      <PathTrack progress={smoothProgress} active={active} dashed />
     </div>
   );
 }

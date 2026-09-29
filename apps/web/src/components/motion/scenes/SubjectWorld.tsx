@@ -56,7 +56,7 @@ export function SubjectWorld({ subject, kind }: SubjectWorldProps) {
         className="subject-pathway-grid"
         aria-label={`${subject.title} ${subject.coverage.itemLabel === "Priority" ? "priorities" : "stages"}`}
       >
-        {showPath ? <PathTrack progress={smoothProgress} active={active} /> : null}
+        {showPath ? <PathTrack progress={smoothProgress} active={active} dashed={kind === "11-plus"} /> : null}
         {subject.coverage.items.map((item, index) => (
           <li className="subject-pathway-card" key={item.title}>
             {showPath ? (
@@ -89,11 +89,37 @@ export function SubjectWorld({ subject, kind }: SubjectWorldProps) {
  * `/subjects` derives each subject's windowed progress from the shared context first
  * (`useSubjectWindowProgress`) and passes that into these same components instead.
  */
-export function PathTrack({ progress, active }: { progress: MotionValue<number>; active: boolean }) {
+export function PathTrack({
+  progress,
+  active,
+  dashed = false,
+}: {
+  progress: MotionValue<number>;
+  active: boolean;
+  /** plan12.md task 15's anti-generic audit: maths and 11-plus share this exact component (both
+      "a drawn line + timed dots" per this file's own top comment), so a solid line reads as maths's
+      "graph curve" reused rather than 11-plus's own "dashed route" from its hero (SubjectHeroMotif's
+      RouteMilestones). Only the static guide line below gets the dash — framer-motion's `pathLength`
+      style on the drawn `m.line` computes its own stroke-dasharray/dashoffset internally to animate
+      the draw, so a static strokeDasharray prop there gets silently overwritten every frame; the
+      guide line has no such conflict. `vectorEffect="non-scaling-stroke"` means the dash length is
+      in screen pixels, unaffected by this SVG's own 100x2 viewBox scale. */
+  dashed?: boolean;
+}) {
   const pathLength = useTransform(progress, [0, 1], active ? [0, 1] : [1, 1]);
   return (
     <svg className="subject-world-track" viewBox="0 0 100 2" preserveAspectRatio="none" aria-hidden="true">
-      <line x1="0" y1="1" x2="100" y2="1" stroke="var(--subject-accent)" strokeWidth="0.35" opacity="0.25" vectorEffect="non-scaling-stroke" />
+      <line
+        x1="0"
+        y1="1"
+        x2="100"
+        y2="1"
+        stroke="var(--subject-accent)"
+        strokeWidth="0.35"
+        opacity="0.25"
+        vectorEffect="non-scaling-stroke"
+        strokeDasharray={dashed ? "7 6" : undefined}
+      />
       <m.line
         x1="0"
         y1="1"

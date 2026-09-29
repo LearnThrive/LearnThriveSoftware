@@ -65,3 +65,34 @@ for (const { path, heading } of SUBJECT_ROUTES) {
     });
   });
 }
+
+// plan12.md task 15's anti-generic audit: /11-plus-tuition's coverage section reused maths's exact
+// PathTrack line, differing only by accent colour — the route's one scroll-linked visual device was
+// a straight copy, not something specific to 11-plus. Fixed by threading a `dashed` prop through so
+// 11-plus's line matches its own hero's dashed "route" language (SubjectHeroMotif's RouteMilestones)
+// instead of maths's solid "curve" line.
+test.describe('subject coverage card composition (task 15)', () => {
+  test('11-plus has a dashed coverage guide line; maths has a solid one', async ({ page }) => {
+    // The static background guide line (not the scroll-drawn one, which framer-motion's own
+    // pathLength implementation controls via its own dynamic stroke-dasharray — see
+    // SubjectWorld.tsx's PathTrack comment).
+    await page.goto('/11-plus-tuition');
+    const elevenPlusLine = page.locator('.subject-world-track line').first();
+    await expect(elevenPlusLine).toHaveAttribute('stroke-dasharray', '7 6');
+
+    await page.goto('/maths-tuition');
+    const mathsLine = page.locator('.subject-world-track line').first();
+    const mathsDash = await mathsLine.getAttribute('stroke-dasharray');
+    expect(mathsDash).toBeNull();
+  });
+
+  test('coverage cards have no lift-shadow, unlike the support grid above them', async ({ page }) => {
+    await page.goto('/maths-tuition');
+    const coverageCard = page.locator('.subject-pathway-card').first();
+    await coverageCard.scrollIntoViewIfNeeded();
+    await expect(coverageCard).toHaveCSS('box-shadow', 'none');
+    const supportCard = page.locator('.subject-benefit-grid .feature-card').first();
+    const supportShadow = await supportCard.evaluate((el) => getComputedStyle(el).boxShadow);
+    expect(supportShadow).not.toBe('none');
+  });
+});
