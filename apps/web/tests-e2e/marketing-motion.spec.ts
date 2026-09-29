@@ -240,7 +240,16 @@ test.describe('reveals on real pages', () => {
   // found /subjects and /about at ~900-1000 ms (against ~200 ms before) and /contact, /faq at ~870 ms
   // for exactly this reason. The first reveal on each of these pages is the first-screen content, so
   // it must be the explicit opt-out; reveals further down are where the choreography belongs.
-  for (const route of ['/subjects', '/about', '/contact', '/faq']) {
+  for (const route of [
+    '/subjects',
+    '/about',
+    '/contact',
+    '/faq',
+    '/maths-tuition',
+    '/english-tuition',
+    '/science-tuition',
+    '/11-plus-tuition',
+  ]) {
     test(`${route}: the first block after the hero is never held back by a reveal`, async ({ request }) => {
       const html = await (await request.get(route)).text();
       const first = html.match(/data-reveal="(\w+)"/)?.[1];
