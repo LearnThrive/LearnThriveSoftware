@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ViewTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { BodyClass } from "@/components/BodyClass";
@@ -220,12 +221,23 @@ export default function HomePage() {
                   </div>
                 </div>
                 <div className={styles.subjectCardBody}>
-                  <div
-                    className={styles.subjectCardIcon}
-                    style={{ color: SUBJECT_ACCENT[subject.subject], background: `${SUBJECT_ACCENT[subject.subject]}14` }}
-                  >
-                    <SubjectIcon subject={subject.subject} />
-                  </div>
+                  {/* plan11.md task 14's prototype subject-card -> subject-page transition: the
+                      icon badge is the one element with a real counterpart on the destination
+                      page (SubjectLandingPage.tsx's .subject-landing-hero-card__icon) — the card's
+                      own photo has no equivalent there (that page's hero uses an icon, not a
+                      photo), so naming the photo would never form a pair. Matched by slug (the
+                      same "maths-tuition" string both sides derive their name from) so the browser
+                      morphs this one badge across the navigation; everything else does its normal
+                      enter animation. No extra props needed — the guide's own Step 1 is explicit
+                      that the morph works without any. */}
+                  <ViewTransition name={`subject-icon-${subject.slug}`}>
+                    <div
+                      className={styles.subjectCardIcon}
+                      style={{ color: SUBJECT_ACCENT[subject.subject], background: `${SUBJECT_ACCENT[subject.subject]}14` }}
+                    >
+                      <SubjectIcon subject={subject.subject} />
+                    </div>
+                  </ViewTransition>
                   <h3>{subject.title}</h3>
                   <p>{subject.description}</p>
                   <span className={styles.subjectCardLink}>{subject.range} <span className={styles.subjectCardArrow} aria-hidden="true">&rarr;</span></span>

@@ -3641,6 +3641,17 @@ ol {
 
 }
 
+/* plan11.md task 14: React's <ViewTransition> ((public)/page.tsx, SubjectLandingPage.tsx) drives
+   the browser's native View Transitions API, whose ::view-transition-* pseudo-elements are NOT
+   matched by a plain `*` selector — the catch-all reduced-motion rule below never reaches them, so
+   they need their own rule. Exactly the CSS Next's own view-transitions guide gives for this. */
+::view-transition {
+  /* The transition's own overlay captures pointer events while it plays, which would otherwise
+     make whatever the visitor clicks next briefly unresponsive — the same actionability failure
+     class docs/DESIGN_SYSTEM.md's reverted page-fade caused, so this is not optional. */
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
@@ -3653,6 +3664,13 @@ ol {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
   }
 
   .button::before {

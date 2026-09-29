@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ViewTransition } from "react";
 import { ButtonLink } from "@/components/ButtonLink";
 import { Container } from "@/components/Container";
 import { CtaSection } from "@/components/CtaSection";
@@ -53,9 +54,15 @@ export function SubjectLandingPage({ subject }: SubjectLandingPageProps) {
         }
         aside={
           <div className="subject-landing-hero-card">
-            <span className="subject-landing-hero-card__icon">
-              <Icon name={subject.icon} />
-            </span>
+            {/* plan11.md task 14's prototype transition — the other half of the pair in
+                (public)/page.tsx's subjectCards; see that file's comment. subject.path (e.g.
+                "/maths-tuition") is this config's own name for the same route the homepage card's
+                slug field spells without the leading slash, so both sides always agree. */}
+            <ViewTransition name={`subject-icon-${subject.path.slice(1)}`}>
+              <span className="subject-landing-hero-card__icon">
+                <Icon name={subject.icon} />
+              </span>
+            </ViewTransition>
             <span className="subject-landing-hero-card__label">
               {subject.hero.noteLabel}
             </span>
