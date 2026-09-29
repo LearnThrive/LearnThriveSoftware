@@ -1017,9 +1017,14 @@
   padding: 64px 40px;
 }
 
+/* plan12.md task 10: "central quote may settle forward; neighbours can remain partially visible" —
+   an asymmetric composition instead of three equal cards, not a real carousel (no autoplay, no
+   scroll-jacking is the task's own explicit rule). The centre item is simply bigger and fully
+   opaque; the two either side read as present but secondary. */
 .testimonialsGrid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: 0.86fr 1.16fr 0.86fr;
+  align-items: center;
   gap: 20px;
 }
 
@@ -1031,11 +1036,29 @@
   box-shadow: var(--shadow-sm);
 }
 
+.testimonialCardFeatured {
+  padding: 36px 32px;
+  box-shadow: var(--shadow-md, 0 20px 44px -24px rgba(20, 49, 82, 0.3));
+}
+
+/* No opacity reduction on the side cards: axe caught that this dropped .testimonialAttribution's
+   text below AA contrast (the same class of bug docs/MOTION_PERFORMANCE_AUDIT.md's M-05 addendum
+   and this plan's own earlier .howStepPending fix both hit) — the size/shadow/padding difference
+   from .testimonialCardFeatured already reads as "settles forward" without touching real text. */
+.testimonialCardSide {
+  box-shadow: none;
+}
+
 .testimonialQuote {
   margin: 0 0 16px;
   font-size: 15px;
   line-height: 1.6;
   color: var(--lt-ink);
+}
+
+.testimonialCardFeatured .testimonialQuote {
+  font-size: 18px;
+  line-height: 1.55;
 }
 
 .testimonialQuote::before {
@@ -1104,9 +1127,36 @@
    completes instead of just stopping after the enquiry form — task 10 replaces the content, not
    the section's place in the story. */
 .closingCta {
+  position: relative;
   text-align: center;
   max-width: 760px;
   margin: 0 auto;
+}
+
+/* plan12.md task 10: a large cinematic closing scene — a soft, static glow (same "no filter, no
+   perpetual animation" shape as the hero's own .heroGlow, M-01's fix) rather than the spine motif
+   alone carrying the whole moment. */
+.closingCtaGlow {
+  position: absolute;
+  left: 50%;
+  top: -10%;
+  width: 640px;
+  height: 640px;
+  margin-left: -320px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(7, 95, 82, 0.16) calc(100% - 30px), rgba(7, 95, 82, 0) 100%);
+  pointer-events: none;
+}
+
+/* The learning-path motif "converging into the final action": a short line from the spine straight
+   down to the headline that follows it — the same idea as the drawn connectors elsewhere on the
+   site, reduced to its simplest form for a moment this brief. */
+.closingSpineConverge {
+  display: block;
+  width: 1px;
+  height: 28px;
+  margin: 0 auto 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0));
 }
 
 /* plan12.md task 5: the recurring "sequential stages" device (dot + connecting line), horizontal
