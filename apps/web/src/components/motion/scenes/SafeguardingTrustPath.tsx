@@ -1,10 +1,8 @@
 "use client";
 
-import * as m from "framer-motion/m";
-import { useTransform } from "framer-motion";
 import type { RefObject } from "react";
-import { useScene } from "@/lib/motion/scroll";
-import { useMotionCapabilities } from "@/lib/motion/capabilities";
+import { ScrollProgressPath } from "@/components/motion/primitives/ScrollProgressPath";
+import { useDiscreteProgress, useScene } from "@/lib/motion/scroll";
 
 /**
  * plan11.md task 11's safeguarding checklist: "Use verified content only. Build fuller scroll/path
@@ -14,6 +12,11 @@ import { useMotionCapabilities } from "@/lib/motion/capabilities";
  * That file's own comment is worth repeating here: this is deliberately a shorter, plainer pipeline
  * than a more elaborate one might use, because a thorough hiring process and a DBS check are the
  * only two things actually confirmed for this site.
+ *
+ * plan12.md task 5: the drawn line now shares its actual drawing code with `LearningPathScene.tsx`
+ * (both call `ScrollProgressPath` instead of each keeping a near-identical inline SVG), and stages
+ * the scroll position hasn't reached yet read as pending — the same "recurring visual device"
+ * treatment, not two independently-evolving copies of it.
  *
  * A vertical drawn line + four stage rows, the same "connector between sequential items" shape as
  * LearningPathScene.tsx on the homepage, adapted for a legal page's plain prose column instead of a
@@ -26,34 +29,29 @@ const STAGES = ["Tutor applies", "Hiring process", "DBS check", "Approved to tea
 
 export function SafeguardingTrustPath() {
   const { ref, smoothProgress } = useScene(["start 0.85", "end 0.55"]);
-  const { scrollChoreography } = useMotionCapabilities();
-  const pathLength = useTransform(smoothProgress, [0, 1], scrollChoreography ? [0, 1] : [1, 1]);
+  const activeIndex = useDiscreteProgress(smoothProgress, STAGES.length);
 
   return (
     <div ref={ref as RefObject<HTMLDivElement>} className="safeguarding-trust-path" aria-hidden="true">
       <div className="safeguarding-trust-path-track">
-        <svg
-          className="safeguarding-trust-path-svg"
+        <ScrollProgressPath
+          progress={smoothProgress}
+          d="M1 0 L1 100"
           viewBox="0 0 2 100"
           preserveAspectRatio="none"
-        >
-          <line x1="1" y1="0" x2="1" y2="100" stroke="var(--colour-border)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-          <m.line
-            x1="1"
-            y1="0"
-            x2="1"
-            y2="100"
-            stroke="var(--colour-green-600)"
-            strokeWidth="2"
-            strokeDasharray="5 6"
-            vectorEffect="non-scaling-stroke"
-            style={{ pathLength }}
-          />
-        </svg>
+          stroke="var(--colour-green-600)"
+          trackStroke="var(--colour-border)"
+          strokeWidth={2}
+          dashArray="5 6"
+          className="safeguarding-trust-path-svg"
+        />
       </div>
       <ol className="safeguarding-trust-path-list">
-        {STAGES.map((stage) => (
-          <li key={stage} className="safeguarding-trust-path-item">
+        {STAGES.map((stage, i) => (
+          <li
+            key={stage}
+            className={`safeguarding-trust-path-item${i > activeIndex ? " safeguarding-trust-path-item--pending" : ""}`}
+          >
             {stage}
           </li>
         ))}

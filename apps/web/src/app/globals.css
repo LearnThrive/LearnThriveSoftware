@@ -2875,6 +2875,16 @@ ol {
   height: 10px;
   border-radius: 50%;
   background: var(--colour-green-600);
+  transition: background 0.3s ease;
+}
+
+/* plan12.md task 5: a stage the scroll position hasn't reached yet, matching home.module.css's
+   .howStepNumberPending — the same recurring visual device, the same treatment. Only the
+   decorative dot's colour changes; the stage's own text stays at full contrast throughout (an
+   opacity reduction here previously failed axe's color-contrast check — --colour-ink on this
+   background has no margin to spend). */
+.safeguarding-trust-path-item--pending::before {
+  background: var(--colour-border);
 }
 
 .safeguarding-trust-path-item:last-child {

@@ -223,21 +223,7 @@ export default function HomePage() {
         <Reveal variant="soft" delay={0.12}>
           <p className={styles.eyebrow}>How it works</p>
           <h2 className={styles.howTitle}>Four steps, no obligation</h2>
-          <LearningPathScene>
-            <div className={styles.howSteps}>
-              {howSteps.map((step, i) => (
-                <div key={step.title} className={styles.howStep}>
-                  <span className={`${styles.howStepNumber} ${step.last ? styles.howStepNumberNavy : styles.howStepNumberGreen}`}>
-                    {i + 1}
-                  </span>
-                  <div className={styles.howStepContent}>
-                    <h4 className={styles.howStepTitle}>{step.title}</h4>
-                    <p className={styles.howStepText}>{step.text}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </LearningPathScene>
+          <LearningPathScene steps={howSteps} />
         </Reveal>
       </section>
 
@@ -411,6 +397,19 @@ export default function HomePage() {
           plan12.md task 3's narrative closer; task 10 owns the full cinematic build. */}
       <SceneShell tone="navy" intensity="flagship" id="closing-cta">
         <div className={styles.closingCta}>
+          {/* plan12.md task 5: the site's recurring "sequential stages, spatially connected"
+              language, converging here — the same dot-and-line device as the homepage's How It
+              Works path and the safeguarding trust path, echoed once more as the story closes.
+              Static rather than scroll-linked: a closing summary, not another scene to scroll
+              through. */}
+          <ol className={styles.closingSpine} aria-hidden="true">
+            {["Match", "Learn", "Understand", "Progress"].map((stage) => (
+              <li key={stage} className={styles.closingSpineItem}>
+                <span className={styles.closingSpineDot} />
+                {stage}
+              </li>
+            ))}
+          </ol>
           <p className={styles.closingCtaEyebrow}>Ready when you are</p>
           <MaskedText>
             <h2 className={styles.closingCtaTitle}>Let&apos;s find the right tutor for your child.</h2>
