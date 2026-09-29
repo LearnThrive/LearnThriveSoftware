@@ -55,7 +55,9 @@ export function FilterTabs({ basePath, param, current, options }: {
     <nav className="filter-tabs" aria-label="Filter" ref={navRef}>
       <span
         className={`filter-tabs__indicator ${indicator ? "is-visible" : ""}`}
-        style={indicator ? { transform: `translateX(${indicator.left}px)`, width: `${indicator.width}px` } : undefined}
+        // plan11.md task 16 (audit A-02): scaleX on a 1px-wide base (app-components.css) instead
+        // of setting `width` directly, so resizing the indicator never touches layout.
+        style={indicator ? { transform: `translateX(${indicator.left}px) scaleX(${indicator.width})` } : undefined}
         aria-hidden="true"
       />
       {options.map((option) => {

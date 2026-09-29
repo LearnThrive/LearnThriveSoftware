@@ -113,12 +113,16 @@
    more than one line (where "sliding" stops meaning anything), the indicator hides itself
    (opacity 0) and the ordinary coloured border under the active tab is what actually shows. */
 .filter-tabs { position: relative; }
+/* plan11.md task 16 (audit finding A-02): was width: ${px}px from React, a layout property
+   re-laying out itself out on every tab change. A 1px base width scaled by transform to the
+   measured pixel width (scaleX(148) on a 1px element renders at 148px) gets the same visual
+   result entirely through transform, alongside the translateX that already positioned it. */
 .filter-tabs__indicator {
-  position: absolute; bottom: -1px; height: 2px;
+  position: absolute; bottom: -1px; left: 0; width: 1px; height: 2px;
   background: var(--app-accent);
   opacity: 0;
-  transition: transform var(--duration-standard) var(--ease-smooth), width var(--duration-standard) var(--ease-smooth),
-    opacity var(--duration-fast) var(--app-ease);
+  transform-origin: left;
+  transition: transform var(--duration-standard) var(--ease-smooth), opacity var(--duration-fast) var(--app-ease);
 }
 .filter-tabs__indicator.is-visible { opacity: 1; }
 

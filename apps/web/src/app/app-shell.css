@@ -231,13 +231,18 @@
 
 .app-main { display: flex; flex-direction: column; min-width: 0; }
 
+/* plan11.md task 16 (audit A-05): was a translucent background with backdrop-filter: blur(10px)
+   at all times — a sticky element with a backdrop blur re-samples and re-blurs whatever scrolls
+   beneath it every frame. The audit's own verdict: "the authenticated app is 'precise UI motion
+   only'; an opaque topbar loses almost nothing and cannot cost anything on scroll" — unlike the
+   marketing header (plan11.md task 13), there's no airy/compact two-state need here, just a plain
+   opaque bar. */
 .app-topbar {
   position: sticky; top: 0; z-index: 20;
   display: flex; align-items: center; gap: var(--space-2);
   height: var(--app-topbar-height);
   padding: 0 var(--space-5);
-  background: rgb(255 255 255 / 86%);
-  backdrop-filter: blur(10px);
+  background: var(--app-surface);
   border-bottom: 1px solid var(--app-border);
 }
 
@@ -463,11 +468,27 @@
 /* The clickable-card standard (plan8 section 83): a 1-2px lift and a stronger shadow on hover,
    a small press-in on click — visibly more than a static card gets (the base .card never moves),
    which is what tells a stat tile apart from an inert one at a glance rather than only on hover. */
+/* plan11.md task 16 (audit A-03): the hover shadow no longer interpolates box-shadow directly —
+   same "::after crossfades a pre-drawn shadow's opacity" technique as .founderCard/.levelCard on
+   the marketing site. Focus-visible keeps its own direct box-shadow: a keyboard focus ring is a
+   deliberate, infrequent action, not the "many tiles repainting under a hovering pointer" cost
+   this finding was about, so it doesn't need the same treatment. */
 .stat-tile--link {
-  transition: border-color var(--duration-fast) var(--app-ease), box-shadow var(--duration-fast) var(--app-ease),
-    transform var(--duration-fast) var(--app-ease);
+  position: relative;
+  transition: border-color var(--duration-fast) var(--app-ease), transform var(--duration-fast) var(--app-ease);
 }
-.stat-tile--link:hover { border-color: var(--app-accent); box-shadow: var(--app-shadow); transform: translateY(-2px); }
+.stat-tile--link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: var(--app-shadow);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-fast) var(--app-ease);
+}
+.stat-tile--link:hover { border-color: var(--app-accent); transform: translateY(-2px); }
+.stat-tile--link:hover::after { opacity: 1; }
 .stat-tile--link:active { transform: translateY(-1px) scale(0.99); transition-duration: var(--duration-instant); }
 .stat-tile--link:focus-visible { outline: none; box-shadow: var(--app-focus-ring); }
 .stat-tile__value { font-family: var(--font-heading); font-size: 1.75rem; font-weight: 700; color: var(--app-ink); line-height: 1.1; }
