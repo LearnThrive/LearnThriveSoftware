@@ -55,12 +55,6 @@
   box-shadow: var(--shadow-sm);
 }
 
-.mockCardDark {
-  background: var(--lt-navy);
-  border-color: var(--lt-navy);
-  color: #fff;
-}
-
 .mockCardLabel {
   font-family: var(--lt-font-mono);
   font-size: 10.5px;
@@ -70,10 +64,6 @@
   margin-bottom: 8px;
 }
 
-.mockCardDark .mockCardLabel {
-  color: #8ed2ad;
-}
-
 .mockCardTitle {
   font-family: var(--lt-font-heading);
   font-weight: 700;
@@ -81,18 +71,10 @@
   color: var(--lt-navy);
 }
 
-.mockCardDark .mockCardTitle {
-  color: #fff;
-}
-
 .mockCardSub {
   margin-top: 4px;
   font-size: 13.5px;
   color: var(--lt-text);
-}
-
-.mockCardDark .mockCardSub {
-  color: rgba(255, 255, 255, 0.72);
 }
 
 .mockCardBody {
@@ -105,6 +87,7 @@
 .mockCardMeta {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 8px;
 }
 
@@ -132,14 +115,19 @@
   gap: 10px;
 }
 
+/* plan13.md task 1 (Brian's feedback): the outer Student card is white like Parent/Tutor now, so
+   the navy/green brand accents that used to colour the whole card live here instead — the
+   participant tiles in navy, the shared whiteboard in green, both solid on white rather than
+   translucent-on-navy (which only read against the dark card this replaces). */
 .mockTile {
   flex: 1;
   padding: 18px 0;
   text-align: center;
   border-radius: 0.6rem;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--lt-navy);
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.85);
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.88);
 }
 
 .mockBoard {
@@ -147,8 +135,9 @@
   padding: 18px 0;
   text-align: center;
   border-radius: 0.6rem;
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--lt-green-dark);
   font-size: 13px;
+  font-weight: 600;
   color: #fff;
 }
 

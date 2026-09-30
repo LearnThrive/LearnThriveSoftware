@@ -46,7 +46,7 @@ function ParentPanel() {
 function StudentPanel() {
   return (
     <div className={styles.panelGrid}>
-      <div className={`${styles.mockCard} ${styles.mockCardDark}`}>
+      <div className={styles.mockCard}>
         <div className={styles.mockCardLabel}>Live lesson</div>
         <div className={styles.mockLessonRow}>
           <span className={styles.mockTile}>Tutor</span>
