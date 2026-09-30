@@ -23,8 +23,8 @@
 
 .grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 60px;
+  grid-template-columns: 11fr 9fr;
+  gap: 52px;
   max-width: 1240px;
   margin: 0 auto;
   align-items: start;
@@ -35,22 +35,37 @@
   top: 100px;
 }
 
+/* plan13.md task 2: a fixed 420px box left a huge empty navy void below a small mock card on
+   taller viewports. Scaling with the viewport (capped both ends) keeps the stage feeling
+   intentionally populated instead of a fixed island in variable empty space. The restrained
+   dot grid is the "background grid/path" the task calls for — static, not animated, so it never
+   touches Plan 11's no-permanent-blur/filter-animation guard. */
 .stage {
   position: relative;
-  height: 420px;
+  height: clamp(460px, 60vh, 640px);
   border-radius: 1.5rem;
-  background: rgba(255, 255, 255, 0.04);
+  background:
+    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.05) 1px, transparent 0) 0 0 / 26px 26px,
+    rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.1);
   overflow: hidden;
 }
 
 /* plan12.md task 8: a persistent "device" chrome — sits in the margin above .stageInner's own
    28px inset, so it never competes with .stageLabel for the same corner. Never re-rendered across
-   scene changes (it lives outside the AnimatePresence swap), reinforcing "one continuous surface". */
+   scene changes (it lives outside the AnimatePresence swap), reinforcing "one continuous surface".
+   plan13.md task 2 adds the lesson-context label on the same row, spanning the full stage width. */
 .stageChrome {
   position: absolute;
   top: 13px;
   left: 18px;
+  right: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.stageChromeDots {
   display: flex;
   gap: 5px;
 }
@@ -62,12 +77,41 @@
   background: rgba(255, 255, 255, 0.18);
 }
 
+.stageContext {
+  font-family: var(--lt-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.72);
+}
+
 .stageInner {
   position: absolute;
   inset: 28px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
+}
+
+.stageParticipants {
+  display: flex;
+  gap: 16px;
+}
+
+.stageParticipant {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.stageParticipantDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #8ed2ad;
 }
 
 .stageLabel {
@@ -76,6 +120,17 @@
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: #8ed2ad;
+}
+
+/* The AnimatePresence swap area: flex:1 absorbs the height .stage gained above, and
+   justify-content centres each scene's content within it instead of leaving it pinned to the
+   top with dead space below — the actual fix for the "floating in a void" feeling. */
+.stageVisual {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 0;
 }
 
 .stageProgress {
@@ -103,51 +158,51 @@
 
 .mockRow {
   display: flex;
-  gap: 10px;
+  gap: 12px;
 }
 
 .mockTile {
   flex: 1;
-  padding: 16px 0;
+  padding: 30px 0;
   text-align: center;
-  border-radius: 0.6rem;
+  border-radius: 0.7rem;
   background: rgba(255, 255, 255, 0.08);
-  font-size: 12.5px;
+  font-size: 14px;
   color: rgba(255, 255, 255, 0.85);
 }
 
 .mockCard {
-  padding: 18px;
-  border-radius: 0.8rem;
+  padding: 26px;
+  border-radius: 0.9rem;
   background: rgba(255, 255, 255, 0.9);
   color: var(--lt-navy);
 }
 
 .mockCardLabel {
   font-family: var(--lt-font-mono);
-  font-size: 10px;
+  font-size: 10.5px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--lt-green-dark);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .mockCardTitle {
   font-family: var(--lt-font-heading);
   font-weight: 700;
-  font-size: 16px;
+  font-size: 19px;
 }
 
 .mockPillRow {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .mockPill {
-  padding: 4px 10px;
+  padding: 6px 12px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 600;
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
@@ -163,8 +218,11 @@
   flex-direction: column;
 }
 
+/* plan13.md task 2: 62vh/40vh left dead scroll between beats once the stage itself carries more
+   visual weight (above). Tightened, not collapsed — six beats still get room to be read before the
+   next scene threshold fires. */
 .beat {
-  min-height: 62vh;
+  min-height: 56vh;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -172,7 +230,7 @@
 }
 
 .beat:last-child {
-  min-height: 40vh;
+  min-height: 34vh;
 }
 
 .beatNumber {
@@ -214,7 +272,7 @@
   }
 
   .stage {
-    height: 320px;
+    height: 360px;
   }
 
   .beat {
