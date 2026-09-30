@@ -16,41 +16,46 @@ const MESSAGES = {
 
 // plan13.md task 11.6: unlike the enquiry route, this endpoint had no rate limiting at all —
 // scrypt's own cost slows a single guess but does nothing against many parallel/automated ones.
-// Keyed by ip:email (account lockout), not ip alone: an IP-only bucket means every login attempt
-// from behind the same NAT/proxy/missing-x-forwarded-for shares one counter regardless of which
-// account is targeted — a handful of people (or this suite's own tests, which share one "unknown"
-// fallback locally) trying *different* accounts would lock each other out. Per-account-per-source
-// is the standard pattern: it still stops credential-stuffing of any one target account, without
-// that collateral lockout. Same in-memory sliding-window shape as
+// Counts only FAILED attempts (standard account-lockout semantics), not every request: an
+// earlier version counted every attempt including successes, and broke the full e2e suite —
+// dozens of unrelated test files each log in with *correct* seeded-account credentials as their
+// own setup step, and that legitimate traffic alone exceeded the limit long before any real
+// brute-force behaviour would. Counting failures only means a string of correct logins never
+// depletes the bucket, while repeated wrong-password guesses against one account still trip it.
+// Keyed by ip:email (account lockout), not ip alone: an IP-only bucket would share one counter
+// across every account behind the same NAT/proxy/missing-x-forwarded-for, locking out unrelated
+// accounts' logins. Same in-memory sliding-window shape as
 // apps/web/src/app/api/enquiry/route.ts's isRateLimited (this is a single-instance prototype
 // backend; a real deployment needs a shared store).
 const RATE_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-const RATE_MAX = 5; // max login attempts per window per ip:email
+const RATE_MAX = 5; // max FAILED login attempts per window per ip:email
 
-const hits = new Map<string, number[]>();
+const failures = new Map<string, number[]>();
 
 function isRateLimited(key: string): boolean {
   const now = Date.now();
-  const timestamps = hits.get(key) ?? [];
-  const recent = timestamps.filter((t) => now - t < RATE_WINDOW_MS);
+  const recent = (failures.get(key) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
+  return recent.length >= RATE_MAX;
+}
 
-  if (recent.length >= RATE_MAX) {
-    hits.set(key, recent);
-    return true;
-  }
-
+function recordFailure(key: string): void {
+  const now = Date.now();
+  const recent = (failures.get(key) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
   recent.push(now);
-  hits.set(key, recent);
-  return false;
+  failures.set(key, recent);
+}
+
+function clearFailures(key: string): void {
+  failures.delete(key);
 }
 
 // Prune stale entries every 10 minutes to avoid unbounded growth.
 setInterval(() => {
   const cutoff = Date.now() - RATE_WINDOW_MS;
-  for (const [key, timestamps] of hits) {
+  for (const [key, timestamps] of failures) {
     const fresh = timestamps.filter((t) => t > cutoff);
-    if (fresh.length === 0) hits.delete(key);
-    else hits.set(key, fresh);
+    if (fresh.length === 0) failures.delete(key);
+    else failures.set(key, fresh);
   }
 }, 10 * 60 * 1000).unref?.();
 
@@ -76,12 +81,14 @@ export async function POST(request: Request) {
 
   const result = await getAuthProvider().verifyCredentials(body.email, body.password);
   if (!result.ok) {
+    recordFailure(rateLimitKey);
     // 401 either way — the message differs (account_disabled vs invalid_credentials) but the
     // status code doesn't, so a network tab alone can't distinguish "wrong password" from
     // "account exists but disabled" without reading the body.
     return Response.json({ error: MESSAGES[result.reason] }, { status: 401 });
   }
 
+  clearFailures(rateLimitKey);
   await createSession(result.user, body.rememberMe === true);
   return Response.json({ user: result.user });
 }
