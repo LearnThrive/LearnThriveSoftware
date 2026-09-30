@@ -48,3 +48,6 @@ graphify-out/
 plan11.md
 PLAN11_HANDOFF.md
 plan12.md
+
+# Storybook's own production build output (`npm run build-storybook`) — regenerable, not source.
+apps/web/storybook-static/

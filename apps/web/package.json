@@ -15,7 +15,9 @@
     "test": "node --test tests/*.test.mjs",
     "test:browser": "node scripts/browser-check.mjs",
     "test:e2e": "playwright test",
-    "profile:motion": "node scripts/profile-motion.mjs"
+    "profile:motion": "node scripts/profile-motion.mjs",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.1",
@@ -38,11 +40,16 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
+    "@storybook/addon-a11y": "^10.6.1",
+    "@storybook/addon-docs": "^10.6.1",
+    "@storybook/nextjs-vite": "^10.6.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "axe-core": "4.13.0",
     "eslint-config-next": "16.3.2",
     "playwright-core": "1.62.1",
-    "typescript": "^6.0.3"
+    "storybook": "^10.6.1",
+    "typescript": "^6.0.3",
+    "vite": "^7.3.6"
   }
 }
