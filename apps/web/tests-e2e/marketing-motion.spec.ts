@@ -869,13 +869,14 @@ test.describe('FAQ active category nav (task 12)', () => {
   test('the pills for the category row currently in view are marked active as the page scrolls', async ({ page }) => {
     // The category grid is two columns (faq.module.css's .faqSections), so a row holds two
     // categories at the same vertical position — getting-started/lessons in row 1, then
-    // subjects-and-stages/working-together in row 2.
+    // subjects-and-stages/sen-support in row 2 (plan13.md task 4 inserted sen-support right after
+    // subjects-and-stages, which pushed working-together into row 3 alongside legal-and-compliance).
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/faq');
     const gettingStarted = page.locator('a[href="#getting-started"]');
     const lessons = page.locator('a[href="#lessons"]');
     const subjects = page.locator('a[href="#subjects-and-stages"]');
-    const working = page.locator('a[href="#working-together"]');
+    const sen = page.locator('a[href="#sen-support"]');
     // Before any scroll (the hero still fills the screen) nothing has entered the observer's band
     // yet — getting-started's aria-current comes only from the component's initial placeholder.
     await expect(gettingStarted).toHaveAttribute('aria-current', 'true');
@@ -901,7 +902,7 @@ test.describe('FAQ active category nav (task 12)', () => {
       window.scrollTo({ top: prevBottom - bandTop + 5, behavior: 'instant' });
     });
     await expect.poll(() => subjects.getAttribute('aria-current')).toBe('true');
-    await expect.poll(() => working.getAttribute('aria-current')).toBe('true');
+    await expect.poll(() => sen.getAttribute('aria-current')).toBe('true');
     await expect.poll(() => gettingStarted.getAttribute('aria-current')).toBeNull();
     await expect.poll(() => lessons.getAttribute('aria-current')).toBeNull();
   });
