@@ -9,7 +9,7 @@ export const legalFaqs: readonly FaqItem[] = [
     answer: (
       <>
         <p>{"LearnThrive Tuition is operated by "}<strong>{"LearnThrive Tuition Ltd"}</strong>{", a private limited company."}</p>
-        <p><strong>{"Company number:"}</strong>{" 16680738"}<br /><strong>{"Registered office:"}</strong>{" 71–75 Shelton Street, Covent Garden, London, WC2H 9JQ"}<br /><strong>{"Contact email:"}</strong>{" "}<a href="mailto:info@learnthrivetuition.co.uk">{"info@learnthrivetuition.co.uk"}</a><br /><strong>{"Telephone:"}</strong>{" "}<PhoneContacts /></p>
+        <p><strong>{"Company number:"}</strong>{" 16680738"}<br /><strong>{"Registered office:"}</strong>{" 71-75 Shelton Street, Covent Garden, London, United Kingdom, WC2H 9JQ"}<br /><strong>{"Contact email:"}</strong>{" "}<a href="mailto:info@learnthrivetuition.co.uk">{"info@learnthrivetuition.co.uk"}</a><br /><strong>{"Telephone:"}</strong>{" "}<PhoneContacts /></p>
         <p>{"LearnThrive Tuition Ltd acts as the "}<strong>{"data controller"}</strong>{" for personal information processed in connection with the website and tuition services."}</p>
         <p>{"Operational responsibility for privacy and data-protection matters is assigned to "}<strong>{"Abdurrahman Mustafa"}</strong>{", with "}<strong>{"Tahasin Hasan"}</strong>{" acting as the escalation point."}</p>
         <p>{"This does not mean either person is formally appointed as a statutory Data Protection Officer."}</p>
