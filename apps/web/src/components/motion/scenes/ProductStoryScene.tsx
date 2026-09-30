@@ -152,36 +152,57 @@ export function ProductStoryScene() {
             {/* plan12.md task 8: a persistent "device" frame that never itself swaps — only what's
                 inside it changes. Rearrangement within one continuous surface, not a panel being
                 replaced by a different panel, is the whole point of "spatial continuity" this task
-                asks for. */}
+                asks for. plan13.md task 2 extends this frame with a lesson-context label (the
+                subject/level already established in scene 0, not new data) so the stage reads as
+                one continuous lesson throughout, not six unrelated screenshots. */}
             <div className={styles.stageChrome} aria-hidden="true">
-              <span className={styles.stageChromeDot} />
-              <span className={styles.stageChromeDot} />
-              <span className={styles.stageChromeDot} />
+              <span className={styles.stageChromeDots}>
+                <span className={styles.stageChromeDot} />
+                <span className={styles.stageChromeDot} />
+                <span className={styles.stageChromeDot} />
+              </span>
+              <span className={styles.stageContext}>Maths &middot; GCSE</span>
             </div>
             <div className={styles.stageInner}>
+              {/* plan13.md task 2's "persistent student/tutor labels": the same two participants
+                  already named in scene 1's mock video tiles, hoisted into the frame itself so
+                  they're visible across all six states rather than only the one scene that shows
+                  the call. */}
+              <div className={styles.stageParticipants} aria-hidden="true">
+                <span className={styles.stageParticipant}>
+                  <span className={styles.stageParticipantDot} />
+                  Tutor
+                </span>
+                <span className={styles.stageParticipant}>
+                  <span className={styles.stageParticipantDot} />
+                  Student
+                </span>
+              </div>
               <span className={styles.stageLabel}>{scene.label}</span>
-              <AnimatePresence mode="wait">
-                {/* initial/exit stay the same {opacity, y, scale} shape regardless of reduceMotion —
-                    conditionally passing undefined instead caused a real hydration mismatch:
-                    Motion bakes the initial values into the SSR'd HTML, and reduceMotion itself
-                    can read differently between server (always false) and a real reduced-
-                    motion client's first render, so the two disagreed on whether opacity/
-                    transform should be present at all. The duration alone (already branched)
-                    is enough to make this read as near-instant under reduced motion.
-                    y/scale (not just opacity) is task 8's "spatial continuity" over a flat
-                    crossfade — the arriving scene visibly advances into the frame, the leaving one
-                    recedes, rather than one simply dissolving into the other in place. */}
-                <m.div
-                  key={activeScene}
-                  initial={{ opacity: 0, y: 22, scale: 0.96 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -22, scale: 0.96 }}
-                  transition={{ duration: reduceMotion ? 0.08 : 0.32 }}
-                  style={{ display: "flex", flexDirection: "column", gap: 12 }}
-                >
-                  <SceneVisual index={activeScene} />
-                </m.div>
-              </AnimatePresence>
+              <div className={styles.stageVisual}>
+                <AnimatePresence mode="wait">
+                  {/* initial/exit stay the same {opacity, y, scale} shape regardless of reduceMotion —
+                      conditionally passing undefined instead caused a real hydration mismatch:
+                      Motion bakes the initial values into the SSR'd HTML, and reduceMotion itself
+                      can read differently between server (always false) and a real reduced-
+                      motion client's first render, so the two disagreed on whether opacity/
+                      transform should be present at all. The duration alone (already branched)
+                      is enough to make this read as near-instant under reduced motion.
+                      y/scale (not just opacity) is task 8's "spatial continuity" over a flat
+                      crossfade — the arriving scene visibly advances into the frame, the leaving one
+                      recedes, rather than one simply dissolving into the other in place. */}
+                  <m.div
+                    key={activeScene}
+                    initial={{ opacity: 0, y: 22, scale: 0.96 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -22, scale: 0.96 }}
+                    transition={{ duration: reduceMotion ? 0.08 : 0.32 }}
+                    style={{ display: "flex", flexDirection: "column", gap: 12 }}
+                  >
+                    <SceneVisual index={activeScene} />
+                  </m.div>
+                </AnimatePresence>
+              </div>
               <div className={styles.stageProgress}>
                 {SCENES.map((s, i) => (
                   <span key={s.label} className={styles.stageDot}>
