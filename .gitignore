@@ -28,7 +28,7 @@ next-env.d.ts
 apps/web/shots/
 plan8.md
 plan9.md
-
+plan13.md
 # Ad-hoc screenshot/debug QA scripts written during the plan9/plan10 passes (reduced-motion
 # capture, targeted region/tab screenshots, hydration-mismatch checks) — useful locally for
 # continued QA but scratch, not designed tooling; apps/web/shot.mjs itself (no hyphen) is the
