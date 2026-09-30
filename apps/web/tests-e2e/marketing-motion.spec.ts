@@ -848,6 +848,30 @@ test.describe('book page composition (task 12)', () => {
     const html = (await (await request.get('/book')).text()).replace(/<!-- -->/g, '');
     expect(html).toContain('A few details to get started');
   });
+
+  // plan13.md task 5: the "Helpful to include" checklist /contact already showed was missing from
+  // /book specifically (docs/PLAN13_LEGACY_MARKETING_PARITY.md) — both pages now share one list
+  // (site.ts's enquiryGuidanceItems) so they can't drift apart.
+  test('the "Helpful to include" checklist is present in the sidebar, matching /contact\'s guidance', async ({ page }) => {
+    await page.goto('/book');
+    const checklist = page.locator('.booking-checklist');
+    await expect(checklist.getByText('Helpful to include')).toBeVisible();
+    const items = checklist.locator('ul li');
+    await expect(items).toHaveCount(4);
+    await expect(items.nth(0)).toHaveText(/year group/);
+    await expect(items.nth(3)).toHaveText(/preferred way to be contacted/);
+  });
+
+  test('the checklist and "what happens next" steps both render legibly, not squeezed into a narrow column', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/book');
+    const item = page.locator('.booking-checklist li').first();
+    const box = await item.boundingBox();
+    expect(box).not.toBeNull();
+    // A regression guard: .booking-sidebar li's pre-existing 2rem/1fr grid rule silently squeezed
+    // this list's plain-text <li>s into a ~32px column before .booking-checklist li reset it.
+    expect(box!.width).toBeGreaterThan(150);
+  });
 });
 
 test.describe('contact page composition (task 12)', () => {

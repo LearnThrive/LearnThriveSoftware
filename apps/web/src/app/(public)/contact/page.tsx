@@ -6,7 +6,7 @@ import { PointerDepth } from "@/components/motion/primitives/PointerDepth";
 import { MaskedText } from "@/components/motion/primitives/MaskedText";
 import { SectionHandoff } from "@/components/motion/primitives/SectionHandoff";
 import { createMetadata } from "@/lib/metadata";
-import { siteConfig } from "@/lib/site";
+import { enquiryGuidanceItems, siteConfig } from "@/lib/site";
 import styles from "./contact.module.css";
 
 export const metadata: Metadata = createMetadata({
@@ -15,13 +15,6 @@ export const metadata: Metadata = createMetadata({
     "Contact LearnThrive Tuition by email or phone, or begin a free consultation enquiry for personalised online tuition.",
   path: "/contact",
 });
-
-const guidanceItems = [
-  "The student’s current year group",
-  "The subject or subjects they need help with",
-  "Any current challenges or near-term goals",
-  "Your preferred way to be contacted",
-];
 
 export default function ContactPage() {
   return (
@@ -123,7 +116,7 @@ export default function ContactPage() {
           </Reveal>
           <Reveal variant="soft" delay={0.12}>
             <ul className={styles.checkList}>
-              {guidanceItems.map((item) => (
+              {enquiryGuidanceItems.map((item) => (
                 <li key={item} className={styles.checkItem}>
                   <svg
                     className={styles.checkIcon}
