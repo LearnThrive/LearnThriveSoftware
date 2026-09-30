@@ -122,6 +122,47 @@ export const faqSections: readonly FaqSection[] = [
     ],
   },
   {
+    id: "sen-support",
+    title: "Special educational needs",
+    intro:
+      "How LearnThrive's tuition can be adapted for learners with additional needs. LearnThrive is a tuition service and does not provide specialist diagnostic or therapeutic support.",
+    items: [
+      {
+        id: "sen-support-available",
+        question: "Does LearnThrive support learners with special educational needs?",
+        answer:
+          "Yes. LearnThrive’s personalised approach means that tuition can be adapted to support learners with additional needs. The focus remains on building understanding and confidence at a pace that suits the individual learner.",
+        link: { href: "/book", label: "Discuss the learner’s needs" },
+      },
+      {
+        id: "sen-lesson-adaptations",
+        question: "How are lessons adapted for learners with additional needs?",
+        answer:
+          "Lessons can be adjusted in a number of ways, including pacing, the use of visual aids and breaking tasks into smaller, manageable steps. The aim is to present material in a way that works for the individual learner and supports their progress.",
+      },
+      {
+        id: "sen-diagnosis-required",
+        question: "Does the learner need a formal diagnosis to receive support?",
+        answer:
+          "No. A formal diagnosis is not required. LearnThrive aims to tailor tuition to every student, whether or not they have a diagnosed condition. If you feel the learner would benefit from an adapted approach, that can be discussed during the initial consultation.",
+        link: { href: "/book", label: "Start a free consultation enquiry" },
+      },
+      {
+        id: "sen-sharing-information",
+        question: "Can parents share information about the learner's needs before lessons begin?",
+        answer:
+          "Yes, and it is highly recommended. When making an enquiry, parents are encouraged to share any details about the learner’s needs, what works well for them and any support already in place. This helps ensure that tuition is informed and adapted from the very first lesson.",
+        link: { href: "/book", label: "Make an enquiry" },
+      },
+      {
+        id: "sen-changing-approach",
+        question: "Can the approach change if something is not working?",
+        answer:
+          "Yes. Adaptations are not fixed. If a particular strategy is not helping the learner, the approach can be adjusted. The aim is to find what works best for the individual, and that may develop over time as their needs and confidence change.",
+      },
+    ],
+  },
+  {
     id: "working-together",
     title: "Working together",
     intro: "How tuition can stay connected to the learner’s priorities and family communication.",
