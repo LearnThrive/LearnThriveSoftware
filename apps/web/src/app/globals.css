@@ -2521,6 +2521,49 @@ ol {
   font-size: 0.86rem;
 }
 
+/* plan13.md task 5: the same "what to include" guidance /contact shows, surfaced on /book too —
+   reuses .booking-sidebar's existing green accent (matches li > span above) rather than the
+   light-background .check-list class, which isn't legible against this sidebar's navy fill. */
+.booking-checklist {
+  margin-top: 1.4rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid rgb(255 255 255 / 13%);
+}
+
+.booking-checklist strong {
+  color: var(--colour-white);
+}
+
+.booking-checklist ul {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.7rem;
+  list-style: none;
+}
+
+.booking-checklist li {
+  /* .booking-sidebar li above (the numbered "What happens next?" steps) sets display: grid with
+     a 2rem/1fr column split, plus its own padding-block/border-bottom, for its own icon+text
+     children — a bare li selector, so it also matches these plain-text items. Every property it
+     sets is reset here explicitly rather than left to depend on that unrelated rule's leftovers. */
+  display: block;
+  position: relative;
+  padding-block: 0.5rem;
+  padding-left: 1.5rem;
+  border-bottom: none;
+  color: #b8cbd4;
+  font-size: 0.86rem;
+}
+
+.booking-checklist li::before {
+  position: absolute;
+  top: 0.05rem;
+  left: 0;
+  color: #91d5b0;
+  content: "✓";
+  font-weight: 900;
+}
+
 .honesty-note {
   margin-top: 1.4rem;
   padding: 1rem;

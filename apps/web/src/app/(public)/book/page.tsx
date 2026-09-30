@@ -6,7 +6,7 @@ import { PhoneContacts } from "@/components/PhoneContacts";
 import { CinematicBackdrop } from "@/components/motion/primitives/CinematicBackdrop";
 import { MaskedText } from "@/components/motion/primitives/MaskedText";
 import { createMetadata } from "@/lib/metadata";
-import { siteConfig } from "@/lib/site";
+import { enquiryGuidanceItems, siteConfig } from "@/lib/site";
 
 export const metadata: Metadata = createMetadata({
   title: "Book a Free Consultation",
@@ -78,6 +78,14 @@ export default function BookPage() {
                 </div>
               </li>
             </ol>
+            <div className="booking-checklist">
+              <strong>Helpful to include</strong>
+              <ul>
+                {enquiryGuidanceItems.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
             <div className="honesty-note">
               <strong>What happens to your details?</strong>
               <p>

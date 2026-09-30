@@ -719,3 +719,14 @@ export const subjectOptions = [
   "More than one subject",
   "Not sure yet",
 ] as const;
+
+/**
+ * plan13.md task 5: shared so /contact and /book show the same guidance rather than two
+ * hand-maintained copies that could drift apart.
+ */
+export const enquiryGuidanceItems = [
+  "The student’s current year group",
+  "The subject or subjects they need help with",
+  "Any current challenges or near-term goals",
+  "Your preferred way to be contacted",
+] as const;
