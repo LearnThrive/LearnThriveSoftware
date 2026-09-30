@@ -1,12 +1,40 @@
 # Design system
 
 Plan6 section 102. A practical reference for the authenticated product's design system — what
-exists, where it lives, and the rule each part is there to enforce. Not a component storybook;
-read the components themselves (`apps/web/src/components/ui/`) for exact props.
+exists, where it lives, and the rule each part is there to enforce. Read the components
+themselves (`apps/web/src/components/ui/`) for exact props — or browse them live in Storybook,
+below.
 
 The **marketing site** (`apps/web/src/app/(public)/**`) is a separate, pre-existing design system
 (`app/globals.css`, `home.module.css` and friends) and isn't covered here — this document is
 specifically about the authenticated product behind `/dashboard`.
+
+## Storybook
+
+The reusable primitives below (`components/ui/`, `components/shell/`) each have stories at
+`apps/web/.storybook/`, using `@storybook/nextjs-vite` — not the deprecated webpack-based
+`@storybook/nextjs`. Run from `apps/web`:
+
+```bash
+npm run storybook          # dev server, http://localhost:6006
+npm run build-storybook    # static build, output to storybook-static/ (gitignored)
+```
+
+Storybook is a *view* onto this same design system, not a second one: `.storybook/preview.tsx`
+imports the product's real stylesheets in their real order (`globals.css`, `app-shell.css`,
+`app-components.css`, `app-dashboard.css`, `app-auth.css`) and the same three `next/font/google`
+fonts `app/layout.tsx` loads, and every story renders the actual exported component — no
+Storybook-only reimplementation of a component's markup or styling. The one thing `.storybook/`
+adds of its own is a small, clearly-scoped layout reset (`preview.css`'s `.sb-app-context`): it
+resets `.app-shell`'s sidebar-grid `display`/`min-height` — meaningless around one isolated
+component preview — while keeping every actual design-system rule that selector carries (the
+`--app-*` focus ring, heading-colour inheritance). No colour, token, spacing or font value is
+redefined anywhere in `.storybook/`.
+
+Buttons (`.btn`/`.btn--primary`/`.btn--secondary`/`.btn--ghost`/`.btn--danger`) have their own
+story (`UI/Buttons`) despite having no `<Button>` component to bind to — every button in the app
+is a plain `<button className="btn btn--...">`, so the story documents that class vocabulary
+directly rather than inventing a wrapper component Storybook-only.
 
 ## Stylesheets
 

@@ -1,0 +1,18 @@
+/*
+ * Storybook-only layout reset. `.app-shell` in production is the sidebar grid — its own CSS sets
+ * `display: grid; grid-template-columns: <sidebar> 1fr; min-height: 100vh; background:
+ * var(--app-canvas)`, which has no meaning around one isolated component preview and would leave
+ * every story sitting in a phantom sidebar column.
+ *
+ * `.sb-app-context` (applied alongside `.app-shell` by the root decorator in preview.tsx) resets
+ * `display`/`min-height` only, and re-states `background` with the same `--app-canvas` token
+ * `.app-shell` already uses — no new colour, no different token, just keeping it since resetting
+ * `display` to `block` drops the grid but not the token reference. The point is inheriting
+ * app-shell.css's real selectors (`.app-shell :focus-visible`, `.app-shell :where(h1, h2, h3)`)
+ * without inheriting its sidebar-grid layout.
+ */
+.sb-app-context.app-shell {
+  display: block;
+  min-height: 0;
+  background: var(--app-canvas);
+}
