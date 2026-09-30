@@ -300,8 +300,12 @@ export default function HomePage() {
         </Reveal>
       </section>
 
+      <SectionHandoff from="cream" to="navy" />
+
       {/* ── Inside a LearnThrive lesson (sticky story) ── */}
       <ProductStoryScene />
+
+      <SectionHandoff from="navy" to="cream" />
 
       {/* ── Levels ────────────────────────────────────── */}
       <section id="levels" className={styles.levelsSection}>
@@ -381,17 +385,21 @@ export default function HomePage() {
 
       {/* ── Enquiry ───────────────────────────────────── */}
       <section id="enquire" className={styles.enquirySection}>
-        <Reveal variant="soft">
-          <div className={styles.enquiryCopy}>
-            <p className={styles.eyebrow}>Get in touch today</p>
-            <h2>Let&apos;s help your child thrive</h2>
-            <p className={styles.enquiryCopyLead}>
-              Tell us a little about your child and what they need.
-              We&apos;ll reply within 24 hours &mdash; no pressure, no obligation.
-            </p>
-            <div className={styles.enquiryContact}>
-              <a href={`mailto:${siteConfig.email}`}>{siteConfig.email}</a>
-            </div>
+        {/* plan13.md task 6: sticky positioning (home.module.css's .enquiryCopy) only works when
+            applied to this element itself — a transform on an *ancestor* (which Reveal's own m.div
+            carries once its animate-in finishes) establishes a new containing block that breaks
+            sticky on any descendant. Passing the class through Reveal's own className, rather than
+            nesting another div inside it, keeps the sticky element and the transformed element the
+            same element, where the two are fine together. */}
+        <Reveal variant="soft" className={styles.enquiryCopy}>
+          <p className={styles.eyebrow}>Get in touch today</p>
+          <h2>Let&apos;s help your child thrive</h2>
+          <p className={styles.enquiryCopyLead}>
+            Tell us a little about your child and what they need.
+            We&apos;ll reply within 24 hours &mdash; no pressure, no obligation.
+          </p>
+          <div className={styles.enquiryContact}>
+            <a href={`mailto:${siteConfig.email}`}>{siteConfig.email}</a>
           </div>
         </Reveal>
         <Reveal variant="soft" delay={0.12}>

@@ -1093,6 +1093,15 @@
   align-items: start;
 }
 
+/* plan13.md task 6: with align-items: start, the copy column (~190px) sat pinned to the top of a
+   ~1060px form column, leaving most of the section as dead cream space beside it. Sticky — the
+   same fix .booking-sidebar already uses next to /book's own tall column — keeps it in view as
+   the form scrolls past, instead of trying to pad short copy out to match a much taller form. */
+.enquiryCopy {
+  position: sticky;
+  top: 7.5rem;
+}
+
 .enquiryCopy h2 {
   font-size: 40px !important;
   line-height: 1.03 !important;
@@ -1296,6 +1305,11 @@
 
   .enquirySection {
     grid-template-columns: 1fr;
+  }
+
+  .enquiryCopy {
+    position: relative;
+    top: 0;
   }
 
   .levelRow {
