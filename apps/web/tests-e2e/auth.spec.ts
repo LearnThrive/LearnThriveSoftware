@@ -129,3 +129,38 @@ test('empty submission shows a validation message without hitting the server', a
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.locator('.alert--error')).toContainText('Enter your email and password');
 });
+
+// plan13.md task 11.6: /api/auth/login had no rate limiting at all — scrypt's own cost slows one
+// guess but does nothing against many automated ones. Keyed by ip:email (account lockout) rather
+// than ip alone, so repeated guesses against one target account are throttled without locking out
+// unrelated logins that happen to share a source (the same reason this test uses a dedicated
+// throwaway email, never reused by another test in this file, to stay isolated from the rest of
+// this suite's own login traffic against the shared seeded accounts).
+test('repeated failed logins against the same account are rate-limited (429), not tried forever', async ({ request }) => {
+  const email = 'rate-limit-guard@learnthrive.dev';
+  let lastStatus = 200;
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const response = await request.post('/api/auth/login', {
+      data: { email, password: 'wrong-password' },
+    });
+    lastStatus = response.status();
+    if (lastStatus === 429) break;
+  }
+  expect(lastStatus).toBe(429);
+});
+
+test('rate limiting is per-account, not per-source — a different account from the same client is unaffected', async ({ request }) => {
+  const floodedEmail = 'rate-limit-guard-2@learnthrive.dev';
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    await request.post('/api/auth/login', { data: { email: floodedEmail, password: 'wrong-password' } });
+  }
+  const flooded = await request.post('/api/auth/login', { data: { email: floodedEmail, password: 'wrong-password' } });
+  expect(flooded.status()).toBe(429);
+
+  // A real account, never targeted above, from the same client — must not be caught in the blast
+  // radius of the other account's lockout.
+  const unrelated = await request.post('/api/auth/login', {
+    data: { email: ACCOUNTS.tutor.email, password: ACCOUNTS.tutor.password },
+  });
+  expect(unrelated.status()).toBe(200);
+});
