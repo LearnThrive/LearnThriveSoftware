@@ -16,8 +16,21 @@ import type { ParticipantRole } from "./protocol";
 // never defaulted). See docs/PRODUCTION_GAPS.md.
 const DEV_FALLBACK_SECRET = "learnthrive-dev-only-classroom-join-secret-not-for-production";
 
+// plan13.md task 11.2: the fallback above is checked into source, so it can never be a real secret
+// once a production deployment exists to read this file. Fail closed rather than silently signing
+// and accepting join tokens anyone could forge — a production process without the real secret set
+// should refuse to run, not quietly degrade to a publicly-known one.
 function secret(): string {
-  return process.env.CLASSROOM_JOIN_SECRET || DEV_FALLBACK_SECRET;
+  const configured = process.env.CLASSROOM_JOIN_SECRET;
+  if (configured) return configured;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "CLASSROOM_JOIN_SECRET is not set. Refusing to sign/verify classroom join tokens with the " +
+        "dev-only fallback secret in production — set CLASSROOM_JOIN_SECRET in both apps/web and " +
+        "apps/realtime's environment.",
+    );
+  }
+  return DEV_FALLBACK_SECRET;
 }
 
 export interface ClassroomJoinTokenPayload {
