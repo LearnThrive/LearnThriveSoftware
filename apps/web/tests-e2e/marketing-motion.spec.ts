@@ -954,3 +954,35 @@ test.describe('route handoffs (task 14)', () => {
     expect(backgroundImage).not.toBe('none');
   });
 });
+
+// ── Homepage visual refinement pass (plan13.md task 6) ──────────────────────────────────────
+
+test.describe('homepage refinement (task 6)', () => {
+  test('the ProductTabs <-> ProductStory boundary has its own handoffs, not a hard tone cut', async ({ page }) => {
+    await page.goto('/');
+    // Pre-existing: navy hero -> cream "why" (task 14), cream enquiry -> navy closing CTA.
+    // Added here: cream platform -> navy lesson-story, and navy lesson-story -> cream levels.
+    await expect(page.locator('[data-section-handoff]')).toHaveCount(4);
+  });
+
+  test('the enquiry section\'s copy column stays in view (sticky) instead of a tall empty gap beside the form', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+    const copy = page.locator('#enquire [class$="enquiryCopy"]');
+    await copy.scrollIntoViewIfNeeded();
+    await expect(copy).toHaveCSS('position', 'sticky');
+    // home.module.css sets top: 7.5rem (120px at the default root size) — after scrolling further
+    // into the section, the sticky element should hold near that offset rather than scroll away.
+    await page.mouse.wheel(0, 500);
+    const top = () => copy.evaluate((el) => el.getBoundingClientRect().top);
+    await expect.poll(top).toBeGreaterThan(100);
+    await expect.poll(top).toBeLessThan(140);
+  });
+
+  test('mobile: the enquiry section stacks normally, sticky positioning off', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+    const copy = page.locator('#enquire [class$="enquiryCopy"]');
+    await expect(copy).toHaveCSS('position', 'relative');
+  });
+});
