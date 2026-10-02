@@ -192,6 +192,11 @@
    an opacity change on an already-painted layer is compositor work (plan11.md task 5). The colour
    comes from --lift-shadow so each variant only has to name its shadow. */
 .founderCard {
+  /* A query container: the card lays itself out by its OWN width, not the window's. In the
+     two-column band just above 1100px each card is ~500px wide, which has no room for a portrait
+     beside a readable bio — so it stacks there, and goes side by side whenever there is room
+     (card >= 35rem), in the two-column desktop layout and the single-column tablet one alike. */
+  container-type: inline-size;
   position: relative;
   background: #fff;
   border: 1px solid var(--lt-border);
@@ -222,24 +227,40 @@
 
 .founderCardInner {
   display: flex;
+  flex-direction: column;
   gap: 22px;
   padding: 26px;
   align-items: flex-start;
 }
 
-.founderPortrait {
-  width: 190px;
-  aspect-ratio: 3 / 4;
+@container (min-width: 35rem) {
+  .founderCardInner {
+    flex-direction: row;
+  }
+}
+
+/* The frame is the flex item, so it carries the size: a fixed square (the sources are 320x320,
+   rendered 1:1 so none of the photo is cropped or stretched) that can never be squeezed below
+   its width. 200px is ~1.5x of what a 320px file can honestly hold on a 2x screen — larger would
+   upscale it. The Image fills the frame. */
+.founderPortraitFrame {
+  position: relative;
   flex: none;
-  object-fit: cover;
-  object-position: 50% 28%;
+  width: min(100%, 200px);
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
   border-radius: 16px;
   border: 1px solid var(--lt-border);
   background: #EFE7D6;
 }
 
-.founderPortraitTahasin {
-  object-position: 50% 22%;
+.founderPortrait {
+  object-fit: cover;
+}
+
+.founderBody {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .founderName {
@@ -262,6 +283,7 @@
 }
 
 .founderBio p {
+  max-width: 64ch;
   margin: 0 0 14px;
   font-size: 15.5px;
   line-height: 1.6;
@@ -427,10 +449,6 @@
     grid-template-columns: 1fr;
   }
 
-  .founderPortrait {
-    width: 150px;
-  }
-
   .heroTitle {
     font-size: 38px !important;
   }
@@ -439,17 +457,6 @@
   .foundersTitle,
   .missionTitle {
     font-size: 28px !important;
-  }
-}
-
-@media (max-width: 560px) {
-  .founderCardInner {
-    flex-direction: column;
-  }
-
-  .founderPortrait {
-    width: 100%;
-    aspect-ratio: 4 / 3;
   }
 }
 

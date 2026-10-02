@@ -91,17 +91,16 @@ export default function AboutPage() {
             <PointerDepth>
               <article className={styles.founderCard}>
                 <div className={styles.founderCardInner}>
-                  <FounderPortraitParallax>
-                  <Image
-                    className={styles.founderPortrait}
-                    src="/images/abdurrahman-mustafa.jpg"
-                    alt="Abdurrahman Mustafa, co-founder"
-                    width={190}
-                    height={253}
-                    sizes="(max-width: 560px) 100vw, 190px"
-                  />
+                  <FounderPortraitParallax className={styles.founderPortraitFrame}>
+                    <Image
+                      className={styles.founderPortrait}
+                      src="/images/abdurrahman-mustafa.jpg"
+                      alt="Abdurrahman Mustafa, co-founder"
+                      fill
+                      sizes="200px"
+                    />
                   </FounderPortraitParallax>
-                  <div>
+                  <div className={styles.founderBody}>
                     <div>
                       <h3 className={styles.founderName}>Abdurrahman Mustafa</h3>
                       <div className={styles.founderRole}>Co-founder</div>
@@ -134,17 +133,16 @@ export default function AboutPage() {
             <PointerDepth>
               <article className={styles.founderCard}>
                 <div className={styles.founderCardInner}>
-                  <FounderPortraitParallax>
-                  <Image
-                    className={`${styles.founderPortrait} ${styles.founderPortraitTahasin}`}
-                    src="/images/tahasin-hasan.jpg"
-                    alt="Tahasin Hasan, co-founder"
-                    width={190}
-                    height={253}
-                    sizes="(max-width: 560px) 100vw, 190px"
-                  />
+                  <FounderPortraitParallax className={styles.founderPortraitFrame}>
+                    <Image
+                      className={styles.founderPortrait}
+                      src="/images/tahasin-hasan.jpg"
+                      alt="Tahasin Hasan, co-founder"
+                      fill
+                      sizes="200px"
+                    />
                   </FounderPortraitParallax>
-                  <div>
+                  <div className={styles.founderBody}>
                     <div>
                       <h3 className={styles.founderName}>Tahasin Hasan</h3>
                       <div className={styles.founderRole}>Co-founder</div>

@@ -23,12 +23,18 @@ export function AboutFoundersScene({ children }: { children: ReactNode }) {
   );
 }
 
-export function FounderPortraitParallax({ children }: { children: ReactNode }) {
+/**
+ * `className` goes to the parallax wrapper — the real flex item of the founder card — so the frame
+ * (width, aspect ratio, `flex: none`) is set on the element that is actually laid out. Sizing the
+ * `<Image>` inside it instead leaves the wrapper free to shrink to nothing under the bio column's
+ * pressure (it only had the image's percentage `max-width` to measure itself by).
+ */
+export function FounderPortraitParallax({ children, className }: { children: ReactNode; className?: string }) {
   const sharedProgress = useContext(FoundersProgressContext);
   const fallbackProgress = useMotionValue(0);
   const progress = sharedProgress ?? fallbackProgress;
   return (
-    <ParallaxLayer progress={progress} from={0} to={14}>
+    <ParallaxLayer progress={progress} from={0} to={14} className={className}>
       {children}
     </ParallaxLayer>
   );
