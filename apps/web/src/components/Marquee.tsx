@@ -6,7 +6,18 @@ import styles from "./Marquee.module.css";
 
 interface MarqueeProps {
   items: string[];
+  /** Which way the strip travels: "left" drifts the content leftwards (the default), "right" the other way. */
+  direction?: "left" | "right";
 }
+
+/**
+ * The strip loops by sliding the track exactly half its own width, so each half has to be wider
+ * than the widest screen or an empty gap opens at the edge for part of every cycle. One copy of the
+ * homepage items is only ~930px, which left a blank run on any desktop wider than that. Repeating
+ * the items this many times per half covers screens up to roughly 3500px; Marquee.module.css scales
+ * the animation duration by the same number so the on-screen speed stays what it always was.
+ */
+const REPEATS = 6;
 
 /**
  * A decorative scrolling strip. The scrolling is a pure CSS transform animation, so it costs
@@ -21,9 +32,10 @@ interface MarqueeProps {
  * animation exactly as before. It assumes "on screen" until the observer says otherwise, which
  * means it never starts a page paused and then un-pauses.
  */
-export function Marquee({ items }: MarqueeProps) {
+export function Marquee({ items, direction = "left" }: MarqueeProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const doubled = [...items, ...items];
+  const half = Array.from({ length: REPEATS }, () => items).flat();
+  const looped = [...half, ...half];
 
   useEffect(() => {
     const element = ref.current;
@@ -58,8 +70,8 @@ export function Marquee({ items }: MarqueeProps) {
 
   return (
     <div ref={ref} className={styles.marquee} aria-hidden="true">
-      <div className={styles.track}>
-        {doubled.map((item, i) => (
+      <div className={styles.track} data-direction={direction}>
+        {looped.map((item, i) => (
           <span key={i}>{item}</span>
         ))}
       </div>
