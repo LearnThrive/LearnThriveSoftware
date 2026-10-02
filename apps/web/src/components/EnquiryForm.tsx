@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import * as m from "framer-motion/m";
 import { AnimatePresence, useReducedMotion } from "framer-motion";
@@ -72,6 +72,14 @@ export function EnquiryForm() {
   const errorSummaryRef = useRef<HTMLDivElement>(null);
   const serverErrorRef = useRef<HTMLDivElement>(null);
   const successRef = useRef<HTMLDivElement>(null);
+  // Abuse protection (route.ts, "Abuse protection"): a honeypot a person never sees, and how long the
+  // form was open before it was sent. A second submit while one is in flight is ignored.
+  const [trap, setTrap] = useState("");
+  const openedAt = useRef(0);
+  const submitting = useRef(false);
+  useEffect(() => {
+    openedAt.current = performance.now();
+  }, []);
 
   function updateField(name: FieldName, value: string) {
     setValues((current) => ({ ...current, [name]: value }));
@@ -92,6 +100,7 @@ export function EnquiryForm() {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submitting.current) return;
     const nextErrors = validate(values);
 
     if (Object.keys(nextErrors).length > 0) {
@@ -104,12 +113,13 @@ export function EnquiryForm() {
     setErrors({});
     setStatus("submitting");
     setServerError("");
+    submitting.current = true;
 
     try {
       const response = await fetch("/api/enquiry", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
+        body: JSON.stringify({ ...values, website: trap, elapsedMs: Math.round(performance.now() - openedAt.current) }),
       });
 
       if (response.ok) {
@@ -128,6 +138,8 @@ export function EnquiryForm() {
       setServerError("A network error occurred. Please check your connection and try again.");
       setStatus("error");
       window.requestAnimationFrame(() => serverErrorRef.current?.focus());
+    } finally {
+      submitting.current = false;
     }
   }
 
@@ -205,7 +217,10 @@ export function EnquiryForm() {
           <button
             className="button button--primary"
             type="button"
-            onClick={() => setStatus("idle")}
+            onClick={() => {
+              openedAt.current = performance.now();
+              setStatus("idle");
+            }}
           >
             <span>Send another enquiry</span>
             <svg viewBox="0 0 20 20" aria-hidden="true">
@@ -449,6 +464,20 @@ export function EnquiryForm() {
                 ) : null}
               </div>
             </div>
+          </div>
+
+          {/* Honeypot: out of sight, out of the tab order and out of the accessibility tree. */}
+          <div className="form-trap" aria-hidden="true">
+            <label htmlFor="enquiry-website">Leave this field empty</label>
+            <input
+              id="enquiry-website"
+              name="website"
+              type="text"
+              tabIndex={-1}
+              autoComplete="off"
+              value={trap}
+              onChange={(event) => setTrap(event.target.value)}
+            />
           </div>
 
           <div className="form-actions">

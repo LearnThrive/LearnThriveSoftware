@@ -9,6 +9,7 @@ import { ButtonLink } from "@/components/ButtonLink";
 import { Container } from "@/components/Container";
 import { PaletteTrigger } from "@/components/palette/PaletteTrigger";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { PORTAL_ENABLED } from "@/lib/portal";
 import { navigation } from "@/lib/site";
 
 interface SiteHeaderSession {
@@ -42,6 +43,8 @@ export function SiteHeader() {
   // generated (plan6 section 99). Until it resolves the header shows "Login", which is the right
   // default for the overwhelming majority of marketing-site visitors.
   useEffect(() => {
+    // No portal (production before the signed-in app exists): nothing to ask, and no Login link below.
+    if (!PORTAL_ENABLED) return;
     let cancelled = false;
     fetch("/api/auth/session")
       .then((response) => (response.ok ? response.json() : null))
@@ -129,7 +132,7 @@ export function SiteHeader() {
               Dashboard
               <span className="header-login__who">{session.name.split(" ")[0]}</span>
             </Link>
-          ) : (
+          ) : PORTAL_ENABLED ? (
             <Link
               href="/login"
               className="header-login"
@@ -138,7 +141,7 @@ export function SiteHeader() {
             >
               Login
             </Link>
-          )}
+          ) : null}
           <PaletteTrigger className="header-icon-button" />
           <ThemeToggle variant="cycle" className="header-theme" />
           <ButtonLink href="/book" className="header-cta">

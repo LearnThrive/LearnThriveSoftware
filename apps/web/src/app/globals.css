@@ -2505,6 +2505,16 @@ img[src*="%2Fimages%2F"] {
   outline-offset: var(--focus-offset);
 }
 
+/* The enquiry honeypot (EnquiryForm.tsx): off-screen rather than display:none, which some bots skip. */
+.form-trap {
+  position: absolute;
+  left: -10000px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
 .form-actions {
   display: flex;
   align-items: center;
