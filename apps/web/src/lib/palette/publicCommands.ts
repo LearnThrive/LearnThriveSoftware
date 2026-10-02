@@ -35,6 +35,14 @@ export function buildPublicCommands(): PaletteCommand[] {
     hint: "/safeguarding",
     keywords: ["dbs", "child protection", "safe", "vetting"],
   });
+  commands.push({
+    id: "page:/trust",
+    title: "Trust and policies",
+    group: "Pages",
+    href: "/trust",
+    hint: "/trust",
+    keywords: ["policies", "safeguarding", "privacy", "complaints", "terms", "company"],
+  });
 
   for (const subject of subjects) {
     commands.push({

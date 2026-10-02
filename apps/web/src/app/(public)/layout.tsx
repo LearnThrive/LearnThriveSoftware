@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { MobileEnquiryBar } from "@/components/MobileEnquiryBar";
 import { MotionDebugOverlay } from "@/components/motion/MotionDebugOverlay";
 import { MotionRuntime } from "@/components/motion/MotionRuntime";
 import { NavigationProgress } from "@/components/NavigationProgress";
@@ -30,6 +31,8 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
         {/* A slim branded progress bar for navigations that take longer than ~150ms. */}
         <NavigationProgress />
         <PublicShell>{children}</PublicShell>
+        {/* Phones: a dismissible "Book a free consultation" bar after the first screen. */}
+        <MobileEnquiryBar />
         {/* Smooth scrolling for the marketing site only (full/standard tier, fine pointer; see the
             component). The app, dashboard and classroom layouts do not mount it. */}
         <SmoothScroll />

@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { JsonLd } from "@/components/seo/JsonLd";
-import { breadcrumbData } from "@/lib/structuredData";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { ViewTransition } from "react";
 import { ButtonLink } from "@/components/ButtonLink";
 import { Container } from "@/components/Container";
@@ -44,16 +43,18 @@ const SPOTLIGHT_VARIANT: Record<SubjectLandingSlug, RevealVariant> = {
 export function SubjectLandingPage({ subject }: SubjectLandingPageProps) {
   return (
     <div className={`subject-landing subject-landing--${subject.slug}`}>
-      <JsonLd
-        data={breadcrumbData([
-          { name: "Subjects", path: "/subjects" },
-          { name: `${subject.title} tuition`, path: subject.path },
-        ])}
-      />
       <PageHero
         eyebrow={subject.hero.eyebrow}
         title={subject.hero.title}
         intro={subject.hero.intro}
+        breadcrumb={
+          <Breadcrumbs
+            trail={[
+              { name: "Subjects", path: "/subjects" },
+              { name: `${subject.title} tuition`, path: subject.path },
+            ]}
+          />
+        }
         backdrop={
           <CinematicBackdrop>
             <SubjectHeroMotif slug={subject.slug} />

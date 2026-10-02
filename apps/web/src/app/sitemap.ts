@@ -16,6 +16,7 @@ const sitemapRoutes = [
   "/terms",
   "/tuition-terms",
   "/safeguarding",
+  "/trust",
   "/complaints",
   "/accessibility",
 ];

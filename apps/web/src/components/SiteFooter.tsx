@@ -5,7 +5,7 @@ import { PhoneContacts } from "@/components/PhoneContacts";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Reveal } from "@/components/motion/primitives/Reveal";
 import { PORTAL_ENABLED } from "@/lib/portal";
-import { navigation, siteConfig, subjects } from "@/lib/site";
+import { siteConfig, subjects } from "@/lib/site";
 
 // Kept "Privacy" ahead of the requested Cookies/Website Terms/Tuition Terms/Safeguarding/
 // Complaints/Accessibility row rather than dropping it: EnquiryForm already links to it
@@ -46,23 +46,44 @@ export function SiteFooter() {
               </p>
             </div>
             <div className="footer-column">
-              <h2>Explore</h2>
-              <ul>
-                {navigation.map((item) => (
-                  <li key={item.href}>
-                    <Link href={item.href}>{item.label}</Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="footer-column">
               <h2>Subjects</h2>
               <ul>
+                <li>
+                  <Link href="/subjects">All subjects</Link>
+                </li>
                 {subjects.map((subject) => (
                   <li key={subject.slug}>
                     <Link href={subject.path}>{subject.title}</Link>
                   </li>
                 ))}
+              </ul>
+            </div>
+            <div className="footer-column">
+              <h2>Company</h2>
+              <ul>
+                <li>
+                  <Link href="/">Home</Link>
+                </li>
+                <li>
+                  <Link href="/about">About</Link>
+                </li>
+                <li>
+                  <Link href="/trust">Trust and policies</Link>
+                </li>
+              </ul>
+            </div>
+            <div className="footer-column">
+              <h2>Support</h2>
+              <ul>
+                <li>
+                  <Link href="/faq">FAQ</Link>
+                </li>
+                <li>
+                  <Link href="/book">Book a free consultation</Link>
+                </li>
+                <li>
+                  <Link href="/contact">Contact</Link>
+                </li>
               </ul>
             </div>
             <div className="footer-column footer-contact">

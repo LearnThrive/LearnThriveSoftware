@@ -1578,6 +1578,154 @@ img[src*="%2Fimages%2F"] {
   max-width: 50rem;
 }
 
+/* The visible breadcrumb trail (components/Breadcrumbs.tsx) on a hero's navy ground. */
+.crumbs {
+  margin-bottom: 1.25rem;
+}
+
+.crumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--lt-font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+}
+
+.crumbs li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--fg-on-inverse-soft);
+}
+
+.crumbs li + li::before {
+  content: "/";
+  color: var(--fg-on-inverse-soft);
+  opacity: 0.6;
+}
+
+.crumbs a {
+  color: var(--fg-on-inverse);
+  text-decoration: underline;
+  text-decoration-color: rgb(255 255 255 / 35%);
+  text-underline-offset: 0.2em;
+}
+
+.crumbs a:hover {
+  text-decoration-color: currentColor;
+}
+
+.crumbs [aria-current="page"] {
+  color: var(--fg-on-inverse);
+}
+
+/* The trust hub (/trust): links to existing policy pages, as quiet cards. */
+.trust-hub {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.trust-hub__card {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1.5rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 1rem;
+  background: var(--surface-1);
+  box-shadow: var(--shadow-1);
+  color: var(--fg-ink);
+  text-decoration: none;
+  transition: border-color var(--duration-fast) var(--ease-smooth), box-shadow var(--duration-fast) var(--ease-smooth);
+}
+
+.trust-hub__card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-2);
+}
+
+.trust-hub__title {
+  font-family: var(--lt-font-heading);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--fg-strong);
+}
+
+.trust-hub__text {
+  color: var(--fg-muted);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.trust-hub__go {
+  margin-top: auto;
+  padding-top: 0.5rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--fg-accent);
+}
+
+.trust-hub__go span {
+  display: inline-block;
+  transition: transform var(--duration-fast) var(--ease-smooth);
+}
+
+.trust-hub__card:hover .trust-hub__go span {
+  transform: translateX(3px);
+}
+
+.trust-hub__split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: clamp(2rem, 5vw, 4rem);
+}
+
+.trust-hub__split h2 {
+  margin: 0.4rem 0 1rem;
+}
+
+.trust-hub__split p:not(.eyebrow) {
+  margin: 0 0 1rem;
+  max-width: 38rem;
+}
+
+.trust-hub__split .button-group {
+  margin-top: 1.5rem;
+}
+
+.trust-hub__facts {
+  display: grid;
+  gap: 0.9rem;
+  margin: 1.25rem 0 0;
+}
+
+.trust-hub__facts div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.trust-hub__facts dt {
+  font-family: var(--lt-font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.trust-hub__facts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
 .page-hero .eyebrow {
   color: var(--fg-accent-on-inverse);
 }
@@ -3365,7 +3513,7 @@ img[src*="%2Fimages%2F"] {
 
 .footer-grid {
   display: grid;
-  grid-template-columns: 1.5fr 0.7fr 0.8fr 1.1fr;
+  grid-template-columns: 1.4fr 0.8fr 0.7fr 0.8fr 1.1fr;
   gap: clamp(2rem, 5vw, 5rem);
 }
 
@@ -4185,5 +4333,257 @@ html[data-motion-tier="light"]::view-transition-new(*) {
   .subject-card:hover .subject-card__icon,
   .testimonial-card:hover {
     transform: none !important;
+  }
+}
+
+/* ── Mobile enquiry bar (components/MobileEnquiryBar.tsx) ────────────────────────────────────────
+   Phones only. z-index 80: under the header (100), the mobile menu and its backdrop (90/95) and the
+   command palette (300), over the page. */
+.enquiry-bar {
+  display: none;
+}
+
+@media (max-width: 46rem) {
+  .enquiry-bar {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 80;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.65rem 0.75rem calc(0.65rem + env(safe-area-inset-bottom));
+    border-top: 1px solid rgb(255 255 255 / 14%);
+    background: var(--surface-inverse);
+    box-shadow: 0 -10px 30px -12px rgb(0 0 0 / 40%);
+    color: var(--fg-on-inverse);
+    transform: translateY(110%);
+    transition: transform var(--duration-medium) var(--ease-out);
+    --focus-colour: var(--focus-colour-on-inverse);
+  }
+
+  .enquiry-bar[data-visible="true"] {
+    transform: none;
+  }
+
+  .enquiry-bar__cta {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.75rem;
+    padding: 0 1rem;
+    border-radius: 999px;
+    background: var(--accent-strong);
+    color: var(--on-accent);
+    font-weight: 700;
+    text-decoration: none;
+  }
+
+  .enquiry-bar__dismiss {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border: 0;
+    border-radius: 50%;
+    background: rgb(255 255 255 / 10%);
+    color: var(--fg-on-inverse);
+    cursor: pointer;
+  }
+
+  .enquiry-bar__dismiss svg {
+    width: 1rem;
+    height: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+  }
+}
+
+/* ── Subjects flyout (components/SubjectsFlyout.tsx) ─────────────────────────────────────────────
+   Desktop: a floating card under the "Subjects" link, opened by the chevron button (and by a mouse
+   hovering). Under 59rem (the mobile menu): an inline block in the open menu. */
+.nav-flyout {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.nav-flyout__toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 2.75rem;
+  margin-left: -0.15rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg-strong);
+  cursor: pointer;
+}
+
+.nav-flyout__toggle svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform var(--duration-fast) var(--ease-smooth);
+}
+
+.nav-flyout[data-open="true"] .nav-flyout__toggle svg {
+  transform: rotate(180deg);
+}
+
+.nav-flyout__panel {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 0.4rem);
+  left: 50%;
+  width: min(25rem, 90vw);
+  padding: 0.5rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 1rem;
+  background: var(--surface-1);
+  box-shadow: var(--shadow-3);
+  opacity: 0;
+  transform: translate(-50%, -6px);
+  visibility: hidden;
+  transition: opacity var(--duration-fast) var(--ease-smooth), transform var(--duration-fast) var(--ease-smooth), visibility var(--duration-fast);
+}
+
+/* A bridge over the gap, so moving the mouse from the link to the panel never leaves the hover area. */
+.nav-flyout__panel::before {
+  position: absolute;
+  top: -0.5rem;
+  right: 0;
+  left: 0;
+  height: 0.5rem;
+  content: "";
+}
+
+.nav-flyout[data-open="true"] .nav-flyout__panel {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  visibility: visible;
+}
+
+.nav-flyout__panel ul {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.primary-navigation .nav-flyout__panel a {
+  display: flex;
+  min-height: 0;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.7rem 0.75rem;
+  border: 0;
+  border-radius: 0.7rem;
+  white-space: normal;
+}
+
+.primary-navigation .nav-flyout__panel a::after {
+  display: none;
+}
+
+.primary-navigation .nav-flyout__panel a:hover {
+  background: var(--surface-accent);
+}
+
+.nav-flyout__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.65rem;
+  background: var(--surface-accent);
+  color: var(--fg-accent);
+}
+
+.nav-flyout__icon svg {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+
+.nav-flyout__text {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.nav-flyout__text strong {
+  font-size: 0.92rem;
+  color: var(--fg-strong);
+}
+
+.nav-flyout__text span {
+  color: var(--fg-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.primary-navigation .nav-flyout__panel .nav-flyout__all {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.25rem;
+  padding: 0.7rem 0.75rem;
+  border-top: 1px solid var(--border-subtle);
+  border-radius: 0 0 0.7rem 0.7rem;
+  color: var(--fg-accent);
+  font-size: 0.85rem;
+}
+
+@media (max-width: 59rem) {
+  .nav-flyout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .nav-flyout__toggle {
+    width: 3.25rem;
+    height: 3.25rem;
+    margin: 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .nav-flyout__panel {
+    position: static;
+    display: none;
+    grid-column: 1 / -1;
+    width: auto;
+    padding: 0.25rem 0 0.5rem;
+    border: 0;
+    border-bottom: 1px solid var(--border-subtle);
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    opacity: 1;
+    transform: none;
+    visibility: visible;
+  }
+
+  .nav-flyout__panel::before {
+    display: none;
+  }
+
+  .nav-flyout[data-open="true"] .nav-flyout__panel {
+    display: block;
+    transform: none;
+  }
+
+  .nav-flyout__panel ul {
+    grid-template-columns: 1fr;
   }
 }
