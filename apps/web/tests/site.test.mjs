@@ -198,3 +198,24 @@ test("production images exist and stay within their payload budgets", () => {
     assert.ok(statSync(fullPath).size <= limit, `${path} exceeds ${limit} bytes`);
   }
 });
+
+// plan15 Wave 12: a page that exists but is missing from the sitemap is a page search engines are
+// never told about; the closed-portal notice is the one public folder that must NOT be listed.
+test("every public page folder is in the sitemap, and the portal notice is not", () => {
+  const publicDir = join(appDir, "(public)");
+  const folders = readdirSync(publicDir).filter((name) => statSync(join(publicDir, name)).isDirectory() && existsSync(join(publicDir, name, "page.tsx")));
+  const subjectPaths = [...siteSource.matchAll(/path: "(\/[a-z0-9-]+)"/g)].map((m) => m[1]);
+  const missing = folders
+    .filter((name) => name !== "portal-opening-soon")
+    .filter((name) => !sitemapSource.includes(`"/${name}"`) && !subjectPaths.includes(`/${name}`));
+  assert.deepEqual(missing, [], `public pages missing from sitemap.ts: ${missing.join(", ")}`);
+  assert.ok(folders.includes("portal-opening-soon"));
+  assert.doesNotMatch(sitemapSource, /portal-opening-soon/);
+});
+
+test("robots.ts keeps crawlers out of the app, the API and development tools", () => {
+  const robotsSource = readFileSync(join(appDir, "robots.ts"), "utf8");
+  for (const path of ["/dashboard", "/api/", "/dev", "/login"]) {
+    assert.ok(robotsSource.includes(`"${path}"`), `robots.ts should disallow ${path}`);
+  }
+});

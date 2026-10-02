@@ -18,6 +18,46 @@ const ALLOWED_ORIGINS = new Set(
     .map((o) => o.trim()),
 );
 
+// ── Abuse protection (plan15 Wave 12 section 16.3) ───────────────────────────────────────────────
+// Three cheap layers in front of the email send, none of them visible to a person and none of them a
+// third-party CAPTCHA (that is an owner decision: privacy and cookie implications):
+//   1. a honeypot field that a human never sees or fills (`website`),
+//   2. a minimum time-to-submit measured by the form itself (`elapsedMs`): a person cannot read, fill
+//      and send seven fields in under MIN_FILL_MS, a script can,
+//   3. the per-IP limiter below, plus whatever the host's own firewall adds (docs/DEPLOYMENT.md).
+// A request that trips 1 or 2 gets the SAME success response a real one does, so a bot learns nothing
+// from probing, and nothing is sent. Outside production the elapsed time may be absent (server-to-
+// server callers and this route's own tests never send it); in production its absence is a bot.
+const MIN_FILL_MS = 2500;
+const MAX_FILL_MS = 24 * 60 * 60 * 1000;
+
+/** The same payload twice inside this window is one enquiry (a double click, a retry after a flaky
+ * network): the second gets the same success answer and no second email. Per instance, best effort. */
+const DUPLICATE_WINDOW_MS = 60 * 1000;
+const recentSubmissions = new Map<string, number>();
+
+/**
+ * One structured line per outcome, for the host's log search. Deliberately carries NO personal data:
+ * no name, email, phone, message or IP, only what happened.
+ */
+function logOutcome(outcome: string, reason?: string) {
+  const line = JSON.stringify({ event: "enquiry", outcome, ...(reason ? { reason } : {}) });
+  if (outcome === "sent" || outcome === "duplicate") console.info(line);
+  else console.warn(line);
+}
+
+function looksAutomated(raw: Record<string, unknown>): string | null {
+  if (typeof raw.website === "string" && raw.website.trim() !== "") return "honeypot";
+  const elapsed = raw.elapsedMs;
+  if (elapsed === undefined) return process.env.NODE_ENV === "production" ? "no-timing" : null;
+  if (typeof elapsed !== "number" || !Number.isFinite(elapsed)) return "bad-timing";
+  // The minimum only applies in production: a developer filling the form to test it, or an e2e run
+  // that does not mock the route, is allowed to be fast.
+  if (elapsed < MIN_FILL_MS && process.env.NODE_ENV === "production") return "too-fast";
+  if (elapsed > MAX_FILL_MS) return "bad-timing";
+  return null;
+}
+
 // ── In-memory sliding-window rate limiter ────────────────────────
 const RATE_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const RATE_MAX = 5; // max submissions per window per IP
@@ -47,6 +87,8 @@ setInterval(() => {
     if (fresh.length === 0) hits.delete(ip);
     else hits.set(ip, fresh);
   }
+  const duplicateCutoff = Date.now() - DUPLICATE_WINDOW_MS;
+  for (const [key, at] of recentSubmissions) if (at < duplicateCutoff) recentSubmissions.delete(key);
 }, 10 * 60 * 1000).unref?.();
 
 type EnquiryBody = {
@@ -194,30 +236,54 @@ export async function POST(request: Request) {
     const forwarded = request.headers.get("x-forwarded-for");
     const ip = forwarded?.split(",")[0]?.trim() ?? "unknown";
     if (isRateLimited(ip)) {
+      logOutcome("rate_limited");
       return Response.json(
         { error: "Too many enquiries. Please try again later." },
         { status: 429 },
       );
     }
 
-    const body: unknown = await request.json();
+    const body: unknown = await request.json().catch(() => null);
 
     if (!validateBody(body)) {
+      logOutcome("rejected", "invalid");
       return Response.json(
         { error: "Invalid form data. Please check your answers and try again." },
         { status: 400 },
       );
     }
 
+    const automated = looksAutomated(body as unknown as Record<string, unknown>);
+    if (automated) {
+      logOutcome("silently_dropped", automated);
+      return Response.json({ success: true });
+    }
+
     // Read at request time (not module load) so a missing/blank key never crashes the module
     // and the 503 below is reachable without ever constructing a Resend client or calling out.
+    // In production this FAILS CLOSED on every variable a real send needs: a deploy that forgot the
+    // recipient or the verified sender gets a friendly "email us" message, never a silent send to a
+    // default address or from the shared onboarding@resend.dev sender.
     const apiKey = process.env.RESEND_API_KEY?.trim();
-    if (!apiKey) {
+    const productionMisconfigured =
+      process.env.NODE_ENV === "production" &&
+      (!process.env.ENQUIRY_EMAIL?.trim() || !process.env.RESEND_FROM_EMAIL?.trim());
+    if (!apiKey || productionMisconfigured) {
+      logOutcome("unavailable", !apiKey ? "no-api-key" : "incomplete-production-config");
       return Response.json(
         { error: `Enquiries are not accepting submissions right now. Please email ${RECIPIENT} directly.` },
         { status: 503 },
       );
     }
+
+    const duplicateKey = `${body.email.trim().toLowerCase()}|${body.support.trim()}`;
+    const previous = recentSubmissions.get(duplicateKey);
+    if (previous !== undefined && Date.now() - previous < DUPLICATE_WINDOW_MS) {
+      logOutcome("duplicate");
+      return Response.json({ success: true });
+    }
+    recentSubmissions.set(duplicateKey, Date.now());
+
     const resend = new Resend(apiKey);
     const fromAddress = process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev";
 
@@ -230,6 +296,9 @@ export async function POST(request: Request) {
     });
 
     if (error) {
+      // A failed send must not block the parent's retry as a "duplicate".
+      recentSubmissions.delete(duplicateKey);
+      logOutcome("send_failed", error.name);
       console.error("Resend error:", error);
       return Response.json(
         { error: "We could not send your enquiry right now. Please try again shortly." },
@@ -253,8 +322,10 @@ export async function POST(request: Request) {
       console.error("Auto-reply failed:", err);
     }
 
+    logOutcome("sent");
     return Response.json({ success: true });
   } catch {
+    logOutcome("error", "unhandled");
     return Response.json(
       { error: "Something went wrong. Please try again." },
       { status: 500 },

@@ -15,6 +15,7 @@
     "test": "node --test tests/*.test.mjs",
     "test:browser": "node scripts/browser-check.mjs",
     "test:e2e": "playwright test",
+    "test:prod-smoke": "playwright test -c playwright.prod.config.ts",
     "profile:motion": "node scripts/profile-motion.mjs",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"

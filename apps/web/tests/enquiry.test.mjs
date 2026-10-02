@@ -117,3 +117,122 @@ test("a failed auto-reply does not fail the overall enquiry submission", async (
   assert.deepEqual(await response.json(), { success: true });
   assert.equal(calls, 2);
 });
+
+// ── plan15 Wave 12: abuse protection and fail-closed production config ──────────────────────────
+
+function setEnv(t, name, value) {
+  const previous = process.env[name];
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
+  t.after(() => {
+    if (previous === undefined) delete process.env[name];
+    else process.env[name] = previous;
+  });
+}
+
+function mockResend(t) {
+  const sent = [];
+  t.mock.method(globalThis, "fetch", async (_url, options) => {
+    sent.push(JSON.parse(options.body));
+    return Response.json({ id: "test-email-id" });
+  });
+  return sent;
+}
+
+function productionEnv(t) {
+  setEnv(t, "NODE_ENV", "production");
+  setEnv(t, "RESEND_API_KEY", "re_test_not_a_real_key");
+  setEnv(t, "RESEND_FROM_EMAIL", "enquiries@example.test");
+  setEnv(t, "ENQUIRY_EMAIL", "owner@example.test");
+}
+
+test("a filled honeypot gets the normal success answer and sends nothing", async (t) => {
+  setEnv(t, "RESEND_API_KEY", "re_test_not_a_real_key");
+  const sent = mockResend(t);
+  const { POST } = loadRoute();
+  const response = await POST(request({ ...validEnquiry, website: "https://spam.example" }));
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { success: true });
+  assert.equal(sent.length, 0);
+});
+
+test("in production a submission that arrives too fast, or with no timing at all, is dropped silently", async (t) => {
+  productionEnv(t);
+  const sent = mockResend(t);
+  const { POST } = loadRoute();
+  for (const extra of [{ elapsedMs: 400 }, {}, { elapsedMs: "soon" }]) {
+    const response = await POST(request({ ...validEnquiry, ...extra }));
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { success: true });
+  }
+  assert.equal(sent.length, 0);
+});
+
+test("in production a human-paced submission is sent", async (t) => {
+  productionEnv(t);
+  const sent = mockResend(t);
+  const { POST } = loadRoute();
+  const response = await POST(request({ ...validEnquiry, website: "", elapsedMs: 41000 }));
+  assert.equal(response.status, 200);
+  assert.equal(sent.length, 2);
+  assert.deepEqual(sent[0].to, ["owner@example.test"]);
+  assert.match(sent[0].from, /enquiries@example\.test/);
+});
+
+test("outside production a fast submission is allowed (developers and un-mocked e2e runs)", async (t) => {
+  setEnv(t, "RESEND_API_KEY", "re_test_not_a_real_key");
+  const sent = mockResend(t);
+  const { POST } = loadRoute();
+  const response = await POST(request({ ...validEnquiry, elapsedMs: 50 }));
+  assert.equal(response.status, 200);
+  assert.equal(sent.length, 2);
+});
+
+for (const missing of ["ENQUIRY_EMAIL", "RESEND_FROM_EMAIL"]) {
+  test(`production fails closed when ${missing} is missing`, async (t) => {
+    productionEnv(t);
+    setEnv(t, missing, undefined);
+    t.mock.method(globalThis, "fetch", () => assert.fail("A misconfigured production deploy must not send"));
+    const { POST } = loadRoute();
+    const response = await POST(request({ ...validEnquiry, elapsedMs: 41000 }));
+    assert.equal(response.status, 503);
+    assert.match((await response.json()).error, /Please email \S+@\S+ directly/);
+  });
+}
+
+test("the same enquiry sent twice in a row is one enquiry (double click, retry)", async (t) => {
+  setEnv(t, "RESEND_API_KEY", "re_test_not_a_real_key");
+  const sent = mockResend(t);
+  const { POST } = loadRoute();
+  const first = await POST(request());
+  const second = await POST(request());
+  assert.equal(first.status, 200);
+  assert.equal(second.status, 200);
+  assert.deepEqual(await second.json(), { success: true });
+  assert.equal(sent.length, 2, "one admin email and one auto-reply, not four");
+});
+
+test("a failed send does not leave the parent's retry blocked as a duplicate", async (t) => {
+  setEnv(t, "RESEND_API_KEY", "re_test_not_a_real_key");
+  let attempt = 0;
+  t.mock.method(globalThis, "fetch", async () => {
+    attempt += 1;
+    if (attempt === 1) return Response.json({ name: "application_error", message: "down" }, { status: 500 });
+    return Response.json({ id: "ok" });
+  });
+  const { POST } = loadRoute();
+  assert.equal((await POST(request())).status, 500);
+  assert.equal((await POST(request())).status, 200);
+});
+
+test("the log line for an outcome carries no personal data", async (t) => {
+  setEnv(t, "RESEND_API_KEY", "re_test_not_a_real_key");
+  mockResend(t);
+  const lines = [];
+  t.mock.method(console, "info", (line) => lines.push(String(line)));
+  const { POST } = loadRoute();
+  await POST(request());
+  const joined = lines.join("\n");
+  assert.match(joined, /"outcome":"sent"/);
+  assert.doesNotMatch(joined, /parent@example\.com|Test Parent|fractions/);
+});
