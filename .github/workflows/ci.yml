@@ -1,0 +1,110 @@
+name: CI
+
+# plan15 Wave 12 section 16.6. What runs, and what it gates:
+#   verify    lint, typecheck, unit tests, production build, then the production smoke suite
+#             (apps/web/tests-prod) in Chromium, Firefox and WebKit against `next start`.  BLOCKING.
+#   e2e       the full dev-server Playwright suite (apps/web/tests-e2e), Chromium. Runs on pushes to
+#             main only: it is the slow one (about 6 minutes) and needs a quiet machine.  BLOCKING there.
+#   audit     `npm audit --omit=dev`, reported, never blocking (known exceptions: docs/DEPLOYMENT_READINESS.md).
+#
+# The branch and deploy process is in docs/DEPLOYMENT.md.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Pinned: the repo's engines field is ">=22.12.0" and this is the oldest line that satisfies it.
+  NODE_VERSION: "22.12.0"
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+
+      # Production build of the public site, with ONLY production-style settings: no email credentials,
+      # the portal closed (the default), no development provider. This is what is deployed.
+      - run: npm run build --workspace=apps/web
+
+      - name: Install browsers for the smoke suite
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      - name: Start the production server
+        working-directory: apps/web
+        run: |
+          NODE_ENV=production npx next start -p 3200 > "$RUNNER_TEMP/next-start.log" 2>&1 &
+          for i in $(seq 1 60); do
+            curl -fs http://localhost:3200/api/health > /dev/null && exit 0
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/next-start.log"
+          exit 1
+
+      - name: Production smoke suite (Chromium, Firefox, WebKit)
+        working-directory: apps/web
+        env:
+          PW_CROSS_BROWSER: "1"
+        run: npm run test:prod-smoke
+
+      - name: Keep the Playwright traces of a failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: apps/web/test-results
+          if-no-files-found: ignore
+
+  e2e:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Dev-server end-to-end suite
+        working-directory: apps/web
+        run: npx playwright test
+      - name: Keep the Playwright traces of a failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-traces
+          path: apps/web/test-results
+          if-no-files-found: ignore
+
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Production dependency audit (report only)
+        continue-on-error: true
+        run: npm audit --omit=dev

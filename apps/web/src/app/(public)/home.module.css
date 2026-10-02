@@ -536,6 +536,12 @@
   font-size: 11px;
 }
 
+/* On the green card the soft on-navy text drops under 4.5:1 once the card is the (lighter) dark-theme
+   green, and 11px text has no large-text allowance: use the full on-inverse colour. */
+.whyCardGreen .whyCardNumber {
+  color: var(--fg-on-inverse) !important;
+}
+
 .whyCardTitle {
   font-size: 25px !important;
   margin: 24px 0 8px !important;
