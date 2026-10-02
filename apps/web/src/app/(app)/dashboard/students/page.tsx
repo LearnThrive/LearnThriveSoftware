@@ -60,6 +60,7 @@ export default async function TutorStudentsPage() {
                   key={student.id}
                   name={student.name}
                   subtitle={student.yearGroup}
+                  href={`/dashboard/progress/${student.id}`}
                   active={student.active}
                   columns={[
                     { label: "Subjects", value: subjectsByStudent.get(student.id)?.join(", ") || "—" },

@@ -73,6 +73,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           : user.role === "TUTOR"
             ? "Reports you still owe, and those already submitted or approved."
             : "Reports your tutor has written and an admin has approved."}
+        actions={user.role === "STUDENT" && user.profileId ? (
+          <Link href={`/dashboard/progress/${user.profileId}`} className="btn btn--secondary">See my progress</Link>
+        ) : undefined}
       />
 
       {available.length > 1 && (

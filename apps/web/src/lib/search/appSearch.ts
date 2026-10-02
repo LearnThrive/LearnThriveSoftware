@@ -89,8 +89,7 @@ export async function searchApp(data: DataProvider, user: AuthenticatedUser, raw
       ...rank(query, (await data.tutors.list()).map((t) => ({ id: t.id, kind: "tutor" as const, title: t.name, subtitle: t.subjects.join(", "), href: `/dashboard/admin/tutors/${t.id}`, keywords: [t.email, ...t.subjects] }))),
     );
   } else if (user.role === "TUTOR" || user.role === "CLIENT") {
-    const listPage = user.role === "TUTOR" ? "/dashboard/students" : "/dashboard/children";
-    results.push(...rank(query, students.map((s) => ({ id: s.id, kind: "student" as const, title: s.name, subtitle: s.yearGroup, href: listPage, keywords: s.yearGroup ? [s.yearGroup] : [] }))));
+    results.push(...rank(query, students.map((s) => ({ id: s.id, kind: "student" as const, title: s.name, subtitle: s.yearGroup, href: `/dashboard/progress/${s.id}`, keywords: s.yearGroup ? [s.yearGroup] : [] }))));
   }
 
   // Reports, through the one visibility gate.
