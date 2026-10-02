@@ -102,7 +102,7 @@
   background: var(--tone-neutral-bg); color: var(--app-muted); font-size: var(--text-label); font-weight: 700;
   transition: background var(--duration-fast) var(--app-ease), color var(--duration-fast) var(--app-ease);
 }
-.filter-tab.is-active .filter-tab__count { background: var(--app-accent-soft); color: var(--app-accent-strong); }
+.filter-tab.is-active .filter-tab__count { background: var(--app-accent-soft); color: var(--app-accent-strong-text); }
 .filter-tab--warning .filter-tab__count { background: var(--tone-warning-bg); color: var(--tone-warning-fg); }
 
 /* The tabs__indicator: an absolutely-positioned bar that a small amount of client JS (see

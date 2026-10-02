@@ -41,6 +41,7 @@
   /* The accent as TEXT (eyebrows, active tab, hover links). Separate from --app-accent, which is a fill
      behind --on-accent and has to stay mid-green in dark; text needs the lighter mint there. */
   --app-accent-text: var(--app-accent);
+  --app-accent-strong-text: var(--app-accent-strong); /* the stronger accent as text (an active tab's count, a unread tag) */
   --app-accent-soft: var(--colour-mint-100);
   /* A crisp two-tone ring rather than a soft 28%-opacity glow: a gap in the surface colour, then
      a solid accent band, so the indicator stays clearly visible against a white card, the grey

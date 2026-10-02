@@ -51,3 +51,23 @@ report reaches a Parent or Student; no schema change; no new dependency; every s
 A1 (palette + search) first, because it is also the shared component the public site reuses and the
 riskiest for authorization; then A2, A7, A3, A4, A6, A5; A8 last. Each lands with tests in the style
 of `tests-e2e/hardening.spec.ts` for anything that reveals data (A1, A2, A4, A8).
+
+## Status: what was built, and where it differs from the proposal
+
+All eight Tier A features are built, each with unit tests of the visibility logic and end-to-end tests of
+the page. Tier B stays proposals only.
+
+| # | Status | What shipped | Difference from the proposal, and why |
+| --- | --- | --- | --- |
+| A1 | Built | `lib/search/appSearch.ts` + the `searchAppAction` server action; the app palette (`components/palette/AppPalette.tsx`); 13 adversarial unit tests (`tests/appSearch.test.mjs`) and 11 e2e tests (`tests-e2e/app-palette.spec.ts`). | Reports are matched only on the fields `visibleReportFor` returns, and **never on `internalTutorNotes` or `confidence` for anyone, including the Tutor and Admin**: a search that matched a private note, even for its author, is one change away from confirming that a note exists to someone who must not know. The proposal allowed Admin/Tutor to match notes; that was tightened. Results link to the progress timeline (students) and the lesson page (lessons, reports). |
+| A2 | Built | `/dashboard/progress/[studentId]` (`lib/dashboard/progress.ts`): coming up (next 3) and lesson history with each lesson's report. Linked from Children, My students, the Admin student profile and the Student's feedback page. | Tutor and Admin also see their own draft and submitted reports (they own or oversee them); a Parent or Student sees approved reports only. A student the person may not see is the same 404 as a made-up id. The entry type has no place for tutor-only fields, for any role. |
+| A3 | Built | System / Reduce motion (`lib/motion/preference.ts`), in the footer, the Settings page and the palettes; theme was already built in Wave 3. | **No "full motion" override.** The proposal allowed one "only as an explicit, labelled choice"; plan 15 section 17.2 says Reduce is always honoured and asks for evidence before touching the reduced-motion rule. Making a device that says "reduce" play motion is exactly what that rule exists to prevent, and no evidence for it was found, so only System and Reduce exist (a test asserts it). |
+| A4 | Built | `/api/lessons/[id]/ics` (one lesson, or `?series=1`), buttons on the lesson page. | **Each occurrence is its own `VEVENT` with an exact UTC instant**, not `DTSTART;TZID=Europe/London` plus a `VTIMEZONE`. The lesson's `startAt` already is the right instant for each date (the scheduling service handles the clock change), so UTC is DST-correct by construction, needs no hand-written timezone block, and every calendar app reads it. The local time and "UK time" are written into the description. |
+| A5 | Built | `?` shortcut overlay and `g` then a letter navigation (role-scoped, never while typing, none destructive); first-run tips (`components/dashboards/GettingStarted.tsx`), dismissible, remembered in this browser. | The tips card sits at the **bottom** of the dashboard so it can never shift the content above it. |
+| A6 | Built | `lib/notifications/derivedReminders.ts`: a "Starting soon" card on Notifications and a badge on the next-lesson card, for lessons within the hour. | Said plainly in the UI: it is worked out when the page opens and sends nothing. There is no notification *menu* in the app (the bell links to the Notifications page), so the card lives on that page. |
+| A7 | Built | Settings > Report approval (Admin only), via an Admin-checked server action and a confirm dialog; the assignment page now shows the rule that actually applies. | Not written to the activity feed: that feed is per lesson (`logActivity` needs a lesson id) and a platform setting has none. Fixed a latent display bug while there: the assignment page said "Required" whenever an assignment had no override of its own, even if the platform default was "not required". |
+| A8 | Built | A "This week" card on the Parent dashboard (`lib/dashboard/weekSummary.ts`): lessons in the next seven days and reports approved in the last seven, titles and dates only. | Titles and dates only, never report text. |
+
+Tier B is unchanged. B1 (report PDF export) is partly served by the new print stylesheet for legal pages
+and `/book`, but not for reports.
+

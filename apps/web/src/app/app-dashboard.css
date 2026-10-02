@@ -240,7 +240,7 @@
 .calendar-wrap .fc-button-primary:not(:disabled).fc-button-active { box-shadow: none !important; color: #fff !important; }
 .calendar-wrap .fc-col-header-cell-cushion { color: var(--app-muted); font-weight: 650; font-size: var(--text-label); text-transform: uppercase; letter-spacing: 0.05em; text-decoration: none; }
 .calendar-wrap .fc-daygrid-day-number { color: var(--app-text); font-size: var(--text-small); text-decoration: none; padding: var(--space-2); }
-.calendar-wrap .fc-day-today .fc-daygrid-day-number { color: var(--app-accent-strong); font-weight: 700; }
+.calendar-wrap .fc-day-today .fc-daygrid-day-number { color: var(--app-accent-strong-text); font-weight: 700; }
 /* FullCalendar de-emphasises adjacent-month "spillover" days two ways at once: a lighter text
    colour *and* 30% opacity on the wrapping .fc-daygrid-day-top — stacked, that's ~1.5:1 against
    white, well past the point of AA compliance. The colour swap alone (--app-muted, 5.3:1) already
@@ -373,3 +373,27 @@
 /* Settings: appearance and motion card */
 .settings-appearance { display: grid; gap: var(--space-5); margin-bottom: var(--space-3); }
 .settings-appearance__label { margin: 0 0 var(--space-2); color: var(--app-ink); font-weight: 600; }
+
+/* Derived views (plan15 A6 starting soon, A8 this week) */
+.starting-soon__list { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.starting-soon__list li { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-2) var(--space-4); }
+.starting-soon__list a { color: var(--app-ink); font-weight: 600; text-decoration: none; }
+.starting-soon__list a:hover { color: var(--app-accent-text); text-decoration: underline; }
+.starting-soon__list span { color: var(--app-muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
+.next-lesson__eyebrow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.this-week { margin-bottom: var(--space-4); }
+.this-week__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: var(--space-5); }
+.this-week__figure { margin: 0; font-size: 2rem; font-weight: 700; line-height: 1; color: var(--app-ink); font-variant-numeric: tabular-nums; }
+.this-week__label { margin: var(--space-1) 0 var(--space-3); color: var(--app-muted); font-size: var(--text-small); }
+.this-week__list { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.this-week__list li { display: grid; gap: 0.1rem; }
+.this-week__list a { color: var(--app-ink); font-weight: 600; text-decoration: none; }
+.this-week__list a:hover { color: var(--app-accent-text); text-decoration: underline; }
+.this-week__list span { color: var(--app-muted); font-size: var(--text-small); }
+
+/* First-run tips (components/dashboards/GettingStarted.tsx) */
+.getting-started { margin-top: var(--space-5); padding: var(--space-4) var(--space-5); }
+.getting-started__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-2); }
+.getting-started__title { display: flex; align-items: center; gap: var(--space-2); margin: 0; font-size: 1rem; color: var(--app-ink); }
+.getting-started__list { margin: 0 0 var(--space-3); padding-left: 1.2rem; color: var(--app-text); }
+.getting-started__list li { margin-bottom: var(--space-1); }

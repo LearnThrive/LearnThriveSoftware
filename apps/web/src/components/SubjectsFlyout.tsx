@@ -18,6 +18,10 @@ import { subjects } from "@/lib/site";
  *  - Under the mobile breakpoint (globals.css) the panel is not a floating card but an inline block inside
  *    the open menu.
  *
+ * The accessible names say "what we teach" rather than "subjects" on purpose: a form field elsewhere on the
+ * site is labelled "Subject", and a label-based locator (or a person's voice command) for that field must
+ * not also match this menu.
+ *
  * A disclosure, not a menu widget: the links are ordinary links in the normal tab order, which is what
  * the ARIA authoring guide recommends for site navigation. No motion beyond a CSS fade.
  */
@@ -102,14 +106,14 @@ export function SubjectsFlyout({
         type="button"
         aria-expanded={open}
         aria-controls={panelId}
-        aria-label="Subjects menu"
+        aria-label="Open the what we teach menu"
         onClick={() => setPinnedOn(pinnedOn === pathname ? null : pathname)}
       >
         <svg viewBox="0 0 20 20" aria-hidden="true">
           <path d="M5 8l5 5 5-5" />
         </svg>
       </button>
-      <div className="nav-flyout__panel" id={panelId} role="group" aria-label="Subjects" inert={!open}>
+      <div className="nav-flyout__panel" id={panelId} role="group" aria-label="What we teach" inert={!open}>
         <ul>
           {subjects.map((subject) => (
             <li key={subject.slug}>

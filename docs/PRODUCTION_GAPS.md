@@ -62,18 +62,21 @@ of this migration, not a restatement of that document.
 - **No time-based notifications.** `LESSON_REMINDER` (lesson approaching / upcoming) and a
   deadline-based `REPORT_REQUIRED` exist as domain types but nothing ever creates one — every
   real trigger fires from a user action, and a time-based one needs a scheduler/cron that doesn't
-  exist anywhere in this prototype. See `docs/NOTIFICATIONS.md`.
+  exist anywhere in this prototype. See `docs/NOTIFICATIONS.md`. *Partly addressed (plan 15):* a
+  "Starting soon" reminder is now worked out when the Notifications page or the next-lesson card is
+  rendered (`lib/notifications/derivedReminders.ts`). It sends nothing and does nothing while the app is
+  closed, and says so; real reminders still need a scheduler and a delivery channel.
 - **No real email/SMS.** Plan section 55 explicitly defers this ("do not send real email/SMS
   unless infrastructure already exists") — every notification today is in-app only.
 - **No lesson report PDF export** (plan section 47 explicitly defers this).
 - **No report revision workflow** — a submitted/approved report has no in-app path back to draft
   for corrections.
-- **No Student progress timeline page** (plan section 46) — the repository method
-  (`ReportRepository.forStudent()`) exists to support it, but no page reads it yet.
-- **No global/admin search** (plan section 52) across Students/Clients/Tutors/Lessons.
-- **No settings page for `requireReportApproval`** — the data-layer setting and its
-  per-Assignment override are fully respected by `reportService.ts`, but nothing in the UI lets
-  an Admin actually change either value.
+- ~~No Student progress timeline page~~ — built in plan 15 (`/dashboard/progress/[studentId]`).
+- ~~No global/admin search~~ — built in plan 15: a role-scoped command palette
+  (`lib/search/appSearch.ts`) with adversarial tests that it cannot return anything the person could not
+  already open.
+- ~~No settings page for `requireReportApproval`~~ — built in plan 15 (Settings > Report approval, Admin
+  only). Per-assignment overrides are still shown on each assignment but are not editable from the UI.
 
 ## Accessibility and device coverage
 
