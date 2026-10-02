@@ -23,6 +23,7 @@ export function SiteHeader() {
   const [open, setOpen] = useState(false);
   const [session, setSession] = useState<SiteHeaderSession | null>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const navRef = useRef<HTMLElement>(null);
 
   // plan11.md task 13's "airy at top -> compact/solid when scrolled, avoid per-pixel React scroll
   // state": scrollY is read via Motion's own scroll listener (framework-optimised, not a raw
@@ -74,6 +75,52 @@ export function SiteHeader() {
     };
   }, [open]);
 
+  // The sliding indicator under the desktop navigation (plan15 Wave 5 section 9.5): one element that glides to
+  // the hovered or focused link and rests under the current page's link. Written straight to CSS variables on
+  // the nav (no React state, nothing per frame); the slide itself is a CSS transform transition. Under the
+  // mobile breakpoint the indicator is not shown and the links keep their own current-page styling.
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const place = (link: HTMLElement | null) => {
+      if (!link) {
+        nav.style.setProperty("--ind-o", "0");
+        return;
+      }
+      const navBox = nav.getBoundingClientRect();
+      const box = link.getBoundingClientRect();
+      nav.style.setProperty("--ind-x", `${box.left - navBox.left}px`);
+      nav.style.setProperty("--ind-w", String(box.width));
+      nav.style.setProperty("--ind-o", "1");
+    };
+    const current = () => nav.querySelector<HTMLElement>('a[aria-current="page"]');
+    const target = (event: Event) => {
+      const link = (event.target as HTMLElement).closest("a");
+      return link && nav.contains(link) && !link.closest(".nav-flyout__panel") ? link : null;
+    };
+    const onEnter = (event: Event) => {
+      const link = target(event);
+      if (link) place(link);
+    };
+    const onLeave = () => place(current());
+    place(current());
+    // Turn the transition on only after the first placement, so the indicator never glides in from the left edge.
+    const frame = window.requestAnimationFrame(() => nav.setAttribute("data-indicator-ready", "true"));
+    nav.addEventListener("pointerover", onEnter);
+    nav.addEventListener("focusin", onEnter);
+    nav.addEventListener("pointerleave", onLeave);
+    nav.addEventListener("focusout", onLeave);
+    window.addEventListener("resize", onLeave);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      nav.removeEventListener("pointerover", onEnter);
+      nav.removeEventListener("focusin", onEnter);
+      nav.removeEventListener("pointerleave", onLeave);
+      nav.removeEventListener("focusout", onLeave);
+      window.removeEventListener("resize", onLeave);
+    };
+  }, [pathname]);
+
   function isCurrent(href: string) {
     if (href === "/") return pathname === "/";
     return pathname.startsWith(href);
@@ -107,7 +154,8 @@ export function SiteHeader() {
           id="primary-navigation"
           data-lenis-prevent
         >
-          <nav className="primary-navigation" aria-label="Main navigation">
+          <nav ref={navRef} className="primary-navigation" aria-label="Main navigation">
+            <span className="nav-indicator" aria-hidden="true" />
             {navigation.map((item, index) => {
               // Route-transition direction by position in the menu (plan15 Wave 8): going to a
               // later item slides the page in from the right, an earlier one from the left.

@@ -685,6 +685,42 @@ img[src*="%2Fimages%2F"] {
   transform-origin: left;
 }
 
+/* The sliding indicator (SiteHeader.tsx): one 1px-wide bar scaled to the link's width and moved with
+   translateX, so the glide is transform-only. Desktop only: under 59rem the menu is a vertical list and the
+   links carry their own current-page style. */
+.primary-navigation {
+  position: relative;
+}
+
+.nav-indicator {
+  position: absolute;
+  bottom: 0.3rem;
+  left: 0;
+  width: 1px;
+  height: 2px;
+  background: var(--colour-green-600);
+  opacity: var(--ind-o, 0);
+  pointer-events: none;
+  transform: translateX(var(--ind-x, 0px)) scaleX(var(--ind-w, 0));
+  transform-origin: left center;
+}
+
+.primary-navigation[data-indicator-ready="true"] .nav-indicator {
+  transition: transform 0.28s var(--ease-out), opacity 0.2s ease;
+}
+
+@media (min-width: 59.01rem) {
+  .primary-navigation a::after {
+    display: none;
+  }
+}
+
+@media (max-width: 59rem) {
+  .nav-indicator {
+    display: none;
+  }
+}
+
 .header-login {
   position: relative;
   display: inline-flex;
