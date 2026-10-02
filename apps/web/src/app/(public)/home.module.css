@@ -111,14 +111,19 @@
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  border: 1px solid rgba(8, 115, 99, 0.5);
+  /* --lt-green-light (#087363) is ~2.5:1 on this navy hero, and on the lighter teal top of the WebGL
+     gradient (full motion tier) it measured 1.03:1 — the chip simply vanished. Same mint the other
+     dark sections already use for their labels, on a faint navy backing so it also holds up over the
+     lightest part of the gradient. */
+  border: 1px solid rgba(142, 210, 173, 0.4);
+  background: rgba(14, 42, 71, 0.45);
   border-radius: 999px;
   padding: 7px 15px;
   font-family: var(--lt-font-mono);
   font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--lt-green-light);
+  color: #8ed2ad;
   margin-bottom: 24px;
   animation: lt-rise 0.6s both;
 }
@@ -127,7 +132,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--lt-green-light);
+  background: #8ed2ad;
 }
 
 .heroTitle {

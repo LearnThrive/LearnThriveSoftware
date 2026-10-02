@@ -107,7 +107,7 @@ export default function HomePage() {
       <HeroScene />
 
       {/* ── Level Marquee ─────────────────────────────── */}
-      <Marquee items={marqueeItems} />
+      <Marquee items={marqueeItems} direction="right" />
 
       {/* ── Trust / proof (plan12.md task 3: moved up from the bottom of the page — the
           narrative's second beat, right after the hero, not an afterthought at the end) ──

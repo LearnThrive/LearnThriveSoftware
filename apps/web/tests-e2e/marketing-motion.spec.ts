@@ -679,6 +679,46 @@ test.describe('hero WebGL atmosphere', () => {
     await expect(page.locator('[data-motion-scene="hero"] > div[aria-hidden="true"]').filter({ has: page.locator('canvas') })).toHaveCount(1);
   });
 
+  // "Visible" is not "working": a canvas whose WebGL context has been lost is still visible — as an
+  // opaque white sheet with a broken-image icon, which covered the navy hero and its white text.
+  // React Strict Mode (on in `next dev`, which is what this suite runs against) mounts, cleans up
+  // and re-mounts every effect, and the cleanup used to lose the context on the same canvas element
+  // the second mount then reused. Nothing above caught it because it only checks the element exists.
+  test('the canvas has a live WebGL context and has been sized — it survives Strict Mode\'s mount/cleanup/mount', async ({ page }) => {
+    await pinCapabilities(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+    const canvas = page.locator('[data-motion-scene="hero"] canvas');
+    await expect(canvas).toBeVisible();
+    // The canvas is resized from a ResizeObserver callback after the context exists, so a canvas that
+    // is still its 300x150 default has never been drawn into at hero size.
+    await expect.poll(() => canvas.evaluate((el: HTMLCanvasElement) => el.width)).toBeGreaterThan(300);
+    const contextLost = await canvas.evaluate((el: HTMLCanvasElement) => {
+      const gl = el.getContext('webgl');
+      return gl === null ? 'no context' : gl.isContextLost();
+    });
+    expect(contextLost).toBe(false);
+  });
+
+  // The headline, copy and CTA are white by design; the chip above them is the one piece of hero
+  // text that was a dark green — ~2.5:1 on the plain navy hero and 1.03:1 over the lighter top of the
+  // gradient, i.e. invisible. It must be a light colour now.
+  test('the hero chip text is light enough to read on both the static and the gradient hero', async ({ page }) => {
+    await pinCapabilities(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+    const chip = page.locator('[data-motion-scene="hero"] [class*="heroChip"]:not([class*="heroChipDot"])');
+    const luminance = await chip.evaluate((el) => {
+      const [r, g, b] = getComputedStyle(el).color.match(/[\d.]+/g)!.slice(0, 3).map((value) => {
+        const channel = Number(value) / 255;
+        return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    });
+    // #087363 (the old colour) is ~0.13; the mint it was replaced with is ~0.55.
+    expect(luminance).toBeGreaterThan(0.4);
+  });
+
   // Code-splitting (whether the dynamic import actually keeps HeroWebGLAtmosphere/heroGradient
   // out of the page's initial script payload) is a production-bundling question dev mode doesn't
   // answer the same way — confirmed instead by inspecting a real `next build`'s
@@ -984,5 +1024,62 @@ test.describe('homepage refinement (task 6)', () => {
     await page.goto('/');
     const copy = page.locator('#enquire [class$="enquiryCopy"]');
     await expect(copy).toHaveCSS('position', 'relative');
+  });
+});
+
+// ── Marquee direction and seamless looping ─────────────────────────────────────────────────
+
+test.describe('Marquee', () => {
+  // Reads the live CSS animation rather than waiting on wall-clock time: pins it, then sets
+  // currentTime to chosen points in the loop and measures where the track actually sits.
+  async function measureMarquee(page: Page) {
+    return page.evaluate(() => {
+      const track = document.querySelector('[class*="Marquee-module"][class*="track"]') as HTMLElement;
+      const animation = track.getAnimations()[0];
+      const duration = Number(animation.effect!.getComputedTiming().duration);
+      const translateX = () => new DOMMatrix(getComputedStyle(track).transform).m41;
+      animation.pause();
+      animation.currentTime = 1000;
+      const early = translateX();
+      animation.currentTime = 3000;
+      const later = translateX();
+      // The loop slides the track half its own width, so it only reads as endless if the track
+      // spans the whole viewport at every point along the way.
+      let widestGap = 0;
+      for (let step = 0; step <= 40; step += 1) {
+        animation.currentTime = (duration * step) / 40 - (step === 40 ? 1 : 0);
+        const box = track.getBoundingClientRect();
+        widestGap = Math.max(widestGap, box.left, window.innerWidth - box.right);
+      }
+      return { movesRight: later > early, widestGap };
+    });
+  }
+
+  test('the homepage level strip travels left-to-right and never runs out of content', async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 900 });
+    await page.goto('/');
+    const { movesRight, widestGap } = await measureMarquee(page);
+    expect(movesRight).toBe(true);
+    // One copy of these items is ~930px, so a loop built from a single copy per half leaves a
+    // blank run of several hundred pixels at the screen edge on any desktop.
+    expect(widestGap).toBeLessThanOrEqual(0);
+  });
+
+  test('other pages keep their strip travelling leftwards, also without a gap', async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 900 });
+    for (const route of ['/about', '/subjects']) {
+      await page.goto(route);
+      const { movesRight, widestGap } = await measureMarquee(page);
+      expect(movesRight, `${route} should still travel leftwards`).toBe(false);
+      expect(widestGap, `${route} should never leave a gap`).toBeLessThanOrEqual(0);
+    }
+  });
+
+  test('with reduced motion the strip stays still but still shows its items', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/');
+    const track = page.locator('[class*="Marquee-module"][class*="track"]');
+    await expect(track).toHaveCSS('animation-name', 'none');
+    await expect(track.locator('span').first()).toHaveText('PRIMARY · YEAR 1–6');
   });
 });

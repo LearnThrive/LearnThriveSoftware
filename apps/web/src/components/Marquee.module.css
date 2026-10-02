@@ -26,8 +26,16 @@
   font-weight: 700;
   font-size: 16px;
   letter-spacing: 0.04em;
-  animation: marquee 26s linear infinite;
+  /* 26s per copy of the items x the 6 copies Marquee.tsx repeats per half: the same on-screen speed
+     as when each half was a single copy. */
+  animation: marquee 156s linear infinite;
   padding-right: 44px;
+}
+
+/* Same keyframes run backwards: -50% -> 0, so the content travels left-to-right. The loop is still
+   seamless because the second half of the track is an exact copy of the first. */
+.track[data-direction="right"] {
+  animation-direction: reverse;
 }
 
 .marquee:hover .track,
