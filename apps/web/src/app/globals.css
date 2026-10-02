@@ -4587,3 +4587,184 @@ html[data-motion-tier="light"]::view-transition-new(*) {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Print (plan15 Wave 10 section 14.5) ─────────────────────────────────────────────────────────
+   For the legal pages and /book (the things people actually print or save as a PDF), and harmless
+   everywhere else: plain black on white, no chrome, no decoration, the address of each link written
+   out, and no section broken across a page. tokens.css keeps print on the light palette whatever the
+   visitor's theme, so nothing here has to fight a dark theme. */
+@media print {
+  @page {
+    margin: 18mm 16mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .skip-link,
+  .announcement-bar,
+  .site-header,
+  .site-footer .footer-grid,
+  .site-footer .footer-appearance,
+  .footer-atmosphere,
+  .enquiry-bar,
+  .navigation-backdrop,
+  .legal-contents,
+  .booking-atmosphere,
+  .legal-hero-atmosphere,
+  .booking-form-frame-corner,
+  [data-lenis-prevent] .menu-toggle,
+  [role="dialog"] {
+    display: none !important;
+  }
+
+  /* Heroes: no navy ground, no decoration, ordinary black type. */
+  .page-hero {
+    background: none !important;
+    color: #000 !important;
+  }
+
+  .page-hero > :not(.page-hero__inner) {
+    display: none !important;
+  }
+
+  .page-hero h1,
+  .page-hero__intro,
+  .page-hero .eyebrow,
+  .crumbs li,
+  .crumbs a,
+  .crumbs [aria-current="page"],
+  .document-card,
+  .document-card * {
+    color: #000 !important;
+  }
+
+  .document-card {
+    border: 1px solid #000 !important;
+    background: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Anything that animates in must simply be there. */
+  [data-reveal],
+  [data-reveal-inner],
+  [data-masked-text-inner] {
+    opacity: 1 !important;
+    transform: none !important;
+    clip-path: none !important;
+  }
+
+  .legal-page-layout {
+    display: block !important;
+  }
+
+  .legal-prose section,
+  .legal-contact-box,
+  .legal-scope {
+    break-inside: avoid;
+  }
+
+  .legal-prose h2,
+  .legal-prose h3 {
+    break-after: avoid;
+    color: #000 !important;
+  }
+
+  .legal-prose,
+  .legal-prose p,
+  .legal-prose li {
+    color: #000 !important;
+    font-size: 11pt;
+    line-height: 1.5;
+  }
+
+  /* Write out where a link goes, for the external and mailto ones in the body of the page. */
+  main a[href^="http"]::after,
+  main a[href^="mailto:"]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.85em;
+    word-break: break-all;
+  }
+
+  main a {
+    color: #000 !important;
+    text-decoration: underline;
+  }
+
+  /* The booking page: the form is the point, so give it room and drop the sidebar's cards' shadows. */
+  .booking-layout {
+    display: block !important;
+  }
+
+  .booking-form-shell,
+  .booking-sidebar > *,
+  .form-field input,
+  .form-field select,
+  .form-field textarea {
+    border-color: #000 !important;
+    background: none !important;
+    box-shadow: none !important;
+  }
+
+  .form-actions button,
+  .enquiry-form-progress {
+    display: none !important;
+  }
+
+  /* The sidebar and contact cards are navy or white-on-dark panels on screen: plain text on paper. */
+  .booking-sidebar,
+  .booking-sidebar *,
+  .contact-mini-card,
+  .contact-mini-card * {
+    background: none !important;
+    box-shadow: none !important;
+    color: #000 !important;
+  }
+
+  .booking-sidebar,
+  .contact-mini-card,
+  .honesty-note {
+    border: 1px solid #000 !important;
+    border-radius: 0 !important;
+  }
+
+  .footer-bottom,
+  .footer-bottom *,
+  .footer-registration {
+    color: #000 !important;
+  }
+
+  .site-footer {
+    background: none !important;
+    color: #000 !important;
+  }
+}
+
+/* ── Announcement bar (components/AnnouncementBar.tsx; off unless lib/site.ts sets one) ───────────── */
+.announcement-bar {
+  background: var(--surface-inverse);
+  color: var(--fg-on-inverse);
+  --focus-colour: var(--focus-colour-on-inverse);
+  font-size: 0.875rem;
+}
+
+.announcement-bar__inner {
+  display: flex;
+  justify-content: center;
+  padding-block: 0.6rem;
+  text-align: center;
+}
+
+.announcement-bar p {
+  margin: 0;
+}
+
+.announcement-bar a {
+  color: var(--fg-on-inverse);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}

@@ -219,3 +219,8 @@ test("robots.ts keeps crawlers out of the app, the API and development tools", (
     assert.ok(robotsSource.includes(`"${path}"`), `robots.ts should disallow ${path}`);
   }
 });
+
+// plan15 Wave 10 section 14.2: the announcement bar is a slot, off until the owner writes one.
+test("the announcement bar ships off: no message exists in the site data", () => {
+  assert.match(siteSource, /export const announcement: Announcement \| null = null;/);
+});

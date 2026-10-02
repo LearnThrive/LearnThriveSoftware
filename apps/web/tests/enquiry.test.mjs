@@ -236,3 +236,42 @@ test("the log line for an outcome carries no personal data", async (t) => {
   assert.match(joined, /"outcome":"sent"/);
   assert.doesNotMatch(joined, /parent@example\.com|Test Parent|fractions/);
 });
+
+// plan15 Wave 10 section 14.5: branded HTML plus a plain-text alternative, nothing image-only.
+test("both emails carry a plain-text alternative that says what the HTML says", async (t) => {
+  setEnv(t, "RESEND_API_KEY", "re_test_not_a_real_key");
+  const sent = mockResend(t);
+  const { POST } = loadRoute();
+  await POST(request());
+  const [adminEmail, autoReply] = sent;
+  assert.match(adminEmail.text, /Parent\/Guardian: Test Parent/);
+  assert.match(adminEmail.text, /fractions and algebra/);
+  assert.match(adminEmail.text, /Preferred Contact: email/);
+  assert.match(autoReply.text, /Thank you for your enquiry, Test Parent!/);
+  assert.match(autoReply.text, /within 24 hours/);
+  for (const email of sent) assert.doesNotMatch(email.text, /<[a-z]+[^>]*>/, "plain text has no markup");
+});
+
+test("the HTML declares a light-only design, gives every surface its own background and has no images", async (t) => {
+  setEnv(t, "RESEND_API_KEY", "re_test_not_a_real_key");
+  const sent = mockResend(t);
+  const { POST } = loadRoute();
+  await POST(request());
+  for (const email of sent) {
+    assert.match(email.html, /<meta name="color-scheme" content="light"\/>/);
+    assert.match(email.html, /bgcolor="#ffffff"/);
+    assert.doesNotMatch(email.html, /<img\b/i, "nothing in the message is an image");
+    assert.match(email.html, /<html lang="en">/);
+  }
+});
+
+test("everything a sender typed is escaped in the HTML and appears untouched in the plain text", async (t) => {
+  setEnv(t, "RESEND_API_KEY", "re_test_not_a_real_key");
+  const sent = mockResend(t);
+  const { POST } = loadRoute();
+  await POST(request({ ...validEnquiry, parentName: "<b>Eve</b> & Co", support: "We need <script>alert(1)</script> help with algebra." }));
+  const [adminEmail] = sent;
+  assert.doesNotMatch(adminEmail.html, /<script>alert/);
+  assert.match(adminEmail.html, /&lt;script&gt;/);
+  assert.match(adminEmail.text, /<script>alert\(1\)<\/script>/);
+});
