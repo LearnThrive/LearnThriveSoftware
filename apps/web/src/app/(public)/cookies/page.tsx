@@ -53,11 +53,13 @@ export default function CookiesPage() {
               </p>
               <ul>
                 <li>
-                  <strong>Your appearance choice.</strong> If you pick Light or
-                  Dark with the theme control, that choice is saved in your
-                  browser’s local storage (under the name “lt-theme”) so the
-                  site looks the same next time. If you leave the control on
-                  System, nothing is saved.
+                  <strong>Your appearance and motion choices.</strong> If you
+                  pick Light or Dark with the theme control, that choice is
+                  saved in your browser’s local storage (under the name
+                  “lt-theme”) so the site looks the same next time. In the same
+                  way, choosing Reduce with the motion control saves “lt-motion”
+                  so the site stays calm on your next visit. If you leave a
+                  control on System, nothing is saved for it.
                 </li>
                 <li>
                   <strong>Your recent searches.</strong> If you use the site
@@ -125,7 +127,7 @@ export default function CookiesPage() {
             <p>
               The current website does not ask for cookie choices because it sets
               no cookies, and the only browser storage it uses is the appearance
-              choice and recent-search list described above, which exist only
+              choices and recent-search list described above, which exist only
               because you used those controls.
               We will reassess this before adding analytics, embedded services
               or any other feature that may require information, consent or an

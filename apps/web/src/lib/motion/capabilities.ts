@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useSyncExternalStore } from "react";
+import { MOTION_EVENT, userPrefersReducedMotion } from "./preference";
 
 /**
  * The four motion tiers of plan11.md task 3. What each one is *for*:
@@ -26,6 +27,7 @@ import { useMemo, useSyncExternalStore } from "react";
  * was served, which the earlier lazy-`useState(computeTier)` read of matchMedia during the first
  * client render could not promise.
  */
+
 export type MotionTier = "full" | "standard" | "light" | "reduced";
 
 /** Everything a tier decision may depend on, gathered in one place so the rule is testable. */
@@ -115,7 +117,7 @@ function hasWindow() {
 function readSignals(): CapabilitySignals {
   const connection = (navigator as Navigator & { connection?: NetworkInformationLike }).connection;
   return {
-    reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches || userPrefersReducedMotion(),
     coarsePointer: window.matchMedia("(pointer: coarse)").matches,
     hoverNone: window.matchMedia("(hover: none)").matches,
     viewportWidth: window.innerWidth,
@@ -158,6 +160,8 @@ function attach() {
 
   const connection = (navigator as Navigator & { connection?: NetworkInformationLike }).connection;
   connection?.addEventListener?.("change", refresh);
+  // The visitor's own Reduce choice (lib/motion/preference.ts) is a reduced-motion signal too.
+  window.addEventListener(MOTION_EVENT, refresh);
 
   // The store may have sat unsubscribed (with a stale snapshot) since the first render read it.
   refresh();
@@ -165,6 +169,7 @@ function attach() {
   return () => {
     queries.forEach((query) => query.removeEventListener("change", refresh));
     connection?.removeEventListener?.("change", refresh);
+    window.removeEventListener(MOTION_EVENT, refresh);
   };
 }
 

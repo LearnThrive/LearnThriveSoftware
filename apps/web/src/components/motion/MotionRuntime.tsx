@@ -3,6 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 import { LazyMotion, MotionConfig, domAnimation } from "framer-motion";
 import { useMotionTier } from "@/lib/motion/capabilities";
+import { useMotionPreference } from "@/lib/motion/useMotionPreference";
 
 /**
  * The one motion boundary for the public marketing site (plan11.md task 3), mounted once in the
@@ -34,6 +35,8 @@ import { useMotionTier } from "@/lib/motion/capabilities";
  */
 export function MotionRuntime({ children }: { children: ReactNode }) {
   const tier = useMotionTier();
+  // The visitor's own Reduce choice has the same effect as the OS setting ("user" already honours that).
+  const preference = useMotionPreference();
 
   useEffect(() => {
     const root = document.documentElement;
@@ -45,7 +48,7 @@ export function MotionRuntime({ children }: { children: ReactNode }) {
 
   return (
     <LazyMotion features={domAnimation} strict>
-      <MotionConfig reducedMotion="user">{children}</MotionConfig>
+      <MotionConfig reducedMotion={preference === "reduce" ? "always" : "user"}>{children}</MotionConfig>
     </LazyMotion>
   );
 }
