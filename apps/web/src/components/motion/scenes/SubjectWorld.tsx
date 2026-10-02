@@ -6,6 +6,7 @@ import type { RefObject } from "react";
 import { useScene } from "@/lib/motion/scroll";
 import { useMotionTier } from "@/lib/motion/capabilities";
 import { AnimatedUnderline } from "@/components/motion/primitives/AnimatedUnderline";
+import { SubjectStage } from "@/components/motion/scenes/SubjectStage";
 import type { SubjectLandingConfig } from "@/lib/site";
 import { motionStagger, staggerDelay } from "@/lib/motion/tokens";
 
@@ -46,23 +47,19 @@ export function SubjectWorld({ subject, kind }: SubjectWorldProps) {
   const tier = useMotionTier();
   const reduceMotion = useReducedMotion();
   const active = tier === "full" && !reduceMotion;
-  const count = subject.coverage.items.length;
-
-  const showPath = kind === "maths" || kind === "11-plus";
-
   return (
     <div ref={ref as RefObject<HTMLDivElement>} className="subject-world" data-motion-scene={`subject-world-${kind}`}>
-      {kind === "science" ? <ScienceNodes progress={smoothProgress} active={active} /> : null}
+      {/* The stage is this subject's own picture (SubjectStage.tsx): a curve on a plane, an annotated
+          sentence, a loop of steps, a route with flags. It replaces the older line-and-dots motifs on the
+          landing pages; PathTrack/Milestone/ScienceNodes below stay for /subjects, which shares one scroll
+          source across its sections. */}
+      <SubjectStage kind={kind} progress={smoothProgress} active={active} />
       <ol
         className="subject-pathway-grid"
         aria-label={`${subject.title} ${subject.coverage.itemLabel === "Priority" ? "priorities" : "stages"}`}
       >
-        {showPath ? <PathTrack progress={smoothProgress} active={active} dashed={kind === "11-plus"} /> : null}
         {subject.coverage.items.map((item, index) => (
           <li className="subject-pathway-card" key={item.title}>
-            {showPath ? (
-              <Milestone progress={smoothProgress} active={active} index={index} count={count} />
-            ) : null}
             <span>
               {subject.coverage.itemLabel} {String(index + 1).padStart(2, "0")}
             </span>

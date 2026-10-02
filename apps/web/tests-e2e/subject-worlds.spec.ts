@@ -72,18 +72,19 @@ for (const { path, heading } of SUBJECT_ROUTES) {
 // 11-plus's line matches its own hero's dashed "route" language (SubjectHeroMotif's RouteMilestones)
 // instead of maths's solid "curve" line.
 test.describe('subject coverage card composition (task 15)', () => {
-  test('11-plus has a dashed coverage guide line; maths has a solid one', async ({ page }) => {
-    // The static background guide line (not the scroll-drawn one, which framer-motion's own
-    // pathLength implementation controls via its own dynamic stroke-dasharray — see
-    // SubjectWorld.tsx's PathTrack comment).
+  // Plan 15 Wave 9 replaced the old straight line-and-dots motif with each subject's own stage
+  // (components/motion/scenes/SubjectStage.tsx). The rule this test protects is unchanged: 11+'s device is a
+  // DASHED route (its hero's language) and maths's is a SOLID curve, never one device in two colours. So it now
+  // reads the stage's own guide paths: the 11+ route's ghost line is dashed, the maths curve's ghost is not.
+  test('11-plus has a dashed route guide; maths has a solid curve guide', async ({ page }) => {
     await page.goto('/11-plus-tuition');
-    const elevenPlusLine = page.locator('.subject-world-track line').first();
-    await expect(elevenPlusLine).toHaveAttribute('stroke-dasharray', '7 6');
+    const routeGuide = page.locator('[data-stage="11-plus"] svg > path').first();
+    expect(await routeGuide.evaluate((el) => getComputedStyle(el).strokeDasharray)).not.toBe('none');
 
     await page.goto('/maths-tuition');
-    const mathsLine = page.locator('.subject-world-track line').first();
-    const mathsDash = await mathsLine.getAttribute('stroke-dasharray');
-    expect(mathsDash).toBeNull();
+    // The first plain <path> in the maths plane is the ghost of the curve (the grid and axes are <line>s).
+    const curveGuide = page.locator('[data-stage="maths"] svg > path').first();
+    expect(await curveGuide.evaluate((el) => getComputedStyle(el).strokeDasharray)).toBe('none');
   });
 
   test('coverage cards have no lift-shadow, unlike the support grid above them', async ({ page }) => {
