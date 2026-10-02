@@ -64,7 +64,7 @@
   background: transparent; color: var(--app-muted);
   font: inherit; font-size: var(--text-small); font-weight: 650; cursor: pointer;
 }
-.password-field__toggle:hover { color: var(--app-accent); background: var(--app-surface-sunken); }
+.password-field__toggle:hover { color: var(--app-accent-text); background: var(--app-surface-sunken); }
 .password-field__toggle:focus-visible { outline: none; box-shadow: var(--app-focus-ring); }
 
 @media (max-width: 62rem) {
@@ -104,7 +104,7 @@
 
 .notification__body { flex: 1; min-width: 0; }
 .notification__message { margin: 0; color: var(--app-ink); font-size: var(--text-body); text-decoration: none; display: block; }
-a.notification__message:hover { color: var(--app-accent); text-decoration: underline; }
+a.notification__message:hover { color: var(--app-accent-text); text-decoration: underline; }
 .notification__meta { display: flex; align-items: center; gap: var(--space-2); margin: 0.2rem 0 0; font-size: var(--text-small); color: var(--app-muted); }
 .notification__unread-tag {
   padding: 0.05rem 0.4rem; border-radius: 999px;
@@ -130,7 +130,7 @@ a.notification__message:hover { color: var(--app-accent); text-decoration: under
 
 .plain-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
 .plain-list li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); font-size: var(--text-small); color: var(--app-text); }
-.plain-list a { color: var(--app-accent); text-decoration: none; }
+.plain-list a { color: var(--app-accent-text); text-decoration: none; }
 .plain-list a:hover { text-decoration: underline; }
 
 /* Screen-reader-only text, used by loading states and icon-only controls. */

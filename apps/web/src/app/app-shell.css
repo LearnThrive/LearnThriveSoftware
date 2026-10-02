@@ -38,6 +38,9 @@
   /* Accents */
   --app-accent: var(--colour-green-700);
   --app-accent-strong: var(--colour-green-800);
+  /* The accent as TEXT (eyebrows, active tab, hover links). Separate from --app-accent, which is a fill
+     behind --on-accent and has to stay mid-green in dark; text needs the lighter mint there. */
+  --app-accent-text: var(--app-accent);
   --app-accent-soft: var(--colour-mint-100);
   /* A crisp two-tone ring rather than a soft 28%-opacity glow: a gap in the surface colour, then
      a solid accent band, so the indicator stays clearly visible against a white card, the grey
@@ -387,7 +390,7 @@
 .page-header__eyebrow {
   margin: 0 0 var(--space-1);
   font-size: var(--text-label); font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
-  color: var(--app-accent);
+  color: var(--app-accent-text);
 }
 
 .page-header__title {
@@ -403,14 +406,14 @@
 .breadcrumbs ol { display: flex; align-items: center; gap: var(--space-2); list-style: none; margin: 0; padding: 0; flex-wrap: wrap; }
 .breadcrumbs li { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-small); color: var(--app-muted); }
 .breadcrumbs a { color: var(--app-muted); text-decoration: none; }
-.breadcrumbs a:hover { color: var(--app-accent); text-decoration: underline; }
+.breadcrumbs a:hover { color: var(--app-accent-text); text-decoration: underline; }
 .breadcrumbs [aria-current="page"] { color: var(--app-ink); font-weight: 600; }
 
 .back-link {
   display: inline-flex; align-items: center; gap: var(--space-2);
   color: var(--app-muted); font-size: var(--text-small); font-weight: 600; text-decoration: none;
 }
-.back-link:hover { color: var(--app-accent); }
+.back-link:hover { color: var(--app-accent-text); }
 .back-link:focus-visible { outline: none; box-shadow: var(--app-focus-ring); border-radius: var(--app-radius-sm); }
 
 /* ============================================================ Cards, stats */
@@ -492,7 +495,7 @@
 .stat-tile--link:focus-visible { outline: none; box-shadow: var(--app-focus-ring); }
 .stat-tile__value { font-family: var(--font-heading); font-size: 1.75rem; font-weight: 700; color: var(--app-ink); line-height: 1.1; }
 .stat-tile__label { font-size: var(--text-small); color: var(--app-muted); }
-.stat-tile__hint { font-size: var(--text-label); color: var(--app-accent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+.stat-tile__hint { font-size: var(--text-label); color: var(--app-accent-text); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
 
 @keyframes stat-tile-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .stat-grid .stat-tile:nth-child(2) { animation-delay: 40ms; }
@@ -557,7 +560,7 @@
 .empty-state__icon {
   display: grid; place-items: center; width: 3rem; height: 3rem;
   margin-bottom: var(--space-1); border-radius: 50%;
-  background: var(--app-surface-accent); color: var(--app-accent);
+  background: var(--app-surface-accent); color: var(--app-accent-text);
   /* A soft ring rather than a heavier fill — enough presence to anchor the message without
      turning an "everything is fine" state into something that reads as an alert. */
   box-shadow: 0 0 0 6px color-mix(in srgb, var(--app-surface-accent) 55%, transparent);
