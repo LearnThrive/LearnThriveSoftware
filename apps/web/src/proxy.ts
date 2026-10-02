@@ -9,7 +9,8 @@ import { PORTAL_CLOSED_PATH, PORTAL_ENABLED } from "@/lib/portal";
  *    pages and the route also guard themselves; this is the second lock, in one place.)
  *  - /login, /dashboard/** and /403 (the signed-in app and the classroom inside it) go to the branded
  *    "Portal opening soon" page while the portal is off.
- *  - /api/auth/** is a 404 while the portal is off: there is no auth provider to talk to yet.
+ *  - /api/auth/** and /api/lessons/** (the app's own API: sign-in, calendar downloads) are a 404 while the
+ *    portal is off: there is no auth provider to talk to yet.
  *
  * In development and in tests it does nothing (see lib/portal.ts), so no app behaviour changes there.
  * The matcher is a constant list because Next analyses it at build time.
@@ -39,5 +40,5 @@ function notFound(pathname: string) {
 }
 
 export const config = {
-  matcher: ["/login", "/403", "/dashboard/:path*", "/api/auth/:path*", "/api/dev/:path*", "/dev/:path*"],
+  matcher: ["/login", "/403", "/dashboard/:path*", "/api/auth/:path*", "/api/lessons/:path*", "/api/dev/:path*", "/dev/:path*"],
 };

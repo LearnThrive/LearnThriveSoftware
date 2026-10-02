@@ -106,6 +106,7 @@ test.describe('the portal is closed in production', () => {
   test('the auth API is a 404', async ({ request }) => {
     expect((await request.get('/api/auth/session')).status()).toBe(404);
     expect((await request.post('/api/auth/login', { data: { email: 'a@b.co', password: 'x' } })).status()).toBe(404);
+    expect((await request.get('/api/lessons/anything/ics')).status()).toBe(404);
   });
 });
 

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { AlertCircle, CheckCircle2, Lock, Video } from "lucide-react";
+import { AlertCircle, CheckCircle2, Lock, Video, CalendarPlus } from "lucide-react";
 import { requireSession } from "@/lib/auth/guard";
 import { createMetadata } from "@/lib/metadata";
 import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
@@ -108,6 +108,18 @@ export default async function LessonDetailPage({
         }
         actions={
           <>
+            {lesson.status !== "CANCELLED" && (
+              // A plain link to an authenticated download (app/api/lessons/[id]/ics/route.ts): the file holds
+              // only what this person may already see on this page.
+              <a href={`/api/lessons/${lesson.id}/ics`} className="btn btn--secondary" download>
+                <CalendarPlus size={16} aria-hidden="true" />Add to calendar
+              </a>
+            )}
+            {lesson.recurrenceId && lesson.status !== "CANCELLED" && (
+              <a href={`/api/lessons/${lesson.id}/ics?series=1`} className="btn btn--ghost" download>
+                Add the whole series
+              </a>
+            )}
             {canJoin && joinWindowOpen && (
               <Link href={`/dashboard/lessons/${lesson.id}/classroom`} className="btn btn--primary">
                 <Video size={16} aria-hidden="true" />Join classroom
