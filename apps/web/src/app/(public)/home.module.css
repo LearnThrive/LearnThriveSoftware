@@ -141,6 +141,13 @@
   padding: 60px 44px 60px 40px;
 }
 
+/* plan15 audit F12: with the grid stretching it, the copy sat at the top and left ~300px of empty navy
+   below the assurances at 1440x900. The grid item is the motion wrapper around .heroCopy; centred against
+   the photo, the spare space is shared above and below. */
+.heroCopyWrap {
+  align-self: center;
+}
+
 .heroChip {
   display: inline-flex;
   align-items: center;
