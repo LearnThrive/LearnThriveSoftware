@@ -19,6 +19,7 @@ export const ogPages: Record<string, OgPage> = {
   "/contact": { eyebrow: "Get in touch", title: "Contact" },
   "/faq": { eyebrow: "Questions", title: "Frequently Asked Questions" },
   "/safeguarding": { eyebrow: "Safeguarding", title: "Safeguarding information" },
+  "/trust": { eyebrow: "Trust", title: "Trust and policies" },
   "/privacy": { eyebrow: "Privacy", title: "Privacy notice" },
   "/cookies": { eyebrow: "Cookies", title: "Cookie notice" },
   "/terms": { eyebrow: "Terms", title: "Website terms" },

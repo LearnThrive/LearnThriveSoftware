@@ -730,3 +730,45 @@ export const enquiryGuidanceItems = [
   "Any current challenges or near-term goals",
   "Your preferred way to be contacted",
 ] as const;
+
+/**
+ * What the trust hub (/trust) links to. The descriptions are each linked page's own metadata
+ * description, word for word: the hub consolidates, it does not add claims.
+ */
+export const trustLinks = [
+  {
+    href: "/safeguarding",
+    label: "Safeguarding information",
+    text: "Student welfare, online tuition safety and routes for raising a safeguarding concern with LearnThrive Tuition or independent services.",
+  },
+  {
+    href: "/privacy",
+    label: "Privacy notice",
+    text: "How LearnThrive Tuition handles information provided through this website and related enquiries.",
+  },
+  {
+    href: "/cookies",
+    label: "Cookie notice",
+    text: "How the current LearnThrive Tuition website uses cookies and similar browser technologies.",
+  },
+  {
+    href: "/accessibility",
+    label: "Accessibility statement",
+    text: "LearnThrive Tuition's commitment to an accessible website, and how to report an accessibility issue.",
+  },
+  {
+    href: "/complaints",
+    label: "Complaints procedure",
+    text: "How to raise a complaint with LearnThrive Tuition and what happens after you do.",
+  },
+  {
+    href: "/terms",
+    label: "Website terms",
+    text: "Terms for using the LearnThrive Tuition public website and making an initial tuition enquiry.",
+  },
+  {
+    href: "/tuition-terms",
+    label: "Tuition terms",
+    text: "How LearnThrive Tuition's tuition service terms are agreed, separately from this website's own terms of use.",
+  },
+] as const;

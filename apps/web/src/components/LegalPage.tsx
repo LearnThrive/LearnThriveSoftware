@@ -5,8 +5,7 @@ import { PhoneContacts } from "@/components/PhoneContacts";
 import { Reveal } from "@/components/motion/primitives/Reveal";
 import { CinematicBackdrop } from "@/components/motion/primitives/CinematicBackdrop";
 import { LegalContentsNav } from "@/components/motion/scenes/LegalPageMotion";
-import { JsonLd } from "@/components/seo/JsonLd";
-import { breadcrumbData } from "@/lib/structuredData";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { siteConfig } from "@/lib/site";
 
 export interface LegalPageProps {
@@ -38,11 +37,11 @@ export function LegalPage({
 }: LegalPageProps) {
   return (
     <>
-      <JsonLd data={breadcrumbData([{ name: title, path }])} />
       <PageHero
         eyebrow={eyebrow}
         title={title}
         intro={intro}
+        breadcrumb={<Breadcrumbs trail={[{ name: title, path }]} />}
         className="page-hero--legal"
         backdrop={
           <CinematicBackdrop

@@ -8,6 +8,7 @@ import { Brand } from "@/components/Brand";
 import { ButtonLink } from "@/components/ButtonLink";
 import { Container } from "@/components/Container";
 import { PaletteTrigger } from "@/components/palette/PaletteTrigger";
+import { SubjectsFlyout } from "@/components/SubjectsFlyout";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { PORTAL_ENABLED } from "@/lib/portal";
 import { navigation } from "@/lib/site";
@@ -107,19 +108,33 @@ export function SiteHeader() {
           data-lenis-prevent
         >
           <nav className="primary-navigation" aria-label="Main navigation">
-            {navigation.map((item, index) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={isCurrent(item.href) ? "page" : undefined}
-                // Route-transition direction by position in the menu (plan15 Wave 8): going to a
-                // later item slides the page in from the right, an earlier one from the left.
-                transitionTypes={[index > currentIndex ? "nav-forward" : "nav-back"]}
-                onClick={() => setOpen(false)}
-              >
-                {item.label}
-              </Link>
-            ))}
+            {navigation.map((item, index) => {
+              // Route-transition direction by position in the menu (plan15 Wave 8): going to a
+              // later item slides the page in from the right, an earlier one from the left.
+              const direction = index > currentIndex ? "nav-forward" : "nav-back";
+              // Subjects carries a flyout of the four subjects (plan15 Wave 10).
+              if (item.href === "/subjects") {
+                return (
+                  <SubjectsFlyout
+                    key={item.href}
+                    current={isCurrent(item.href)}
+                    transitionType={direction}
+                    onNavigate={() => setOpen(false)}
+                  />
+                );
+              }
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  aria-current={isCurrent(item.href) ? "page" : undefined}
+                  transitionTypes={[direction]}
+                  onClick={() => setOpen(false)}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
           </nav>
           {/* Someone already signed in has no use for a "Login" link — send them to their
               dashboard instead (plan6 sections 14 and 78). */}

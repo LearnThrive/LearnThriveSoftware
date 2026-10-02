@@ -15,6 +15,8 @@ type PageHeroProps = {
       z-index: 1 inside this component's position: relative/overflow: clip root already handles
       the layering); every existing caller that omits it is completely unaffected. */
   backdrop?: ReactNode;
+  /** A visible breadcrumb trail (components/Breadcrumbs.tsx), shown above the eyebrow on deep pages. */
+  breadcrumb?: ReactNode;
 };
 
 export function PageHero({
@@ -25,12 +27,14 @@ export function PageHero({
   actions,
   className,
   backdrop,
+  breadcrumb,
 }: PageHeroProps) {
   return (
     <section className={className ? `page-hero ${className}` : "page-hero"}>
       {backdrop}
       <Container className="page-hero__inner">
         <div className="page-hero__copy">
+          {breadcrumb}
           <p className="eyebrow">{eyebrow}</p>
           <h1>{title}</h1>
           <p className="page-hero__intro">{intro}</p>
