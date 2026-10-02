@@ -144,22 +144,30 @@ function escapeHtml(text: string): string {
 // Colours below are hardcoded hex, not this app's CSS custom properties — email clients don't
 // reliably support CSS variables, so the branded wrapper inlines the same values the tokens
 // resolve to instead of referencing them.
-function emailWrapper(content: string): string {
+//
+// plan15 Wave 10 section 14.5: the design is deliberately light-only and every surface carries its own
+// background (and a `bgcolor` attribute for Outlook), with the colour-scheme meta tags telling clients
+// that support them (Apple Mail, iOS Mail) not to re-theme it. Clients that force-invert regardless
+// (some Gmail and Outlook modes) turn whole cells, never just the text, so contrast pairs survive. The
+// brand header is TEXT, not an image: it renders with images blocked, and nothing in the message is
+// image-only. Every message also ships a plain-text alternative (buildEmailText, buildAutoReplyText).
+function emailWrapper(content: string, preheader = ""): string {
   return `
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="color-scheme" content="light"/><meta name="supported-color-schemes" content="light"/><title>LearnThrive Tuition</title></head>
 <body style="margin:0;padding:0;background:#f4f1ec;font-family:Arial,Helvetica,sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f1ec;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#f4f1ec;font-size:1px;line-height:1px;">${escapeHtml(preheader)}</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#f4f1ec" style="background:#f4f1ec;">
     <tr><td align="center" style="padding:32px 16px;">
       <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(9,29,49,0.08);">
-        <tr><td style="background:#ffffff;padding:28px 32px;text-align:center;border-bottom:1px solid #d8e0df;">
+        <tr><td bgcolor="#ffffff" style="background:#ffffff;padding:28px 32px;text-align:center;border-bottom:1px solid #d8e0df;">
           <span style="font-size:18px;font-weight:800;color:#0e2a47;letter-spacing:-0.02em;">Learn<span style="color:#075f52;">Thrive</span> Tuition</span>
         </td></tr>
-        <tr><td style="background:#ffffff;padding:36px 32px;">
+        <tr><td bgcolor="#ffffff" style="background:#ffffff;padding:36px 32px;">
           ${content}
         </td></tr>
-        <tr><td style="background:#091d31;padding:24px 32px;text-align:center;">
+        <tr><td bgcolor="#091d31" style="background:#091d31;padding:24px 32px;text-align:center;">
           <p style="margin:0;color:#b9cbd5;font-size:13px;line-height:1.5;">
             LearnThrive Tuition &middot; Personalised tutoring that makes a difference
           </p>
@@ -207,7 +215,27 @@ function buildEmailHtml(data: EnquiryBody): string {
         <td style="padding:12px 16px;color:#435466;background:#ffffff;">${escapeHtml(data.support)}</td>
       </tr>
     </table>
-  `);
+  `, `New enquiry from ${data.parentName} about ${data.subject}.`);
+}
+
+/** The same notification as plain text: for clients and filters that do not render HTML. */
+function buildEmailText(data: EnquiryBody): string {
+  return [
+    "New Enquiry Received",
+    "",
+    `Parent/Guardian: ${data.parentName}`,
+    `Email: ${data.email}`,
+    `Phone: ${data.phone || "Not provided"}`,
+    `Year Group: ${data.yearGroup}`,
+    `Subject: ${data.subject}`,
+    `Preferred Contact: ${data.contactMethod}`,
+    "",
+    "Support Required:",
+    data.support,
+    "",
+    "-- LearnThrive Tuition",
+    SITE_URL,
+  ].join("\n");
 }
 
 function buildAutoReplyHtml(name: string): string {
@@ -218,7 +246,24 @@ function buildAutoReplyHtml(name: string): string {
     <p style="margin:0 0 16px;color:#435466;font-size:15px;line-height:1.65;">We aim to respond to all enquiries within <strong style="color:#0e2a47;">24 hours</strong>.</p>
     <p style="margin:0 0 24px;color:#435466;font-size:15px;line-height:1.65;">In the meantime, if you have any urgent questions, feel free to reply to this email.</p>
     <p style="margin:0;color:#435466;font-size:15px;line-height:1.65;">Kind regards,<br/><strong style="color:#0e2a47;">The LearnThrive Tuition Team</strong></p>
-  `);
+  `, "We have received your enquiry and will be in touch shortly.");
+}
+
+/** The parent's confirmation as plain text, word for word what the HTML says. */
+function buildAutoReplyText(name: string): string {
+  return [
+    `Thank you for your enquiry, ${name}!`,
+    "",
+    "We have received your enquiry and a member of the LearnThrive Tuition team will be in touch shortly.",
+    "",
+    "We aim to respond to all enquiries within 24 hours.",
+    "",
+    "In the meantime, if you have any urgent questions, feel free to reply to this email.",
+    "",
+    "Kind regards,",
+    "The LearnThrive Tuition Team",
+    SITE_URL,
+  ].join("\n");
 }
 
 export async function POST(request: Request) {
@@ -293,6 +338,7 @@ export async function POST(request: Request) {
       replyTo: body.email,
       subject: `Free consultation enquiry — ${body.subject}`,
       html: buildEmailHtml(body),
+      text: buildEmailText(body),
     });
 
     if (error) {
@@ -317,6 +363,7 @@ export async function POST(request: Request) {
         replyTo: RECIPIENT,
         subject: "We've received your enquiry — LearnThrive Tuition",
         html: buildAutoReplyHtml(body.parentName),
+        text: buildAutoReplyText(body.parentName),
       });
     } catch (err) {
       console.error("Auto-reply failed:", err);

@@ -772,3 +772,19 @@ export const trustLinks = [
     text: "How LearnThrive Tuition's tuition service terms are agreed, separately from this website's own terms of use.",
   },
 ] as const;
+
+/**
+ * The site-wide announcement bar (plan15 Wave 10 section 14.2). OFF by default: `announcement` is `null`
+ * and nothing renders. To use it, replace `null` with an object, for example
+ * `{ text: "Half-term tuition places are open.", href: "/book", linkLabel: "Book a free consultation" }`,
+ * and rebuild. It shows above the header on every public page, is plain text plus one optional link, and
+ * is never written by the code: only the owner's own words go here.
+ */
+export interface Announcement {
+  text: string;
+  /** An optional link; both `href` and `linkLabel` are needed for it to render. */
+  href?: string;
+  linkLabel?: string;
+}
+
+export const announcement: Announcement | null = null;
