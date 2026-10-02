@@ -85,6 +85,7 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
           </div>
         </div>
         <div className="profile-header__actions">
+          <Link href={`/dashboard/progress/${student.id}`} className="btn btn--secondary">See progress</Link>
           <Link href="/dashboard/admin/lessons/new" className="btn btn--primary">
             <CalendarPlus size={16} aria-hidden="true" />Schedule lesson
           </Link>

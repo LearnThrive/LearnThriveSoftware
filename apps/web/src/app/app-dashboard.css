@@ -337,3 +337,35 @@
 .radio-group { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); }
 .radio-option { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-small); color: var(--app-text); cursor: pointer; }
 .radio-option input { accent-color: var(--app-accent); width: 1rem; height: 1rem; }
+
+
+/* ── Progress timeline (app/(app)/dashboard/progress/[studentId]) ───────────────────────────────
+   plan15 feature A2: a vertical rule with one dot per lesson, the lesson's report beneath it. */
+.progress-timeline { position: relative; margin: 0; padding: 0; list-style: none; }
+.progress-timeline::before {
+  content: ""; position: absolute; top: 0.6rem; bottom: 0.6rem; left: 0.4rem; width: 2px;
+  background: var(--app-border);
+}
+.progress-timeline__item { position: relative; padding: 0 0 var(--space-6) 2rem; }
+.progress-timeline__item:last-child { padding-bottom: 0; }
+.progress-timeline__dot {
+  position: absolute; top: 0.35rem; left: 0; width: 0.95rem; height: 0.95rem; border-radius: 50%;
+  border: 2px solid var(--app-accent); background: var(--app-surface);
+}
+.progress-timeline__item.is-upcoming .progress-timeline__dot { border-style: dashed; border-color: var(--app-muted); }
+.progress-timeline__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); color: var(--app-muted); font-size: var(--text-small); }
+.progress-timeline__title { margin: var(--space-1) 0 var(--space-2); font-size: 1.05rem; color: var(--app-ink); }
+.progress-timeline__title a { color: inherit; text-decoration: none; }
+.progress-timeline__title a:hover { color: var(--app-accent-text); text-decoration: underline; }
+.progress-timeline__subject { margin-left: var(--space-2); color: var(--app-muted); font-size: var(--text-small); font-weight: 500; }
+.progress-timeline__report p { margin: 0 0 var(--space-3); color: var(--app-text); }
+.progress-timeline__report dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: var(--space-3); margin: 0; }
+.progress-timeline__report dt { color: var(--app-muted); font-size: var(--text-label); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.progress-timeline__report dd { margin: var(--space-1) 0 0; color: var(--app-text); }
+.progress-timeline__none { margin: 0; color: var(--app-muted); font-size: var(--text-small); }
+.progress-upcoming { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.progress-upcoming li { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2) var(--space-3); }
+.progress-upcoming time { min-width: 12rem; color: var(--app-muted); font-size: var(--text-small); }
+.progress-upcoming a { color: var(--app-ink); font-weight: 600; text-decoration: none; }
+.progress-upcoming a:hover { color: var(--app-accent-text); text-decoration: underline; }
+.progress-upcoming span { color: var(--app-muted); font-size: var(--text-small); }

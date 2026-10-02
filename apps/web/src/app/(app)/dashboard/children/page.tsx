@@ -66,7 +66,12 @@ export default async function ChildrenPage() {
                     </span>
                   }
                   description={tutors ? `Taught by ${tutors}` : "No tutor assigned yet"}
-                  action={<Link href="/dashboard/calendar" className="btn btn--ghost">View calendar</Link>}
+                  action={
+                    <>
+                      <Link href={`/dashboard/progress/${student.id}`} className="btn btn--secondary">See progress</Link>
+                      <Link href="/dashboard/calendar" className="btn btn--ghost">View calendar</Link>
+                    </>
+                  }
                 />
                 <CardBody className="card__body--flush">
                   {upcoming.length === 0 ? (
