@@ -41,7 +41,7 @@
 .btn--primary:hover:not(:disabled) { background: var(--app-accent-strong); border-color: var(--app-accent-strong); }
 
 .btn--secondary { background: var(--app-surface); border-color: var(--app-border-strong); color: var(--app-ink); }
-.btn--secondary:hover:not(:disabled) { border-color: var(--app-accent); color: var(--app-accent); }
+.btn--secondary:hover:not(:disabled) { border-color: var(--app-accent); color: var(--app-accent-text); }
 
 .btn--ghost { background: transparent; color: var(--app-ink); }
 .btn--ghost:hover:not(:disabled) { background: var(--app-surface-sunken); }
@@ -73,7 +73,7 @@
 .dialog-trigger--primary:hover { background: var(--app-accent-strong); border-color: var(--app-accent-strong); }
 
 .dialog-trigger--secondary { border-color: var(--app-border-strong); background: var(--app-surface); color: var(--app-ink); }
-.dialog-trigger--secondary:hover { border-color: var(--app-accent); color: var(--app-accent); }
+.dialog-trigger--secondary:hover { border-color: var(--app-accent); color: var(--app-accent-text); }
 
 .dialog-trigger--danger { border-color: var(--tone-critical-border); background: var(--app-surface); color: var(--fg-error); }
 .dialog-trigger--danger:hover { background: var(--error-bg); border-color: var(--fg-error); }
@@ -95,7 +95,7 @@
   transition: color var(--duration-fast) var(--app-ease), border-color var(--duration-fast) var(--app-ease);
 }
 .filter-tab:hover { color: var(--app-ink); }
-.filter-tab.is-active { color: var(--app-accent); border-bottom-color: var(--app-accent); }
+.filter-tab.is-active { color: var(--app-accent-text); border-bottom-color: var(--app-accent); }
 .filter-tab:focus-visible { outline: none; box-shadow: var(--app-focus-ring); border-radius: var(--app-radius-sm); }
 .filter-tab__count {
   padding: 0.05rem 0.4rem; border-radius: 999px;
@@ -153,7 +153,7 @@
 .lesson-row__chevron, .person-row__chevron, .record-list__chevron { transition: transform var(--duration-fast) var(--app-ease), color var(--duration-fast) var(--app-ease); }
 .lesson-row__link:hover .lesson-row__chevron,
 .person-row__link:hover .person-row__chevron,
-.record-list__link:hover .record-list__chevron { transform: translateX(3px); color: var(--app-accent); }
+.record-list__link:hover .record-list__chevron { transform: translateX(3px); color: var(--app-accent-text); }
 
 .lesson-row__when { display: flex; flex-direction: column; min-width: 9.5rem; flex: none; }
 .lesson-row__day { font-size: var(--text-small); font-weight: 650; color: var(--app-ink); }
@@ -162,7 +162,7 @@
 .lesson-row__title { font-weight: 600; color: var(--app-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lesson-row__subtitle { font-size: var(--text-small); color: var(--app-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lesson-row__meta { display: flex; align-items: center; gap: var(--space-3); flex: none; }
-.lesson-row__relative { font-size: var(--text-small); color: var(--app-accent); font-weight: 600; }
+.lesson-row__relative { font-size: var(--text-small); color: var(--app-accent-text); font-weight: 600; }
 .lesson-row__chevron, .person-row__chevron { color: var(--app-muted); }
 
 .person-row__identity { display: flex; align-items: center; gap: var(--space-3); min-width: 13rem; flex: 1; }
@@ -412,7 +412,7 @@ body.has-dialog { overflow: hidden; }
 }
 .toast.is-closing { animation: toast-out var(--duration-fast) var(--app-ease) forwards; }
 .toast p { margin: 0; flex: 1; font-size: var(--text-small); color: var(--app-ink); }
-.toast--success .toast__icon { color: var(--app-accent); animation: toast-check-in var(--duration-medium) var(--ease-snappy); }
+.toast--success .toast__icon { color: var(--app-accent-text); animation: toast-check-in var(--duration-medium) var(--ease-snappy); }
 .toast--error { border-left-color: var(--fg-error); }
 .toast--error .toast__icon { color: var(--fg-error); }
 .toast__dismiss {
@@ -468,7 +468,7 @@ body.has-dialog { overflow: hidden; }
 .timeline__body { min-width: 0; }
 .timeline__message { margin: 0; font-size: var(--text-body); color: var(--app-ink); }
 .timeline__message a { color: inherit; text-decoration: none; }
-.timeline__message a:hover { color: var(--app-accent); text-decoration: underline; }
+.timeline__message a:hover { color: var(--app-accent-text); text-decoration: underline; }
 .timeline__meta { margin: 0.1rem 0 0; font-size: var(--text-small); color: var(--app-muted); }
 
 .child-heading { display: flex; align-items: center; gap: var(--space-3); }

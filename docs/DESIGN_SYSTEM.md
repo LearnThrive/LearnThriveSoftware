@@ -259,7 +259,7 @@ System (default) / Light / Dark. Mechanics are in `src/lib/theme.ts`: System is 
 (`@media (prefers-color-scheme: dark)` guarded by `:root:not([data-theme="light"])`); an explicit choice
 is `html[data-theme]`, stored in `localStorage` (`lt-theme`) — never a cookie — and applied before
 first paint by a tiny fixed inline script in `<head>`, so there is no flash. Everything is gated on
-`html[data-themes="on"]`, set from `NEXT_PUBLIC_THEME_TOGGLE`, which is the kill switch.
+`html[data-themes="on"]`, which is set unless the build has `NEXT_PUBLIC_THEME_TOGGLE=0` (the kill switch).
 `tests/theme.test.mjs` fails if the two copies of the dark block ever differ.
 
 ### Public-site interaction layer (plan 15 Waves 4-9)

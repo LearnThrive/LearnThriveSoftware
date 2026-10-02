@@ -40,7 +40,7 @@
 .day-schedule__time { flex: none; min-width: 6.5rem; font-size: var(--text-small); font-weight: 650; color: var(--app-ink); }
 .day-schedule__body { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .day-schedule__title { font-weight: 600; color: var(--app-ink); text-decoration: none; }
-.day-schedule__title:hover { color: var(--app-accent); text-decoration: underline; }
+.day-schedule__title:hover { color: var(--app-accent-text); text-decoration: underline; }
 .day-schedule__meta { font-size: var(--text-small); color: var(--app-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 @media (max-width: 40rem) {
@@ -159,7 +159,7 @@
   background: var(--app-surface); border: 1px solid var(--app-border);
   border-radius: var(--app-radius-lg); box-shadow: var(--app-shadow-sm); text-align: center;
 }
-.status-page__icon { display: grid; place-items: center; width: 3.25rem; height: 3.25rem; border-radius: 50%; background: var(--app-surface-accent); color: var(--app-accent); }
+.status-page__icon { display: grid; place-items: center; width: 3.25rem; height: 3.25rem; border-radius: 50%; background: var(--app-surface-accent); color: var(--app-accent-text); }
 .status-page__code { margin: 0; font-size: var(--text-label); font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--app-muted); }
 .status-page__title { margin: 0; font-family: var(--font-heading); font-size: var(--text-h1); font-weight: 700; color: var(--app-ink); }
 .status-page__description { margin: 0; max-width: 42ch; color: var(--app-muted); }
@@ -317,7 +317,7 @@
 @keyframes lesson-peek-in { from { transform: translateX(1.5rem); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
 .lesson-peek__header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
-.lesson-peek__eyebrow { margin: 0 0 0.2rem; font-size: var(--text-label); font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--app-accent); }
+.lesson-peek__eyebrow { margin: 0 0 0.2rem; font-size: var(--text-label); font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--app-accent-text); }
 .lesson-peek__title { margin: 0; font-family: var(--font-heading); font-size: var(--text-h2); font-weight: 700; color: var(--app-ink); }
 .lesson-peek__meta { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 .lesson-peek__actions { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); }

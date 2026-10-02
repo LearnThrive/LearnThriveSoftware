@@ -12,10 +12,9 @@
  *  4. Everything is wrapped in try/catch: localStorage throws in private windows and with site data
  *     blocked, and the site must render correctly (System) when it does.
  *
- * The whole feature is behind NEXT_PUBLIC_THEME_TOGGLE (see THEMES_ENABLED): with the flag off the
+ * The whole feature has a kill switch, NEXT_PUBLIC_THEME_TOGGLE=0 (see THEMES_ENABLED): with it set the
  * layout never sets `html[data-themes="on"]`, the dark CSS never applies, the init script is not
- * emitted and the toggle renders nothing. It is the kill switch, and what kept the site from being
- * half-dark while the theme was being built.
+ * emitted and the toggle renders nothing: the site is exactly the light site it was before.
  */
 export type ThemeChoice = "system" | "light" | "dark";
 
@@ -23,10 +22,9 @@ export const THEME_CHOICES: readonly ThemeChoice[] = ["system", "light", "dark"]
 
 export const THEME_STORAGE_KEY = "lt-theme";
 
-/** Read at build time (NEXT_PUBLIC_*), so it is a constant per build. OFF unless "1" until the
- * dark theme is finished on every route (plan15 Wave 3's definition of done); then it flips to
- * "on unless 0" and stays as the kill switch. */
-export const THEMES_ENABLED = process.env.NEXT_PUBLIC_THEME_TOGGLE === "1";
+/** Read at build time (NEXT_PUBLIC_*), so it is a constant per build. ON unless "0": the dark theme
+ * is finished on every route (plan15 Wave 3), and the flag stays as the kill switch. */
+export const THEMES_ENABLED = process.env.NEXT_PUBLIC_THEME_TOGGLE !== "0";
 
 /** The `theme-color` of each scheme: the navy browser chrome of the light site, a deeper one in dark. */
 export const THEME_COLOURS = { light: "#0e2a47", dark: "#061321" } as const;

@@ -1,8 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
 import { PUBLIC_ROUTES } from './support';
 
-// plan15 Wave 3 — System / Light / Dark. The dev server for this suite is started with
-// NEXT_PUBLIC_THEME_TOGGLE=1 (playwright.config.ts), the flag that switches the whole feature on.
+// plan15 Wave 3 — System / Light / Dark. The feature is on by default; NEXT_PUBLIC_THEME_TOGGLE=0
+// is its kill switch (playwright.config.ts pins the flag to 1 so the suite never depends on a default).
 
 const DARK_CANVAS = 'rgb(10, 26, 43)'; // --surface-canvas, dark
 const LIGHT_CANVAS = 'rgb(255, 255, 255)'; // --surface-canvas, light
