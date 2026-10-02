@@ -10,6 +10,8 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Toaster } from "@/components/ui/Toaster";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { AppPaletteHost } from "@/components/palette/AppPaletteHost";
+import { PaletteTrigger } from "@/components/palette/PaletteTrigger";
 import { isNavItemActive, type AppNavSection } from "@/lib/navigation/appNavigation";
 import { prefersReducedMotion } from "@/lib/motion/reducedMotion";
 import { useDelayedUnmount } from "@/lib/motion/useDelayedUnmount";
@@ -193,6 +195,8 @@ export function AppShellClient({
             </span>
           )}
 
+          <PaletteTrigger className="icon-button app-topbar__search" label="Search" />
+
           <Link
             href="/dashboard/notifications"
             className={`icon-button app-topbar__bell ${bellRinging ? "is-ringing" : ""}`}
@@ -260,6 +264,9 @@ export function AppShellClient({
       {/* useSearchParams needs a Suspense boundary; the toaster renders nothing until an action
           actually reports back, so there's no fallback worth showing. */}
       <Suspense fallback={null}><Toaster /></Suspense>
+
+      {/* Ctrl/Cmd+K search, `?` shortcuts and "g then a letter" navigation: one host, this shell only. */}
+      <AppPaletteHost role={user.role} onSignOut={handleLogout} />
     </div>
   );
 }
