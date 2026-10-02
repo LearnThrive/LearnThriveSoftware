@@ -3,15 +3,19 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { CalendarPlus, ChevronDown, ClipboardList, GraduationCap, Plus, UserRound, Users } from "lucide-react";
+import { QUICK_CREATE } from "@/lib/navigation/quickCreate";
 import { useDelayedUnmount } from "@/lib/motion/useDelayedUnmount";
 
-const ITEMS = [
-  { href: "/dashboard/admin/people/students", label: "Student", icon: GraduationCap },
-  { href: "/dashboard/admin/people/clients", label: "Client", icon: Users },
-  { href: "/dashboard/admin/people/tutors", label: "Tutor", icon: UserRound },
-  { href: "/dashboard/admin/assignments", label: "Tuition assignment", icon: ClipboardList },
-  { href: "/dashboard/admin/lessons/new", label: "Lesson", icon: CalendarPlus },
-];
+// The entries (and who may have them) live in lib/navigation/quickCreate.ts, shared with the command
+// palette; this only adds each one's icon.
+const ICONS = {
+  "/dashboard/admin/people/students": GraduationCap,
+  "/dashboard/admin/people/clients": Users,
+  "/dashboard/admin/people/tutors": UserRound,
+  "/dashboard/admin/assignments": ClipboardList,
+  "/dashboard/admin/lessons/new": CalendarPlus,
+} as const;
+const ITEMS = QUICK_CREATE.map((item) => ({ ...item, icon: ICONS[item.href] }));
 
 /**
  * One "+ Create" control instead of five competing buttons across the dashboard (plan6 section
