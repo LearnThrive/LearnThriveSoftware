@@ -79,7 +79,7 @@ export function HeroScene() {
       <div className={styles.heroGlow} aria-hidden="true" />
       {webgl ? <HeroWebGLAtmosphere /> : null}
       <div className={styles.heroGrid}>
-        <m.div style={{ y: copyY, scale: copyScale, opacity: copyOpacity, transformOrigin: "left top" }}>
+        <m.div className={styles.heroCopyWrap} style={{ y: copyY, scale: copyScale, opacity: copyOpacity, transformOrigin: "left top" }}>
           <div className={styles.heroCopy}>
             <div className={styles.heroChip}>
               <span className={styles.heroChipDot} aria-hidden="true" />

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { MobileEnquiryBar } from "@/components/MobileEnquiryBar";
-import { MotionDebugOverlay } from "@/components/motion/MotionDebugOverlay";
+import { MotionDebugGate } from "@/components/motion/MotionDebugGate";
 import { MotionRuntime } from "@/components/motion/MotionRuntime";
 import { NavigationProgress } from "@/components/NavigationProgress";
 import { SmoothScroll } from "@/components/motion/SmoothScroll";
@@ -42,7 +42,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
         <PaletteHost />
         {/* Renders nothing unless `?motionDebug=1` is present in a development build (or a build
             made with NEXT_PUBLIC_MOTION_DEBUG=1) — see lib/motion/debug.ts. */}
-        <MotionDebugOverlay />
+        <MotionDebugGate />
       </MotionRuntime>
     </>
   );

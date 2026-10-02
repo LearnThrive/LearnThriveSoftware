@@ -1536,6 +1536,22 @@ img[src*="%2Fimages%2F"] {
   display: block;
 }
 
+/* plan15 audit F5: the maths hero's coordinate curve ran straight through the lead paragraph. On a wide hero
+   the curve now fades out over the left (text) column; on a narrow one, where the text spans the width, the
+   whole motif sits further back so it can never compete with the copy. */
+.subject-landing--maths .subject-hero-motif {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, transparent 38%, #000 66%);
+  mask-image: linear-gradient(to right, transparent 0, transparent 38%, #000 66%);
+}
+
+@media (max-width: 62rem) {
+  .subject-landing--maths .subject-hero-motif {
+    -webkit-mask-image: none;
+    mask-image: none;
+    opacity: 0.4;
+  }
+}
+
 .page-hero::after {
   position: absolute;
   right: -8rem;
