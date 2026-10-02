@@ -111,11 +111,10 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
       suppressHydrationWarning
       className={`${bricolage.variable} ${publicSans.variable} ${ibmPlexMono.variable}`}
     >
-      {THEMES_ENABLED ? (
-        <head>
-          <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
-        </head>
-      ) : null}
+      {/* The pre-paint preference script: theme (a no-op unless the themes are on) and motion. */}
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body>
         {children}
         <JsonLd data={webSiteData()} />

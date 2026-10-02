@@ -3617,7 +3617,9 @@ img[src*="%2Fimages%2F"] {
 
 .footer-appearance {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-start;
+  gap: 0.75rem;
   padding-top: 1rem;
 }
 
@@ -4334,6 +4336,43 @@ html[data-motion-tier="light"]::view-transition-new(*) {
   .testimonial-card:hover {
     transform: none !important;
   }
+}
+
+/* The visitor's own "Reduce motion" choice (lib/motion/preference.ts) gets the same blanket rule as the
+   prefers-reduced-motion media query above: every CSS animation and transition completes at once, smooth
+   scrolling is off, view transitions do not play. Reduce always wins; there is no opposite override. */
+html[data-motion="reduce"] {
+  scroll-behavior: auto;
+}
+
+html[data-motion="reduce"] *,
+html[data-motion="reduce"] *::before,
+html[data-motion="reduce"] *::after {
+  scroll-behavior: auto !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+html[data-motion="reduce"] ::view-transition-old(*),
+html[data-motion="reduce"] ::view-transition-new(*),
+html[data-motion="reduce"] ::view-transition-group(*) {
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+}
+
+html[data-motion="reduce"] .button::before {
+  display: none;
+}
+
+html[data-motion="reduce"] .button:hover,
+html[data-motion="reduce"] .button:active:not(:disabled),
+html[data-motion="reduce"] .feature-grid .feature-card:hover,
+html[data-motion="reduce"] .values-grid .feature-card:hover,
+html[data-motion="reduce"] .subject-card:hover,
+html[data-motion="reduce"] .subject-card:hover .subject-card__icon,
+html[data-motion="reduce"] .testimonial-card:hover {
+  transform: none !important;
 }
 
 /* ── Mobile enquiry bar (components/MobileEnquiryBar.tsx) ────────────────────────────────────────

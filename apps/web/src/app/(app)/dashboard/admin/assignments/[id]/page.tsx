@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CalendarPlus } from "lucide-react";
 import { requireRole } from "@/lib/auth/guard";
+import { effectiveRequireApproval } from "@/lib/reports/reportService";
 import { createMetadata } from "@/lib/metadata";
 import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
 import { PageHeader } from "@/components/shell/PageHeader";
@@ -32,6 +33,8 @@ export default async function AssignmentDetailPage({ params }: { params: Promise
   const data = getDataProvider();
   const assignment = await data.assignments.get(id);
   if (!assignment) notFound();
+  // The rule that applies: this assignment's own, else the platform default (Settings).
+  const reportApprovalRequired = await effectiveRequireApproval(data, assignment.id);
 
   const [tutor, students, clients, allLessons] = await Promise.all([
     data.tutors.get(assignment.tutorId),
@@ -147,7 +150,7 @@ export default async function AssignmentDetailPage({ params }: { params: Promise
               <dl className="detail-list" style={{ marginTop: 0 }}>
                 <div><dt>Duration</dt><dd>{assignment.defaultDurationMinutes ?? 60} minutes</dd></div>
                 <div><dt>Location</dt><dd>{assignment.defaultLocationType === "IN_PERSON" ? "In person" : "Online"}</dd></div>
-                <div><dt>Report approval</dt><dd>{assignment.requireReportApproval === false ? "Not required" : "Required"}</dd></div>
+                <div><dt>Report approval</dt><dd>{reportApprovalRequired ? "Required" : "Not required"}{assignment.requireReportApproval == null ? " (platform default)" : ""}</dd></div>
               </dl>
             </CardBody>
           </Card>

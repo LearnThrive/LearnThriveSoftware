@@ -45,11 +45,12 @@ Outstanding factual qualifications:
 
 ## Browser storage added by plan 15 (for legal review)
 
-The Cookie notice used to say, accurately, that the site used no browser storage. Plan 15 added two small, user-initiated uses, so the notice's "What this website currently uses" and "Why there is no cookie banner" sections were changed to describe them factually. **The wording needs the owner's and a legal reviewer's approval; the reviewed-on date on the page was deliberately not changed.**
+The Cookie notice used to say, accurately, that the site used no browser storage. Plan 15 added three small, user-initiated uses (a theme choice, a motion choice and the search recents), so the notice's "What this website currently uses" and "Why there is no cookie banner" sections were changed to describe them factually. **The wording needs the owner's and a legal reviewer's approval; the reviewed-on date on the page was deliberately not changed.**
 
 | What | Where | When it is written | Contains | Leaves the browser? |
 | --- | --- | --- | --- | --- |
 | `lt-theme` | `localStorage` | Only when a visitor picks Light or Dark. Choosing System removes it. | `light` or `dark` | No |
+| `lt-motion` | `localStorage` | Only when a visitor chooses Reduce motion. Choosing System removes it. | `reduce` | No |
 | `lt-palette-public:recent` | `sessionStorage` | When a visitor opens a page from the site search (Ctrl/Cmd+K). | Up to 5 page identifiers (for example `page:/safeguarding`) | No; cleared when the tab closes |
 
 Notes for the reviewer:

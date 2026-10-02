@@ -1,6 +1,7 @@
 import type { PaletteCommand } from "@/components/palette/CommandPalette";
 import { faqSections } from "@/lib/faqs";
 import { navigation, siteConfig, subjects } from "@/lib/site";
+import { setMotionPreference } from "@/lib/motion/preference";
 import { setTheme } from "@/lib/theme";
 
 /**
@@ -74,6 +75,8 @@ export function buildPublicCommands(): PaletteCommand[] {
     { id: "theme:system", title: "Use the system appearance", group: "Appearance", run: () => setTheme("system"), keywords: ["theme", "dark", "light", "auto"] },
     { id: "theme:light", title: "Switch to the light theme", group: "Appearance", run: () => setTheme("light"), keywords: ["theme", "day", "bright"] },
     { id: "theme:dark", title: "Switch to the dark theme", group: "Appearance", run: () => setTheme("dark"), keywords: ["theme", "night"] },
+    { id: "motion:system", title: "Follow my device for motion", group: "Appearance", run: () => setMotionPreference("system"), keywords: ["animation", "motion", "reduce", "default"] },
+    { id: "motion:reduce", title: "Reduce motion", group: "Appearance", run: () => setMotionPreference("reduce"), keywords: ["animation", "motion", "less", "calm", "accessibility"] },
   );
 
   for (const page of legalPages) {

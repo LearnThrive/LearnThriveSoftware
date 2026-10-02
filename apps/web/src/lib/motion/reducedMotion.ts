@@ -1,5 +1,7 @@
 "use client";
 
+import { userPrefersReducedMotion } from "./preference";
+
 /**
  * The one place JS-driven motion (as opposed to a CSS transition/animation, which the blanket
  * `prefers-reduced-motion` rule in globals.css already catches automatically) checks whether it
@@ -10,5 +12,5 @@
  */
 export function prefersReducedMotion(): boolean {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches || userPrefersReducedMotion();
 }

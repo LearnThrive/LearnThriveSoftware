@@ -71,6 +71,8 @@ export const THEME_EVENT = "lt-theme-change";
 
 /**
  * Runs before first paint. Keep it tiny, self-contained and free of interpolation: it is inlined
- * into every page, and a fixed string can be allowed by hash in a CSP.
+ * into every page, and a fixed string can be allowed by hash in a CSP. It also applies the visitor's
+ * motion preference (lib/motion/preference.ts), so a visitor who chose Reduce never sees one frame of
+ * motion; the key is spelled out here because the script cannot import.
  */
-export const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem("${THEME_STORAGE_KEY}");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}})()`;
+export const THEME_INIT_SCRIPT = `(function(){try{var d=document.documentElement,t=localStorage.getItem("${THEME_STORAGE_KEY}");if(t==="light"||t==="dark")d.setAttribute("data-theme",t);if(localStorage.getItem("lt-motion")==="reduce")d.setAttribute("data-motion","reduce")}catch(e){}})()`;

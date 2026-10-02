@@ -3,6 +3,7 @@ import type { Role } from "@/lib/auth/types";
 import { navigationFor } from "@/lib/navigation/appNavigation";
 import { quickCreateFor } from "@/lib/navigation/quickCreate";
 import { goToTargetsFor } from "@/lib/palette/appShortcuts";
+import { setMotionPreference } from "@/lib/motion/preference";
 import { setTheme } from "@/lib/theme";
 
 /**
@@ -51,6 +52,8 @@ export function buildAppCommands(role: Role, actions: AppCommandActions): Palett
     { id: "theme:system", title: "Use the system appearance", group: "Appearance", run: () => setTheme("system"), keywords: ["theme", "dark", "light", "auto"] },
     { id: "theme:light", title: "Switch to the light theme", group: "Appearance", run: () => setTheme("light"), keywords: ["theme", "day", "bright"] },
     { id: "theme:dark", title: "Switch to the dark theme", group: "Appearance", run: () => setTheme("dark"), keywords: ["theme", "night"] },
+    { id: "motion:system", title: "Follow my device for motion", group: "Appearance", run: () => setMotionPreference("system"), keywords: ["animation", "motion", "reduce", "default"] },
+    { id: "motion:reduce", title: "Reduce motion", group: "Appearance", run: () => setMotionPreference("reduce"), keywords: ["animation", "motion", "less", "calm", "accessibility"] },
     { id: "help:shortcuts", title: "Keyboard shortcuts", group: "Help", run: actions.showShortcuts, hint: "?", keywords: ["keys", "hotkeys", "help"] },
     { id: "account:sign-out", title: "Sign out", group: "Account", run: actions.signOut, keywords: ["log out", "logout", "exit"] },
   );
