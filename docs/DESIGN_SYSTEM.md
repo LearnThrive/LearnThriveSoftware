@@ -287,6 +287,30 @@ originals went from 1.2-3.8 MB to 75-200 KB) in `public/images/`, blur placehold
 `src/lib/imageBlur.generated.ts`, and the subject of each photo kept in frame by `lib/imageFocus.ts`
 (`object-position`). Founder portraits are rendered 1:1 at a fixed, unsqueezable size.
 
+### Brand, trust and deploy surfaces (plan 15 Waves 10 and 12)
+
+| Piece | What it is | Where |
+|---|---|---|
+| **Vector brand** | `BrandMark` (inline SVG, two inks `--brand-ink` / `--brand-green`, so one component is right on light, dark and navy), the icon set generated from it, per-page OG cards. Rules in [BRAND.md](BRAND.md). | `components/brand/`, `scripts/make-icons.mjs`, `app/og/` |
+| **Subjects flyout** | A disclosure beside the Subjects link: keyboard and touch operable, hover only as a convenience, inline in the mobile menu. Its accessible names say "what we teach" so they never collide with the enquiry form's "Subject" field. | `SubjectsFlyout.tsx` |
+| **Breadcrumbs (public)** | One array renders the visible trail and the BreadcrumbList JSON-LD, inside the hero. Distinct from the app's own `components/shell/PageHeader.tsx` breadcrumbs. | `components/Breadcrumbs.tsx` |
+| **Trust hub** | `/trust`: links to existing policy pages using their own descriptions, how an enquiry is handled, company details. No new claims. | `app/(public)/trust/` |
+| **Mobile enquiry bar** | Phones only, after the first screen; hides over forms, the keyboard and the footer; dismissal in memory, never stored. | `MobileEnquiryBar.tsx` |
+| **Announcement bar** | A slot in `lib/site.ts`, `null` (off) by default. | `AnnouncementBar.tsx` |
+| **Print** | A `@media print` block: plain black on white, no chrome, link addresses written out. The dark theme is screen-only so print is always light. | `globals.css`, `tokens.css` |
+| **Portal-closed page** | "Portal opening soon" for `/login` and `/dashboard` in production until the app has real authentication. | `app/(public)/portal-opening-soon/`, `proxy.ts`, `lib/portal.ts` |
+
+### The signed-in app additions (plan 15 Wave 11)
+
+| Piece | What it is | Where |
+|---|---|---|
+| **App palette** | The shared `CommandPalette` with the role's own navigation, what quick-create offers that role, theme and motion, shortcut help and sign out as static commands, and a role-scoped server search for lessons, people and reports. Never mounted in the classroom route group. | `AppPalette.tsx`, `lib/search/appSearch.ts` |
+| **Shortcuts** | `?` for the list, `g` then a letter to go to a page. Role-scoped, never while typing, none destructive. | `lib/palette/appShortcuts.ts`, `ShortcutsOverlay.tsx` |
+| **Motion preference** | System or Reduce (no "full motion" override): `html[data-motion="reduce"]` carries the blanket rule, the capability store reports the reduced tier, Motion is told to skip spatial animation. Applied before first paint. | `lib/motion/preference.ts`, `MotionToggle.tsx` |
+| **Progress timeline** | Coming up and lesson history, with parent-safe report fields. | `app/(app)/dashboard/progress/` |
+| **Derived views** | "Starting soon" reminders and a parent's "This week", computed when the page renders. | `lib/notifications/derivedReminders.ts`, `lib/dashboard/weekSummary.ts` |
+| **Accent as text in the app** | `--app-accent-text` and `--app-accent-strong-text`: the accent fills stay mid-green in dark, so text that uses the accent takes these (mint in dark) to stay AA. | `app-shell.css`, `tokens.css` |
+
 ## Components (`components/ui/`, `components/shell/`)
 
 | Component | Rule it enforces |

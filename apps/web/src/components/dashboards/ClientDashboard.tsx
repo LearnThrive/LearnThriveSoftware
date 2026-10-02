@@ -3,6 +3,7 @@ import { FileText } from "lucide-react";
 import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
 import type { AuthenticatedUser } from "@/lib/auth/types";
 import { lessonBucketsFor, visibleReportsFor, visibleStudentsFor } from "@/lib/dashboard/queries";
+import { weekSummaryFor } from "@/lib/dashboard/weekSummary";
 import { visibleReportFor } from "@/lib/reports/reportService";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
@@ -17,10 +18,11 @@ import { RecordList, RecordRow } from "@/components/records/RecordRow";
 export async function ClientDashboard({ user }: { user: AuthenticatedUser }) {
   const data = getDataProvider();
   const now = new Date();
-  const [buckets, students, reportPairs] = await Promise.all([
+  const [buckets, students, reportPairs, week] = await Promise.all([
     lessonBucketsFor(data, user, now),
     visibleStudentsFor(data, user),
     visibleReportsFor(data, user),
+    weekSummaryFor(data, user, now),
   ]);
 
   const tutorNames = new Map((await data.tutors.list()).map((tutor) => [tutor.id, tutor.name]));
@@ -47,6 +49,42 @@ export async function ClientDashboard({ user }: { user: AuthenticatedUser }) {
           ? `The next lesson is ${formatRelative(buckets.next.startAt)}.`
           : "No lessons scheduled at the moment."}
       />
+
+      <Card className="this-week">
+        <CardHeader title="This week" description="The next seven days, and what has arrived in the last seven." />
+        <CardBody>
+          <div className="this-week__grid">
+            <div>
+              <p className="this-week__figure">{week.lessons.length}</p>
+              <p className="this-week__label">{week.lessons.length === 1 ? "lesson coming up" : "lessons coming up"}</p>
+              {week.lessons.length > 0 && (
+                <ul className="this-week__list">
+                  {week.lessons.slice(0, 3).map((lesson) => (
+                    <li key={lesson.lessonId}>
+                      <Link href={`/dashboard/lessons/${lesson.lessonId}`}>{lesson.title}</Link>
+                      <span>{[lesson.childNames.join(", "), formatRelative(lesson.startAt, now)].filter(Boolean).join(" · ")}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div>
+              <p className="this-week__figure">{week.newReports.length}</p>
+              <p className="this-week__label">{week.newReports.length === 1 ? "new report" : "new reports"}</p>
+              {week.newReports.length > 0 && (
+                <ul className="this-week__list">
+                  {week.newReports.slice(0, 3).map((report) => (
+                    <li key={report.lessonId}>
+                      <Link href={`/dashboard/lessons/${report.lessonId}`}>{report.lessonTitle}</Link>
+                      <span>{formatRelative(report.approvedAt, now)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </CardBody>
+      </Card>
 
       <div className="grid-2">
         <LessonSection

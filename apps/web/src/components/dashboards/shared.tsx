@@ -2,11 +2,12 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { CalendarDays, Video } from "lucide-react";
 import type { Lesson } from "@learnthrive/data/domain";
-import { StatusBadge } from "@/components/ui/Badge";
+import { Badge, StatusBadge } from "@/components/ui/Badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LessonList, LessonRow } from "@/components/lessons/LessonRow";
 import { formatLongDate, formatRelative, formatTimeRange } from "@/lib/format";
+import { isStartingSoon } from "@/lib/notifications/derivedReminders";
 import { isWithinJoinWindow } from "@/lib/scheduling/joinWindow";
 
 /** A greeting that reflects the actual time of day — small, but it's the first thing every
@@ -52,7 +53,10 @@ export function NextLessonCard({ lesson, subtitle, role, canJoin }: {
   return (
     <Card className="next-lesson">
       <CardBody>
-        <p className="next-lesson__eyebrow">Next lesson · {formatRelative(lesson.startAt)}</p>
+        <p className="next-lesson__eyebrow">
+          Next lesson · {formatRelative(lesson.startAt)}
+          {isStartingSoon(lesson, new Date()) && <Badge tone="warning">Starting soon</Badge>}
+        </p>
         <h2 className="next-lesson__title">
           <Link href={`/dashboard/lessons/${lesson.id}`}>{lesson.title}</Link>
         </h2>

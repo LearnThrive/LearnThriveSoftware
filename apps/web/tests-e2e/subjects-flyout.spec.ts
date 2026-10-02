@@ -3,8 +3,8 @@ import { test, expect, type Page } from '@playwright/test';
 // plan15 Wave 10 section 14.2: the Subjects flyout in the header. A disclosure beside the Subjects link:
 // keyboard and touch operable, nothing hover-only, closes on Escape / outside press / navigation.
 
-const toggle = (page: Page) => page.getByRole('button', { name: 'Subjects menu' });
-const panel = (page: Page) => page.getByRole('group', { name: 'Subjects' });
+const toggle = (page: Page) => page.getByRole('button', { name: 'Open the what we teach menu' });
+const panel = (page: Page) => page.getByRole('group', { name: 'What we teach' });
 
 test.describe('desktop', () => {
   test.use({ viewport: { width: 1280, height: 800 } });

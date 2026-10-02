@@ -5,6 +5,7 @@ import { AdminDashboard } from "@/components/dashboards/AdminDashboard";
 import { TutorDashboard } from "@/components/dashboards/TutorDashboard";
 import { ClientDashboard } from "@/components/dashboards/ClientDashboard";
 import { StudentDashboard } from "@/components/dashboards/StudentDashboard";
+import { GettingStarted } from "@/components/dashboards/GettingStarted";
 
 export const metadata: Metadata = createMetadata({
   title: "Dashboard",
@@ -19,10 +20,17 @@ export const metadata: Metadata = createMetadata({
 export default async function DashboardPage() {
   const user = await requireSession();
 
-  switch (user.role) {
-    case "ADMIN": return <AdminDashboard user={user} />;
-    case "TUTOR": return <TutorDashboard user={user} />;
-    case "CLIENT": return <ClientDashboard user={user} />;
-    default: return <StudentDashboard user={user} />;
-  }
+  const dashboard =
+    user.role === "ADMIN" ? <AdminDashboard user={user} />
+    : user.role === "TUTOR" ? <TutorDashboard user={user} />
+    : user.role === "CLIENT" ? <ClientDashboard user={user} />
+    : <StudentDashboard user={user} />;
+
+  // First-run tips sit below the dashboard, dismissible (components/dashboards/GettingStarted.tsx).
+  return (
+    <>
+      {dashboard}
+      <GettingStarted role={user.role} />
+    </>
+  );
 }

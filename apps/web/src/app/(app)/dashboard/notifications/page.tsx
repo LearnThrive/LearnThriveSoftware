@@ -6,9 +6,11 @@ import { createMetadata } from "@/lib/metadata";
 import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
 import { markNotificationReadAction } from "@/lib/actions/notifications";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatLessonDateTime, formatRelative } from "@/lib/format";
+import { lessonsStartingSoon, reminderWording } from "@/lib/notifications/derivedReminders";
+import { visibleLessonsFor } from "@/lib/scheduling/visibleLessons";
 
 export const metadata: Metadata = createMetadata({
   title: "Notifications",
@@ -20,6 +22,8 @@ export default async function NotificationsPage() {
   const user = await requireSession();
   const notifications = await getDataProvider().notifications.forUser(user.id);
   const unread = notifications.filter((notification) => !notification.read);
+  // Derived when the page is opened, not stored: see lib/notifications/derivedReminders.ts.
+  const startingSoon = lessonsStartingSoon(await visibleLessonsFor(getDataProvider(), user), new Date());
 
   return (
     <>
@@ -30,6 +34,25 @@ export default async function NotificationsPage() {
           ? `${unread.length} unread.`
           : "You're all caught up."}
       />
+
+      {startingSoon.length > 0 && (
+        <Card className="starting-soon">
+          <CardHeader
+            title="Starting soon"
+            description="Worked out when you open this page. LearnThrive does not send an email or message about it."
+          />
+          <CardBody>
+            <ul className="starting-soon__list">
+              {startingSoon.map((reminder) => (
+                <li key={reminder.lessonId}>
+                  <Link href={`/dashboard/lessons/${reminder.lessonId}`}>{reminder.title}</Link>
+                  <span>{reminderWording(reminder.minutesUntil)}</span>
+                </li>
+              ))}
+            </ul>
+          </CardBody>
+        </Card>
+      )}
 
       <Card className={notifications.length === 0 ? "card--empty" : ""}>
         {notifications.length === 0 ? (

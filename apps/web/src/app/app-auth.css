@@ -108,7 +108,7 @@ a.notification__message:hover { color: var(--app-accent-text); text-decoration: 
 .notification__meta { display: flex; align-items: center; gap: var(--space-2); margin: 0.2rem 0 0; font-size: var(--text-small); color: var(--app-muted); }
 .notification__unread-tag {
   padding: 0.05rem 0.4rem; border-radius: 999px;
-  background: var(--app-accent-soft); color: var(--app-accent-strong);
+  background: var(--app-accent-soft); color: var(--app-accent-strong-text);
   font-size: var(--text-label); font-weight: 700;
 }
 

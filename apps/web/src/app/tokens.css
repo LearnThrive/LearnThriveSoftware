@@ -264,6 +264,7 @@
     --app-accent: #0b866f;
     --app-accent-strong: #0a7a65;
     --app-accent-text: #6fd3a8;
+    --app-accent-strong-text: #6fd3a8;
     --app-accent-soft: rgb(111 211 168 / 14%);
     --tone-neutral-bg: rgb(255 255 255 / 9%);
     --tone-neutral-fg: #c9d6df;
@@ -380,6 +381,7 @@
   --app-accent: #0b866f;
   --app-accent-strong: #0a7a65;
   --app-accent-text: #6fd3a8;
+  --app-accent-strong-text: #6fd3a8;
   --app-accent-soft: rgb(111 211 168 / 14%);
   --tone-neutral-bg: rgb(255 255 255 / 9%);
   --tone-neutral-fg: #c9d6df;
