@@ -17,6 +17,7 @@ export default function PublicPalette({ open, onClose, shortcutLabel }: { open: 
       onClose={onClose}
       commands={commands}
       storageKey="lt-palette-public"
+      persist="session"
       label="Search LearnThrive"
       placeholder="Search pages, subjects and questions…"
       shortcutLabel={shortcutLabel}

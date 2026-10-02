@@ -46,8 +46,14 @@ export interface CommandPaletteProps {
   placeholder?: string;
   /** The dialog's accessible name. */
   label?: string;
-  /** localStorage key for "recent": one per surface (public site, app). */
+  /** Storage key for "recent": one per surface (public site, app). */
   storageKey: string;
+  /**
+   * Where "recent" lives. The public site uses "session": it is forgotten when the tab closes, so the
+   * marketing site leaves nothing behind between visits (see the cookie notice). The signed-in app
+   * keeps the default, "local".
+   */
+  persist?: "local" | "session";
   /** What the open-shortcut is, for the footer hint ("Ctrl K" / "⌘K"). */
   shortcutLabel?: string;
 }
@@ -56,19 +62,23 @@ const MAX_RESULTS = 40;
 const MAX_RECENT = 5;
 const SEARCH_DEBOUNCE_MS = 160;
 
-function readRecent(storageKey: string): string[] {
+function storageFor(persist: "local" | "session"): Storage {
+  return persist === "session" ? window.sessionStorage : window.localStorage;
+}
+
+function readRecent(storageKey: string, persist: "local" | "session"): string[] {
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(`${storageKey}:recent`) ?? "[]");
+    const parsed = JSON.parse(storageFor(persist).getItem(`${storageKey}:recent`) ?? "[]");
     return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string").slice(0, MAX_RECENT) : [];
   } catch {
     return [];
   }
 }
 
-function writeRecent(storageKey: string, id: string) {
+function writeRecent(storageKey: string, persist: "local" | "session", id: string) {
   try {
-    const next = [id, ...readRecent(storageKey).filter((existing) => existing !== id)].slice(0, MAX_RECENT);
-    window.localStorage.setItem(`${storageKey}:recent`, JSON.stringify(next));
+    const next = [id, ...readRecent(storageKey, persist).filter((existing) => existing !== id)].slice(0, MAX_RECENT);
+    storageFor(persist).setItem(`${storageKey}:recent`, JSON.stringify(next));
   } catch {
     /* private window or blocked storage: recents simply do not persist */
   }
@@ -84,6 +94,7 @@ export function CommandPalette({
   placeholder = "Search…",
   label = "Command palette",
   storageKey,
+  persist = "local",
   shortcutLabel,
 }: CommandPaletteProps) {
   const router = useRouter();
@@ -117,11 +128,11 @@ export function CommandPalette({
       setQuery("");
       setActive(0);
       setRemote([]);
-      setRecentIds(readRecent(storageKey));
+      setRecentIds(readRecent(storageKey, persist));
     }
     document.body.classList.add("has-dialog");
     return () => document.body.classList.remove("has-dialog");
-  }, [open, storageKey]);
+  }, [open, storageKey, persist]);
 
   // Focus the field once it exists.
   useEffect(() => {
@@ -211,7 +222,7 @@ export function CommandPalette({
 
   const execute = useCallback(
     (command: PaletteCommand) => {
-      writeRecent(storageKey, command.id);
+      writeRecent(storageKey, persist, command.id);
       onClose();
       if (command.run) {
         command.run();
@@ -238,7 +249,7 @@ export function CommandPalette({
       }
       router.push(href);
     },
-    [onClose, router, storageKey],
+    [onClose, router, storageKey, persist],
   );
 
   // Escape closes; Tab stays inside the panel (the close button and the field).

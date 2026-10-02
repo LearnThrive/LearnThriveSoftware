@@ -43,6 +43,22 @@ Outstanding factual qualifications:
 - Re-check both notices before adding analytics, pixels, embeds, chat, booking, payment, CRM, portals, video platforms, or recording. Non-essential storage/access must not run before any required consent or other control is implemented.
 - The shared legal-page component displays **10 September 2026** as its last-reviewed date. This is an editorial review date, not evidence of company or professional legal approval.
 
+## Browser storage added by plan 15 (for legal review)
+
+The Cookie notice used to say, accurately, that the site used no browser storage. Plan 15 added two small, user-initiated uses, so the notice's "What this website currently uses" and "Why there is no cookie banner" sections were changed to describe them factually. **The wording needs the owner's and a legal reviewer's approval; the reviewed-on date on the page was deliberately not changed.**
+
+| What | Where | When it is written | Contains | Leaves the browser? |
+| --- | --- | --- | --- | --- |
+| `lt-theme` | `localStorage` | Only when a visitor picks Light or Dark. Choosing System removes it. | `light` or `dark` | No |
+| `lt-palette-public:recent` | `sessionStorage` | When a visitor opens a page from the site search (Ctrl/Cmd+K). | Up to 5 page identifiers (for example `page:/safeguarding`) | No; cleared when the tab closes |
+
+Notes for the reviewer:
+
+- Neither is a cookie, neither identifies a person, neither is read by the server, and the site works without them (private windows and blocked storage are handled).
+- Whether a persistent, user-chosen appearance preference needs consent or is covered by the exemption for something the user has asked for is a legal question this repository cannot answer. If the answer is "needs consent", the lowest-impact option is to keep the preference for the session only (change `lib/theme.ts` to use `sessionStorage`).
+- The signed-in app (not live in production) keeps its own sidebar state in `localStorage` (`learnthrive:sidebar-collapsed`), and the app palette planned for Wave 11 will keep a recent-items list; re-check this notice before the portal opens.
+- The smooth-scroll code reads a `lt-smooth` key if one exists; nothing on the site ever writes it (it is a developer switch).
+
 ## Future-change gate
 
 Before deploying a new provider or feature, record what data it receives, purpose, lawful basis, children's-data impact, processor/controller role, transfer mechanism, retention, security/access, and whether privacy information or storage/access choices must change. Repeat the production audit after deployment. This is particularly important for analytics, CRM, booking/payment, portals, lesson platforms, chat, and recording.

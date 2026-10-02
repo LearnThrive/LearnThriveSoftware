@@ -77,23 +77,34 @@ of this migration, not a restatement of that document.
 
 ## Accessibility and device coverage
 
-- **No automated accessibility audit tool was run** against `apps/web` (no axe-core or
-  equivalent installed for this app), and no manual screen-reader pass was performed. Every
-  interactive control added has a real label (verified indirectly by the Playwright tests, which
-  locate controls via `getByLabel`/`aria-label`), but that is not the same as an audit. See
-  `docs/HARDENING.md`.
-- **No real-device or cross-browser testing of `apps/web`** — built and tested on Windows
-  Chromium via Playwright only, same caveat `apps/classroom/PRODUCTION_GAPS.md` already records
-  for the classroom app specifically (Safari/iOS untested there too).
-- **No responsive testing against a real or emulated phone viewport** for the dashboard pages
-  built in Phases F-H — the CSS is fluid/auto-fill by construction (verified by code review, not
-  a live narrow-viewport pass).
+Corrected 2 October 2026 (plan 15). The earlier text said no automated audit existed; one has since been added and run.
+
+- **Automated accessibility audit: in place, scoped.** `axe-core` (WCAG 2 A/AA) runs against every public
+  route and the main app screens in the **light** theme (`tests-e2e/accessibility.spec.ts`) and in the
+  **dark** theme (`tests-e2e/accessibility-dark.spec.ts`, all four roles), alongside keyboard-only and
+  200% zoom suites (`tests-e2e/accessibility-zoom-keyboard.spec.ts`) and a 360 px no-horizontal-overflow
+  check on every public route (`tests-prod/smoke.spec.ts`). Contrast is also computed in both themes for the
+  semantic colour pairs (`tests/theme.test.mjs`). axe finds roughly a third of real accessibility problems,
+  so this is a floor, not a clean bill.
+- **Still not done: any manual screen-reader pass** (NVDA, VoiceOver, TalkBack). Every control has a real
+  label and the dialogs/combobox follow the ARIA patterns, but nobody has listened to them.
+- **Browsers and devices.** Day-to-day development and the full e2e suite run in Windows Chromium. A
+  Firefox, WebKit and iPhone-profile run of the production smoke suite is configured
+  (`playwright.prod.config.ts`, `PW_CROSS_BROWSER=1`, executed in CI) but **has not been run by the
+  author**, and no real phone or Mac Safari has been used. Safari/iOS behaviour of smooth scrolling, View
+  Transitions, WebGL, `backdrop-filter` and scroll-driven animation is reasoned about (each is feature-gated
+  and degrades to native behaviour), not observed. The classroom app's own caveat (Safari/iOS untested)
+  stands.
+- **Responsive coverage.** The public routes are checked at 360 px (no overflow) and the app screens for all
+  four roles were captured and checked at 390 px and 1440 px (no horizontal overflow, no console errors);
+  that was an automated capture, not a hands-on pass on a real phone.
 
 ## Observability and operations
 
-- **No structured logging, metrics, tracing, or alerting** for `apps/web` beyond what Next.js's
-  own dev server prints — the same gap `apps/classroom/PRODUCTION_GAPS.md` records for
-  `apps/realtime`.
+- **Observability is minimal.** The enquiry route now writes one structured, personal-data-free JSON line
+  per outcome, and `/api/health` exists for uptime checks. There are still **no metrics, tracing, alerting
+  or error-reporting service** for `apps/web` (a vendor is an owner decision), and the same gap
+  `apps/classroom/PRODUCTION_GAPS.md` records for `apps/realtime` stands.
 - **No backup/recovery plan** — there is no persistent data to back up today (everything is
   in-memory, reset on restart), but this becomes a real requirement the moment a database exists.
 - **`resetDataProvider()`'s Admin-only "Reset demo data" button** (plan section 98) is a
@@ -114,6 +125,14 @@ of this migration, not a restatement of that document.
   never did.
 - **No legal/compliance review** — terms of service, consent, liability — before any real tuition
   runs through this system.
+
+## Deploying the public site (plan 15 Wave 12)
+
+The marketing site and its enquiry form can ship before any of the app-level gaps above are closed,
+because in a production build the signed-in app is closed (login, dashboards and the classroom redirect to
+a "Portal opening soon" page; the auth API and development tools are 404s). What is verified, what is
+owner-blocked and how to deploy are in `docs/DEPLOYMENT_READINESS.md` and `docs/DEPLOYMENT.md`. Every gap in
+the sections above still applies to the app on the day the portal is opened.
 
 ## What this phase's work does establish
 

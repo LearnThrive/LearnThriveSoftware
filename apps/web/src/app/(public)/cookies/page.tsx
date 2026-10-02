@@ -46,10 +46,31 @@ export default function CookiesPage() {
           content: (
             <>
               <p>
-                The current LearnThrive website features do not set cookies or
-                use browser storage. The site does not include analytics,
-                advertising pixels, embedded third-party media, external font
-                services or other tracking features.
+                The current LearnThrive website does not set cookies. It keeps
+                two small things in your own browser, each only because of
+                something you choose to do, and neither is sent to LearnThrive
+                or to anyone else:
+              </p>
+              <ul>
+                <li>
+                  <strong>Your appearance choice.</strong> If you pick Light or
+                  Dark with the theme control, that choice is saved in your
+                  browser’s local storage (under the name “lt-theme”) so the
+                  site looks the same next time. If you leave the control on
+                  System, nothing is saved.
+                </li>
+                <li>
+                  <strong>Your recent searches.</strong> If you use the site
+                  search (Ctrl K or ⌘K), the pages you open from it are
+                  remembered in your browser’s session storage so they can be
+                  offered first the next time you open it. Closing the tab clears
+                  them.
+                </li>
+              </ul>
+              <p>
+                The site does not include analytics, advertising pixels,
+                embedded third-party media, external font services or other
+                tracking features.
               </p>
               <p>
                 The enquiry form holds your answers temporarily while the page is
@@ -102,8 +123,10 @@ export default function CookiesPage() {
           title: "Why there is no cookie banner",
           content: (
             <p>
-              The current website does not ask for cookie choices because its
-              features do not use non-essential storage or access technologies.
+              The current website does not ask for cookie choices because it sets
+              no cookies, and the only browser storage it uses is the appearance
+              choice and recent-search list described above, which exist only
+              because you used those controls.
               We will reassess this before adding analytics, embedded services
               or any other feature that may require information, consent or an
               objection control.
