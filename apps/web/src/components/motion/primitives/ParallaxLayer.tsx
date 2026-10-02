@@ -5,6 +5,13 @@ import * as m from "framer-motion/m";
 import { useTransform, type MotionValue } from "framer-motion";
 import { observeInView } from "@/lib/motion/activity";
 import { useMotionCapabilities } from "@/lib/motion/capabilities";
+import {
+  clampParallaxPx,
+  parallaxOverscanPx,
+  parallaxScaleFor,
+  PARALLAX_DEPTH_MAX_PX,
+  type ParallaxDepth,
+} from "@/lib/motion/depth";
 
 /**
  * One depth layer of a scroll-linked scene (plan11.md task 8): moves by a bounded number of pixels
@@ -13,8 +20,19 @@ import { useMotionCapabilities } from "@/lib/motion/capabilities";
  * Authored ranges are for the "full" tier. They are multiplied by the tier's `parallaxScale` — 1
  * on full, less on standard, a token amount on light, and zero when the visitor has asked for
  * reduced motion — so a phone gets a little depth, a tablet a bit more, and nobody who opted out of
- * motion gets any, without a per-scene branch. Movement is also hard-capped, because depth is
- * an accent: a layer that travels a third of the screen is a different effect.
+ * motion gets any, without a per-scene branch. Movement is also hard-capped by `depth`, because
+ * depth is an accent: a layer that travels a third of the screen is a different effect.
+ *
+ * Depth presets (lib/motion/depth.ts), chosen by what the layer is:
+ *   accent (default) <= 48px   chips, cards, the main object
+ *   scene            <= 120px  a layer that is the point of a scene (a large photo, an illustration)
+ *   cinematic        <= 200px  a large BACKGROUND layer; full tier only (still elsewhere). It moves
+ *                              far enough that its edges would show, so the layer sets
+ *                              `--parallax-overscan` (px) on itself: size it with
+ *                              `inset: calc(var(--parallax-overscan) * -1) 0` inside an
+ *                              `overflow: hidden` frame and the edges never appear.
+ * Tiers: full/standard/light (scaled by parallaxScale), never under reduced motion; cinematic on
+ * full only.
  *
  * Suggested authored ranges (the plan's): background detail 8-20px, the main object 10-24px,
  * a foreground chip 18-34px — deeper layers move further.
@@ -36,16 +54,16 @@ export type ParallaxLayerProps = {
   /** Promote to a compositor layer while near the viewport. Only for measured hot layers. */
   promote?: boolean;
   axis?: "y" | "x";
+  /** How far this layer may travel; see above. Default "accent" (<= 48px). */
+  depth?: ParallaxDepth;
   className?: string;
   /** For a purely decorative layer (a glow, a dot grid) that carries its look in `className`. */
   "aria-hidden"?: boolean;
   children?: ReactNode;
 };
 
-/** No layer travels further than this, whatever a caller asks for. */
-export const MAX_PARALLAX_PX = 48;
-
-const clampPx = (value: number) => Math.max(-MAX_PARALLAX_PX, Math.min(MAX_PARALLAX_PX, value));
+/** No `accent` layer travels further than this, whatever a caller asks for. */
+export const MAX_PARALLAX_PX = PARALLAX_DEPTH_MAX_PX.accent;
 
 export function ParallaxLayer({
   progress,
@@ -54,13 +72,14 @@ export function ParallaxLayer({
   disabled = false,
   promote = false,
   axis = "y",
+  depth = "accent",
   className,
   "aria-hidden": ariaHidden,
   children,
 }: ParallaxLayerProps) {
-  const { scrollChoreography, parallaxScale } = useMotionCapabilities();
-  const scale = disabled || !scrollChoreography ? 0 : parallaxScale;
-  const offset = useTransform(progress, [0, 1], [clampPx(from) * scale, clampPx(to) * scale]);
+  const { tier, scrollChoreography, parallaxScale } = useMotionCapabilities();
+  const scale = disabled || !scrollChoreography ? 0 : parallaxScaleFor(depth, tier, parallaxScale);
+  const offset = useTransform(progress, [0, 1], [clampParallaxPx(from, depth) * scale, clampParallaxPx(to, depth) * scale]);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -84,7 +103,11 @@ export function ParallaxLayer({
       ref={ref}
       className={className}
       aria-hidden={ariaHidden}
-      style={axis === "x" ? { x: offset } : { y: offset }}
+      style={{
+        ...(axis === "x" ? { x: offset } : { y: offset }),
+        // Only a cinematic layer needs it: the room it must overscan by to keep its edges hidden.
+        ...(depth === "cinematic" ? ({ "--parallax-overscan": `${parallaxOverscanPx(from, to)}px` } as object) : null),
+      }}
     >
       {children}
     </m.div>

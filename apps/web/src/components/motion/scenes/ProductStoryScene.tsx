@@ -47,6 +47,19 @@ const SCENES = [
   },
 ] as const;
 
+/**
+ * The mock lesson surface for each scene (plan15 Wave 6, audit finding F6). They were two grey
+ * placeholder boxes in a mostly empty panel; they are now small, honest drawings of what the
+ * product actually has: the tutor match, the two-person classroom, the whiteboard, the
+ * understanding check, and the lesson report with the fields `LessonReport` really carries
+ * (summary, progress, next steps), built from the same card, pill and row language the rest of the
+ * mock uses. Nothing here claims a feature that does not exist. Decorative: the whole stage is
+ * aria-hidden to assistive tech; the beats beside it carry the meaning.
+ */
+function Avatar({ initial }: { initial: string }) {
+  return <span className={styles.mockAvatar}>{initial}</span>;
+}
+
 function SceneVisual({ index }: { index: number }) {
   if (index === 0) {
     return (
@@ -54,28 +67,62 @@ function SceneVisual({ index }: { index: number }) {
         <div className={styles.mockCard}>
           <div className={styles.mockCardLabel}>Tutor match</div>
           <div className={styles.mockCardTitle}>Maths &middot; GCSE</div>
+          <div className={styles.mockMatch}>
+            <Avatar initial="T" />
+            <div className={styles.mockMatchText}>
+              <b>Tutor matched</b>
+              <span>Subject and level fit</span>
+            </div>
+            <span className={styles.mockCheck} aria-hidden="true" />
+          </div>
         </div>
         <div className={styles.mockPillRow}>
           <span className={`${styles.mockPill} ${styles.mockPillActive}`}>Subject: Maths</span>
           <span className={styles.mockPill}>Year 10</span>
+          <span className={styles.mockPill}>One-to-one</span>
         </div>
       </>
     );
   }
   if (index === 1) {
     return (
-      <div className={styles.mockRow}>
-        <div className={styles.mockTile}>Tutor</div>
-        <div className={styles.mockTile}>Student</div>
-      </div>
+      <>
+        <div className={styles.mockRow}>
+          <div className={styles.mockVideo}>
+            <Avatar initial="T" />
+            <span className={styles.mockVideoName}>Tutor</span>
+          </div>
+          <div className={styles.mockVideo}>
+            <Avatar initial="S" />
+            <span className={styles.mockVideoName}>Student</span>
+          </div>
+        </div>
+        <div className={styles.mockPillRow}>
+          <span className={`${styles.mockPill} ${styles.mockPillActive}`}>Both joined</span>
+          <span className={styles.mockPill}>Online classroom</span>
+        </div>
+      </>
     );
   }
   if (index === 2) {
     return (
       <div className={styles.mockRow}>
-        <div className={styles.mockTile}>Video</div>
-        <div className={styles.mockTile} style={{ flex: 2 }}>
-          Whiteboard
+        <div className={`${styles.mockVideo} ${styles.mockVideoSmall}`}>
+          <Avatar initial="T" />
+          <span className={styles.mockVideoName}>Video</span>
+        </div>
+        <div className={styles.mockBoard}>
+          <span className={styles.mockBoardTitle}>Whiteboard</span>
+          <svg viewBox="0 0 160 90" className={styles.mockGraph} aria-hidden="true">
+            <path d="M14 76H150M14 76V12" className={styles.mockAxis} />
+            <path d="M18 70C48 66 62 24 92 28C112 31 128 50 148 18" className={styles.mockCurve} />
+            <circle cx="92" cy="28" r="4.5" className={styles.mockPoint} />
+          </svg>
+          <div className={styles.mockToolRow}>
+            <span className={styles.mockTool}>Pen</span>
+            <span className={styles.mockTool}>Text</span>
+            <span className={styles.mockTool}>Shapes</span>
+          </div>
         </div>
       </div>
     );
@@ -85,6 +132,13 @@ function SceneVisual({ index }: { index: number }) {
       <div className={styles.mockCard}>
         <div className={styles.mockCardLabel}>Understanding check</div>
         <div className={styles.mockCardTitle}>3 of 4 confident</div>
+        <div className={styles.mockMeter} aria-hidden="true">
+          <span className={styles.mockMeterOn} />
+          <span className={styles.mockMeterOn} />
+          <span className={styles.mockMeterOn} />
+          <span className={styles.mockMeterOff} />
+        </div>
+        <div className={styles.mockFootnote}>One topic to look at again next time</div>
       </div>
     );
   }
@@ -92,7 +146,22 @@ function SceneVisual({ index }: { index: number }) {
     return (
       <div className={styles.mockCard}>
         <div className={styles.mockCardLabel}>Lesson report</div>
-        <div className={styles.mockCardTitle}>Topics covered &middot; Progress</div>
+        <dl className={styles.mockFields}>
+          <div>
+            <dt>Topics covered</dt>
+            <dd>Quadratic equations</dd>
+          </div>
+          <div>
+            <dt>Progress</dt>
+            <dd>
+              <span className={styles.mockTag}>Strong</span>
+            </dd>
+          </div>
+          <div>
+            <dt>Next steps</dt>
+            <dd>Factorising practice</dd>
+          </div>
+        </dl>
       </div>
     );
   }
@@ -101,6 +170,7 @@ function SceneVisual({ index }: { index: number }) {
       <div className={styles.mockCard}>
         <div className={styles.mockCardLabel}>Parent dashboard</div>
         <div className={styles.mockCardTitle}>Lesson complete</div>
+        <div className={styles.mockFootnote}>Report available &middot; Progress: strong</div>
       </div>
       <div className={styles.mockPillRow}>
         <span className={`${styles.mockPill} ${styles.mockPillActive}`}>Next lesson: Tue 6pm</span>

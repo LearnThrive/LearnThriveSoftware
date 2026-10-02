@@ -7,6 +7,7 @@ import { useScene } from "@/lib/motion/scroll";
 import { useMotionTier } from "@/lib/motion/capabilities";
 import { AnimatedUnderline } from "@/components/motion/primitives/AnimatedUnderline";
 import type { SubjectLandingConfig } from "@/lib/site";
+import { motionStagger, staggerDelay } from "@/lib/motion/tokens";
 
 export type SubjectWorldKind = "maths" | "english" | "science" | "11-plus";
 
@@ -66,7 +67,7 @@ export function SubjectWorld({ subject, kind }: SubjectWorldProps) {
               {subject.coverage.itemLabel} {String(index + 1).padStart(2, "0")}
             </span>
             {kind === "english" ? (
-              <AnimatedUnderline drawOnView delay={index * 0.08}>
+              <AnimatedUnderline drawOnView delay={staggerDelay(index, motionStagger.list)}>
                 <h3>{item.title}</h3>
               </AnimatedUnderline>
             ) : (

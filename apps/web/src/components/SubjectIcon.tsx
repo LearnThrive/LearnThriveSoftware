@@ -1,10 +1,10 @@
 export type SubjectKey = "maths" | "english" | "science" | "eleven-plus";
 
 export const SUBJECT_ACCENT: Record<SubjectKey, string> = {
-  maths: "#075f52",
-  english: "#8a5a2b",
-  science: "#1c6ea4",
-  "eleven-plus": "#7a4fb5",
+  maths: "var(--subject-maths)",
+  english: "var(--subject-english)",
+  science: "var(--subject-science)",
+  "eleven-plus": "var(--subject-eleven-plus)",
 };
 
 /**

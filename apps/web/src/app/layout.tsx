@@ -3,7 +3,11 @@ import Script from "next/script";
 import type { ReactNode } from "react";
 import { Bricolage_Grotesque, Public_Sans, IBM_Plex_Mono } from "next/font/google";
 import { siteConfig } from "@/lib/site";
+import { THEME_COLOURS, THEME_INIT_SCRIPT, THEMES_ENABLED } from "@/lib/theme";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { webSiteData } from "@/lib/structuredData";
 import "./globals.css";
+import "./tokens.css";
 import "./app-shell.css";
 import "./app-components.css";
 import "./app-dashboard.css";
@@ -46,15 +50,24 @@ export const metadata: Metadata = {
     address: false,
     telephone: false,
   },
-  icons: {
-    icon: "/favicon.svg",
-  },
+  // Icons come from the file conventions in this folder (icon.svg, favicon.ico, apple-icon.png), all
+  // generated from the vector mark by scripts/make-icons.mjs.
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#0e2a47",
+  // One theme-color per scheme (plan15 Wave 3): the browser's own chrome follows the OS scheme.
+  // Without the themes flag there is only the light site, so only the light colour.
+  themeColor: THEMES_ENABLED
+    ? [
+        { media: "(prefers-color-scheme: light)", color: THEME_COLOURS.light },
+        { media: "(prefers-color-scheme: dark)", color: THEME_COLOURS.dark },
+      ]
+    : THEME_COLOURS.light,
+  // Lets the browser paint native UI (scrollbars, form controls, the canvas behind the page) in
+  // the visitor's scheme from the first byte, before any stylesheet loads.
+  colorScheme: THEMES_ENABLED ? "light dark" : "light",
 };
 
 const organisationData = {
@@ -62,7 +75,7 @@ const organisationData = {
   "@type": "EducationalOrganization",
   name: siteConfig.name,
   url: siteConfig.url,
-  logo: `${siteConfig.url}/brand/learnthrive-logo.png`,
+  logo: `${siteConfig.url}/icons/icon-512.png`,
   description: siteConfig.description,
   email: siteConfig.email,
   telephone: siteConfig.phoneContacts.map((contact) => contact.phoneHref),
@@ -91,10 +104,21 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
     <html
       lang="en-GB"
       data-scroll-behavior="smooth"
+      data-themes={THEMES_ENABLED ? "on" : undefined}
+      // The init script below sets data-theme before React hydrates; React must keep what the DOM
+      // says rather than flag it (see node_modules/next/dist/docs/01-app/02-guides/
+      // preventing-flash-before-hydration.md). On <html> only.
+      suppressHydrationWarning
       className={`${bricolage.variable} ${publicSans.variable} ${ibmPlexMono.variable}`}
     >
+      {THEMES_ENABLED ? (
+        <head>
+          <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        </head>
+      ) : null}
       <body>
         {children}
+        <JsonLd data={webSiteData()} />
         <Script
           id="learnthrive-organisation-data"
           type="application/ld+json"

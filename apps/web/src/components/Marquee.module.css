@@ -11,8 +11,8 @@
 }
 
 .marquee {
-  background: var(--lt-green, #075f52);
-  color: #fff;
+  background: var(--accent-strong);
+  color: var(--fg-on-inverse);
   overflow: hidden;
   padding: 14px 0;
   white-space: nowrap;

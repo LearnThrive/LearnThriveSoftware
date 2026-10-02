@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Image from "next/image";
+import { BrandMark } from "@/components/brand/BrandMark";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
@@ -29,14 +29,7 @@ export default async function LoginPage() {
           <ArrowLeft size={16} aria-hidden="true" />Back to learnthrivetuition.co.uk
         </Link>
         <div className="auth-brand__body">
-          <Image
-            className="auth-brand__mark auth-enter"
-            src="/brand/learnthrive-mark.png"
-            alt=""
-            width={40}
-            height={34}
-            priority
-          />
+          <BrandMark className="auth-brand__mark auth-enter" />
           <p className="auth-brand__tagline auth-enter" style={{ animationDelay: "60ms" }}>Learn. Grow. Thrive.</p>
           <h1 className="auth-brand__headline auth-enter" style={{ animationDelay: "100ms" }}>Everything for your tuition, in one place.</h1>
           <ul className="auth-brand__points">

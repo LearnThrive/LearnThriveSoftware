@@ -13,6 +13,7 @@ export const metadata = createMetadata({
 export default function AccessibilityPage() {
   return (
     <LegalPage
+      path="/accessibility"
       eyebrow="Accessibility"
       title="Accessibility statement"
       intro="We want this website to be usable by everyone, including parents, guardians, students and tutors using assistive technology."

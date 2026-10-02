@@ -1,0 +1,121 @@
+/* The appearance control. Everything here is a semantic token, so it themes itself. */
+
+.cycle {
+  display: inline-grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-1);
+  color: var(--fg-strong);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-snappy),
+    border-color var(--duration-fast) var(--ease-snappy),
+    transform var(--duration-instant) var(--ease-snappy);
+}
+
+.cycle:hover {
+  background: var(--surface-accent);
+  border-color: var(--border-strong);
+}
+
+.cycle:active {
+  transform: scale(0.94);
+}
+
+.group {
+  display: inline-flex;
+  gap: 2px;
+  margin: 0;
+  padding: 3px;
+  min-width: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-sunken);
+}
+
+.legend {
+  /* Visually hidden, still the group's accessible name. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.option {
+  position: relative;
+  display: block;
+}
+
+.input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.face {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.25rem;
+  padding: 0 0.8rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--fg-muted);
+  transition:
+    background-color var(--duration-fast) var(--ease-snappy),
+    color var(--duration-fast) var(--ease-snappy);
+}
+
+.input:checked + .face {
+  background: var(--surface-1);
+  color: var(--fg-strong);
+  box-shadow: var(--shadow-1);
+}
+
+.input:not(:checked):hover + .face {
+  color: var(--fg-strong);
+}
+
+.input:focus-visible + .face {
+  outline: var(--focus-width) solid var(--focus-colour);
+  outline-offset: var(--focus-offset);
+}
+
+/* On a navy surface (the footer). */
+.inverse {
+  border-color: var(--border-on-inverse);
+  background: rgb(255 255 255 / 6%);
+  --focus-colour: var(--focus-colour-on-inverse);
+}
+
+.inverse .face {
+  color: var(--fg-on-inverse-muted);
+}
+
+.inverse .input:checked + .face {
+  background: rgb(255 255 255 / 14%);
+  color: var(--fg-on-inverse);
+  box-shadow: none;
+}
+
+.inverse .input:not(:checked):hover + .face {
+  color: var(--fg-on-inverse);
+}
+
+@media (max-width: 30rem) {
+  .face {
+    padding: 0 0.6rem;
+  }
+}

@@ -30,7 +30,7 @@
   position: absolute;
   inset: 0;
   width: 100%;
-  background: #8ed2ad;
+  background: var(--fg-accent-on-inverse);
   transform-origin: top;
 }
 
@@ -43,17 +43,17 @@
   display: grid;
   place-items: center;
   z-index: 1;
-  background: var(--lt-navy, #0e2a47);
+  background: var(--surface-inverse);
   transition: border-color 0.3s ease, background 0.3s ease;
 }
 
 .stageDotActive {
-  border-color: #8ed2ad;
-  background: #8ed2ad;
+  border-color: var(--fg-accent-on-inverse);
+  background: var(--fg-accent-on-inverse);
 }
 
 .stageDotActive svg {
-  color: var(--lt-navy);
+  color: var(--fg-strong);
 }
 
 .stageDot svg {
@@ -69,7 +69,7 @@
 .stageTitle {
   font-weight: 700;
   font-size: 15px;
-  color: #fff;
+  color: var(--fg-on-inverse);
   transition: opacity 0.3s ease;
 }
 

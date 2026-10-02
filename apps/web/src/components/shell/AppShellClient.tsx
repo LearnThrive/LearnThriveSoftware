@@ -1,7 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
+import { BrandMark } from "@/components/brand/BrandMark";
 import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Bell, ChevronsLeft, ChevronsRight, LogOut, Menu, UserRound, X } from "lucide-react";
@@ -9,6 +9,7 @@ import { NavIcon } from "@/components/shell/NavIcon";
 import { Avatar } from "@/components/ui/Avatar";
 import { Toaster } from "@/components/ui/Toaster";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { isNavItemActive, type AppNavSection } from "@/lib/navigation/appNavigation";
 import { prefersReducedMotion } from "@/lib/motion/reducedMotion";
 import { useDelayedUnmount } from "@/lib/motion/useDelayedUnmount";
@@ -149,7 +150,7 @@ export function AppShellClient({
       <aside className="app-sidebar" aria-label="Product navigation">
         <div className="app-sidebar__brand">
           <Link href="/dashboard" className="app-brand">
-            <Image className="app-brand__mark" src="/brand/learnthrive-mark.png" alt="" width={28} height={24} priority />
+            <BrandMark className="app-brand__mark" />
             <span className="app-brand__word">Learn<strong>Thrive</strong></span>
           </Link>
         </div>
@@ -165,7 +166,7 @@ export function AppShellClient({
           <div className="app-drawer__panel">
             <div className="app-drawer__top">
               <Link href="/dashboard" className="app-brand">
-                <Image className="app-brand__mark" src="/brand/learnthrive-mark.png" alt="" width={28} height={24} priority />
+                <BrandMark className="app-brand__mark" />
                 <span className="app-brand__word">Learn<strong>Thrive</strong></span>
               </Link>
               <button ref={drawerCloseRef} type="button" className="icon-button" onClick={() => setDrawerOpen(false)} aria-label="Close navigation">
@@ -230,6 +231,9 @@ export function AppShellClient({
                     <p className="app-usermenu__name">{user.name}</p>
                     <p className="app-usermenu__meta">{ROLE_LABELS[user.role]} · {user.email}</p>
                   </div>
+                </div>
+                <div className="app-usermenu__appearance">
+                  <ThemeToggle variant="radio" />
                 </div>
                 <Link href="/dashboard/settings" className="app-usermenu__item" role="menuitem">
                   <UserRound size={16} aria-hidden="true" />Account settings

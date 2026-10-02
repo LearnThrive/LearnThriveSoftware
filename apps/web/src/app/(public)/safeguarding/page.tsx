@@ -14,6 +14,7 @@ export const metadata = createMetadata({
 export default function SafeguardingPage() {
   return (
     <LegalPage
+      path="/safeguarding"
       eyebrow="Safeguarding"
       title="Safeguarding information"
       intro="Children’s welfare comes first. This page explains how to raise a concern and the safety considerations that matter around online tuition."

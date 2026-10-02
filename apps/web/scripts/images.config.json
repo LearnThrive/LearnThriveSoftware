@@ -1,0 +1,19 @@
+{
+  "_comment": "Per-image settings for scripts/optimise-images.mjs. crop is in FRACTIONS of the original (left/top/width/height). kind: 'photo' (default budget 400 KB) or 'portrait' (150 KB).",
+  "images": {
+    "subject-maths": { "kind": "photo", "maxEdge": 1800, "quality": 78, "budgetKb": 260 },
+    "subject-english": { "kind": "photo", "maxEdge": 1800, "quality": 78, "budgetKb": 260 },
+    "subject-science": { "kind": "photo", "maxEdge": 1800, "quality": 78, "budgetKb": 260 },
+    "subject-elevenplus": {
+      "kind": "photo",
+      "maxEdge": 1800,
+      "quality": 78,
+      "budgetKb": 260,
+      "crop": { "left": 0, "top": 0.46, "width": 1, "height": 0.4445 }
+    },
+    "hero-tutor-student": { "kind": "photo", "maxEdge": 1720, "quality": 80, "budgetKb": 260 },
+    "parent-child-homework": { "kind": "photo", "maxEdge": 900, "quality": 80, "budgetKb": 100 },
+    "abdurrahman-mustafa": { "kind": "portrait", "maxEdge": 1200, "quality": 82 },
+    "tahasin-hasan": { "kind": "portrait", "maxEdge": 1200, "quality": 82 }
+  }
+}

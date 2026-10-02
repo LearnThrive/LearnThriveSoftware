@@ -31,6 +31,8 @@ export default defineConfig({
     // refuses to run under NODE_ENV=production (see assertNotProductionWithoutRealProvider in
     // src/lib/auth/devProvider.ts), so `next start` would crash the whole auth flow by design.
     command: 'npm run dev -- -p 3100',
+    // plan15 Wave 3: the theme toggle and dark theme are behind this flag (src/lib/theme.ts).
+    env: { NEXT_PUBLIC_THEME_TOGGLE: '1' },
     url: 'http://localhost:3100',
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,

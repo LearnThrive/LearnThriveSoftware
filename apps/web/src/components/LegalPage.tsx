@@ -5,9 +5,13 @@ import { PhoneContacts } from "@/components/PhoneContacts";
 import { Reveal } from "@/components/motion/primitives/Reveal";
 import { CinematicBackdrop } from "@/components/motion/primitives/CinematicBackdrop";
 import { LegalContentsNav } from "@/components/motion/scenes/LegalPageMotion";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { breadcrumbData } from "@/lib/structuredData";
 import { siteConfig } from "@/lib/site";
 
 export interface LegalPageProps {
+  /** The page's own path, for its BreadcrumbList structured data. */
+  path: `/${string}`;
   eyebrow: string;
   title: string;
   intro: string;
@@ -24,6 +28,7 @@ export interface LegalPageProps {
 }
 
 export function LegalPage({
+  path,
   eyebrow,
   title,
   intro,
@@ -33,6 +38,7 @@ export function LegalPage({
 }: LegalPageProps) {
   return (
     <>
+      <JsonLd data={breadcrumbData([{ name: title, path }])} />
       <PageHero
         eyebrow={eyebrow}
         title={title}

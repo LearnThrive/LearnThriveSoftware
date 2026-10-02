@@ -174,11 +174,22 @@ test("required subjects and testimonial attributions are preserved", () => {
 });
 
 test("production images exist and stay within their payload budgets", () => {
+  // plan15 Wave 9/10: the 292 KB / 134 KB raster logos are now ~8 KB / ~2.5 KB vectors, and the four
+  // subject photographs went from 1.2-3.8 MB originals to optimised masters (scripts/optimise-images.mjs).
+  // Budgets only ever tighten.
   const budgets = new Map([
-    ["public/brand/learnthrive-logo.png", 350_000],
-    ["public/brand/learnthrive-mark.png", 175_000],
+    ["public/brand/learnthrive-logo.svg", 12_000],
+    ["public/brand/learnthrive-mark.svg", 6_000],
+    ["public/brand/learnthrive-mark-light.svg", 6_000],
+    ["public/icons/icon-512.png", 40_000],
+    ["public/icons/maskable-512.png", 40_000],
     ["public/images/online-tuition.webp", 100_000],
     ["public/og-image.png", 100_000],
+    ["public/images/subject-maths.jpg", 260_000],
+    ["public/images/subject-english.jpg", 260_000],
+    ["public/images/subject-science.jpg", 260_000],
+    ["public/images/subject-elevenplus.jpg", 260_000],
+    ["public/images/hero-tutor-student.jpg", 260_000],
   ]);
 
   for (const [path, limit] of budgets) {

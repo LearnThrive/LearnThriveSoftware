@@ -1,0 +1,436 @@
+/*
+ * Semantic design tokens — plan15 Wave 2 (section 6.1, 6.5, 6.6).
+ *
+ * globals.css keeps the raw palette (--colour-*); app-shell.css keeps the product's own --app-*
+ * roles. This file adds the layer between a raw colour and a component: what a colour is FOR
+ * (a surface, body text, a hairline, an accent), shared by the marketing site, the authenticated
+ * app and — for focus and contrast only — the classroom. A component asks for `--surface-1`, never
+ * `#ffffff`, which is what lets the dark theme (Wave 3) be a second set of values for these names
+ * instead of a second stylesheet.
+ *
+ * The light values below are the values the site already shipped with, role by role, so adding this
+ * layer changes nothing by itself. The product scope (.app-shell/.auth-route) re-points the same
+ * names at its cooler --app-* values, because the product is deliberately a calmer, greyer system
+ * than the warm marketing site; both keep their character and share the vocabulary, the elevation
+ * scale, the focus ring and the radii.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* ── Surfaces ─────────────────────────────────────────────────────────────────────────── */
+  --surface-canvas: var(--colour-white); /* the page itself */
+  --surface-1: var(--colour-white); /* a card, panel, input: raised off the canvas */
+  --surface-2: #f7f2e8; /* warm section tint (marketing "cream") */
+  --surface-3: #fbf8f1; /* soft warm tint: cards on a tinted section, raised cream */
+  --surface-sunken: #f0ebdf; /* recessed: wells, inactive tracks */
+  --surface-accent: var(--colour-mint-100); /* accent-tinted background: badges, hover, "today" */
+  --surface-inverse: var(--colour-navy-900); /* navy sections, the footer */
+  --surface-inverse-deep: var(--colour-navy-950); /* deeper navy: the hero, the strip beneath the header */
+  --surface-inverse-raised: var(--colour-navy-800); /* a panel sitting on a navy section */
+
+  /* ── Text ─────────────────────────────────────────────────────────────────────────────── */
+  --fg-strong: var(--colour-ink); /* headings */
+  --fg-body: #435466; /* paragraphs */
+  --fg-muted: var(--colour-muted); /* captions, hints, labels (>= 4.5:1 on every surface above) */
+  --fg-ink: #26333f; /* emphasised body copy on marketing pages: a notch stronger than --fg-body */
+  --fg-on-inverse: #ffffff; /* headings on navy */
+  --fg-on-inverse-soft: rgb(255 255 255 / 84%); /* body copy on navy (and over the hero gradient: >= 5:1) */
+  --fg-on-inverse-muted: rgb(255 255 255 / 72%); /* labels and captions on navy */
+  --fg-accent: var(--colour-green-800); /* links, labels and eyebrows on a light surface */
+  --fg-accent-on-inverse: #8ed2ad; /* the same role on navy: the mint the dark sections use */
+  --fg-accent-bright: #13c2a0; /* large numerals/figures on navy only (3:1 on navy-900, large text) */
+  --fg-error: var(--colour-error);
+
+  /* ── Lines ────────────────────────────────────────────────────────────────────────────── */
+  --border-subtle: #e7dfcd; /* hairline: card edges, dividers */
+  --border-strong: #cfc7b6; /* input borders, stronger dividers */
+  --border-on-inverse: rgb(255 255 255 / 14%); /* hairline on navy */
+
+  /* ── Accent and feedback ──────────────────────────────────────────────────────────────── */
+  --accent: var(--colour-green-700);
+  --accent-strong: var(--colour-green-800);
+  --accent-soft: var(--colour-mint-100);
+  --accent-deep: var(--colour-green-800); /* a full-width accent band that carries body text (the CTA) */
+  --on-accent: #ffffff; /* text on an accent-filled button */
+  --error-bg: var(--colour-error-bg);
+
+  /* ── Status tones (badges, alerts, calendar events, avatars) ──────────────────────────────
+     The semantic vocabulary docs/DESIGN_SYSTEM.md describes: tone = what the status MEANS, never
+     decoration. Each is a background/foreground pair that clears 4.5:1 in both themes (checked by
+     tests-e2e/accessibility.spec.ts and tests/theme.test.mjs's contrast pairs). */
+  --tone-neutral-bg: #eef2f5;
+  --tone-neutral-fg: #3d4f60;
+  --tone-muted-bg: #f1f3f5;
+  --tone-muted-fg: #566878;
+  --tone-positive-bg: #e2f3e9;
+  --tone-positive-fg: #1d6b42;
+  --tone-warning-bg: #fdf0d9;
+  --tone-warning-fg: #8a5a06;
+  --tone-warning-soft-bg: #fdf7ea;
+  --tone-warning-soft-border: #f0dcb4;
+  --tone-warning-soft-fg: #7a5a1d;
+  --tone-critical-border: #e7c4c7;
+  --tone-info-bg: #e4eefb;
+  --tone-info-fg: #1d4e87;
+  --tone-info-soft-bg: #eef4fb;
+  --tone-info-soft-border: #cfe0f4;
+  --tone-private-bg: #fdf7ed;
+  --tone-private-border: #dfc9a3;
+  --tone-private-fg: #7a5a1d;
+  --tone-private-label: #8a6428;
+  --tone-private-body: #4f3c1c;
+  --skeleton-base: #eef1f4;
+  --skeleton-sheen: rgb(255 255 255 / 70%);
+  --avatar-a-bg: #dfeee6;
+  --avatar-a-fg: #1d6b4f;
+  --avatar-b-bg: #e2eaf7;
+  --avatar-b-fg: #274a80;
+  --avatar-c-bg: #f7e7dc;
+  --avatar-c-fg: #8a4f22;
+  --avatar-d-bg: #e9e4f5;
+  --avatar-d-fg: #4f3d86;
+  --avatar-e-bg: #dcecef;
+  --avatar-e-fg: #1d5c6b;
+
+  /* ── Subject identity (icons and accents on a light or dark card) ─────────────────────── */
+  --subject-maths: #075f52;
+  --subject-english: #8a5a2b;
+  --subject-science: #1c6ea4;
+  --subject-eleven-plus: #7a4fb5;
+
+  /* ── Brand inks (the vector mark, components/brand/BrandMark.tsx) ───────────────────────────
+     The two colours of the logo, as roles, so one inline SVG is right on every surface. */
+  --brand-ink: #112c4b;
+  --brand-green: #14864b;
+
+  /* Per-subject colour themes (subject landing pages and the subject cards): accent for borders and
+     icons, ink for text on a light or dark surface, soft for a tinted section, hero for text on navy. */
+  --sp-maths-accent: #168a5b;
+  --sp-maths-ink: #075f52;
+  --sp-maths-soft: #e9f5ef;
+  --sp-maths-hero: #8ed2ad;
+  --sp-english-accent: #c47b31;
+  --sp-english-ink: #8f4d18;
+  --sp-english-soft: #fbefe3;
+  --sp-english-hero: #f0b77d;
+  --sp-science-accent: #24739a;
+  --sp-science-ink: #17668e;
+  --sp-science-soft: #e7f2f7;
+  --sp-science-hero: #8ccae5;
+  --sp-plus-accent: #6c5aa7;
+  --sp-plus-ink: #5e4c96;
+  --sp-plus-soft: #eeebf8;
+  --sp-plus-hero: #c7bdec;
+
+  /* ── Overlay ──────────────────────────────────────────────────────────────────────────── */
+  --overlay: rgb(9 29 49 / 56%); /* behind a dialog, drawer or palette */
+
+  /* ── Elevation (plan15 section 6.5) ───────────────────────────────────────────────────────
+     Five steps, each 2-3 stacked layers — a tight contact shadow plus soft ambient ones — tinted
+     with the navy (9 29 49), never pure black. The light theme also carries a 1px inner top
+     highlight (visible on tinted/cream surfaces, invisible on white, which is right). The dark
+     theme re-expresses elevation as lightness and hairlines instead (see the dark block).
+       1  a hairline lift: inputs, chips, rows
+       2  a resting card
+       3  a card on hover, a popover
+       4  a dropdown, a floating panel, a sticky header over content
+       5  a dialog, a drawer: the highest thing on the page */
+  --shadow-1: 0 1px 2px rgb(9 29 49 / 6%), 0 1px 1px rgb(9 29 49 / 4%);
+  --shadow-2: 0 1px 2px rgb(9 29 49 / 5%), 0 4px 10px -2px rgb(9 29 49 / 8%), inset 0 1px 0 rgb(255 255 255 / 70%);
+  --shadow-3: 0 1px 2px rgb(9 29 49 / 5%), 0 6px 14px -4px rgb(9 29 49 / 9%), 0 18px 32px -12px rgb(9 29 49 / 11%),
+    inset 0 1px 0 rgb(255 255 255 / 70%);
+  --shadow-4: 0 2px 4px rgb(9 29 49 / 5%), 0 12px 24px -6px rgb(9 29 49 / 11%), 0 32px 56px -20px rgb(9 29 49 / 16%);
+  --shadow-5: 0 4px 8px rgb(9 29 49 / 6%), 0 24px 48px -12px rgb(9 29 49 / 16%), 0 56px 96px -32px rgb(9 29 49 / 24%);
+
+  /* ── Focus (plan15 section 6.6): one language, marketing and product ──────────────────────
+     A 2px accent band set off from the element by a 2px gap that shows whatever surface it sits
+     on — so it reads as the same two-tone ring on white, cream, grey and tinted rows without
+     naming any of them, and it never competes with an element's own box-shadow. >= 3:1 against
+     every light surface (green-700 on white is 5.6:1). Navy sections set --focus-colour to the
+     mint variant instead (green-700 is only 2.5:1 on navy-900). */
+  --focus-colour: var(--colour-green-700);
+  --focus-colour-on-inverse: #8ed2ad;
+  --focus-width: 2px;
+  --focus-offset: 2px;
+
+  /* ── Texture for navy surfaces (plan15 section 6.5) ───────────────────────────────────────
+     A very faint top-left radial light plus a static grain tile (3-4% opacity, no animation) so
+     large flat navy fields do not band on a good display. One image, painted once. */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E");
+  --navy-light: radial-gradient(120% 90% at 0% 0%, rgb(255 255 255 / 6%), rgb(255 255 255 / 0%) 55%);
+
+  /* Photography: untouched in the light theme; slightly dimmed and contrast-lifted in the dark one,
+     so a bright photo does not glare off a dark page. A flat brightness/contrast pair — never a
+     colour shift or blur that could distort a face. */
+  --image-filter: none;
+}
+
+/* The product scope: the same names, the product's own (cooler) values. app-shell.css still defines
+   the --app-* tokens it always did; these just point the shared names at them. */
+.app-shell,
+.auth-route {
+  --surface-canvas: var(--app-canvas);
+  --surface-1: var(--app-surface);
+  --surface-2: var(--app-surface-sunken);
+  --surface-3: var(--app-surface);
+  --surface-sunken: var(--app-surface-sunken);
+  --surface-accent: var(--app-surface-accent);
+  --surface-inverse: var(--app-sidebar);
+  --fg-strong: var(--app-ink);
+  --fg-body: var(--app-text);
+  --fg-muted: var(--app-muted);
+  --fg-on-inverse: var(--app-on-dark);
+  --fg-on-inverse-soft: var(--app-on-dark);
+  --fg-on-inverse-muted: var(--app-on-dark-muted);
+  --fg-accent: var(--app-accent-strong);
+  --border-subtle: var(--app-border);
+  --border-strong: var(--app-border-strong);
+  --accent: var(--app-accent);
+  --accent-strong: var(--app-accent-strong);
+  --accent-soft: var(--app-accent-soft);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════════════════
+   Dark theme — plan15 Wave 3. A designed theme, not an inversion: the canvas is near navy-950,
+   surfaces step UP in lightness with hairlines (elevation is lightness + border, not shadow),
+   inverse (navy) sections get DEEPER than the canvas so the section rhythm survives, text is a
+   soft off-white, never pure white, and the accent is retuned brighter for text and a hair
+   lighter as a fill so white-on-accent stays >= 4.5:1.
+
+   Two selectors carry the identical block, because CSS cannot share one declaration list between
+   a media query and an attribute selector:
+     1. System (the default): the OS says dark and the visitor has not chosen Light.
+     2. Explicit: html[data-theme="dark"], set by the pre-paint script before first paint.
+   tests/theme.test.mjs fails if the two blocks ever differ.
+
+   Both are gated on html[data-themes="on"], which layout.tsx sets from NEXT_PUBLIC_THEME_TOGGLE,
+   so the whole theme can be switched off at build time (a kill switch) and, until the toggle was
+   shipped, nothing was half-dark. With the attribute absent the site is light, exactly as before.
+   ═══════════════════════════════════════════════════════════════════════════════════════════ */
+
+@media (prefers-color-scheme: dark) {
+  :root[data-themes="on"]:not([data-theme="light"]) {
+    color-scheme: dark;
+    /* theme:begin */
+    --surface-canvas: #0a1a2b;
+    --surface-1: #0f2740;
+    --surface-2: #0c2036;
+    --surface-3: #123150;
+    --surface-sunken: #07131f;
+    --surface-accent: rgb(111 211 168 / 14%);
+    --surface-inverse: #061321;
+    --surface-inverse-deep: #040e18;
+    --surface-inverse-raised: #0e2a47;
+    --fg-strong: #eef4f8;
+    --fg-body: #bccbd7;
+    --fg-ink: #d6e1e9;
+    --fg-muted: #95a9b9;
+    --fg-on-inverse: #f2f7fa;
+    --fg-on-inverse-soft: rgb(242 247 250 / 84%);
+    --fg-on-inverse-muted: rgb(242 247 250 / 68%);
+    --fg-accent: #6fd3a8;
+    --fg-accent-on-inverse: #8ed2ad;
+    --fg-accent-bright: #13c2a0;
+    --fg-error: #ff9a9f;
+    --border-subtle: #1f3a55;
+    --border-strong: #345572;
+    --border-on-inverse: rgb(255 255 255 / 12%);
+    --accent: #0b866f;
+    --accent-strong: #0a7a65;
+    --accent-soft: rgb(111 211 168 / 14%);
+    --accent-deep: #075345;
+    --on-accent: #ffffff;
+    --error-bg: rgb(255 154 159 / 12%);
+    --overlay: rgb(2 8 14 / 72%);
+    --shadow-1: 0 0 0 1px rgb(255 255 255 / 6%);
+    --shadow-2: 0 0 0 1px rgb(255 255 255 / 7%), 0 6px 14px -4px rgb(0 0 0 / 45%);
+    --shadow-3: 0 0 0 1px rgb(255 255 255 / 8%), 0 10px 22px -6px rgb(0 0 0 / 50%), 0 24px 40px -16px rgb(0 0 0 / 45%);
+    --shadow-4: 0 0 0 1px rgb(255 255 255 / 9%), 0 16px 32px -8px rgb(0 0 0 / 55%), 0 40px 64px -24px rgb(0 0 0 / 55%);
+    --shadow-5: 0 0 0 1px rgb(255 255 255 / 10%), 0 28px 56px -12px rgb(0 0 0 / 65%), 0 64px 104px -32px rgb(0 0 0 / 60%);
+    --focus-colour: #8ed2ad;
+    --navy-light: radial-gradient(120% 90% at 0% 0%, rgb(255 255 255 / 4%), rgb(255 255 255 / 0%) 55%);
+    --image-filter: brightness(0.92) contrast(1.04);
+    --app-canvas: #0a1a2b;
+    --app-surface: #0f2740;
+    --app-surface-sunken: #0c2036;
+    --app-surface-accent: rgb(111 211 168 / 14%);
+    --app-sidebar: #061321;
+    --app-border: #1f3a55;
+    --app-border-strong: #345572;
+    --app-ink: #eef4f8;
+    --app-text: #bccbd7;
+    --app-muted: #95a9b9;
+    --app-accent: #0b866f;
+    --app-accent-strong: #0a7a65;
+    --app-accent-soft: rgb(111 211 168 / 14%);
+    --tone-neutral-bg: rgb(255 255 255 / 9%);
+    --tone-neutral-fg: #c9d6df;
+    --tone-muted-bg: rgb(255 255 255 / 6%);
+    --tone-muted-fg: #9fb2c1;
+    --tone-positive-bg: rgb(73 190 125 / 16%);
+    --tone-positive-fg: #86e2ae;
+    --tone-warning-bg: rgb(240 180 70 / 16%);
+    --tone-warning-fg: #f5cb78;
+    --tone-warning-soft-bg: rgb(240 180 70 / 10%);
+    --tone-warning-soft-border: rgb(240 180 70 / 32%);
+    --tone-warning-soft-fg: #f5cb78;
+    --tone-critical-border: rgb(255 154 159 / 38%);
+    --tone-info-bg: rgb(110 160 235 / 17%);
+    --tone-info-fg: #a4c6f6;
+    --tone-info-soft-bg: rgb(110 160 235 / 10%);
+    --tone-info-soft-border: rgb(110 160 235 / 30%);
+    --tone-private-bg: rgb(240 180 70 / 9%);
+    --tone-private-border: rgb(240 180 70 / 34%);
+    --tone-private-fg: #f5cb78;
+    --tone-private-label: #d9b46a;
+    --tone-private-body: #e3d3b0;
+    --skeleton-base: #14304b;
+    --skeleton-sheen: rgb(255 255 255 / 7%);
+    --avatar-a-bg: rgb(80 190 140 / 22%);
+    --avatar-a-fg: #8fe0bb;
+    --avatar-b-bg: rgb(110 150 230 / 22%);
+    --avatar-b-fg: #a9c4f4;
+    --avatar-c-bg: rgb(235 150 90 / 22%);
+    --avatar-c-fg: #f2b98c;
+    --avatar-d-bg: rgb(150 125 230 / 22%);
+    --avatar-d-fg: #c5b5f3;
+    --avatar-e-bg: rgb(90 190 205 / 22%);
+    --avatar-e-fg: #8fdbe8;
+    --subject-maths: #5fd0a6;
+    --subject-english: #e0b07a;
+    --subject-science: #7fbbea;
+    --subject-eleven-plus: #b99aee;
+    --brand-ink: #eef4f8;
+    --brand-green: #5fd08e;
+    --sp-maths-accent: #3fbf86;
+    --sp-maths-ink: #6fd3a8;
+    --sp-maths-soft: rgb(63 191 134 / 12%);
+    --sp-maths-hero: #8ed2ad;
+    --sp-english-accent: #e0a060;
+    --sp-english-ink: #f0b77d;
+    --sp-english-soft: rgb(224 160 96 / 11%);
+    --sp-english-hero: #f0b77d;
+    --sp-science-accent: #5fb0d8;
+    --sp-science-ink: #8ccae5;
+    --sp-science-soft: rgb(95 176 216 / 11%);
+    --sp-science-hero: #8ccae5;
+    --sp-plus-accent: #9d8ad8;
+    --sp-plus-ink: #c7bdec;
+    --sp-plus-soft: rgb(157 138 216 / 12%);
+    --sp-plus-hero: #c7bdec;
+    /* theme:end */
+  }
+}
+
+:root[data-themes="on"][data-theme="dark"] {
+  color-scheme: dark;
+  /* theme:begin */
+  --surface-canvas: #0a1a2b;
+  --surface-1: #0f2740;
+  --surface-2: #0c2036;
+  --surface-3: #123150;
+  --surface-sunken: #07131f;
+  --surface-accent: rgb(111 211 168 / 14%);
+  --surface-inverse: #061321;
+  --surface-inverse-deep: #040e18;
+  --surface-inverse-raised: #0e2a47;
+  --fg-strong: #eef4f8;
+  --fg-body: #bccbd7;
+  --fg-ink: #d6e1e9;
+  --fg-muted: #95a9b9;
+  --fg-on-inverse: #f2f7fa;
+  --fg-on-inverse-soft: rgb(242 247 250 / 84%);
+  --fg-on-inverse-muted: rgb(242 247 250 / 68%);
+  --fg-accent: #6fd3a8;
+  --fg-accent-on-inverse: #8ed2ad;
+  --fg-accent-bright: #13c2a0;
+  --fg-error: #ff9a9f;
+  --border-subtle: #1f3a55;
+  --border-strong: #345572;
+  --border-on-inverse: rgb(255 255 255 / 12%);
+  --accent: #0b866f;
+  --accent-strong: #0a7a65;
+  --accent-soft: rgb(111 211 168 / 14%);
+  --accent-deep: #075345;
+  --on-accent: #ffffff;
+  --error-bg: rgb(255 154 159 / 12%);
+  --overlay: rgb(2 8 14 / 72%);
+  --shadow-1: 0 0 0 1px rgb(255 255 255 / 6%);
+  --shadow-2: 0 0 0 1px rgb(255 255 255 / 7%), 0 6px 14px -4px rgb(0 0 0 / 45%);
+  --shadow-3: 0 0 0 1px rgb(255 255 255 / 8%), 0 10px 22px -6px rgb(0 0 0 / 50%), 0 24px 40px -16px rgb(0 0 0 / 45%);
+  --shadow-4: 0 0 0 1px rgb(255 255 255 / 9%), 0 16px 32px -8px rgb(0 0 0 / 55%), 0 40px 64px -24px rgb(0 0 0 / 55%);
+  --shadow-5: 0 0 0 1px rgb(255 255 255 / 10%), 0 28px 56px -12px rgb(0 0 0 / 65%), 0 64px 104px -32px rgb(0 0 0 / 60%);
+  --focus-colour: #8ed2ad;
+  --navy-light: radial-gradient(120% 90% at 0% 0%, rgb(255 255 255 / 4%), rgb(255 255 255 / 0%) 55%);
+  --image-filter: brightness(0.92) contrast(1.04);
+  --app-canvas: #0a1a2b;
+  --app-surface: #0f2740;
+  --app-surface-sunken: #0c2036;
+  --app-surface-accent: rgb(111 211 168 / 14%);
+  --app-sidebar: #061321;
+  --app-border: #1f3a55;
+  --app-border-strong: #345572;
+  --app-ink: #eef4f8;
+  --app-text: #bccbd7;
+  --app-muted: #95a9b9;
+  --app-accent: #0b866f;
+  --app-accent-strong: #0a7a65;
+  --app-accent-soft: rgb(111 211 168 / 14%);
+  --tone-neutral-bg: rgb(255 255 255 / 9%);
+  --tone-neutral-fg: #c9d6df;
+  --tone-muted-bg: rgb(255 255 255 / 6%);
+  --tone-muted-fg: #9fb2c1;
+  --tone-positive-bg: rgb(73 190 125 / 16%);
+  --tone-positive-fg: #86e2ae;
+  --tone-warning-bg: rgb(240 180 70 / 16%);
+  --tone-warning-fg: #f5cb78;
+  --tone-warning-soft-bg: rgb(240 180 70 / 10%);
+  --tone-warning-soft-border: rgb(240 180 70 / 32%);
+  --tone-warning-soft-fg: #f5cb78;
+  --tone-critical-border: rgb(255 154 159 / 38%);
+  --tone-info-bg: rgb(110 160 235 / 17%);
+  --tone-info-fg: #a4c6f6;
+  --tone-info-soft-bg: rgb(110 160 235 / 10%);
+  --tone-info-soft-border: rgb(110 160 235 / 30%);
+  --tone-private-bg: rgb(240 180 70 / 9%);
+  --tone-private-border: rgb(240 180 70 / 34%);
+  --tone-private-fg: #f5cb78;
+  --tone-private-label: #d9b46a;
+  --tone-private-body: #e3d3b0;
+  --skeleton-base: #14304b;
+  --skeleton-sheen: rgb(255 255 255 / 7%);
+  --avatar-a-bg: rgb(80 190 140 / 22%);
+  --avatar-a-fg: #8fe0bb;
+  --avatar-b-bg: rgb(110 150 230 / 22%);
+  --avatar-b-fg: #a9c4f4;
+  --avatar-c-bg: rgb(235 150 90 / 22%);
+  --avatar-c-fg: #f2b98c;
+  --avatar-d-bg: rgb(150 125 230 / 22%);
+  --avatar-d-fg: #c5b5f3;
+  --avatar-e-bg: rgb(90 190 205 / 22%);
+  --avatar-e-fg: #8fdbe8;
+  --subject-maths: #5fd0a6;
+  --subject-english: #e0b07a;
+  --subject-science: #7fbbea;
+  --subject-eleven-plus: #b99aee;
+  --brand-ink: #eef4f8;
+  --brand-green: #5fd08e;
+  --sp-maths-accent: #3fbf86;
+  --sp-maths-ink: #6fd3a8;
+  --sp-maths-soft: rgb(63 191 134 / 12%);
+  --sp-maths-hero: #8ed2ad;
+  --sp-english-accent: #e0a060;
+  --sp-english-ink: #f0b77d;
+  --sp-english-soft: rgb(224 160 96 / 11%);
+  --sp-english-hero: #f0b77d;
+  --sp-science-accent: #5fb0d8;
+  --sp-science-ink: #8ccae5;
+  --sp-science-soft: rgb(95 176 216 / 11%);
+  --sp-science-hero: #8ccae5;
+  --sp-plus-accent: #9d8ad8;
+  --sp-plus-ink: #c7bdec;
+  --sp-plus-soft: rgb(157 138 216 / 12%);
+  --sp-plus-hero: #c7bdec;
+  /* theme:end */
+}

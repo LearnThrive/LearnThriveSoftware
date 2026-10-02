@@ -17,8 +17,8 @@
   --colour-border: #d8e0df;
   --colour-error: #a12832;
   --colour-error-bg: #fff1f2;
-  --colour-focus: #813900;
-  --colour-focus-outer: #fff2b8;
+  /* --colour-focus / --colour-focus-outer (the old brown outline in a pale-yellow halo) are gone:
+     see --focus-colour in tokens.css. */
 
   /* Both variables resolve through next/font (loaded sitewide on <html> in layout.tsx), with the
      same system-font fallback chain either way. "Aptos"/"Aptos Display" (Microsoft 365's default)
@@ -36,9 +36,11 @@
   --radius-sm: 0.5rem;
   --radius-md: 0.875rem;
   --radius-lg: 1.25rem;
-  --shadow-sm: 0 8px 24px rgb(9 29 49 / 7%);
-  --shadow-md: 0 20px 55px rgb(9 29 49 / 13%);
-  --shadow-interactive: 0 16px 34px rgb(9 29 49 / 11%);
+  /* The original three shadows, now aliases of the 5-step elevation scale in tokens.css: resting
+     card, floating panel, hover lift. New work should name the step (--shadow-1 ... --shadow-5). */
+  --shadow-sm: var(--shadow-2);
+  --shadow-md: var(--shadow-4);
+  --shadow-interactive: var(--shadow-3);
 
   /* ── Motion system (plan8) ───────────────────────────────────────────────────────────────
      One shared set of durations and easing curves for the whole product — marketing, app and
@@ -62,6 +64,12 @@
   --duration-medium: 220ms;
   --duration-standard: var(--duration-medium);
   --duration-slow: 380ms;
+  /* plan15 Wave 2: three longer durations for arrivals the visitor did not trigger (a section
+     reveal, the hero's first-screen sequence, a whole scene). Never a response to input.
+     Mirrored in src/lib/motion/tokens.ts; keep the two in sync. */
+  --duration-emphasis: 600ms;
+  --duration-hero: 900ms;
+  --duration-cinematic: 1400ms;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-snappy: var(--ease-out);
   --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
@@ -87,11 +95,73 @@ html {
   scroll-padding-top: 6rem;
 }
 
+/* Smooth scrolling (components/motion/SmoothScroll.tsx, plan15 Wave 4). While Lenis is active it
+   owns the easing, so the native `scroll-behavior: smooth` above must stand down or the two would
+   fight over every anchor jump. These are Lenis' own recommended rules: it uses the real document
+   scroll, so no height tricks are needed, but nested scrollers should not chain into the page,
+   a stopped page (mobile menu open) must not scroll, and an iframe must not swallow wheel events. */
+html[data-smooth-scroll="on"],
+html.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+/* The pointer-tracked spotlight border (components/motion/SpotlightPointer.tsx, plan15 Wave 6): a
+   1px ring of soft accent light that follows the cursor around a card's edge. Pure CSS from the two
+   custom properties the pointer writes; hidden unless a fine pointer hovers, so touch and every
+   other tier keep the card's plain border. */
+[data-spotlight] {
+  position: relative;
+  isolation: isolate;
+}
+
+[data-spotlight]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  padding: 1px;
+  border-radius: inherit;
+  background: radial-gradient(
+    280px circle at var(--mx, 50%) var(--my, 50%),
+    color-mix(in srgb, var(--accent) 70%, transparent),
+    transparent 64%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-standard) var(--ease-snappy);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  [data-spotlight]:hover::before {
+    opacity: 1;
+  }
+}
+
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+.lenis.lenis-smooth iframe {
+  pointer-events: none;
+}
+
 body {
   min-width: 20rem;
   margin: 0;
-  background: var(--colour-white);
-  color: var(--colour-text);
+  background: var(--surface-canvas);
+  color: var(--fg-body);
   font-family: var(--font-sans);
   font-size: 1rem;
   line-height: 1.65;
@@ -131,21 +201,24 @@ a {
 }
 
 :focus-visible {
-  outline: 3px solid var(--colour-focus);
-  outline-offset: 3px;
-  box-shadow: 0 0 0 6px var(--colour-focus-outer);
+  /* One focus language (plan15 section 6.6, tokens.css): a 2px accent band with a 2px gap that
+     shows whatever surface the element sits on. Replaces the brown-outline-in-a-yellow-halo this
+     file used to give the marketing site, so a marketing page and a dashboard no longer have two
+     unrelated focus treatments. Navy sections set --focus-colour to the mint variant. */
+  outline: var(--focus-width) solid var(--focus-colour);
+  outline-offset: var(--focus-offset);
 }
 
 ::selection {
   background: var(--colour-mint-200);
-  color: var(--colour-navy-950);
+  color: var(--fg-strong);
 }
 
 h1,
 h2,
 h3 {
   margin: 0;
-  color: var(--colour-ink);
+  color: var(--fg-strong);
   font-family: var(--font-heading);
   font-weight: 720;
   line-height: 1.08;
@@ -163,6 +236,32 @@ h2 {
 h3 {
   font-size: clamp(1.15rem, 1.7vw, 1.45rem);
   letter-spacing: -0.02em;
+}
+
+/* plan15 section 6.4: composed lines. Balanced headings (no one-word last line, no ragged
+   wrap), "pretty" paragraphs (no orphan on the last line), the font's optical-size axis where it
+   has one so large display text is drawn tighter and small text more open, and tabular figures
+   wherever numbers line up or change (stats, counters, dates, times). Progressive: browsers
+   without text-wrap simply wrap as they always did. */
+h1,
+h2,
+h3,
+h4 {
+  text-wrap: balance;
+  font-optical-sizing: auto;
+}
+
+p,
+li,
+blockquote,
+dd,
+figcaption {
+  text-wrap: pretty;
+}
+
+time,
+.tabular {
+  font-variant-numeric: tabular-nums;
 }
 
 p {
@@ -189,17 +288,19 @@ ol {
 }
 
 .section--tint {
-  background: var(--colour-mint-100);
+  background: var(--surface-accent);
 }
 
 .section--navy {
-  background: var(--colour-navy-900);
+  background: var(--surface-inverse);
   color: #dce8ed;
+  --focus-colour: var(--focus-colour-on-inverse);
+  background-image: var(--navy-light), var(--grain);
 }
 
 .section--navy h2,
 .section--navy h3 {
-  color: var(--colour-white);
+  color: var(--fg-on-inverse);
 }
 
 .sr-only {
@@ -220,8 +321,8 @@ ol {
   top: 0.75rem;
   left: 0.75rem;
   padding: 0.7rem 1rem;
-  background: var(--colour-white);
-  color: var(--colour-navy-950);
+  background: var(--surface-1);
+  color: var(--fg-strong);
   border: 2px solid var(--colour-navy-950);
   border-radius: var(--radius-sm);
   font-weight: 700;
@@ -235,7 +336,7 @@ ol {
 
 .eyebrow {
   margin-bottom: 1rem;
-  color: var(--colour-green-800);
+  color: var(--fg-accent);
   font-size: 0.78rem;
   font-weight: 800;
   letter-spacing: 0.14em;
@@ -334,8 +435,8 @@ ol {
 }
 
 .button--primary {
-  background: var(--colour-green-800);
-  color: var(--colour-white);
+  background: var(--accent-strong);
+  color: var(--fg-on-inverse);
   box-shadow: 0 10px 24px rgb(7 95 82 / 18%);
 }
 
@@ -345,52 +446,72 @@ ol {
 }
 
 .button--primary:hover {
-  background: var(--colour-green-700);
+  background: var(--accent);
   box-shadow: 0 14px 28px rgb(7 95 82 / 24%);
 }
 
 .button--secondary {
   --button-sheen: rgb(7 95 82 / 8%);
 
-  border-color: #b8c8c6;
+  border-color: var(--border-strong);
   background: transparent;
-  color: var(--colour-navy-900);
+  color: var(--fg-strong);
 }
 
 .button--secondary:hover {
-  border-color: var(--colour-navy-900);
-  background: var(--colour-white);
+  border-color: var(--fg-strong);
+  background: var(--surface-1);
 }
 
 .button--light {
   --button-sheen: rgb(7 95 82 / 8%);
 
-  background: var(--colour-white);
-  color: var(--colour-navy-950);
+  background: var(--surface-1);
+  color: var(--fg-strong);
 }
 
 .button--secondary svg,
 .button--light svg {
-  background: var(--colour-mint-100);
+  background: var(--surface-accent);
 }
 
 .button--light:hover {
-  background: var(--colour-cream);
+  background: var(--surface-3);
 }
 
 .button--text {
   padding-inline: 0.5rem;
-  color: var(--colour-white);
+  color: var(--fg-on-inverse);
 }
 
 .button--text:hover {
   background: rgb(255 255 255 / 10%);
 }
 
+/* A submit button that is working keeps its exact size: the arrow swaps for a ring in the same box. */
+.button-spinner {
+  flex: none;
+}
+
+.button-spinner circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 22 40;
+  transform-origin: center;
+  animation: button-spin 0.8s linear infinite;
+}
+
+@keyframes button-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .button:focus-visible {
-  outline: 3px solid var(--colour-focus);
-  outline-offset: 3px;
-  box-shadow: 0 0 0 6px var(--colour-focus-outer);
+  outline: var(--focus-width) solid var(--focus-colour);
+  outline-offset: var(--focus-offset);
 }
 
 .button:active:not(:disabled) {
@@ -409,7 +530,7 @@ ol {
   min-height: 2.75rem;
   align-items: center;
   gap: 0.55rem;
-  color: var(--colour-green-800);
+  color: var(--fg-accent);
   font-weight: 750;
   text-decoration: none;
 }
@@ -434,15 +555,15 @@ ol {
   z-index: 100;
   top: 0;
   border-bottom: 1px solid transparent;
-  background: rgb(255 255 255 / 72%);
+  background: color-mix(in srgb, var(--surface-1) 72%, transparent);
   box-shadow: none;
   transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
 }
 
 .site-header.site-header--scrolled {
-  border-bottom: 1px solid rgb(14 42 71 / 10%) !important;
-  background: rgb(255 255 255 / 100%) !important;
-  box-shadow: 0 2px 18px rgb(9 29 49 / 4%) !important;
+  border-bottom: 1px solid var(--border-subtle) !important;
+  background: var(--surface-1) !important;
+  box-shadow: var(--shadow-1) !important;
 }
 
 .site-header__inner {
@@ -463,14 +584,13 @@ ol {
   flex: 0 0 auto;
   align-items: center;
   gap: 0.55rem;
-  color: var(--colour-navy-900);
+  color: var(--fg-strong);
   text-decoration: none;
 }
 
 .brand__mark {
   width: 3.15rem;
   height: 2.7rem;
-  object-fit: contain;
 }
 
 .brand__wordmark {
@@ -485,13 +605,13 @@ ol {
 }
 
 .brand__wordmark strong {
-  color: var(--colour-green-800);
+  color: var(--fg-accent);
 }
 
 .brand__wordmark small {
   grid-column: 1 / -1;
   margin-top: 0.3rem;
-  color: var(--colour-navy-900);
+  color: var(--fg-strong);
   font-family: var(--font-sans);
   font-size: 0.54rem;
   font-weight: 750;
@@ -502,17 +622,24 @@ ol {
 
 .brand--inverse .brand__wordmark,
 .brand--inverse .brand__wordmark small {
-  color: var(--colour-white);
+  color: var(--fg-on-inverse);
 }
 
 .brand--inverse .brand__wordmark strong {
-  color: #87d3a8;
+  color: var(--fg-accent-on-inverse);
 }
 
-.brand--inverse .brand__mark {
-  padding: 0.16rem;
-  border-radius: 0.3rem;
-  background: #f9f2ea;
+/* On a navy surface (the footer) the mark takes its light inks. */
+.brand--inverse {
+  --brand-ink: #eef4f8;
+  --brand-green: #5fd08e;
+}
+
+/* Photographs sit slightly back in the dark theme (tokens.css --image-filter: a flat brightness and
+   contrast pair, never a colour shift or blur). Matches the optimiser URL of /public/images only, so
+   logos and marks under /public/brand are untouched. */
+img[src*="%2Fimages%2F"] {
+  filter: var(--image-filter);
 }
 
 .navigation-shell {
@@ -532,7 +659,7 @@ ol {
   display: inline-flex;
   min-height: 2.75rem;
   align-items: center;
-  color: var(--colour-ink);
+  color: var(--fg-strong);
   font-size: 0.9rem;
   font-weight: 650;
   text-decoration: none;
@@ -563,7 +690,7 @@ ol {
   display: inline-flex;
   min-height: 2.75rem;
   align-items: center;
-  color: var(--colour-ink);
+  color: var(--fg-strong);
   font-size: 0.9rem;
   font-weight: 650;
   text-decoration: none;
@@ -595,10 +722,42 @@ ol {
   margin-left: 0.45rem;
   padding: 0.1rem 0.45rem;
   border-radius: 999px;
-  background: var(--colour-mint-100);
-  color: var(--colour-green-800);
+  background: var(--surface-accent);
+  color: var(--fg-accent);
   font-size: 0.72rem;
   font-weight: 700;
+}
+
+/* The header's round icon buttons (Search, appearance): one size, one hover, one press. */
+.header-icon-button {
+  display: inline-grid;
+  flex: none;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-1);
+  color: var(--fg-strong);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-snappy),
+    border-color var(--duration-fast) var(--ease-snappy),
+    transform var(--duration-instant) var(--ease-snappy);
+}
+
+.header-icon-button:hover {
+  background: var(--surface-accent);
+  border-color: var(--border-strong);
+}
+
+.header-icon-button:active {
+  transform: scale(0.94);
+}
+
+.header-theme {
+  flex: none;
 }
 
 .header-cta {
@@ -617,16 +776,18 @@ ol {
   place-content: center;
   gap: 0.28rem;
   padding: 0;
-  border: 1px solid var(--colour-border);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  background: var(--colour-white);
+  background: var(--surface-1);
 }
 
 .menu-toggle span {
   width: 1.25rem;
   height: 2px;
-  background: var(--colour-navy-900);
+  background: var(--surface-inverse);
   transition: transform 160ms ease, opacity 160ms ease;
+  --focus-colour: var(--focus-colour-on-inverse);
+  background-image: var(--navy-light), var(--grain);
 }
 
 .menu-toggle[aria-expanded="true"] span:nth-child(1) {
@@ -667,7 +828,7 @@ ol {
   position: relative;
   overflow: clip;
   padding-block: clamp(3.5rem, 7vw, 6.75rem);
-  background: var(--colour-cream);
+  background: var(--surface-3);
 }
 
 .home-hero::before {
@@ -693,13 +854,13 @@ ol {
 
 .home-hero__copy h1 span {
   display: block;
-  color: var(--colour-green-800);
+  color: var(--fg-accent);
 }
 
 .home-hero__lead {
   max-width: 41rem;
   margin-block: 1.65rem 2rem;
-  color: var(--colour-text);
+  color: var(--fg-body);
   font-size: clamp(1.05rem, 1.5vw, 1.25rem);
   line-height: 1.65;
 }
@@ -738,8 +899,8 @@ ol {
 
 /* Trust strip */
 .trust-strip {
-  border-block: 1px solid var(--colour-border);
-  background: var(--colour-white);
+  border-block: 1px solid var(--border-subtle);
+  background: var(--surface-1);
 }
 
 .trust-strip__grid {
@@ -753,18 +914,18 @@ ol {
   align-items: flex-start;
   gap: 0.8rem;
   padding: 1.45rem 1.25rem;
-  border-right: 1px solid var(--colour-border);
+  border-right: 1px solid var(--border-subtle);
 }
 
 .trust-point:first-child {
-  border-left: 1px solid var(--colour-border);
+  border-left: 1px solid var(--border-subtle);
 }
 
 .trust-point > svg {
   width: 1.65rem;
   height: 1.65rem;
   flex: 0 0 auto;
-  color: var(--colour-green-800);
+  color: var(--fg-accent);
 }
 
 .trust-point div {
@@ -774,13 +935,13 @@ ol {
 }
 
 .trust-point strong {
-  color: var(--colour-ink);
+  color: var(--fg-strong);
   font-size: 0.9rem;
   line-height: 1.3;
 }
 
 .trust-point span {
-  color: var(--colour-muted);
+  color: var(--fg-muted);
   font-size: 0.78rem;
   line-height: 1.4;
 }
@@ -832,7 +993,7 @@ ol {
 .section-heading__intro {
   max-width: 41rem;
   margin-top: 1.25rem;
-  color: var(--colour-text);
+  color: var(--fg-body);
   font-size: 1.08rem;
 }
 
@@ -841,15 +1002,15 @@ ol {
 }
 
 .section-heading--inverse .eyebrow {
-  color: #8ed2ad;
+  color: var(--fg-accent-on-inverse);
 }
 
 .section-heading--inverse h2 {
-  color: var(--colour-white);
+  color: var(--fg-on-inverse);
 }
 
 .section-heading--inverse .section-heading__intro {
-  color: #c8d7df;
+  color: var(--fg-on-inverse-soft);
 }
 
 .feature-grid {
@@ -861,7 +1022,7 @@ ol {
 .feature-card {
   min-width: 0;
   padding-block: 1.5rem;
-  border-top: 2px solid var(--colour-navy-900);
+  border-top: 2px solid var(--fg-strong);
 }
 
 /* Uiverse-inspired surface language; source credits live in THIRD_PARTY_NOTICES.md. */
@@ -869,10 +1030,10 @@ ol {
 .subject-benefit-grid .feature-card,
 .values-grid .feature-card {
   padding: clamp(1.25rem, 2vw, 1.55rem);
-  border: 1px solid var(--colour-border);
-  border-top: 3px solid var(--colour-navy-900);
+  border: 1px solid var(--border-subtle);
+  border-top: 3px solid var(--fg-strong);
   border-radius: var(--radius-md);
-  background: linear-gradient(145deg, var(--colour-white), var(--colour-cream));
+  background: linear-gradient(145deg, var(--surface-1), var(--surface-3));
   box-shadow:
     0 3px 0 rgb(7 95 82 / 9%),
     0 12px 28px rgb(9 29 49 / 6%);
@@ -895,8 +1056,8 @@ ol {
   height: 2.8rem;
   border: 1px solid rgb(7 95 82 / 10%);
   border-radius: 50%;
-  background: var(--colour-mint-100);
-  color: var(--colour-green-800);
+  background: var(--surface-accent);
+  color: var(--fg-accent);
   place-items: center;
   transition:
     background-color var(--duration-fast) ease,
@@ -909,7 +1070,7 @@ ol {
 }
 
 .feature-card__index {
-  color: #55697a;
+  color: var(--fg-muted);
   font-size: 0.8rem;
   font-weight: 750;
 }
@@ -919,7 +1080,7 @@ ol {
 }
 
 .feature-card p {
-  color: var(--colour-muted);
+  color: var(--fg-muted);
   font-size: 0.94rem;
   line-height: 1.6;
 }
@@ -985,7 +1146,7 @@ ol {
 }
 
 .learning-path__header span {
-  color: #9fb5c2;
+  color: var(--fg-on-inverse-muted);
   font-size: 0.77rem;
   font-weight: 750;
   letter-spacing: 0.1em;
@@ -993,7 +1154,7 @@ ol {
 }
 
 .learning-path__header strong {
-  color: #8ed2ad;
+  color: var(--fg-accent-on-inverse);
   font-size: 0.82rem;
 }
 
@@ -1018,7 +1179,7 @@ ol {
 }
 
 .learning-path li > span {
-  color: #8ed2ad;
+  color: var(--fg-accent-on-inverse);
   font-size: 0.75rem;
   font-weight: 800;
 }
@@ -1029,7 +1190,7 @@ ol {
 }
 
 .learning-path li strong {
-  color: var(--colour-white);
+  color: var(--fg-on-inverse);
 }
 
 .learning-path li p {
@@ -1062,11 +1223,11 @@ ol {
   flex-direction: column;
   padding: clamp(1.4rem, 2.4vw, 2rem);
   overflow: hidden;
-  border: 1px solid var(--colour-border);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   background:
-    radial-gradient(circle at 0 0, var(--subject-soft, var(--colour-mint-100)), transparent 11rem),
-    var(--colour-white);
+    radial-gradient(circle at 0 0, var(--subject-soft, var(--surface-accent)), transparent 11rem),
+    var(--surface-1);
   box-shadow: var(--shadow-sm);
   transition:
     border-color var(--duration-fast) ease,
@@ -1085,28 +1246,28 @@ ol {
 }
 
 .subject-card:focus-within {
-  border-color: color-mix(in srgb, var(--subject-accent) 48%, var(--colour-border));
+  border-color: color-mix(in srgb, var(--subject-accent) 48%, var(--border-subtle));
   box-shadow: var(--shadow-md);
 }
 
 .subject-card--maths {
-  --subject-accent: #168a5b;
-  --subject-soft: #e7f4ed;
+  --subject-accent: var(--sp-maths-accent);
+  --subject-soft: var(--sp-maths-soft);
 }
 
 .subject-card--english {
-  --subject-accent: #c47b31;
-  --subject-soft: #fbefe3;
+  --subject-accent: var(--sp-english-accent);
+  --subject-soft: var(--sp-english-soft);
 }
 
 .subject-card--science {
-  --subject-accent: #24739a;
-  --subject-soft: #e7f2f7;
+  --subject-accent: var(--sp-science-accent);
+  --subject-soft: var(--sp-science-soft);
 }
 
 .subject-card--11-plus {
-  --subject-accent: #6c5aa7;
-  --subject-soft: #eeebf8;
+  --subject-accent: var(--sp-plus-accent);
+  --subject-soft: var(--sp-plus-soft);
 }
 
 .subject-card__header {
@@ -1122,7 +1283,7 @@ ol {
   width: 3.25rem;
   height: 3.25rem;
   border-radius: var(--radius-sm);
-  background: var(--colour-cream);
+  background: var(--surface-3);
   color: var(--subject-accent);
   box-shadow: 0 0 0 0 var(--subject-soft);
   place-items: center;
@@ -1138,7 +1299,7 @@ ol {
 }
 
 .subject-card__stage {
-  color: var(--colour-muted);
+  color: var(--fg-muted);
   font-size: 0.72rem;
   font-weight: 750;
   letter-spacing: 0.06em;
@@ -1153,7 +1314,7 @@ ol {
 
 .subject-card > p {
   margin-bottom: 1.75rem;
-  color: var(--colour-text);
+  color: var(--fg-body);
   font-size: 0.94rem;
 }
 
@@ -1163,7 +1324,7 @@ ol {
   align-items: center;
   gap: 0.5rem;
   margin-top: auto;
-  color: var(--colour-navy-900);
+  color: var(--fg-strong);
   font-weight: 750;
   text-decoration: none;
 }
@@ -1187,7 +1348,7 @@ ol {
   right: 8%;
   left: 8%;
   height: 1px;
-  background: #b9d6ca;
+  background: color-mix(in srgb, var(--accent) 28%, var(--border-subtle));
   content: "";
 }
 
@@ -1203,10 +1364,10 @@ ol {
   height: 6rem;
   margin-inline: auto;
   padding: 1.75rem;
-  border: 1px solid #b9d6ca;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border-subtle));
   border-radius: 50%;
-  background: var(--colour-mint-100);
-  color: var(--colour-green-800);
+  background: var(--surface-accent);
+  color: var(--fg-accent);
 }
 
 .step-number {
@@ -1218,11 +1379,13 @@ ol {
   width: 1.7rem;
   height: 1.7rem;
   border-radius: 50%;
-  background: var(--colour-navy-900);
-  color: var(--colour-white);
+  background: var(--surface-inverse);
+  color: var(--fg-on-inverse);
   font-size: 0.72rem;
   font-weight: 800;
   place-items: center;
+  --focus-colour: var(--focus-colour-on-inverse);
+  background-image: var(--navy-light), var(--grain);
 }
 
 .steps-grid h3 {
@@ -1230,7 +1393,7 @@ ol {
 }
 
 .steps-grid p {
-  color: var(--colour-muted);
+  color: var(--fg-muted);
   font-size: 0.92rem;
 }
 
@@ -1247,11 +1410,11 @@ ol {
   margin: 0;
   padding: clamp(1.4rem, 2.4vw, 2rem);
   overflow: hidden;
-  border: 1px solid var(--colour-border);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background:
     radial-gradient(circle at 100% 0, rgb(22 138 91 / 7%), transparent 10rem),
-    var(--colour-white);
+    var(--surface-1);
   box-shadow: 0 10px 28px rgb(9 29 49 / 6%);
   transition:
     border-color var(--duration-fast) ease,
@@ -1263,8 +1426,8 @@ ol {
   grid-column: span 3;
   background:
     radial-gradient(circle at 100% 0, rgb(142 210 173 / 12%), transparent 13rem),
-    var(--colour-navy-900);
-  color: #dce7ed;
+    var(--surface-inverse);
+  color: var(--fg-on-inverse-soft);
   box-shadow: 0 16px 38px rgb(9 29 49 / 15%);
 }
 
@@ -1278,7 +1441,7 @@ ol {
   height: 2.75rem;
   border: 1px solid rgb(22 138 91 / 12%);
   border-radius: 50%;
-  background: var(--colour-mint-100);
+  background: var(--surface-accent);
   color: var(--colour-green-600);
   font-family: Georgia, serif;
   font-size: 2.8rem;
@@ -1289,33 +1452,33 @@ ol {
 .testimonial-card--featured .testimonial-card__quote {
   border-color: rgb(255 255 255 / 12%);
   background: rgb(255 255 255 / 9%);
-  color: #8ed2ad;
+  color: var(--fg-accent-on-inverse);
 }
 
 .testimonial-card figcaption {
   margin-block: 1rem 0.8rem;
-  color: var(--colour-ink);
+  color: var(--fg-strong);
   font-family: var(--font-heading);
   font-size: 1.2rem;
   font-weight: 750;
 }
 
 .testimonial-card--featured figcaption {
-  color: var(--colour-white);
+  color: var(--fg-on-inverse);
 }
 
 .testimonial-card blockquote {
   margin: 0;
-  color: var(--colour-text);
+  color: var(--fg-body);
 }
 
 .testimonial-card--featured blockquote {
-  color: #dce7ed;
+  color: var(--fg-on-inverse-soft);
 }
 
 .testimonial-card > p {
   margin-top: 1.3rem;
-  color: var(--colour-green-800);
+  color: var(--fg-accent);
   font-size: 0.82rem;
   font-weight: 750;
   line-height: 1.45;
@@ -1327,8 +1490,8 @@ ol {
 
 /* CTA */
 .cta-section {
-  background: var(--colour-green-800);
-  color: var(--colour-white);
+  background: var(--accent-deep);
+  color: var(--fg-on-inverse);
 }
 
 .cta-section__inner {
@@ -1345,7 +1508,7 @@ ol {
 
 .cta-section h2 {
   max-width: 18ch;
-  color: var(--colour-white);
+  color: var(--fg-on-inverse);
 }
 
 .cta-section p:not(.eyebrow) {
@@ -1359,8 +1522,10 @@ ol {
 .page-hero {
   position: relative;
   overflow: clip;
-  background: var(--colour-navy-900);
-  color: var(--colour-white);
+  background: var(--surface-inverse);
+  color: var(--fg-on-inverse);
+  --focus-colour: var(--focus-colour-on-inverse);
+  background-image: var(--navy-light), var(--grain);
 }
 
 /* plan12.md task 7: the per-subject hero motif, full-bleed behind the hero copy (CinematicBackdrop
@@ -1414,19 +1579,19 @@ ol {
 }
 
 .page-hero .eyebrow {
-  color: #8ed2ad;
+  color: var(--fg-accent-on-inverse);
 }
 
 .page-hero h1 {
   max-width: 14ch;
-  color: var(--colour-white);
+  color: var(--fg-on-inverse);
   font-size: clamp(2.7rem, 5vw, 5rem);
 }
 
 .page-hero__intro {
   max-width: 44rem;
   margin-top: 1.4rem;
-  color: #c8d7df;
+  color: var(--fg-on-inverse-soft);
   font-size: clamp(1.05rem, 1.6vw, 1.25rem);
 }
 
@@ -1491,7 +1656,7 @@ ol {
 .contact-mini-card > span,
 .document-card > span {
   margin-bottom: 1.1rem;
-  color: #9fb5c2;
+  color: var(--fg-on-inverse-muted);
   font-size: 0.75rem;
   font-weight: 750;
   letter-spacing: 0.1em;
@@ -1499,14 +1664,14 @@ ol {
 }
 
 .tagline-card strong {
-  color: var(--colour-white);
+  color: var(--fg-on-inverse);
   font-family: var(--font-heading);
   font-size: clamp(1.9rem, 4vw, 3rem);
   line-height: 1.05;
 }
 
 .tagline-card strong:nth-of-type(2) {
-  color: #8ed2ad;
+  color: var(--fg-accent-on-inverse);
 }
 
 .tagline-card--compact strong {
@@ -1515,7 +1680,7 @@ ol {
 
 .document-card strong {
   display: block;
-  color: var(--colour-white);
+  color: var(--fg-on-inverse);
   font-size: 1.2rem;
 }
 
@@ -1525,7 +1690,7 @@ ol {
 
 .document-card p {
   margin-top: 0.8rem;
-  color: #c8d7df;
+  color: var(--fg-on-inverse-soft);
   font-size: 0.95rem;
 }
 
@@ -1540,7 +1705,7 @@ ol {
 
 .contact-mini-card a {
   min-width: 0;
-  color: var(--colour-white);
+  color: var(--fg-on-inverse);
   font-weight: 700;
   overflow-wrap: anywhere;
 }
@@ -1559,7 +1724,7 @@ ol {
 .prose-large {
   display: grid;
   gap: 1.4rem;
-  color: var(--colour-text);
+  color: var(--fg-body);
   font-size: clamp(1.06rem, 1.7vw, 1.3rem);
   line-height: 1.7;
 }
@@ -1580,7 +1745,7 @@ ol {
 .why-personalised__panel {
   padding: clamp(1.75rem, 4vw, 3rem);
   border-left: 4px solid var(--colour-green-600);
-  background: var(--colour-cream);
+  background: var(--surface-3);
 }
 
 .why-personalised__panel h2 {
@@ -1602,15 +1767,15 @@ ol {
   grid-template-columns: 8rem 1fr;
   gap: 1.5rem;
   padding-block: 1.25rem;
-  border-bottom: 1px solid var(--colour-border);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .statement-list li:first-child {
-  border-top: 1px solid var(--colour-border);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .statement-list span {
-  color: var(--colour-green-800);
+  color: var(--fg-accent);
   font-weight: 800;
 }
 
@@ -1626,11 +1791,11 @@ ol {
 .values-grid .icon-box {
   border-color: rgb(255 255 255 / 12%);
   background: rgb(255 255 255 / 10%);
-  color: #8ed2ad;
+  color: var(--fg-accent-on-inverse);
 }
 
 .values-grid .feature-card__index {
-  color: #9fb5c2;
+  color: var(--fg-on-inverse-muted);
 }
 
 .values-grid .feature-card p {
@@ -1646,7 +1811,7 @@ ol {
 
 .subject-jump > span {
   padding-block: 0.8rem;
-  color: #9fb5c2;
+  color: var(--fg-on-inverse-muted);
   font-size: 0.75rem;
   font-weight: 750;
   letter-spacing: 0.1em;
@@ -1659,13 +1824,13 @@ ol {
   align-items: center;
   justify-content: space-between;
   border-top: 1px solid rgb(255 255 255 / 12%);
-  color: var(--colour-white);
+  color: var(--fg-on-inverse);
   font-weight: 700;
   text-decoration: none;
 }
 
 .subject-jump a:hover {
-  color: #8ed2ad;
+  color: var(--fg-accent-on-inverse);
 }
 
 .subject-details {
@@ -1692,23 +1857,23 @@ ol {
   justify-items: center;
   overflow: hidden;
   border-radius: var(--radius-lg);
-  background: var(--colour-mint-100);
-  color: var(--colour-green-800);
+  background: var(--surface-accent);
+  color: var(--fg-accent);
 }
 
 .subject-detail__visual--english {
-  background: #fbefe3;
-  color: #8f4d18;
+  background: var(--sp-english-soft);
+  color: var(--sp-english-ink);
 }
 
 .subject-detail__visual--science {
-  background: #e7f2f7;
-  color: #17668e;
+  background: var(--sp-science-soft);
+  color: var(--sp-science-ink);
 }
 
 .subject-detail__visual--11-plus {
-  background: #eeebf8;
-  color: #5e4c96;
+  background: var(--sp-plus-soft);
+  color: var(--sp-plus-ink);
 }
 
 .subject-detail__visual > svg {
@@ -1745,7 +1910,7 @@ ol {
 }
 
 .subject-detail__summary {
-  color: var(--colour-ink);
+  color: var(--fg-strong);
   font-size: clamp(1.08rem, 1.7vw, 1.28rem);
   font-weight: 600;
 }
@@ -1764,7 +1929,7 @@ ol {
 
 .tag-list li {
   padding: 0.45rem 0.7rem;
-  border: 1px solid var(--colour-border);
+  border: 1px solid var(--border-subtle);
   border-radius: 999px;
   color: var(--colour-navy-800);
   font-size: 0.78rem;
@@ -1793,31 +1958,31 @@ ol {
 
 /* Subject landing pages */
 .subject-landing {
-  --subject-accent: var(--colour-green-600);
-  --subject-ink: var(--colour-green-800);
-  --subject-soft: var(--colour-mint-100);
-  --subject-hero-accent: #8ed2ad;
+  --subject-accent: var(--sp-maths-accent);
+  --subject-ink: var(--sp-maths-ink);
+  --subject-soft: var(--sp-maths-soft);
+  --subject-hero-accent: var(--sp-maths-hero);
 }
 
 .subject-landing--english {
-  --subject-accent: #c47b31;
-  --subject-ink: #8f4d18;
-  --subject-soft: #fbefe3;
-  --subject-hero-accent: #f0b77d;
+  --subject-accent: var(--sp-english-accent);
+  --subject-ink: var(--sp-english-ink);
+  --subject-soft: var(--sp-english-soft);
+  --subject-hero-accent: var(--sp-english-hero);
 }
 
 .subject-landing--science {
-  --subject-accent: #24739a;
-  --subject-ink: #17668e;
-  --subject-soft: #e7f2f7;
-  --subject-hero-accent: #8ccae5;
+  --subject-accent: var(--sp-science-accent);
+  --subject-ink: var(--sp-science-ink);
+  --subject-soft: var(--sp-science-soft);
+  --subject-hero-accent: var(--sp-science-hero);
 }
 
 .subject-landing--11-plus {
-  --subject-accent: #6c5aa7;
-  --subject-ink: #5e4c96;
-  --subject-soft: #eeebf8;
-  --subject-hero-accent: #c7bdec;
+  --subject-accent: var(--sp-plus-accent);
+  --subject-ink: var(--sp-plus-ink);
+  --subject-soft: var(--sp-plus-soft);
+  --subject-hero-accent: var(--sp-plus-hero);
 }
 
 .subject-landing .page-hero .eyebrow {
@@ -1862,7 +2027,7 @@ ol {
 }
 
 .subject-landing-hero-card strong {
-  color: var(--colour-white);
+  color: var(--fg-on-inverse);
   font-family: var(--font-heading);
   font-size: clamp(1.45rem, 2.8vw, 2rem);
   line-height: 1.15;
@@ -1870,7 +2035,7 @@ ol {
 
 .subject-landing-hero-card p {
   margin-top: 0.85rem;
-  color: #c8d7df;
+  color: var(--fg-on-inverse-soft);
   font-size: 0.94rem;
 }
 
@@ -1892,7 +2057,7 @@ ol {
 }
 
 .subject-benefit-grid .icon-box {
-  border-color: color-mix(in srgb, var(--subject-accent) 24%, var(--colour-border));
+  border-color: color-mix(in srgb, var(--subject-accent) 24%, var(--border-subtle));
   background: var(--subject-soft);
   color: var(--subject-ink);
 }
@@ -1917,10 +2082,10 @@ ol {
   min-width: 0;
   min-height: 17rem;
   padding: clamp(1.35rem, 2.5vw, 1.8rem);
-  border: 1px solid color-mix(in srgb, var(--subject-accent) 20%, var(--colour-border));
+  border: 1px solid color-mix(in srgb, var(--subject-accent) 20%, var(--border-subtle));
   border-top: 3px solid var(--subject-accent);
   border-radius: var(--radius-md);
-  background: var(--colour-white);
+  background: var(--surface-1);
 }
 
 /* plan11.md task 10's per-subject "world" motifs (SubjectWorld.tsx): a drawn path + milestone dots
@@ -1977,7 +2142,7 @@ ol {
 }
 
 .subject-pathway-card p {
-  color: var(--colour-muted);
+  color: var(--fg-muted);
   font-size: 0.94rem;
   line-height: 1.62;
 }
@@ -1987,7 +2152,7 @@ ol {
 }
 
 .subject-personalised__body > p {
-  color: var(--colour-ink);
+  color: var(--fg-strong);
   font-size: clamp(1.06rem, 1.7vw, 1.28rem);
   line-height: 1.7;
 }
@@ -2003,11 +2168,11 @@ ol {
   grid-template-columns: minmax(8rem, 0.42fr) minmax(0, 1fr);
   gap: 1.5rem;
   padding-block: 1.15rem;
-  border-bottom: 1px solid var(--colour-border);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .subject-personalised__points li:first-child {
-  border-top: 1px solid var(--colour-border);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .subject-personalised__points span {
@@ -2063,7 +2228,7 @@ ol {
   position: absolute;
   width: 26px;
   height: 26px;
-  border: 2px solid var(--colour-green-700);
+  border: 2px solid var(--accent-strong);
   pointer-events: none;
 }
 
@@ -2093,14 +2258,14 @@ ol {
 
 .booking-form-heading > p:last-child {
   margin-top: 0.8rem;
-  color: var(--colour-muted);
+  color: var(--fg-muted);
 }
 
 .enquiry-form {
-  --form-surface: var(--colour-cream);
+  --form-surface: var(--surface-3);
 
   padding: clamp(1.25rem, 3vw, 2.25rem);
-  border: 1px solid var(--colour-border);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   background: var(--form-surface);
   box-shadow:
@@ -2118,7 +2283,7 @@ ol {
   margin-bottom: 1.5rem;
   font-size: 0.82rem;
   font-weight: 650;
-  color: var(--colour-muted);
+  color: var(--fg-muted);
 }
 
 .enquiry-form-progress-step {
@@ -2138,8 +2303,8 @@ ol {
 }
 
 .enquiry-form-progress-dot.is-complete {
-  border-color: var(--colour-green-700);
-  background: var(--colour-green-700);
+  border-color: var(--accent-strong);
+  background: var(--accent);
 }
 
 .enquiry-form-progress-line {
@@ -2154,7 +2319,7 @@ ol {
   display: block;
   width: 100%;
   height: 100%;
-  background: var(--colour-green-700);
+  background: var(--accent);
   transform-origin: left;
   transition: transform 0.35s ease;
 }
@@ -2162,7 +2327,7 @@ ol {
 .form-stage + .form-stage {
   margin-top: 1.75rem;
   padding-top: 1.75rem;
-  border-top: 1px dashed var(--colour-border);
+  border-top: 1px dashed var(--border-subtle);
 }
 
 .form-stage-heading {
@@ -2170,7 +2335,7 @@ ol {
   font-family: var(--font-heading);
   font-size: 0.95rem;
   font-weight: 800;
-  color: var(--colour-ink);
+  color: var(--fg-strong);
 }
 
 .form-grid {
@@ -2192,7 +2357,7 @@ ol {
 
 .form-field label,
 .contact-preference legend {
-  color: var(--colour-ink);
+  color: var(--fg-strong);
   font-size: 0.88rem;
   font-weight: 750;
 }
@@ -2210,11 +2375,11 @@ ol {
 }
 
 .form-field:focus-within label {
-  color: var(--colour-green-800);
+  color: var(--fg-accent);
 }
 
 .form-field label span {
-  color: var(--colour-muted);
+  color: var(--fg-muted);
   font-weight: 500;
 }
 
@@ -2224,10 +2389,10 @@ ol {
   width: 100%;
   min-height: 3rem;
   padding: 0.72rem 0.85rem;
-  border: 1px solid #aeb9bd;
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  background: var(--colour-white);
-  color: var(--colour-ink);
+  background: var(--surface-1);
+  color: var(--fg-strong);
   box-shadow: inset 0 1px 2px rgb(9 29 49 / 4%);
   transition:
     border-color var(--duration-fast) ease,
@@ -2242,10 +2407,9 @@ ol {
 .form-field input:focus,
 .form-field select:focus,
 .form-field textarea:focus {
-  border-color: var(--colour-green-800);
-  outline: 3px solid var(--colour-focus);
-  outline-offset: 2px;
-  box-shadow: 0 0 0 5px var(--colour-focus-outer);
+  border-color: var(--accent-strong);
+  outline: var(--focus-width) solid var(--focus-colour);
+  outline-offset: var(--focus-offset);
 }
 
 .form-field [aria-invalid="true"] {
@@ -2260,11 +2424,11 @@ ol {
 }
 
 .field-hint {
-  color: var(--colour-muted);
+  color: var(--fg-muted);
 }
 
 .field-error {
-  color: var(--colour-error);
+  color: var(--fg-error);
   font-weight: 650;
 }
 
@@ -2280,9 +2444,9 @@ ol {
   gap: 0.2rem;
   margin-top: 0.65rem;
   padding: 0.22rem;
-  border: 1px solid #aeb9bd;
+  border: 1px solid var(--border-strong);
   border-radius: calc(var(--radius-sm) + 0.18rem);
-  background: var(--colour-white);
+  background: var(--surface-1);
 }
 
 .contact-preference label {
@@ -2305,8 +2469,8 @@ ol {
   padding: 0.52rem 0.9rem;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  background: var(--colour-white);
-  color: var(--colour-ink);
+  background: var(--surface-1);
+  color: var(--fg-strong);
   font-weight: 700;
   transition:
     background-color var(--duration-fast) ease,
@@ -2316,7 +2480,7 @@ ol {
 .contact-preference label span::before {
   width: 0.68rem;
   height: 0.68rem;
-  border: 1px solid #879799;
+  border: 1px solid var(--fg-muted);
   border-radius: 50%;
   content: "";
   transition:
@@ -2326,20 +2490,19 @@ ol {
 }
 
 .contact-preference input:checked + span {
-  background: var(--colour-mint-100);
-  color: var(--colour-green-800);
+  background: var(--surface-accent);
+  color: var(--fg-accent);
 }
 
 .contact-preference input:checked + span::before {
-  border-color: var(--colour-green-800);
-  background: var(--colour-green-800);
+  border-color: var(--accent-strong);
+  background: var(--accent-strong);
   box-shadow: inset 0 0 0 2px var(--colour-mint-100);
 }
 
 .contact-preference input:focus-visible + span {
-  outline: 3px solid var(--colour-focus);
-  outline-offset: 3px;
-  box-shadow: 0 0 0 6px var(--colour-focus-outer);
+  outline: var(--focus-width) solid var(--focus-colour);
+  outline-offset: var(--focus-offset);
 }
 
 .form-actions {
@@ -2351,7 +2514,7 @@ ol {
 
 .form-actions > p {
   max-width: 28rem;
-  color: var(--colour-muted);
+  color: var(--fg-muted);
   font-size: 0.78rem;
   line-height: 1.45;
 }
@@ -2365,7 +2528,7 @@ ol {
 }
 
 .form-message strong {
-  color: var(--colour-ink);
+  color: var(--fg-strong);
 }
 
 .form-message p {
@@ -2373,14 +2536,14 @@ ol {
 }
 
 .form-message--error {
-  border: 1px solid #efc4c8;
-  background: var(--colour-error-bg);
-  color: var(--colour-error);
+  border: 1px solid var(--tone-critical-border);
+  background: var(--error-bg);
+  color: var(--fg-error);
 }
 
 .form-message--prepared {
-  border: 1px solid #a9d5bf;
-  background: #edf8f1;
+  border: 1px solid color-mix(in srgb, var(--tone-positive-fg) 35%, transparent);
+  background: var(--tone-positive-bg);
 }
 
 .form-message--prepared .button {
@@ -2393,9 +2556,9 @@ ol {
    of the green treatment .form-message--error's red counterpart gets. Same colours as the (unused
    by anything else) .form-message--prepared above, given the matching name. */
 .form-message--success {
-  border: 1px solid #a9d5bf;
-  background: #edf8f1;
-  color: var(--colour-ink);
+  border: 1px solid color-mix(in srgb, var(--tone-positive-fg) 35%, transparent);
+  background: var(--tone-positive-bg);
+  color: var(--fg-strong);
 }
 
 .form-message--success .button {
@@ -2407,16 +2570,16 @@ ol {
   width: 2.25rem;
   height: 2.25rem;
   margin-bottom: 0.75rem;
-  color: var(--colour-green-700);
+  color: var(--fg-accent);
 }
 
 .login-panel {
   max-width: 26rem;
   margin: 0 auto;
   padding: 2rem;
-  border: 1px solid var(--colour-border);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  background: var(--colour-white);
+  background: var(--surface-1);
   box-shadow: var(--shadow-sm);
 }
 
@@ -2443,7 +2606,7 @@ ol {
   padding: 0.3rem 0.6rem;
   border: none;
   background: none;
-  color: var(--colour-green-800);
+  color: var(--fg-accent);
   font-size: 0.8rem;
   font-weight: 700;
   cursor: pointer;
@@ -2457,7 +2620,7 @@ ol {
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  color: var(--colour-text);
+  color: var(--fg-body);
   font-size: 0.88rem;
 }
 
@@ -2476,12 +2639,14 @@ ol {
   padding: 1.6rem;
   border-top: 4px solid var(--colour-green-600);
   border-radius: var(--radius-lg);
-  background: var(--colour-navy-900);
+  background: var(--surface-inverse);
   color: #d5e2e8;
+  --focus-colour: var(--focus-colour-on-inverse);
+  background-image: var(--navy-light), var(--grain);
 }
 
 .booking-sidebar h2 {
-  color: var(--colour-white);
+  color: var(--fg-on-inverse);
   font-size: 1.6rem;
 }
 
@@ -2505,19 +2670,19 @@ ol {
   height: 1.8rem;
   border-radius: 50%;
   background: rgb(255 255 255 / 10%);
-  color: #91d5b0;
+  color: var(--fg-accent-on-inverse);
   font-size: 0.75rem;
   font-weight: 800;
   place-items: center;
 }
 
 .booking-sidebar li strong {
-  color: var(--colour-white);
+  color: var(--fg-on-inverse);
 }
 
 .booking-sidebar li p {
   margin-top: 0.2rem;
-  color: #b8cbd4;
+  color: var(--fg-on-inverse-soft);
   font-size: 0.86rem;
 }
 
@@ -2531,7 +2696,7 @@ ol {
 }
 
 .booking-checklist strong {
-  color: var(--colour-white);
+  color: var(--fg-on-inverse);
 }
 
 .booking-checklist ul {
@@ -2551,7 +2716,7 @@ ol {
   padding-block: 0.5rem;
   padding-left: 1.5rem;
   border-bottom: none;
-  color: #b8cbd4;
+  color: var(--fg-on-inverse-soft);
   font-size: 0.86rem;
 }
 
@@ -2559,7 +2724,7 @@ ol {
   position: absolute;
   top: 0.05rem;
   left: 0;
-  color: #91d5b0;
+  color: var(--fg-accent-on-inverse);
   content: "✓";
   font-weight: 900;
 }
@@ -2572,12 +2737,12 @@ ol {
 }
 
 .honesty-note strong {
-  color: #91d5b0;
+  color: var(--fg-accent-on-inverse);
 }
 
 .honesty-note p {
   margin-top: 0.4rem;
-  color: #b8cbd4;
+  color: var(--fg-on-inverse-soft);
   font-size: 0.82rem;
 }
 
@@ -2591,20 +2756,20 @@ ol {
 .contact-card {
   min-width: 0;
   padding: clamp(1.6rem, 4vw, 3rem);
-  border: 1px solid var(--colour-border);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  background: var(--colour-cream);
+  background: var(--surface-3);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 80%),
     0 12px 30px rgb(9 29 49 / 6%);
 }
 
 .contact-card--green {
-  background: var(--colour-mint-100);
+  background: var(--surface-accent);
 }
 
 .contact-card__label {
-  color: var(--colour-green-800);
+  color: var(--fg-accent);
   font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.1em;
@@ -2617,7 +2782,7 @@ ol {
 }
 
 .contact-card > a {
-  color: var(--colour-green-800);
+  color: var(--fg-accent);
   font-size: clamp(1rem, 2vw, 1.3rem);
   font-weight: 800;
   overflow-wrap: anywhere;
@@ -2629,7 +2794,7 @@ ol {
 }
 
 .contact-card > a:hover {
-  color: var(--colour-green-700);
+  color: var(--fg-accent);
   text-decoration-color: currentColor;
 }
 
@@ -2645,9 +2810,9 @@ ol {
   gap: clamp(2rem, 5vw, 4rem);
   margin-top: 1rem;
   padding: clamp(1.6rem, 4vw, 3rem);
-  border: 1px solid var(--colour-border);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  background: var(--colour-white);
+  background: var(--surface-1);
   box-shadow: 0 12px 30px rgb(9 29 49 / 5%);
 }
 
@@ -2670,7 +2835,7 @@ ol {
   position: absolute;
   top: 0.08rem;
   left: 0;
-  color: var(--colour-green-800);
+  color: var(--fg-accent);
   content: "✓";
   font-weight: 900;
 }
@@ -2687,7 +2852,7 @@ ol {
 .faq-jump > span {
   display: block;
   margin-bottom: 0.75rem;
-  color: #c8d7df;
+  color: var(--fg-on-inverse-soft);
   font-size: 0.8rem;
   font-weight: 750;
 }
@@ -2698,7 +2863,7 @@ ol {
   gap: 1rem;
   min-height: 2.75rem;
   align-items: center;
-  color: var(--colour-white);
+  color: var(--fg-on-inverse);
   border-top: 1px solid rgb(255 255 255 / 15%);
   font-size: 0.95rem;
   text-decoration: none;
@@ -2737,11 +2902,34 @@ ol {
 
 .faq-list {
   min-width: 0;
-  border-top: 1px solid var(--colour-border);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* plan15 Wave 7 section 11.4: an answer opens and closes by animating its height instead of snapping.
+   Chrome 131+ / Safari with ::details-content; everywhere else it simply snaps, as it always did. */
+@supports selector(::details-content) {
+  .faq-item {
+    interpolate-size: allow-keywords;
+  }
+
+  .faq-item::details-content {
+    block-size: 0;
+    overflow: clip;
+    opacity: 0;
+    transition:
+      block-size var(--duration-slow) var(--ease-gentle),
+      opacity var(--duration-standard) var(--ease-smooth),
+      content-visibility var(--duration-slow) allow-discrete;
+  }
+
+  .faq-item[open]::details-content {
+    block-size: auto;
+    opacity: 1;
+  }
 }
 
 .faq-item {
-  border-bottom: 1px solid var(--colour-border);
+  border-bottom: 1px solid var(--border-subtle);
   scroll-margin-top: 6rem;
 }
 
@@ -2752,7 +2940,7 @@ ol {
   justify-content: space-between;
   gap: 1rem;
   padding: 1.25rem 0.25rem;
-  color: var(--colour-navy-900);
+  color: var(--fg-strong);
   font-weight: 750;
   line-height: 1.45;
   cursor: pointer;
@@ -2765,7 +2953,7 @@ ol {
 
 .faq-item summary:hover,
 .faq-item[open] summary {
-  color: var(--colour-green-800);
+  color: var(--fg-accent);
 }
 
 .faq-item__marker {
@@ -2847,13 +3035,13 @@ ol {
 }
 
 .faq-item__answer a {
-  color: var(--colour-green-800);
+  color: var(--fg-accent);
 }
 
 .faq-item__answer blockquote {
   margin-inline: 0;
   padding-left: 1rem;
-  border-left: 3px solid var(--colour-green-700);
+  border-left: 3px solid var(--accent-strong);
 }
 
 .faq-list--compact summary {
@@ -2873,7 +3061,7 @@ ol {
   top: 7rem;
   padding: 1.5rem;
   border-radius: var(--radius-sm);
-  background: var(--colour-cream);
+  background: var(--surface-3);
 }
 
 /* LegalContentsNav (plan11.md task 12): the currently-in-view section's link, tracked via
@@ -2881,8 +3069,8 @@ ol {
    plus colour/weight, not a moving element, so this never fights the sticky sidebar's own layout. */
 .legal-contents a[aria-current="true"] {
   padding-left: 0.6rem;
-  border-left: 2px solid var(--colour-green-700);
-  color: var(--colour-green-800);
+  border-left: 2px solid var(--accent-strong);
+  color: var(--fg-accent);
   font-weight: 700;
   transition: border-color var(--duration-fast) ease, padding-left var(--duration-fast) ease;
 }
@@ -2890,7 +3078,7 @@ ol {
 .legal-contents h2 {
   display: block;
   margin-bottom: 0.75rem;
-  color: var(--colour-navy-900);
+  color: var(--fg-strong);
   font-weight: 750;
   font-size: 1rem;
   letter-spacing: normal;
@@ -2916,7 +3104,7 @@ ol {
 .legal-prose > .legal-scope + section {
   margin-top: 3rem;
   padding-top: 2.5rem;
-  border-top: 1px solid var(--colour-border);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .legal-prose h2 {
@@ -2944,7 +3132,7 @@ ol {
 
 .legal-prose a,
 .legal-contents a {
-  color: var(--colour-green-800);
+  color: var(--fg-accent);
   overflow-wrap: anywhere;
 }
 
@@ -2983,7 +3171,7 @@ ol {
   position: relative;
   padding: 0.6rem 0 1.25rem 44px;
   font-weight: 600;
-  color: var(--colour-ink);
+  color: var(--fg-strong);
 }
 
 .safeguarding-trust-path-item::before {
@@ -3014,9 +3202,9 @@ ol {
 .legal-contact-box {
   margin-top: 3rem;
   padding: clamp(1.25rem, 3vw, 2rem);
-  border-left: 4px solid var(--colour-green-700);
+  border-left: 4px solid var(--accent-strong);
   border-radius: var(--radius-sm);
-  background: var(--colour-mint-100);
+  background: var(--surface-accent);
 }
 
 /* plan12.md task 9: the one section on /safeguarding a reader might need in a hurry — same
@@ -3027,7 +3215,7 @@ ol {
   padding: clamp(1.25rem, 3vw, 2rem);
   border-left: 4px solid var(--colour-navy-800);
   border-radius: var(--radius-sm);
-  background: var(--colour-mint-100);
+  background: var(--surface-accent);
 }
 
 .safeguarding-urgent-box ul {
@@ -3044,15 +3232,15 @@ ol {
 .legal-table-wrap th,
 .legal-table-wrap td {
   padding: 0.8rem;
-  border: 1px solid var(--colour-border);
+  border: 1px solid var(--border-subtle);
   text-align: left;
   vertical-align: top;
   overflow-wrap: anywhere;
 }
 
 .legal-table-wrap th {
-  color: var(--colour-navy-900);
-  background: var(--colour-mint-100);
+  color: var(--fg-strong);
+  background: var(--surface-accent);
 }
 
 @media (max-width: 50rem) {
@@ -3093,11 +3281,33 @@ ol {
   min-height: 70vh;
   align-items: center;
   padding-block: 5rem;
-  background: var(--colour-cream);
+  background: var(--surface-3);
 }
 
 .not-found__inner {
-  max-width: 52rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(1.5rem, 4vw, 4rem);
+}
+
+.not-found__art {
+  width: 100%;
+  max-width: 26rem;
+  height: auto;
+  justify-self: end;
+}
+
+@media (max-width: 52rem) {
+  .not-found__inner {
+    grid-template-columns: 1fr;
+  }
+
+  .not-found__art {
+    max-width: 15rem;
+    justify-self: start;
+    order: -1;
+  }
 }
 
 .not-found h1 {
@@ -3115,8 +3325,10 @@ ol {
   position: relative;
   overflow: hidden;
   padding-top: clamp(4rem, 7vw, 6rem);
-  background: var(--colour-navy-950);
+  background: var(--surface-inverse-deep);
   color: #b9cbd5;
+  --focus-colour: var(--focus-colour-on-inverse);
+  background-image: var(--navy-light), var(--grain);
 }
 
 /* plan12.md task 14: the footer's own dot-grid + soft glow — see SiteFooter.tsx's comment. Matches
@@ -3155,13 +3367,13 @@ ol {
 
 .footer-tagline {
   margin-top: 1rem;
-  color: #91d5b0;
+  color: var(--fg-accent-on-inverse);
   font-weight: 750;
 }
 
 .footer-column h2 {
   margin-bottom: 1rem;
-  color: var(--colour-white);
+  color: var(--fg-on-inverse);
   font-family: var(--font-sans);
   font-size: 0.82rem;
   font-weight: 800;
@@ -3179,14 +3391,23 @@ ol {
   display: inline-flex;
   min-height: 2rem;
   align-items: center;
-  color: #c5d4dc;
+  color: var(--fg-on-inverse-soft);
   font-size: 0.9rem;
   text-decoration: none;
+  /* The underline draws in from the left (a 1px gradient growing in width) instead of popping in. */
+  background: linear-gradient(currentColor, currentColor) no-repeat 0 calc(50% + 0.78em) / 0 1px;
+  transition:
+    background-size var(--duration-standard) var(--ease-snappy),
+    color var(--duration-fast) var(--ease-snappy);
 }
 
-.footer-column a:hover,
+.footer-column a:hover {
+  color: var(--fg-on-inverse);
+  background-size: 100% 1px;
+}
+
 .footer-bottom a:hover {
-  color: var(--colour-white);
+  color: var(--fg-on-inverse);
   text-decoration: underline;
 }
 
@@ -3210,7 +3431,7 @@ ol {
 .footer-login {
   width: fit-content;
   margin-top: 0.45rem;
-  color: #91d5b0 !important;
+  color: var(--fg-accent-on-inverse) !important;
   font-weight: 700;
 }
 
@@ -3234,6 +3455,12 @@ ol {
 .footer-bottom a {
   color: #b9cbd5;
   text-decoration: none;
+}
+
+.footer-appearance {
+  display: flex;
+  justify-content: flex-start;
+  padding-top: 1rem;
 }
 
 .footer-registration {
@@ -3261,12 +3488,12 @@ ol {
 
   .button--secondary:hover svg,
   .button--light:hover svg {
-    background: var(--colour-white);
+    background: var(--surface-1);
   }
 
   .feature-grid .feature-card:hover,
   .values-grid .feature-card:hover {
-    border-color: #a9c8bb;
+    border-color: color-mix(in srgb, var(--accent) 32%, var(--border-subtle));
     box-shadow:
       0 4px 0 rgb(7 95 82 / 14%),
       var(--shadow-interactive);
@@ -3286,7 +3513,7 @@ ol {
   }
 
   .subject-card:hover {
-    border-color: color-mix(in srgb, var(--subject-accent) 48%, var(--colour-border));
+    border-color: color-mix(in srgb, var(--subject-accent) 48%, var(--border-subtle));
     box-shadow: var(--shadow-md);
     transform: translateY(-4px);
   }
@@ -3298,7 +3525,7 @@ ol {
   }
 
   .testimonial-card:hover {
-    border-color: #b8cdc5;
+    border-color: color-mix(in srgb, var(--accent) 28%, var(--border-subtle));
     box-shadow: var(--shadow-interactive);
     transform: translateY(-2px);
   }
@@ -3311,7 +3538,7 @@ ol {
   .form-field input:hover,
   .form-field select:hover,
   .form-field textarea:hover {
-    border-color: #829e96;
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border-strong));
   }
 
   .button:active:not(:disabled) {
@@ -3384,8 +3611,8 @@ ol {
     gap: 1rem;
     padding: 1rem clamp(1rem, 5vw, 2.5rem) 1.5rem;
     overflow-y: auto;
-    border-bottom: 1px solid var(--colour-border);
-    background: var(--colour-white);
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--surface-1);
     box-shadow: var(--shadow-md);
     opacity: 0;
     pointer-events: none;
@@ -3434,7 +3661,7 @@ ol {
   .primary-navigation a {
     min-height: 3.25rem;
     padding-inline: 0.75rem;
-    border-bottom: 1px solid var(--colour-border);
+    border-bottom: 1px solid var(--border-subtle);
     font-size: 1rem;
   }
 
@@ -3444,15 +3671,15 @@ ol {
 
   .primary-navigation a[aria-current="page"] {
     border-radius: 0.35rem;
-    background: var(--colour-mint-100);
-    color: var(--colour-green-800);
+    background: var(--surface-accent);
+    color: var(--fg-accent);
     box-shadow: inset 3px 0 0 var(--colour-green-600);
   }
 
   .header-login {
     min-height: 3.25rem;
     padding-inline: 0.75rem;
-    border-bottom: 1px solid var(--colour-border);
+    border-bottom: 1px solid var(--border-subtle);
     font-size: 1rem;
   }
 
@@ -3462,8 +3689,8 @@ ol {
 
   .header-login[aria-current="page"] {
     border-radius: 0.35rem;
-    background: var(--colour-mint-100);
-    color: var(--colour-green-800);
+    background: var(--surface-accent);
+    color: var(--fg-accent);
     box-shadow: inset 3px 0 0 var(--colour-green-600);
   }
 
@@ -3496,11 +3723,11 @@ ol {
   }
 
   .trust-point:nth-child(3) {
-    border-left: 1px solid var(--colour-border);
+    border-left: 1px solid var(--border-subtle);
   }
 
   .trust-point:nth-child(-n + 2) {
-    border-bottom: 1px solid var(--colour-border);
+    border-bottom: 1px solid var(--border-subtle);
   }
 
   .steps-grid {
@@ -3669,9 +3896,9 @@ ol {
   .trust-point,
   .trust-point:first-child,
   .trust-point:nth-child(3) {
-    border-right: 1px solid var(--colour-border);
-    border-bottom: 1px solid var(--colour-border);
-    border-left: 1px solid var(--colour-border);
+    border-right: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--border-subtle);
+    border-left: 1px solid var(--border-subtle);
   }
 
   .trust-point:last-child {
@@ -3829,6 +4056,85 @@ ol {
    the browser's native View Transitions API, whose ::view-transition-* pseudo-elements are NOT
    matched by a plain `*` selector — the catch-all reduced-motion rule below never reaches them, so
    they need their own rule. Exactly the CSS Next's own view-transitions guide gives for this. */
+/* ── Site-wide route transition (plan15 Wave 8, components/motion/PageTransition.tsx) ───────────
+   The header is named so it persists and never slides (a moving header would break the visitor's one
+   fixed reference point); the page content cross-fades, and nav links add a small directional slide.
+   Short, asymmetric (the old page leaves fast, the new one arrives a little more gently) and never
+   blocking: see ::view-transition below. Reduced motion, the light tier and unsupporting browsers
+   get an instant swap. */
+.site-header {
+  view-transition-name: site-header;
+}
+
+::view-transition-group(site-header) {
+  animation: none;
+  z-index: 100;
+}
+
+::view-transition-old(site-header) {
+  display: none;
+}
+
+::view-transition-new(site-header) {
+  animation: none;
+}
+
+::view-transition-old(.page-fade) {
+  animation: 140ms ease-in both vt-fade-out;
+}
+
+::view-transition-new(.page-fade) {
+  animation: 260ms var(--ease-gentle) 90ms both vt-fade-in;
+}
+
+::view-transition-old(.nav-forward) {
+  animation: 140ms ease-in both vt-fade-out, 320ms var(--ease-smooth) both vt-out-left;
+}
+
+::view-transition-new(.nav-forward) {
+  animation: 260ms var(--ease-gentle) 90ms both vt-fade-in, 380ms var(--ease-gentle) both vt-in-right;
+}
+
+::view-transition-old(.nav-back) {
+  animation: 140ms ease-in both vt-fade-out, 320ms var(--ease-smooth) both vt-out-right;
+}
+
+::view-transition-new(.nav-back) {
+  animation: 260ms var(--ease-gentle) 90ms both vt-fade-in, 380ms var(--ease-gentle) both vt-in-left;
+}
+
+@keyframes vt-fade-out {
+  to { opacity: 0; }
+}
+
+@keyframes vt-fade-in {
+  from { opacity: 0; }
+}
+
+@keyframes vt-out-left {
+  to { translate: -28px 0; }
+}
+
+@keyframes vt-out-right {
+  to { translate: 28px 0; }
+}
+
+@keyframes vt-in-right {
+  from { translate: 28px 0; }
+}
+
+@keyframes vt-in-left {
+  from { translate: -28px 0; }
+}
+
+/* The light tier (phones, low-power devices) navigates instantly. */
+html[data-motion-tier="light"]::view-transition-group(*),
+html[data-motion-tier="light"]::view-transition-old(*),
+html[data-motion-tier="light"]::view-transition-new(*) {
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+}
+
 ::view-transition {
   /* The transition's own overlay captures pointer events while it plays, which would otherwise
      make whatever the visitor clicks next briefly unresponsive — the same actionability failure

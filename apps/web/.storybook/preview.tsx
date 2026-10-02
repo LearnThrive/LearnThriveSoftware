@@ -2,6 +2,7 @@ import type { Preview } from "@storybook/nextjs-vite";
 import { useEffect } from "react";
 import { Bricolage_Grotesque, Public_Sans, IBM_Plex_Mono } from "next/font/google";
 import "../src/app/globals.css";
+import "../src/app/tokens.css";
 import "../src/app/app-shell.css";
 import "../src/app/app-components.css";
 import "../src/app/app-dashboard.css";
@@ -58,7 +59,40 @@ function ApplyProductFonts({ children }: { children: React.ReactNode }) {
   return children;
 }
 
+/**
+ * plan15 Wave 3: a Light/Dark toolbar. It sets `data-themes="on"` (the flag that lets tokens.css's
+ * dark block apply at all) and `data-theme` on `<html>`, exactly what layout.tsx's pre-paint script
+ * and ThemeToggle do in the real app, so a story is the real component under the real tokens.
+ */
+function ApplyTheme({ theme, children }: { theme: string; children: React.ReactNode }) {
+  useEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute("data-themes", "on");
+    root.setAttribute("data-theme", theme === "dark" ? "dark" : "light");
+    return () => {
+      root.removeAttribute("data-themes");
+      root.removeAttribute("data-theme");
+    };
+  }, [theme]);
+  return children;
+}
+
 const preview: Preview = {
+  globalTypes: {
+    theme: {
+      description: "Colour theme",
+      defaultValue: "light",
+      toolbar: {
+        title: "Theme",
+        icon: "circlehollow",
+        items: [
+          { value: "light", title: "Light" },
+          { value: "dark", title: "Dark" },
+        ],
+        dynamicTitle: true,
+      },
+    },
+  },
   parameters: {
     layout: "fullscreen",
     nextjs: {
@@ -72,7 +106,8 @@ const preview: Preview = {
     },
   },
   decorators: [
-    (Story) => (
+    (Story, context) => (
+      <ApplyTheme theme={String(context.globals.theme)}>
       <ApplyProductFonts>
         {/* `.app-shell`/`.auth-route` is what scopes app-shell.css's focus-ring and heading-colour
             rules (see docs/DESIGN_SYSTEM.md's Colour section) — without it a story's <h1>/<h2>/<h3>
@@ -88,6 +123,7 @@ const preview: Preview = {
           </div>
         </div>
       </ApplyProductFonts>
+      </ApplyTheme>
     ),
   ],
 };

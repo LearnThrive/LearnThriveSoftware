@@ -19,8 +19,8 @@
   --lt-font-mono: var(--font-ibm-plex-mono), monospace;
 
   font-family: var(--lt-font-body);
-  color: var(--lt-ink);
-  background: var(--lt-cream);
+  color: var(--fg-ink);
+  background: var(--surface-2);
 }
 
 .page h1,
@@ -28,22 +28,24 @@
 .page h3 {
   font-family: var(--lt-font-heading);
   font-weight: 800;
-  color: var(--lt-navy);
+  color: var(--fg-strong);
   line-height: 1.05;
   letter-spacing: -0.02em;
 }
 
 :global(body.is-contact .site-header) {
-  background: #F7F2E8;
-  border-bottom-color: #E7DFCD;
+  background: var(--surface-2);
+  border-bottom-color: var(--border-subtle);
 }
 
 /* ── Hero ──────────────────────────────────────────────── */
 .hero {
   position: relative;
-  background: var(--lt-navy);
-  color: #fff;
+  background: var(--surface-inverse);
+  color: var(--fg-on-inverse);
   overflow: hidden;
+  --focus-colour: var(--focus-colour-on-inverse);
+  background-image: var(--navy-light), var(--grain);
 }
 
 .heroDots {
@@ -82,20 +84,20 @@
   font-size: 11px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--lt-green-light);
+  color: var(--fg-accent);
   margin-bottom: 16px;
   animation: lt-rise 0.6s both;
 }
 
 .eyebrowDark {
-  color: var(--lt-green-dark);
+  color: var(--fg-accent);
 }
 
 .heroTitle {
   font-size: clamp(34px, 4.4vw, 52px) !important;
   line-height: 1 !important;
   letter-spacing: -0.03em !important;
-  color: #fff !important;
+  color: var(--fg-on-inverse) !important;
   margin: 0 0 20px !important;
   animation: lt-rise 0.8s both 0.12s;
 }
@@ -112,7 +114,7 @@
   right: -8px;
   bottom: 2px;
   height: 22px;
-  background: var(--lt-green);
+  background: var(--accent-strong);
   transform-origin: left;
   animation: lt-mark 0.75s cubic-bezier(0.2, 0.8, 0.3, 1) both 0.9s;
   border-radius: 4px;
@@ -125,7 +127,7 @@
 .heroLead {
   font-size: 18.5px;
   line-height: 1.55;
-  color: rgba(255, 255, 255, 0.84);
+  color: var(--fg-on-inverse-soft);
   max-width: 52ch;
   margin: 0;
   animation: lt-rise 0.8s both 0.3s;
@@ -174,19 +176,21 @@
 }
 
 .cardWhite {
-  background: #fff;
-  border: 1px solid var(--lt-border);
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
   --lift-shadow: 0 26px 44px -28px rgba(20, 49, 82, 0.5);
 }
 
 .cardNavy {
-  background: var(--lt-navy);
-  color: #fff;
+  background: var(--surface-inverse);
+  color: var(--fg-on-inverse);
   --lift-shadow: 0 26px 44px -28px rgba(20, 49, 82, 0.85);
+  --focus-colour: var(--focus-colour-on-inverse);
+  background-image: var(--navy-light), var(--grain);
 }
 
 .cardNavy h2 {
-  color: #fff !important;
+  color: var(--fg-on-inverse) !important;
 }
 
 /* plan12.md task 12: "contact methods become compositional elements rather than generic cards" —
@@ -199,11 +203,11 @@
 }
 
 .cardWhite .cardIcon {
-  color: var(--lt-green-dark);
+  color: var(--fg-accent);
 }
 
 .cardNavy .cardIcon {
-  color: #13c2a0;
+  color: var(--fg-accent-bright);
 }
 
 .cardLabel {
@@ -216,7 +220,7 @@
 }
 
 .cardWhite .cardLabel {
-  color: var(--lt-green-dark);
+  color: var(--fg-accent);
 }
 
 .cardNavy .cardLabel {
@@ -244,11 +248,11 @@
 }
 
 .cardWhite .cardLink {
-  color: var(--lt-green-dark);
+  color: var(--fg-accent);
 }
 
 .cardNavy .cardLink {
-  color: var(--lt-green-light);
+  color: var(--fg-accent);
 }
 
 .card p {
@@ -258,11 +262,11 @@
 }
 
 .cardWhite p {
-  color: var(--lt-text);
+  color: var(--fg-muted);
 }
 
 .cardNavy p {
-  color: rgba(255, 255, 255, 0.78);
+  color: var(--fg-on-inverse-muted);
 }
 
 .phoneList {
@@ -278,7 +282,7 @@
 
 .phoneName {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--fg-on-inverse-muted);
 }
 
 .phoneNumber {
@@ -292,13 +296,13 @@
 
 .phoneNumber:hover {
   opacity: 0.8;
-  color: #13c2a0;
+  color: var(--fg-accent-bright);
 }
 
 /* ── Guidance Section ──────────────────────────────────── */
 .guidanceSection {
-  background: var(--lt-cream-light);
-  border-block: 1px solid var(--lt-border);
+  background: var(--surface-3);
+  border-block: 1px solid var(--border-subtle);
   padding: 64px 40px;
 }
 
@@ -328,7 +332,7 @@
   align-items: flex-start;
   font-size: 16px;
   line-height: 1.55;
-  color: var(--lt-ink);
+  color: var(--fg-ink);
 }
 
 .checkIcon {
@@ -336,7 +340,7 @@
   height: 24px;
   flex: none;
   margin-top: 2px;
-  color: var(--lt-green-dark);
+  color: var(--fg-accent);
 }
 
 /* ── CTA ───────────────────────────────────────────────── */
@@ -355,14 +359,14 @@
   max-width: 50ch;
   font-size: 16.5px;
   line-height: 1.6;
-  color: var(--lt-text);
+  color: var(--fg-muted);
 }
 
 /* border-radius matches globals.css's .button — see home.module.css's .btnPrimary comment for why */
 .btnPrimary {
   display: inline-block;
-  background: var(--lt-green);
-  color: #fff;
+  background: var(--accent-strong);
+  color: var(--fg-on-inverse);
   font-weight: 600;
   font-size: 16.5px;
   padding: 16px 30px;
@@ -375,8 +379,8 @@
 
 .btnPrimary:hover {
   transform: translateY(-3px);
-  background: var(--lt-green-dark);
-  color: #fff;
+  background: var(--accent-strong);
+  color: var(--fg-on-inverse);
 }
 
 /* ── Animations ────────────────────────────────────────── */

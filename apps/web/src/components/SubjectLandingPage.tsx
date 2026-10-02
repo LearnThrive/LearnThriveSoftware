@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { breadcrumbData } from "@/lib/structuredData";
 import { ViewTransition } from "react";
 import { ButtonLink } from "@/components/ButtonLink";
 import { Container } from "@/components/Container";
@@ -13,6 +15,7 @@ import { CinematicBackdrop } from "@/components/motion/primitives/CinematicBackd
 import { SubjectHeroMotif } from "@/components/motion/scenes/SubjectHeroMotif";
 import { SubjectWorld } from "@/components/motion/scenes/SubjectWorld";
 import type { SubjectLandingConfig, SubjectLandingSlug } from "@/lib/site";
+import { motionStagger, staggerDelay } from "@/lib/motion/tokens";
 
 type SubjectLandingPageProps = {
   subject: SubjectLandingConfig;
@@ -41,6 +44,12 @@ const SPOTLIGHT_VARIANT: Record<SubjectLandingSlug, RevealVariant> = {
 export function SubjectLandingPage({ subject }: SubjectLandingPageProps) {
   return (
     <div className={`subject-landing subject-landing--${subject.slug}`}>
+      <JsonLd
+        data={breadcrumbData([
+          { name: "Subjects", path: "/subjects" },
+          { name: `${subject.title} tuition`, path: subject.path },
+        ])}
+      />
       <PageHero
         eyebrow={subject.hero.eyebrow}
         title={subject.hero.title}
@@ -92,7 +101,7 @@ export function SubjectLandingPage({ subject }: SubjectLandingPageProps) {
               // The first card is the first block below the hero, so it stays static (LCP) —
               // matching the same "first reveal is the explicit opt-out" convention marketing-
               // motion.spec.ts already enforces for /subjects, /about, /contact and /faq.
-              <Reveal key={item.title} variant={index === 0 ? "static" : SUPPORT_VARIANT[subject.slug]} delay={index * 0.07}>
+              <Reveal key={item.title} variant={index === 0 ? "static" : SUPPORT_VARIANT[subject.slug]} delay={staggerDelay(index, motionStagger.list)}>
                 <FeatureCard {...item} index={index + 1} />
               </Reveal>
             ))}

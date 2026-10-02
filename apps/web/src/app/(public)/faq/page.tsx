@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { breadcrumbData, faqPageData } from "@/lib/structuredData";
 import Link from "next/link";
 import { BodyClass } from "@/components/BodyClass";
 import { Reveal } from "@/components/motion/primitives/Reveal";
@@ -9,6 +11,7 @@ import { SectionHandoff } from "@/components/motion/primitives/SectionHandoff";
 import { createMetadata } from "@/lib/metadata";
 import { faqSections } from "@/lib/faqs";
 import styles from "./faq.module.css";
+import { motionStagger, staggerDelay } from "@/lib/motion/tokens";
 
 export const metadata: Metadata = createMetadata({
   title: "Frequently Asked Questions",
@@ -22,6 +25,8 @@ export default function FaqPage() {
     <div className={styles.page}>
       <BodyClass className="is-faq" />
       <FaqHashOpener />
+      <JsonLd data={breadcrumbData([{ name: "FAQ", path: "/faq" }])} />
+      <JsonLd data={faqPageData(faqSections.flatMap((section) => section.items))} />
 
       {/* ── Hero ──────────────────────────────────────── */}
       <section className={styles.hero} id="faq-top">
@@ -56,7 +61,7 @@ export default function FaqPage() {
         {faqSections.map((section, i) => (
           // The first row of categories is on the first screen and holds the page's largest text
           // paint (LCP ~870 ms when revealed); it is static, and the rows below reveal.
-          <Reveal variant={i < 2 ? "static" : "soft"} key={section.id} delay={(i % 2) * 0.08}>
+          <Reveal variant={i < 2 ? "static" : "soft"} key={section.id} delay={staggerDelay(i % 2, motionStagger.list)}>
             <section
               className={styles.category}
               id={section.id}

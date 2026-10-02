@@ -110,9 +110,20 @@ export function createHeroGradient(canvas: HTMLCanvasElement): HeroGradientHandl
   const timeLoc = gl.getUniformLocation(program, "u_time");
 
   const startedAt = performance.now();
+  // `pointer*` is what is drawn; `target*` is where the cursor is. The drawn value eases toward the
+  // target (plan15 Wave 5 section 9.2) so the gradient follows the cursor like a liquid rather than
+  // snapping to it. The easing loop exists only while the two differ: it stops itself the frame they
+  // meet, so at rest — and offscreen, where nothing calls setPointer — nothing is running.
   let pointerX = 0.5;
   let pointerY = 0.35;
+  let targetX = pointerX;
+  let targetY = pointerY;
+  let easeFrame = 0;
+  let lastEaseAt = 0;
   let disposed = false;
+  /** Time constant of the follow, in ms: ~63% of the way there after this long. */
+  const FOLLOW_MS = 140;
+  const SETTLED = 0.0006;
 
   function draw() {
     if (disposed) return;
@@ -121,14 +132,35 @@ export function createHeroGradient(canvas: HTMLCanvasElement): HeroGradientHandl
     gl!.drawArrays(gl!.TRIANGLES, 0, 3);
   }
 
+  function ease(now: number) {
+    easeFrame = 0;
+    if (disposed) return;
+    const dt = Math.min(64, Math.max(1, now - lastEaseAt));
+    lastEaseAt = now;
+    const k = 1 - Math.exp(-dt / FOLLOW_MS);
+    pointerX += (targetX - pointerX) * k;
+    pointerY += (targetY - pointerY) * k;
+    if (Math.abs(targetX - pointerX) < SETTLED && Math.abs(targetY - pointerY) < SETTLED) {
+      pointerX = targetX;
+      pointerY = targetY;
+      draw();
+      return;
+    }
+    draw();
+    easeFrame = requestAnimationFrame(ease);
+  }
+
   draw();
 
   return {
     setPointer(x, y) {
       if (disposed) return;
-      pointerX = x;
-      pointerY = y;
-      draw();
+      targetX = x;
+      targetY = y;
+      if (easeFrame === 0) {
+        lastEaseAt = performance.now();
+        easeFrame = requestAnimationFrame(ease);
+      }
     },
     resize(widthPx, heightPx, dpr) {
       if (disposed) return;
@@ -145,6 +177,8 @@ export function createHeroGradient(canvas: HTMLCanvasElement): HeroGradientHandl
     dispose() {
       if (disposed) return;
       disposed = true;
+      if (easeFrame) cancelAnimationFrame(easeFrame);
+      easeFrame = 0;
       gl!.deleteProgram(program);
       gl!.deleteShader(vertexShader);
       gl!.deleteShader(fragmentShader);

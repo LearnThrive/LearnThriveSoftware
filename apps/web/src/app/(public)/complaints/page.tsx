@@ -13,6 +13,7 @@ export const metadata = createMetadata({
 export default function ComplaintsPage() {
   return (
     <LegalPage
+      path="/complaints"
       eyebrow="Complaints"
       title="Our complaints procedure"
       intro="If something has not met your expectations, we want to know. This page explains how to raise a complaint and what happens next."
