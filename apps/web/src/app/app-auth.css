@@ -26,13 +26,10 @@
 
 .auth-brand__body { max-width: 30rem; }
 .auth-brand__mark {
-  /* Same reasoning as .app-brand__mark (app-shell.css): the logo mark is drawn for a light
-     surface, not this panel's navy/green gradient, so it sits on its own small cream chip. */
-  width: 3rem; height: 3rem; margin-bottom: var(--space-5);
-  padding: 0.3rem;
-  border-radius: 0.9rem;
-  background: var(--colour-cream);
-  object-fit: contain;
+  /* The vector mark in its light inks on the panel's navy/green gradient (no chip needed). */
+  --brand-ink: #eef4f8;
+  --brand-green: #8ed2ad;
+  width: 3.2rem; height: 3rem; margin-bottom: var(--space-5);
 }
 .auth-brand__tagline {
   margin: 0 0 var(--space-2);
@@ -97,7 +94,7 @@
   transition: background var(--duration-standard) var(--ease-smooth);
 }
 .notification + .notification { border-top: 1px solid var(--app-border); }
-.notification--unread { background: #f6fbf8; }
+.notification--unread { background: color-mix(in srgb, var(--app-surface-accent) 45%, var(--app-surface)); }
 
 .notification__dot {
   flex: none; width: 0.5rem; height: 0.5rem; margin-top: 0.45rem;

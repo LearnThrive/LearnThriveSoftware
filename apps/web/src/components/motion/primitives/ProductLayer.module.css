@@ -2,6 +2,6 @@
   position: relative;
   border-radius: 20px;
   overflow: hidden;
-  background: #fff;
+  background: var(--surface-1);
   box-shadow: 0 40px 80px -40px rgba(14, 42, 71, 0.35);
 }

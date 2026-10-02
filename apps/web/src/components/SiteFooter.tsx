@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Brand } from "@/components/Brand";
 import { Container } from "@/components/Container";
 import { PhoneContacts } from "@/components/PhoneContacts";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Reveal } from "@/components/motion/primitives/Reveal";
 import { navigation, siteConfig, subjects } from "@/lib/site";
 
@@ -102,6 +103,9 @@ export function SiteFooter() {
                 </Link>
               ))}
             </nav>
+          </div>
+          <div className="footer-appearance">
+            <ThemeToggle variant="radio" inverse />
           </div>
           <p className="footer-registration">
             {siteConfig.legalName} &middot; Company No. {siteConfig.companyNumber} &middot;

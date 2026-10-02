@@ -1,5 +1,5 @@
-import Image from "next/image";
 import Link from "next/link";
+import { BrandMark } from "@/components/brand/BrandMark";
 import { siteConfig } from "@/lib/site";
 
 type BrandProps = {
@@ -13,14 +13,7 @@ export function Brand({ inverse = false }: BrandProps) {
       href="/"
       aria-label={`${siteConfig.name} home`}
     >
-      <Image
-        className="brand__mark"
-        src="/brand/learnthrive-mark.png"
-        alt=""
-        width={200}
-        height={172}
-        priority
-      />
+      <BrandMark className="brand__mark" />
       <span className="brand__wordmark" aria-hidden="true">
         <span>Learn</span>
         <strong>Thrive</strong>

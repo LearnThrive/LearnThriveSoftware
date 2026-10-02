@@ -12,6 +12,7 @@ export const metadata = createMetadata({
 export default function CookiesPage() {
   return (
     <LegalPage
+      path="/cookies"
       eyebrow="Website information"
       title="Cookie notice"
       intro="A plain-language explanation of the cookies and similar technologies used by the current LearnThrive Tuition website."

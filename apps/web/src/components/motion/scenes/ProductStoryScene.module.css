@@ -1,7 +1,9 @@
 .section {
   padding: 80px 40px;
-  background: var(--lt-navy);
-  color: #fff;
+  background: var(--surface-inverse);
+  color: var(--fg-on-inverse);
+  --focus-colour: var(--focus-colour-on-inverse);
+  background-image: var(--navy-light), var(--grain);
 }
 
 .header {
@@ -11,14 +13,14 @@
 }
 
 .headerTitle {
-  color: #fff !important;
+  color: var(--fg-on-inverse) !important;
 }
 
 .headerLead {
   margin-top: 14px;
   font-size: 16.5px;
   line-height: 1.6;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--fg-on-inverse-muted);
 }
 
 .grid {
@@ -82,7 +84,7 @@
   font-size: 10px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--fg-on-inverse-muted);
 }
 
 .stageInner {
@@ -104,14 +106,14 @@
   gap: 6px;
   font-size: 11.5px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--fg-on-inverse-muted);
 }
 
 .stageParticipantDot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #8ed2ad;
+  background: var(--fg-accent-on-inverse);
 }
 
 .stageLabel {
@@ -119,7 +121,7 @@
   font-size: 10.5px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #8ed2ad;
+  color: var(--fg-accent-on-inverse);
 }
 
 /* The AnimatePresence swap area: flex:1 absorbs the height .stage gained above, and
@@ -152,7 +154,7 @@
   display: block;
   width: 100%;
   height: 100%;
-  background: #8ed2ad;
+  background: var(--fg-accent-on-inverse);
   transform-origin: left center;
 }
 
@@ -168,14 +170,14 @@
   border-radius: 0.7rem;
   background: rgba(255, 255, 255, 0.08);
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--fg-on-inverse-soft);
 }
 
 .mockCard {
   padding: 26px;
   border-radius: 0.9rem;
-  background: rgba(255, 255, 255, 0.9);
-  color: var(--lt-navy);
+  background: var(--surface-1);
+  color: var(--fg-strong);
 }
 
 .mockCardLabel {
@@ -183,7 +185,7 @@
   font-size: 10.5px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--lt-green-dark);
+  color: var(--fg-accent);
   margin-bottom: 8px;
 }
 
@@ -205,12 +207,223 @@
   font-size: 12.5px;
   font-weight: 600;
   background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  color: var(--fg-on-inverse);
 }
 
 .mockPillActive {
-  background: #8ed2ad;
-  color: var(--lt-navy);
+  background: var(--fg-accent-on-inverse);
+  /* The deep navy in both themes: the mint fill is light in both, so the label must be dark in both. */
+  color: var(--surface-inverse);
+}
+
+/* Mock lesson surfaces (plan15 Wave 6): small drawings of what the product really has. */
+.mockAvatar {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--fg-accent);
+  font-family: var(--lt-font-heading);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.mockMatch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.mockMatchText {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--fg-muted);
+}
+
+.mockMatchText b {
+  font-size: 14px;
+  color: var(--fg-strong);
+}
+
+.mockCheck {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent-strong);
+  position: relative;
+}
+
+.mockCheck::after {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 4px;
+  width: 5px;
+  height: 9px;
+  border: solid var(--on-accent);
+  border-width: 0 2px 2px 0;
+  transform: rotate(40deg);
+}
+
+.mockVideo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 26px 0;
+  border-radius: 0.7rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-on-inverse);
+}
+
+.mockVideoSmall {
+  flex: 0 0 30%;
+  padding: 18px 0;
+}
+
+.mockVideoName {
+  font-size: 12.5px;
+  color: var(--fg-on-inverse-soft);
+}
+
+.mockBoard {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 0.7rem;
+  background: var(--surface-1);
+  color: var(--fg-strong);
+}
+
+.mockBoardTitle {
+  font-family: var(--lt-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg-accent);
+}
+
+.mockGraph {
+  width: 100%;
+  height: auto;
+}
+
+.mockAxis {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.mockCurve {
+  fill: none;
+  stroke: var(--fg-accent);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.mockPoint {
+  fill: var(--surface-1);
+  stroke: var(--fg-accent);
+  stroke-width: 2.5;
+}
+
+.mockToolRow {
+  display: flex;
+  gap: 6px;
+}
+
+.mockTool {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg-muted);
+}
+
+.mockMeter {
+  display: flex;
+  gap: 6px;
+  margin-top: 16px;
+}
+
+.mockMeterOn,
+.mockMeterOff {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.mockMeterOn {
+  background: var(--accent-strong);
+}
+
+.mockMeterOff {
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+}
+
+.mockFootnote {
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: var(--fg-muted);
+}
+
+.mockFields {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.mockFields > div {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.mockFields > div:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.mockFields dt {
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.mockFields dd {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--fg-strong);
+}
+
+.mockTag {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--tone-positive-bg);
+  color: var(--tone-positive-fg);
+  font-size: 12.5px;
 }
 
 .storyCol {
@@ -237,12 +450,12 @@
   font-family: var(--lt-font-mono);
   font-size: 11px;
   letter-spacing: 0.14em;
-  color: #8ed2ad;
+  color: var(--fg-accent-on-inverse);
   margin-bottom: 10px;
 }
 
 .beatTitle {
-  color: #fff !important;
+  color: var(--fg-on-inverse) !important;
   font-size: 28px !important;
   margin: 0 0 10px !important;
 }
@@ -256,7 +469,7 @@
 .beatText {
   font-size: 16px;
   line-height: 1.6;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--fg-on-inverse-muted);
   max-width: 40ch;
 }
 

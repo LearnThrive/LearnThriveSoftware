@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { breadcrumbData } from "@/lib/structuredData";
 import Link from "next/link";
 import { BodyClass } from "@/components/BodyClass";
 import { Reveal } from "@/components/motion/primitives/Reveal";
@@ -20,6 +22,7 @@ export default function ContactPage() {
   return (
     <div className={styles.page}>
       <BodyClass className="is-contact" />
+      <JsonLd data={breadcrumbData([{ name: "Contact", path: "/contact" }])} />
 
       {/* ── Hero ──────────────────────────────────────── */}
       <section className={styles.hero}>

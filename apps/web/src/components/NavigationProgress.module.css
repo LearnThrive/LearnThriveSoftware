@@ -1,0 +1,36 @@
+/* A 3px strip at the very top of the viewport, above the sticky header. Transform and opacity only. */
+.bar {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 400;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--fg-accent-on-inverse));
+  transform-origin: left center;
+  transform: scaleX(0);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Climbs quickly to ~80% and then crawls, so it never looks finished before the page is. */
+.bar[data-state="loading"] {
+  opacity: 1;
+  animation: nav-progress-climb 9s cubic-bezier(0.1, 0.7, 0.2, 1) forwards;
+}
+
+.bar[data-state="done"] {
+  opacity: 0;
+  transform: scaleX(1);
+  transition:
+    transform var(--duration-fast) var(--ease-snappy),
+    opacity var(--duration-slow) var(--ease-smooth) var(--duration-fast);
+}
+
+@keyframes nav-progress-climb {
+  from {
+    transform: scaleX(0.04);
+  }
+
+  to {
+    transform: scaleX(0.86);
+  }
+}

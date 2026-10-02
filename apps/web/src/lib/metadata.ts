@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ogImagePath } from "@/lib/ogPages";
 import { siteConfig } from "@/lib/site";
 
 type PageMetadata = {
@@ -13,6 +14,8 @@ export function createMetadata({
   path,
 }: PageMetadata): Metadata {
   const canonical = path === "/" ? siteConfig.url : `${siteConfig.url}${path}`;
+  // A per-page brand card (app/og/[[...slug]]/route.tsx) rather than one shared image.
+  const image = ogImagePath(path);
 
   return {
     title,
@@ -27,10 +30,10 @@ export function createMetadata({
       locale: "en_GB",
       images: [
         {
-          url: "/og-image.png",
+          url: image,
           width: 1200,
           height: 630,
-          alt: `${siteConfig.name} — personalised online tuition`,
+          alt: `${title} — ${siteConfig.name}`,
         },
       ],
     },
@@ -38,7 +41,7 @@ export function createMetadata({
       card: "summary_large_image",
       title,
       description,
-      images: ["/og-image.png"],
+      images: [image],
     },
   };
 }

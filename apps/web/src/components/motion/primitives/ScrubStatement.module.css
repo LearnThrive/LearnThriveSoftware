@@ -1,0 +1,35 @@
+.statement {
+  margin: 0;
+}
+
+.word {
+  display: inline;
+}
+
+/* Native scroll-driven animation: each word fills from muted to strong across its own slice of the
+   paragraph's journey through the viewport (--w runs 0..1 along the sentence). Gated on the tier
+   attribute MotionRuntime writes, on no-preference, and on support, so every other visitor gets the
+   finished text. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    :global(html[data-motion-tier="full"]) .statement,
+    :global(html[data-motion-tier="standard"]) .statement {
+      view-timeline: --scrub block;
+    }
+
+    :global(html[data-motion-tier="full"]) .word,
+    :global(html[data-motion-tier="standard"]) .word {
+      animation: scrub-word linear both;
+      animation-timeline: --scrub;
+      animation-range: cover calc(14% + var(--w) * 28%) cover calc(26% + var(--w) * 28%);
+    }
+  }
+}
+
+/* Opacity only (the compositor-first rule, tests/compositor.test.mjs): a word at partial opacity
+   over the page reads as the muted tone of the same ink, and rises to the full strong tone. */
+@keyframes scrub-word {
+  from {
+    opacity: 0.42;
+  }
+}

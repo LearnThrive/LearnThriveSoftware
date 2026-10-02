@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { breadcrumbData } from "@/lib/structuredData";
 import Image from "next/image";
 import Link from "next/link";
 import { BodyClass } from "@/components/BodyClass";
@@ -29,6 +31,7 @@ export default function AboutPage() {
   return (
     <div className={styles.page}>
       <BodyClass className="is-about" />
+      <JsonLd data={breadcrumbData([{ name: "About", path: "/about" }])} />
 
       {/* ── Hero ──────────────────────────────────────── */}
       <section className={styles.hero}>
@@ -70,8 +73,8 @@ export default function AboutPage() {
           </p>
           <p className={styles.storyText}>
             Founders &mdash; and childhood friends &mdash;{" "}
-            <strong style={{ color: "#143152" }}>Abdurrahman Mustafa</strong> and{" "}
-            <strong style={{ color: "#143152" }}>Tahasin Hasan</strong> set out
+            <strong style={{ color: "var(--fg-strong)" }}>Abdurrahman Mustafa</strong> and{" "}
+            <strong style={{ color: "var(--fg-strong)" }}>Tahasin Hasan</strong> set out
             to make great tuition genuinely accessible: the kind that adapts to
             how each student learns, rather than expecting every child to learn
             the same way. That belief still drives everything we do.

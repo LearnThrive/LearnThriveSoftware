@@ -13,6 +13,7 @@ export const metadata = createMetadata({
 export default function TuitionTermsPage() {
   return (
     <LegalPage
+      path="/tuition-terms"
       eyebrow="Tuition terms"
       title="Terms for LearnThrive tuition"
       intro="These are the terms that apply once tuition is arranged — separate from the website terms that govern browsing and enquiring here."

@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { breadcrumbData } from "@/lib/structuredData";
 import { Container } from "@/components/Container";
 import { EnquiryForm } from "@/components/EnquiryForm";
 import { PageHero } from "@/components/PageHero";
@@ -18,6 +20,7 @@ export const metadata: Metadata = createMetadata({
 export default function BookPage() {
   return (
     <>
+      <JsonLd data={breadcrumbData([{ name: "Book a free consultation", path: "/book" }])} />
       <PageHero
         eyebrow="Free consultation"
         title="Tell us how we can support your child"

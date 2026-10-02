@@ -5,23 +5,25 @@
 }
 
 .toneNavy {
-  background: var(--colour-navy-900);
-  color: #fff;
+  background: var(--surface-inverse);
+  color: var(--fg-on-inverse);
+  --focus-colour: var(--focus-colour-on-inverse);
+  background-image: var(--navy-light), var(--grain);
 }
 
 .toneCream {
-  background: var(--colour-cream);
-  color: var(--colour-navy-950);
+  background: var(--surface-3);
+  color: var(--fg-strong);
 }
 
 .toneWhite {
-  background: #fff;
-  color: var(--colour-navy-950);
+  background: var(--surface-1);
+  color: var(--fg-strong);
 }
 
 .toneMint {
-  background: var(--colour-mint-100);
-  color: var(--colour-navy-950);
+  background: var(--surface-accent);
+  color: var(--fg-strong);
 }
 
 .intensityQuiet {

@@ -22,8 +22,8 @@
   --lt-font-mono: var(--font-ibm-plex-mono), monospace;
 
   font-family: var(--lt-font-body);
-  color: var(--lt-ink);
-  background: var(--lt-cream);
+  color: var(--fg-ink);
+  background: var(--surface-2);
 }
 
 .page h1,
@@ -32,23 +32,25 @@
 .page h4 {
   font-family: var(--lt-font-heading);
   font-weight: 800;
-  color: var(--lt-navy);
+  color: var(--fg-strong);
   line-height: 1.05;
   letter-spacing: -0.02em;
 }
 
 /* ── Override site header ──────────────────────────────── */
 :global(body.is-subjects .site-header) {
-  background: #F7F2E8;
-  border-bottom-color: #E7DFCD;
+  background: var(--surface-2);
+  border-bottom-color: var(--border-subtle);
 }
 
 /* ── Hero ──────────────────────────────────────────────── */
 .hero {
   position: relative;
-  background: var(--lt-navy);
-  color: #fff;
+  background: var(--surface-inverse);
+  color: var(--fg-on-inverse);
   overflow: hidden;
+  --focus-colour: var(--focus-colour-on-inverse);
+  background-image: var(--navy-light), var(--grain);
 }
 
 .heroDots {
@@ -87,20 +89,20 @@
   font-size: 11px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--lt-green-light);
+  color: var(--fg-accent);
   margin-bottom: 16px;
   animation: lt-rise 0.6s both;
 }
 
 .eyebrowDark {
-  color: var(--lt-green-dark);
+  color: var(--fg-accent);
 }
 
 .heroTitle {
   font-size: clamp(34px, 4.4vw, 52px) !important;
   line-height: 1 !important;
   letter-spacing: -0.03em !important;
-  color: #fff !important;
+  color: var(--fg-on-inverse) !important;
   margin: 0 0 20px !important;
   animation: lt-rise 0.8s both 0.12s;
 }
@@ -117,7 +119,7 @@
   right: -8px;
   bottom: 2px;
   height: 22px;
-  background: var(--lt-green);
+  background: var(--accent-strong);
   transform-origin: left;
   animation: lt-mark 0.75s cubic-bezier(0.2, 0.8, 0.3, 1) both 0.9s;
   border-radius: 4px;
@@ -130,7 +132,7 @@
 .heroLead {
   font-size: 18.5px;
   line-height: 1.55;
-  color: rgba(255, 255, 255, 0.84);
+  color: var(--fg-on-inverse-soft);
   max-width: 52ch;
   margin: 0;
   animation: lt-rise 0.8s both 0.3s;
@@ -149,7 +151,7 @@
 .heroJumpLink {
   font-size: 14px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.88);
+  color: var(--fg-on-inverse-soft);
   border: 1px solid rgba(8, 115, 99, 0.45);
   border-radius: 999px;
   padding: 9px 18px;
@@ -158,8 +160,8 @@
 }
 
 .heroJumpLink:hover {
-  border-color: var(--lt-green-light);
-  color: #fff;
+  border-color: var(--accent-strong);
+  color: var(--fg-on-inverse);
   background: rgba(255, 255, 255, 0.08);
 }
 
@@ -172,9 +174,9 @@
   display: flex;
   gap: 16px;
   align-items: flex-start;
-  background: var(--lt-cream-light);
-  border: 1px solid var(--lt-border);
-  border-left: 4px solid var(--lt-green);
+  background: var(--surface-3);
+  border: 1px solid var(--border-subtle);
+  border-left: 4px solid var(--accent-strong);
   border-radius: 14px;
   padding: 20px 22px;
   max-width: 78ch;
@@ -184,11 +186,11 @@
   margin: 0;
   font-size: 15.5px;
   line-height: 1.6;
-  color: var(--lt-ink);
+  color: var(--fg-ink);
 }
 
 .callout a {
-  color: var(--lt-green-dark);
+  color: var(--fg-accent);
   font-weight: 600;
 }
 
@@ -258,7 +260,7 @@
   height: 56px;
   border-radius: 16px;
   background: rgba(7, 95, 82, 0.13);
-  color: var(--lt-green-dark);
+  color: var(--fg-accent);
   display: grid;
   place-items: center;
   flex: none;
@@ -273,7 +275,7 @@
 
 .subjectTitle {
   font-size: 40px !important;
-  color: var(--lt-navy) !important;
+  color: var(--fg-strong) !important;
   margin: 0 !important;
   line-height: 1 !important;
 }
@@ -283,7 +285,7 @@
   font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--lt-green-dark);
+  color: var(--fg-accent);
   margin-top: 6px;
 }
 
@@ -291,7 +293,7 @@
   margin: 0;
   font-size: 17px;
   line-height: 1.6;
-  color: var(--lt-ink);
+  color: var(--fg-ink);
   max-width: 62ch;
 }
 
@@ -305,7 +307,7 @@
   gap: 6px;
   margin-top: 18px;
   font-weight: 700;
-  color: var(--lt-green-dark);
+  color: var(--fg-accent);
   text-decoration: none;
 }
 
@@ -315,9 +317,9 @@
 
 .subjectImage {
   position: relative;
-  border: 1px solid var(--lt-border);
+  border: 1px solid var(--border-subtle);
   border-radius: 22px;
-  height: 180px;
+  aspect-ratio: 2 / 1;
   overflow: hidden;
 }
 
@@ -341,9 +343,9 @@
    comes from --lift-shadow so each variant only has to name its shadow. */
 .levelCard {
   position: relative;
-  background: #fff;
-  border: 1px solid var(--lt-border);
-  border-top: 4px solid var(--lt-green);
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-top: 4px solid var(--accent-strong);
   border-radius: 22px;
   padding: 24px;
   --lift-shadow: 0 26px 44px -28px rgba(20, 49, 82, 0.5);
@@ -370,10 +372,12 @@
 }
 
 .levelCardDark {
-  background: var(--lt-navy);
-  border-color: var(--lt-navy);
-  border-top-color: var(--lt-green-light);
+  background: var(--surface-inverse);
+  border-color: var(--fg-strong);
+  border-top-color: var(--accent-strong);
   --lift-shadow: 0 26px 44px -28px rgba(20, 49, 82, 0.55);
+  --focus-colour: var(--focus-colour-on-inverse);
+  background-image: var(--navy-light), var(--grain);
 }
 
 .levelCardHeader {
@@ -388,7 +392,7 @@
   height: 28px;
   border-radius: 8px;
   background: rgba(7, 95, 82, 0.14);
-  color: var(--lt-green-dark);
+  color: var(--fg-accent);
   display: grid;
   place-items: center;
   font-family: var(--lt-font-heading);
@@ -408,29 +412,29 @@
 
 .levelCardDark .levelCardNumber {
   background: rgba(8, 115, 99, 0.18);
-  color: var(--lt-green-light);
+  color: var(--fg-accent);
 }
 
 .levelCardName {
   font-family: var(--lt-font-heading);
   font-weight: 800;
   font-size: 17px;
-  color: var(--lt-navy);
+  color: var(--fg-strong);
 }
 
 .levelCardDark .levelCardName {
-  color: #fff;
+  color: var(--fg-on-inverse);
 }
 
 .levelCardText {
   margin: 0;
   font-size: 15px;
   line-height: 1.55;
-  color: var(--lt-text);
+  color: var(--fg-muted);
 }
 
 .levelCardDark .levelCardText {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--fg-on-inverse-soft);
 }
 
 /* ── Science GCSE breakdown ────────────────────────────── */
@@ -443,25 +447,25 @@
   margin: 0;
   font-size: 14.5px;
   line-height: 1.5;
-  color: var(--lt-text);
+  color: var(--fg-muted);
 }
 
 .scienceBreakdown b {
-  color: var(--lt-green-dark);
+  color: var(--fg-accent);
 }
 
 /* ── 11+ Section ───────────────────────────────────────── */
 .elevenPlusSection {
-  background: var(--lt-cream-light);
-  border-block: 1px solid var(--lt-border);
+  background: var(--surface-3);
+  border-block: 1px solid var(--border-subtle);
   padding: 64px 40px;
   scroll-margin-top: 24px;
 }
 
 .elevenPlusCard {
   position: relative;
-  background: var(--lt-navy);
-  color: #fff;
+  background: var(--surface-inverse);
+  color: var(--fg-on-inverse);
   border-radius: 26px;
   padding: 44px;
   overflow: hidden;
@@ -470,6 +474,8 @@
      .levelRowDark .levelYears etc.) stays visible and on-brand. Purely decorative art, not text,
      so this is a legibility choice rather than a WCAG contrast requirement. */
   --subject-accent: #13c2a0;
+  --focus-colour: var(--focus-colour-on-inverse);
+  background-image: var(--navy-light), var(--grain);
 }
 
 .elevenPlusDots {
@@ -487,7 +493,7 @@
 
 .elevenPlusTitle {
   font-size: 38px !important;
-  color: #fff !important;
+  color: var(--fg-on-inverse) !important;
   margin: 0 0 14px !important;
 }
 
@@ -495,7 +501,7 @@
   margin: 0;
   font-size: 17px;
   line-height: 1.6;
-  color: rgba(255, 255, 255, 0.84);
+  color: var(--fg-on-inverse-soft);
   max-width: 60ch;
 }
 
@@ -523,19 +529,19 @@
   font-family: var(--lt-font-heading);
   font-weight: 800;
   font-size: 18px;
-  color: #fff;
+  color: var(--fg-on-inverse);
   margin-bottom: 4px;
 }
 
 .elevenPlusItem span {
   font-size: 13.5px;
-  color: rgba(255, 255, 255, 0.68);
+  color: var(--fg-on-inverse-muted);
 }
 
 .elevenPlusFooter {
   margin: 26px 0 0;
   font-size: 16px;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--fg-on-inverse-soft);
 }
 
 /* ── CTA ───────────────────────────────────────────────── */
@@ -554,13 +560,13 @@
   max-width: 50ch;
   font-size: 16.5px;
   line-height: 1.6;
-  color: var(--lt-text);
+  color: var(--fg-muted);
 }
 
 .btnPrimary {
   display: inline-block;
-  background: var(--lt-green);
-  color: #fff;
+  background: var(--accent-strong);
+  color: var(--fg-on-inverse);
   font-weight: 600;
   font-size: 16.5px;
   padding: 16px 30px;
@@ -573,8 +579,8 @@
 
 .btnPrimary:hover {
   transform: translateY(-3px);
-  background: var(--lt-green-dark);
-  color: #fff;
+  background: var(--accent-strong);
+  color: var(--fg-on-inverse);
 }
 
 /* ── Animations ────────────────────────────────────────── */

@@ -5,9 +5,11 @@ exists, where it lives, and the rule each part is there to enforce. Read the com
 themselves (`apps/web/src/components/ui/`) for exact props — or browse them live in Storybook,
 below.
 
-The **marketing site** (`apps/web/src/app/(public)/**`) is a separate, pre-existing design system
-(`app/globals.css`, `home.module.css` and friends) and isn't covered here — this document is
-specifically about the authenticated product behind `/dashboard`.
+The **marketing site** (`apps/web/src/app/(public)/**`) keeps its own expressive stylesheets
+(`app/globals.css`, `home.module.css` and friends), but since plan 15 it shares this system's
+*vocabulary*: both read the semantic tokens in `app/tokens.css` (surfaces, text, lines, accent,
+elevation, focus, status tones), and both therefore have a dark theme. See "Plan 15 foundations"
+below. The rest of this document is about the authenticated product behind `/dashboard`.
 
 ## Storybook
 
@@ -43,6 +45,7 @@ giant UI component file" is exactly what this split avoids):
 
 | File | Owns |
 |---|---|
+| `app/tokens.css` | The semantic token layer shared by marketing, app and (for focus/contrast) the classroom: surfaces, text, lines, accent, status tones, the 5-step elevation scale, the focus ring, navy texture, and the dark theme. Imported right after `globals.css`. |
 | `app/globals.css` | Marketing site + a few classes the app still shares with it (`.btn`-adjacent legacy, alerts). Being wound down as pages migrate onto the app system below. |
 | `app/app-shell.css` | Design tokens (`:root`), the AppShell itself — sidebar, topbar, account menu, mobile drawer, badges, buttons, icon buttons, breadcrumbs. |
 | `app/app-components.css` | The reusable UI primitives — forms, Card, Dialog, EmptyState, FilterTabs, SearchInput, Toast. |
@@ -71,13 +74,15 @@ palette move without touching every component.
 | `--app-accent-soft` | `--colour-mint-100` | Accent-tinted background (badges, hover) |
 | `--app-focus-ring` | `0 0 0 2px var(--app-surface), 0 0 0 4px var(--app-accent)` | The one focus-visible treatment, everywhere |
 
-`globals.css` gives the whole document the marketing site's focus ring (a brown outline in a yellow
-halo). `app-shell.css` overrides it for `.app-shell` and `.auth-route` so a keyboard user moving
-through one dashboard screen doesn't meet two unrelated focus treatments — components with their
-own rule showed the accent ring while breadcrumbs, inline links and timeline entries fell through
-to the marketing one. It's a solid two-tone band (surface-coloured gap, then accent) rather than a
-soft translucent glow, because the glow disappeared against the accent-tinted and sunken surfaces
-it had to sit on. The classroom keeps its own high-contrast ring — correct against dark surfaces.
+**One focus language** (plan 15 Wave 2). The marketing site used to have its own ring (a brown outline
+in a pale-yellow halo) and the product another. Both are now the same two-tone band: a 2px accent
+outline with a 2px gap (`--focus-width`, `--focus-offset`, `--focus-colour` in `tokens.css`), the
+gap showing whatever surface the element sits on. It is an `outline`, not a `box-shadow`, so it
+never replaces an element's own shadow, and it is >= 3:1 on every light surface (green-700 on white
+is 5.6:1). Navy sections set `--focus-colour` to the mint variant (`--focus-colour-on-inverse`),
+because green-700 is only 2.5:1 on navy-900; the dark theme uses mint everywhere. The product's
+`--app-focus-ring` is the same band drawn as a box-shadow pair. The classroom keeps its own
+high-contrast ring — correct against its dark immersive surfaces.
 
 **Headings inherit their surface's colour.** `globals.css` styles bare `h1, h2, h3 { color:
 var(--colour-ink) }`, and a rule matching an element beats an inherited value — so any heading on
@@ -140,6 +145,24 @@ marketing site, the app and the classroom alike:
 | `--ease-smooth` | `cubic-bezier(0.4, 0, 0.2, 1)` | Symmetric ease-in-out — crossfades, a tab underline sliding between two positions. |
 | `--ease-gentle` | `cubic-bezier(0.16, 1, 0.3, 1)` | A slower, more settled ease-out for larger movements — dialogs, empty-state icons. |
 
+**Plan 15 additions.** Three longer durations for arrivals the visitor did not trigger — never a
+response to input: `--duration-emphasis` 600ms (a section-level reveal that should be noticed),
+`--duration-hero` 900ms (the first screen's main objects), `--duration-cinematic` 1400ms (a whole
+scene or the hero sequence's total run). Two more springs beside `surface` and `tactile` in
+`src/lib/motion/tokens.ts`: `soft` (stiffness 170, damping 26 — large surfaces arriving, a hero photo
+settling) and `weighty` (120/24, mass 1.25 — big panels). Staggers are a named choice
+(`motionStagger.list` 80ms, `.cards` 90ms, `.editorial` 120ms) applied through one helper,
+`staggerDelay(index, step, base)`, capped at six steps so a long list never waits a second; the pages
+no longer hand-write `delay={i * 0.09}`. `tests/motionTokens.test.mjs` pins every duration against
+its CSS custom property.
+
+**Parallax depth presets** (`src/lib/motion/depth.ts`, the `depth` prop of `ParallaxLayer`): `accent`
+(<= 48px, the default and what every existing layer uses), `scene` (<= 120px: a layer that is the
+point of a scene), `cinematic` (<= 200px: a large background layer only, **full tier only** — still
+everywhere else — and the layer sets `--parallax-overscan` so it can be oversized
+(`inset: calc(var(--parallax-overscan) * -1) 0` inside `overflow: hidden`) and its edges never show).
+The authored distance is still multiplied by the tier's `parallaxScale`.
+
 **The tactile-press standard**, applied to every button-shaped control (`.btn`, `.dialog-trigger`,
 `.icon-button`, FullCalendar's own toolbar buttons, the marketing `.btnPrimary`/`.btnSecondary`):
 hover lifts `translateY(-1px)`, press drops to `scale(0.97)` (a smaller `scale(0.92)` on
@@ -177,6 +200,92 @@ made a link/button right after navigating briefly non-actionable — a real Play
 timeout, not a cosmetic nit — which is exactly the "never delay an interaction to let a motion
 effect finish" rule plan8 section 72 states outright. Removed rather than patched around; see
 `AppShellClient.tsx`'s comment on the reverted `<main>` element for the specifics.
+
+## Plan 15 foundations
+
+### Semantic tokens (`app/tokens.css`)
+
+Raw palette (`--colour-*`, `globals.css`) -> **semantic role** (`tokens.css`) -> component. A
+component asks for what a colour is *for*; the dark theme is a second set of values for the same
+names. Light values equal what the site already shipped with, role by role.
+
+| Family | Tokens |
+|---|---|
+| Surfaces | `--surface-canvas` (the page), `--surface-1` (card/input), `--surface-2` (warm section tint), `--surface-3` (soft tint / card on a tint), `--surface-sunken`, `--surface-accent`, `--surface-inverse` / `-deep` / `-raised` (navy sections) |
+| Text | `--fg-strong` (headings), `--fg-body`, `--fg-ink`, `--fg-muted`, `--fg-on-inverse` / `-soft` / `-muted` (on navy), `--fg-accent`, `--fg-accent-on-inverse`, `--fg-accent-bright` (large figures on navy), `--fg-error` |
+| Lines | `--border-subtle`, `--border-strong`, `--border-on-inverse` |
+| Accent | `--accent`, `--accent-strong`, `--accent-soft`, `--on-accent` |
+| Status tones | `--tone-{neutral,muted,positive,warning,info,private}-*`, `--error-bg`: each a background/foreground pair that clears 4.5:1 in both themes |
+| Identity | `--subject-{maths,english,science,eleven-plus}`, `--avatar-{a..e}-{bg,fg}` |
+| Misc | `--overlay`, `--skeleton-base` / `--skeleton-sheen`, `--image-filter` |
+
+`--text-body` / `--text-small` etc. are the product's *type sizes* (above); text *colours* are `--fg-*`
+so the two never collide. The product scope (`.app-shell`, `.auth-route`) re-points the same names at
+its cooler `--app-*` values, so both systems keep their character and share the vocabulary.
+
+`scripts/tokenise-colours.py` is the property-aware converter that moved the marketing stylesheets
+onto these tokens (`#fff` as a *background* is a surface that must darken; `#fff` as *text* is text on
+an accent or navy fill that must stay light). Before/after counts across `globals.css`, the five
+marketing CSS modules and `components/**/*.module.css`: hard-coded hex 252 -> 129, `rgb(a)` 197 -> 167,
+raw `--lt-*`/`--colour-*` references 486 -> 96, semantic-token references 0 -> 543; plus every
+inline `style={{ color: "#hex" }}` in the page components and the whole product stylesheet set
+(status tones, avatars, alerts, skeletons, scrims). What remains is deliberate: overlays and
+shadows (white/black at an alpha, correct on any theme), gradients, and always-dark surfaces
+(the next-lesson card, the auth panel, the footer atmosphere) that keep their literal navy.
+
+### Elevation
+
+Five steps, each 2-3 stacked layers (a tight contact shadow plus soft ambient ones) tinted with the
+navy, never pure black, plus a 1px inner top highlight on raised light surfaces (visible on cream,
+invisible on white — correct): `--shadow-1` hairline lift (inputs, chips, rows), `-2` resting card,
+`-3` hover/popover, `-4` dropdown/floating panel, `-5` dialog/drawer. The original `--shadow-sm/md/
+interactive` and the product's `--app-shadow-sm/-/-lg` are now aliases of steps 2/4/3 and 1/2/4. In the
+dark theme elevation is lightness + a hairline ring + deeper shadow, not a glow.
+
+### Navy surfaces
+
+A faint top-left radial light plus a static grain tile (`--navy-light`, `--grain`; 3.5% opacity, no
+animation) on the main navy sections, so a large flat field does not band on a good display.
+
+### Typography
+
+`text-wrap: balance` on `h1-h4`, `text-wrap: pretty` on paragraphs/list items/quotes,
+`font-optical-sizing: auto`, and `font-variant-numeric: tabular-nums` on `<time>`, `.tabular` and the
+home stats. All progressive: a browser without them wraps as it always did.
+
+### Themes (plan 15 Wave 3)
+
+System (default) / Light / Dark. Mechanics are in `src/lib/theme.ts`: System is CSS alone
+(`@media (prefers-color-scheme: dark)` guarded by `:root:not([data-theme="light"])`); an explicit choice
+is `html[data-theme]`, stored in `localStorage` (`lt-theme`) — never a cookie — and applied before
+first paint by a tiny fixed inline script in `<head>`, so there is no flash. Everything is gated on
+`html[data-themes="on"]`, set from `NEXT_PUBLIC_THEME_TOGGLE`, which is the kill switch.
+`tests/theme.test.mjs` fails if the two copies of the dark block ever differ.
+
+### Public-site interaction layer (plan 15 Waves 4-9)
+
+Everything here is the marketing site only. Each piece names the tiers it runs on; none of it is in the
+app or the classroom unless said so.
+
+| Piece | What it is | Tiers | Where |
+|---|---|---|---|
+| **Smooth scrolling** | Lenis, loaded dynamically and driven from Motion's frame loop (one rAF). Keeps the browser's *real* scroll position, so `useScroll`, `position: sticky` and every scene work unchanged. Wheel notches ease (1.1s, exponential ease-out); precision-touchpad streams are handed back to the browser event by event; keyboard, find-in-page, selection autoscroll, zoom and the scrollbar stay native. In-page anchors scroll through Lenis, update the hash, **move focus to the target**, and still fire `hashchange` for the FAQ opener. Back/Forward drops any in-flight glide and adopts the browser's restored position. Paused while the mobile menu or any dialog/palette is open. Kill switches: `NEXT_PUBLIC_SMOOTH_SCROLL=0` (build) and `?smooth=0` (run time, remembered for the tab; `?smooth=1` re-enables). | full + standard, fine pointer, not reduced motion, not Save-Data; **never** the app, dashboard, classroom or touch | `components/motion/SmoothScroll.tsx`, `lib/motion/smoothScroll.ts` |
+| **Shared scroll store** | One passive scroll listener: position, progress, velocity, direction, one notification per frame, nothing running at rest. `scrubProgress(y, start, end)` for scenes. The marquee quickens with scroll speed from it. | all (it is only read where used) | `lib/motion/scrollStore.ts` |
+| **Hero sequence** | CSS keyframes from first paint (never JS-gated, never delaying the LCP photo): chip, headline lines rising out of masks (90ms stagger), lead, buttons, assurances, the photo settling, chips arriving; ~1.4s in total. The WebGL gradient fades in over the always-mounted static glow and follows the pointer with an eased lerp (the loop exists only while it converges). | all (WebGL: full only) | `HeroScene.tsx`, `home.module.css` |
+| **Hero handoff** | On the full tier the hero is pinned (`position: sticky`, bounded by its own stack) while the marquee and stats strip slide over it; the hero copy eases up, scales to 0.96 and fades. Progress comes from the page scroll through the pin range (`usePinnedProgress`), because a pinned element's own position stops changing. | full | `HeroScene.tsx`, `lib/motion/scroll.ts` |
+| **Scrubbed statement** | The home statement's words go from muted to strong as it scrolls through the viewport. Native CSS scroll-driven animation (opacity only), no JavaScript; elsewhere it is the finished sentence. | full + standard, no-preference, `@supports (animation-timeline)` | `ScrubStatement.tsx` |
+| **Level bars** | Draw in as the row scrolls into view (a slide inside the clipped track: transform only, round cap preserved). | same as above | `home.module.css` |
+| **Spotlight border** | One delegated `pointermove` writes `--mx/--my` on `[data-spotlight]` cards (rAF-throttled, no state); the ring is CSS. | full + fine pointer | `SpotlightPointer.tsx`, `globals.css` |
+| **Route transitions** | The header is a named transition group; page content cross-fades (<=380ms), and the header's nav links add a small directional slide by their order in the menu. Never blocking: `::view-transition` is `pointer-events: none`; links are actionable the instant the page exists (K11). | full + standard; instant on light, reduced motion and unsupporting browsers | `PageTransition.tsx`, `globals.css` |
+| **Command palette** | Ctrl/Cmd+K (and `/` outside a text field, and a visible Search button). An ARIA combobox/listbox on the dialog pattern; grouped, ranked results (`lib/palette/score.ts`), recents, announced result count, focus returns to the opener. The command set is a lazy chunk. The shortcut map lives in `lib/palette/shortcuts.ts`; the chord is never stolen from a form field. | all | `components/palette/`, `lib/palette/` |
+| **Appearance control** | Header (one icon button cycling System/Light/Dark), footer (radio group), app account menu. | all (flag-gated) | `ThemeToggle.tsx` |
+
+**Staggers** are `Stagger` (a container composing `Reveal`) or `staggerDelay(i, motionStagger.cards)`; never a
+hand-written `delay={i * 0.09}`. **Images** go through `scripts/optimise-images.mjs`: originals in the
+untracked `apps/web/assets-src/`, web-ready masters (<= 260 KB for the subject photos; the four subject
+originals went from 1.2-3.8 MB to 75-200 KB) in `public/images/`, blur placeholders generated into
+`src/lib/imageBlur.generated.ts`, and the subject of each photo kept in frame by `lib/imageFocus.ts`
+(`object-position`). Founder portraits are rendered 1:1 at a fixed, unsqueezable size.
 
 ## Components (`components/ui/`, `components/shell/`)
 

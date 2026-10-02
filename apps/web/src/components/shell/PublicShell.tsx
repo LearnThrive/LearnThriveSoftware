@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { PageTransition } from "@/components/motion/PageTransition";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 
@@ -14,7 +15,9 @@ export function PublicShell({ children }: { children: ReactNode }) {
     <>
       <a className="skip-link" href="#main-content">Skip to main content</a>
       <SiteHeader />
-      <main id="main-content">{children}</main>
+      <main id="main-content">
+        <PageTransition>{children}</PageTransition>
+      </main>
       <SiteFooter />
     </>
   );

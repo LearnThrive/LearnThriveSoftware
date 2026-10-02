@@ -639,7 +639,7 @@ test.describe('ProductLayer', () => {
 // needs the real hero, not a lab section) — driven against / directly instead.
 
 test.describe('hero WebGL atmosphere', () => {
-  test('a capable desktop gets the canvas, not the static glow', async ({ page }) => {
+  test('a capable desktop gets the canvas', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (err) => errors.push(String(err)));
     await pinCapabilities(page);
@@ -649,6 +649,36 @@ test.describe('hero WebGL atmosphere', () => {
     const hero = page.locator('[data-motion-scene="hero"]');
     await expect(hero.locator('canvas')).toBeVisible();
     expect(errors).toEqual([]);
+  });
+
+  // plan15 audit F2: the static glow used to be unmounted when the canvas mounted, so the hero's left
+  // half popped from flat navy to a teal wash ~0.5s after load. The glow now stays mounted under the
+  // canvas, and the canvas container fades in (opacity, ~0.8s) instead of appearing.
+  test('the static glow stays mounted under the canvas, which fades in instead of popping', async ({ page }) => {
+    await pinCapabilities(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+    expect(await tierOf(page)).toBe('full');
+    const hero = page.locator('[data-motion-scene="hero"]');
+    await expect(hero.locator('canvas')).toBeVisible();
+    await expect(hero.locator('[class*="heroGlow"]')).toHaveCount(1);
+    const container = hero.locator('div[aria-hidden="true"]').filter({ has: page.locator('canvas') });
+    const transition = await container.evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return { property: cs.transitionProperty, seconds: parseFloat(cs.transitionDuration) };
+    });
+    expect(transition.property).toContain('opacity');
+    expect(transition.seconds).toBeGreaterThan(0.5);
+    // ...and it does end up fully shown once the first frame is in.
+    await expect.poll(() => container.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
+  });
+
+  test('the static glow is there on every tier', async ({ page }) => {
+    await pinCapabilities(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+    expect(await tierOf(page)).toBe('light');
+    await expect(page.locator('[data-motion-scene="hero"] [class*="heroGlow"]')).toHaveCount(1);
   });
 
   test('a phone gets the static glow, never the canvas', async ({ page }) => {
@@ -717,6 +747,32 @@ test.describe('hero WebGL atmosphere', () => {
     });
     // #087363 (the old colour) is ~0.13; the mint it was replaced with is ~0.55.
     expect(luminance).toBeGreaterThan(0.4);
+  });
+
+  // plan15 audit F3: colour alone is not contrast. Over the lightest teal the gradient reaches (the
+  // brightest pixel behind the chip measured rgb(51,126,126) at the worst pointer position) the chip's
+  // own translucent navy backing has to carry it to 4.5:1 for 11px text.
+  test('the hero chip meets 4.5:1 over the brightest teal of the gradient (backing included)', async ({ page }) => {
+    await pinCapabilities(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+    const chip = page.locator('[data-motion-scene="hero"] [class*="heroChip"]:not([class*="heroChipDot"])');
+    const ratio = await chip.evaluate((el) => {
+      const parse = (value: string) => value.match(/[\d.]+/g)!.map(Number);
+      const lin = (v: number) => {
+        const c = v / 255;
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+      };
+      const luminance = ([r, g, b]: number[]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+      const cs = getComputedStyle(el);
+      const [br, bg, bb, ba = 1] = parse(cs.backgroundColor);
+      const worstTeal = [51, 126, 126];
+      const backing = [br, bg, bb].map((channel, i) => channel * ba + worstTeal[i] * (1 - ba));
+      const text = luminance(parse(cs.color));
+      const back = luminance(backing);
+      return (Math.max(text, back) + 0.05) / (Math.min(text, back) + 0.05);
+    });
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
   });
 
   // Code-splitting (whether the dynamic import actually keeps HeroWebGLAtmosphere/heroGradient
@@ -1081,5 +1137,70 @@ test.describe('Marquee', () => {
     const track = page.locator('[class*="Marquee-module"][class*="track"]');
     await expect(track).toHaveCSS('animation-name', 'none');
     await expect(track.locator('span').first()).toHaveText('PRIMARY · YEAR 1–6');
+  });
+});
+
+
+// plan15 Wave 5: the hero is an orchestrated CSS sequence (chip, headline lines rising out of masks,
+// lead, buttons, assurances, photo settling, chips arriving). It must read as one headline to
+// assistive tech, finish within ~1.5s, never touch the LCP photograph's opacity, and be fully
+// resolved at once for anyone who asked for less motion.
+test.describe('hero arrival sequence', () => {
+  test('the headline still reads as one heading with a real space between its two lines', async ({ page }) => {
+    await page.goto('/');
+    const heading = page.getByRole('heading', { level: 1 });
+    await expect(heading).toHaveAccessibleName('Strong foundations. Brighter futures.');
+    // Two mask lines, direct children of the h1 (their inner spans carry "heroLineInner" too, so a
+    // substring selector would count four).
+    await expect(heading.locator(':scope > span')).toHaveCount(2);
+  });
+
+  test('on a capable desktop every hero piece ends at rest, and the photo is never transparent', async ({ page }) => {
+    await pinCapabilities(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+    const photo = page.locator('[data-motion-scene="hero"] [class*="heroPhoto"]').first();
+    // The LCP element: opaque from the very first frame, only its transform may animate.
+    expect(await photo.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
+    const resting = async () =>
+      page.evaluate(() => {
+        const parts = [
+          '[data-motion-scene="hero"] [class*="heroChip"]:not([class*="heroChipDot"])',
+          '[data-motion-scene="hero"] [class*="heroLineInner"]',
+          '[data-motion-scene="hero"] [class*="heroLead"]',
+          '[data-motion-scene="hero"] [class*="heroButtons"]',
+          '[data-motion-scene="hero"] [class*="heroAssurances"]',
+        ];
+        return parts.every((selector) =>
+          [...document.querySelectorAll(selector)].every((el) => {
+            const cs = getComputedStyle(el);
+            return cs.opacity === '1' && (cs.transform === 'none' || cs.transform === 'matrix(1, 0, 0, 1, 0, 0)');
+          }),
+        );
+      });
+    // The sequence itself runs ~1.4s from first paint; the allowance covers the page load and a
+    // dev server's slower first render on top of it.
+    await expect.poll(resting, { timeout: 3500 }).toBe(true);
+  });
+
+  test('reduced motion shows the finished hero immediately', async ({ page }) => {
+    await pinCapabilities(page);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+    const inner = page.locator('[data-motion-scene="hero"] [class*="heroLineInner"]').first();
+    expect(await inner.evaluate((el) => getComputedStyle(el).transform)).toMatch(/^(none|matrix\(1, 0, 0, 1, 0, 0\))$/);
+    expect(await inner.evaluate((el) => getComputedStyle(el).animationName)).toBe('none');
+  });
+
+  test('the photograph settles with a CSS animation that stops overriding its transform when done', async ({ page }) => {
+    await pinCapabilities(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+    const photo = page.locator('[data-motion-scene="hero"] [class*="heroPhoto"]').first();
+    const fill = await photo.evaluate((el) => getComputedStyle(el).animationFillMode);
+    // `backwards`, never `both`/`forwards`: a held fill would pin the transform and silence the
+    // scroll parallax ParallaxLayer drives on the same element.
+    expect(fill).toBe('backwards');
   });
 });

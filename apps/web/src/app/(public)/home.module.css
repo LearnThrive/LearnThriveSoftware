@@ -11,10 +11,21 @@
   to { transform: scaleX(1); }
 }
 
+/* plan15 Wave 5: a headline line rising out of its own mask, and the hero photograph settling. */
+@keyframes lt-line-rise {
+  from { transform: translateY(125%); }
+  to { transform: none; }
+}
+
+@keyframes lt-settle {
+  from { transform: translateY(20px) scale(1.035); }
+  to { transform: none; }
+}
+
 /* ── Override site header background on homepage ───────── */
 :global(body.is-homepage .site-header) {
-  background: #F7F2E8;
-  border-bottom-color: #E7DFCD;
+  background: var(--surface-2);
+  border-bottom-color: var(--border-subtle);
 }
 
 /* ── Wrapper — resets global heading/body overrides ────── */
@@ -43,8 +54,8 @@
   --lt-font-mono: var(--font-ibm-plex-mono), monospace;
 
   font-family: var(--lt-font-body);
-  color: var(--lt-ink);
-  background: var(--lt-cream);
+  color: var(--fg-ink);
+  background: var(--surface-2);
 }
 
 .page h1,
@@ -53,17 +64,40 @@
 .page h4 {
   font-family: var(--lt-font-heading);
   font-weight: 800;
-  color: var(--lt-navy);
+  color: var(--fg-strong);
   line-height: 1.05;
   letter-spacing: -0.02em;
+}
+
+/* ── Hero stack (plan15 Wave 5 section 9.4) ───────────────────────────────────────────── */
+.heroStack {
+  position: relative;
+}
+
+/* The marquee and the stats strip: opaque, and above the pinned hero so they slide over it. */
+.heroCover {
+  position: relative;
+  z-index: 2;
+}
+
+/* Full tier only (the attribute MotionRuntime writes). The hero pins just below the scrolled header
+   (4.25rem) for as long as the stack lasts, i.e. while the cover slides over it; `position: sticky`
+   is bounded by .heroStack, so it unpins when the stack ends and never reaches later sections.
+   Sticky does not change the hero's place in the flow, so applying it after hydration moves nothing. */
+:global(html[data-motion-tier="full"]) .hero {
+  position: sticky;
+  top: 4.25rem;
+  z-index: 0;
 }
 
 /* ── Hero ──────────────────────────────────────────────── */
 .hero {
   position: relative;
-  background: var(--lt-navy);
-  color: #fff;
+  background: var(--surface-inverse);
+  color: var(--fg-on-inverse);
   overflow: hidden;
+  --focus-colour: var(--focus-colour-on-inverse);
+  background-image: var(--navy-light), var(--grain);
 }
 
 .heroDots {
@@ -113,26 +147,28 @@
   gap: 9px;
   /* --lt-green-light (#087363) is ~2.5:1 on this navy hero, and on the lighter teal top of the WebGL
      gradient (full motion tier) it measured 1.03:1 — the chip simply vanished. Same mint the other
-     dark sections already use for their labels, on a faint navy backing so it also holds up over the
-     lightest part of the gradient. */
+     dark sections already use for their labels. The navy backing is what keeps it legible over the
+     lightest part of the gradient: with the pointer at its worst position the brightest teal behind
+     the chip was measured at 2.7:1 under the earlier 45% backing; at 72% it is ~7:1 (plan15 audit
+     F3, measured with the chip hidden and the gradient re-rendered at 7 pointer positions). */
   border: 1px solid rgba(142, 210, 173, 0.4);
-  background: rgba(14, 42, 71, 0.45);
+  background: rgba(10, 30, 52, 0.72);
   border-radius: 999px;
   padding: 7px 15px;
   font-family: var(--lt-font-mono);
   font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #8ed2ad;
+  color: var(--fg-accent-on-inverse);
   margin-bottom: 24px;
-  animation: lt-rise 0.6s both;
+  animation: lt-rise var(--duration-emphasis) var(--ease-gentle) both;
 }
 
 .heroChipDot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #8ed2ad;
+  background: var(--fg-accent-on-inverse);
 }
 
 .heroTitle {
@@ -141,9 +177,23 @@
   font-size: clamp(34px, 5vw, 68px) !important;
   line-height: 0.97 !important;
   letter-spacing: -0.03em !important;
-  color: #fff !important;
+  color: var(--fg-on-inverse) !important;
   margin: 0 0 24px !important;
-  animation: lt-rise 0.8s both 0.12s;
+}
+
+/* The mask is the line's own box, extended sideways (so the highlight bar's overhang is not cut)
+   and down far enough to keep descenders. Each line starts below it and rises in, staggered 90ms,
+   over --duration-hero with --ease-gentle: the sequence is chip, lines, lead, buttons, assurances,
+   with the whole thing done in ~1.4s. */
+.heroLine {
+  display: block;
+  clip-path: inset(-0.06em -16px -0.18em -16px);
+}
+
+.heroLineInner {
+  display: block;
+  animation: lt-line-rise var(--duration-hero) var(--ease-gentle) both;
+  animation-delay: calc(0.12s + var(--i, 0) * 0.09s);
 }
 
 .heroMark {
@@ -158,9 +208,9 @@
   right: -8px;
   bottom: 2px;
   height: 24px;
-  background: var(--lt-green);
+  background: var(--accent-strong);
   transform-origin: left;
-  animation: lt-mark 0.75s cubic-bezier(0.2, 0.8, 0.3, 1) both 0.9s;
+  animation: lt-mark 0.75s var(--ease-gentle) both 0.75s;
   border-radius: 4px;
 }
 
@@ -171,23 +221,23 @@
 .heroLead {
   font-size: 18.5px;
   line-height: 1.55;
-  color: rgba(255, 255, 255, 0.84);
+  color: var(--fg-on-inverse-soft);
   max-width: 38ch;
   margin: 0 0 30px;
-  animation: lt-rise 0.8s both 0.3s;
+  animation: lt-rise var(--duration-hero) var(--ease-gentle) both 0.33s;
 }
 
 .heroButtons {
   display: flex;
   gap: 14px;
   align-items: center;
-  animation: lt-rise 0.8s both 0.42s;
+  animation: lt-rise var(--duration-hero) var(--ease-gentle) both 0.42s;
 }
 
 .btnPrimary {
   display: inline-block;
-  background: var(--lt-green);
-  color: #fff;
+  background: var(--accent-strong);
+  color: var(--fg-on-inverse);
   font-weight: 600;
   font-size: 16.5px;
   padding: 16px 30px;
@@ -207,8 +257,8 @@
 
 .btnPrimary:hover {
   transform: translateY(-3px);
-  background: var(--lt-green-dark);
-  color: #fff;
+  background: var(--accent-strong);
+  color: var(--fg-on-inverse);
 }
 .btnPrimary:active {
   transform: translateY(-1px) scale(0.97);
@@ -217,7 +267,7 @@
 
 .btnSecondary {
   display: inline-block;
-  color: #fff;
+  color: var(--fg-on-inverse);
   font-weight: 600;
   font-size: 16px;
   padding: 15px 22px;
@@ -229,7 +279,7 @@
 
 .btnSecondary:hover {
   background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+  color: var(--fg-on-inverse);
 }
 .btnSecondary:active {
   transform: scale(0.97);
@@ -242,8 +292,8 @@
   gap: 12px 24px;
   margin-top: 30px;
   font-size: 14.5px;
-  color: rgba(255, 255, 255, 0.7);
-  animation: lt-rise 0.8s both 0.55s;
+  color: var(--fg-on-inverse-muted);
+  animation: lt-rise var(--duration-hero) var(--ease-gentle) both 0.51s;
   list-style: none;
 }
 
@@ -258,11 +308,16 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--lt-green-light);
+  background: var(--accent);
 }
 
 .heroPhoto {
   position: relative;
+  /* A soft settle, not a fade: the photograph is the LCP element and is fully opaque from the first
+     paint, so only its transform animates. `backwards` (not `both`) so that once it has finished
+     the animation stops overriding the element's own transform, which ParallaxLayer drives from
+     scroll — the exact collision the chip comment in HeroScene.tsx describes. */
+  animation: lt-settle 1.1s var(--ease-gentle) backwards;
 }
 
 .heroPhotoImg {
@@ -286,11 +341,11 @@
   position: absolute;
   left: -30px;
   bottom: 44px;
-  background: #fff;
+  background: var(--surface-1);
   border-radius: 14px;
   padding: 12px 16px;
   box-shadow: 0 18px 34px -20px rgba(0, 0, 0, 0.45);
-  animation: lt-rise 0.7s both 0.6s;
+  animation: lt-rise var(--duration-emphasis) var(--ease-gentle) both 0.6s;
   z-index: 1;
 }
 
@@ -303,11 +358,11 @@
      inside .heroPhoto's box instead of past .hero's clipped boundary (plan11.md task 7). */
   right: 4px;
   top: 36px;
-  background: #fff;
+  background: var(--surface-1);
   border-radius: 14px;
   padding: 11px 15px;
   box-shadow: 0 18px 34px -20px rgba(0, 0, 0, 0.45);
-  animation: lt-rise 0.7s both 0.72s;
+  animation: lt-rise var(--duration-emphasis) var(--ease-gentle) both 0.72s;
   z-index: 1;
   max-width: 168px;
 }
@@ -320,14 +375,14 @@
   font-family: var(--lt-font-heading);
   font-weight: 800;
   font-size: 17px;
-  color: var(--lt-navy);
+  color: var(--fg-strong);
   line-height: 1.1;
 }
 
 .heroFloatChipSub {
   font-family: var(--lt-font-mono);
   font-size: 10.5px;
-  color: var(--lt-green-dark);
+  color: var(--fg-accent);
   margin-top: 3px;
 }
 
@@ -341,14 +396,14 @@
   font-size: 11px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--lt-green-dark);
+  color: var(--fg-accent);
   margin-bottom: 14px;
 }
 
 .sectionTitle {
   font-size: 42px !important;
   letter-spacing: -0.02em !important;
-  color: var(--lt-navy) !important;
+  color: var(--fg-strong) !important;
   margin: 0 0 8px !important;
   max-width: 24ch;
 }
@@ -361,14 +416,14 @@
   font-size: clamp(28px, 4.2vw, 52px);
   line-height: 1.12;
   letter-spacing: -0.02em;
-  color: var(--lt-navy);
+  color: var(--fg-strong);
   max-width: 18ch;
   margin: 0 0 44px;
 }
 
 .sectionSubtitle {
   margin: 0 0 34px;
-  color: var(--lt-text);
+  color: var(--fg-muted);
   font-size: 16.5px;
 }
 
@@ -422,29 +477,31 @@
 }
 
 .whyCardNavy {
-  background: var(--lt-navy);
-  color: #fff;
+  background: var(--surface-inverse);
+  color: var(--fg-on-inverse);
   --lift-shadow: 0 26px 44px -28px rgba(20, 49, 82, 0.85);
+  --focus-colour: var(--focus-colour-on-inverse);
+  background-image: var(--navy-light), var(--grain);
 }
 
 .whyCardNavy h3 {
-  color: #fff !important;
+  color: var(--fg-on-inverse) !important;
 }
 
 .whyCardWhite {
-  background: #fff;
-  border: 1px solid var(--lt-border);
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
   --lift-shadow: 0 26px 44px -28px rgba(20, 49, 82, 0.5);
 }
 
 .whyCardGreen {
-  background: var(--lt-green);
-  color: #fff;
+  background: var(--accent-strong);
+  color: var(--fg-on-inverse);
   --lift-shadow: 0 26px 44px -28px rgba(7, 95, 82, 0.85);
 }
 
 .whyCardGreen h3 {
-  color: #fff !important;
+  color: var(--fg-on-inverse) !important;
 }
 
 .whyCardHeader {
@@ -492,21 +549,21 @@
 }
 
 .whyCardNavy .whyCardText {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--fg-on-inverse-soft);
 }
 
 .whyCardGreen .whyCardText {
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--fg-on-inverse);
 }
 
 .whyCardWhite .whyCardText {
-  color: var(--lt-text);
+  color: var(--fg-muted);
 }
 
 /* ── How it works ──────────────────────────────────────── */
 .howSection {
-  background: var(--lt-cream-light);
-  border-block: 1px solid var(--lt-border);
+  background: var(--surface-3);
+  border-block: 1px solid var(--border-subtle);
   padding: 64px 40px;
   display: grid;
   grid-template-columns: 0.85fr 1.15fr;
@@ -516,7 +573,7 @@
 
 .howImage {
   position: relative;
-  border: 1px solid var(--lt-border);
+  border: 1px solid var(--border-subtle);
   border-radius: 22px;
   height: 320px;
   overflow: hidden;
@@ -553,8 +610,8 @@
   width: 2px;
   background: repeating-linear-gradient(
     to bottom,
-    var(--lt-green-dark) 0,
-    var(--lt-green-dark) 5px,
+    var(--accent-strong) 0,
+    var(--accent-strong) 5px,
     transparent 5px,
     transparent 11px
   );
@@ -603,7 +660,7 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  color: #fff;
+  color: var(--fg-on-inverse);
   display: grid;
   place-items: center;
   font-family: var(--lt-font-heading);
@@ -613,11 +670,13 @@
 }
 
 .howStepNumberGreen {
-  background: var(--lt-green);
+  background: var(--accent-strong);
 }
 
 .howStepNumberNavy {
-  background: var(--lt-navy);
+  background: var(--surface-inverse);
+  --focus-colour: var(--focus-colour-on-inverse);
+  background-image: var(--navy-light), var(--grain);
 }
 
 /* plan12.md task 5: the path now visibly "activates" stages as it draws, not just the line itself
@@ -627,7 +686,7 @@
    background already sits close to AA's floor with no margin to spend). */
 .howStepNumberPending {
   background: var(--lt-border);
-  color: var(--lt-navy);
+  color: var(--fg-strong);
 }
 
 .howStepContent {
@@ -636,14 +695,14 @@
 
 .howStepTitle {
   font-size: 19px !important;
-  color: var(--lt-navy) !important;
+  color: var(--fg-strong) !important;
   margin: 0 0 4px !important;
 }
 
 .howStepText {
   margin: 0;
   font-size: 15px;
-  color: var(--lt-text);
+  color: var(--fg-muted);
   line-height: 1.55;
 }
 
@@ -667,7 +726,7 @@
 .subjectsSectionRange {
   font-family: var(--lt-font-mono);
   font-size: 11px;
-  color: var(--lt-text);
+  color: var(--fg-muted);
 }
 
 .subjectsGrid {
@@ -678,8 +737,8 @@
 
 .subjectCard {
   position: relative;
-  background: #fff;
-  border: 1px solid var(--lt-border);
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
   border-radius: 22px;
   --lift-shadow: 0 26px 44px -28px rgba(20, 49, 82, 0.55);
   transition: transform 0.3s var(--ease-snappy), border-color 0.3s var(--ease-snappy);
@@ -705,7 +764,7 @@
 
 .subjectCard:hover {
   transform: translateY(-5px);
-  border-color: var(--lt-green);
+  border-color: var(--accent-strong);
   color: inherit;
 }
 .subjectCard:active {
@@ -719,7 +778,9 @@
 
 .subjectCardImage {
   position: relative;
-  height: 132px;
+  /* A deliberate banner: 2.3:1 (it was a 132px strip, ~5:1, which cropped 70-87% of every photo).
+     The subject of each picture is kept in frame with object-position (lib/imageFocus.ts). */
+  aspect-ratio: 2.3 / 1;
   overflow: hidden;
   /* The card's own radius (22px) minus its 1px border. */
   border-radius: 21px 21px 0 0;
@@ -762,21 +823,21 @@
 
 .subjectCardBody h3 {
   font-size: 25px !important;
-  color: var(--lt-navy) !important;
+  color: var(--fg-strong) !important;
   margin: 0 0 8px !important;
 }
 
 .subjectCardBody p {
   margin: 0 0 16px;
   font-size: 15px;
-  color: var(--lt-text);
+  color: var(--fg-muted);
   line-height: 1.55;
 }
 
 .subjectCardLink {
   font-family: var(--lt-font-mono);
   font-size: 11px;
-  color: var(--lt-green-dark);
+  color: var(--fg-accent);
   text-decoration: none;
 }
 
@@ -796,8 +857,8 @@
 
 /* ── Levels Ladder ─────────────────────────────────────── */
 .levelsSection {
-  background: var(--lt-cream-light);
-  border-block: 1px solid var(--lt-border);
+  background: var(--surface-3);
+  border-block: 1px solid var(--border-subtle);
   padding: 64px 40px;
 }
 
@@ -807,8 +868,8 @@
 }
 
 .levelRow {
-  background: #fff;
-  border: 1px solid var(--lt-border);
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
   border-radius: 16px;
   padding: 20px 24px;
   display: grid;
@@ -819,13 +880,15 @@
 }
 
 .levelRow:hover {
-  border-color: var(--lt-green);
+  border-color: var(--accent-strong);
   transform: translateX(6px);
 }
 
 .levelRowDark {
-  background: var(--lt-navy);
-  border-color: var(--lt-navy);
+  background: var(--surface-inverse);
+  border-color: var(--fg-strong);
+  --focus-colour: var(--focus-colour-on-inverse);
+  background-image: var(--navy-light), var(--grain);
 }
 
 .levelRowDark:hover {
@@ -836,17 +899,17 @@
   font-family: var(--lt-font-heading);
   font-weight: 800;
   font-size: 20px;
-  color: var(--lt-navy);
+  color: var(--fg-strong);
 }
 
 .levelRowDark .levelName {
-  color: #fff;
+  color: var(--fg-on-inverse);
 }
 
 .levelYears {
   font-family: var(--lt-font-mono);
   font-size: 10.5px;
-  color: var(--lt-text);
+  color: var(--fg-muted);
   margin-top: 2px;
 }
 
@@ -854,24 +917,24 @@
   /* --lt-green-light (#087363) is fine everywhere it sits on the cream/white sections (5.2-5.8:1)
      but only 2.5:1 on this row's own dark navy background — a brighter one-off here rather than
      changing the shared token and risking the other light-background usages. */
-  color: #13c2a0;
+  color: var(--fg-accent-bright);
 }
 
 .levelDesc {
   margin: 0;
   font-size: 15px;
-  color: var(--lt-text);
+  color: var(--fg-muted);
 }
 
 .levelRowDark .levelDesc {
-  color: rgba(255, 255, 255, 0.78);
+  color: var(--fg-on-inverse-muted);
 }
 
 .levelBar {
   width: 150px;
   height: 8px;
   border-radius: 99px;
-  background: #EFE7D6;
+  background: var(--surface-sunken);
   overflow: hidden;
 }
 
@@ -879,14 +942,37 @@
   background: rgba(255, 255, 255, 0.18);
 }
 
+/* The fill's final length is its width (--fill, set inline from the level's own value) and never
+   animates. plan15 Wave 6 section 10.5: on the full and standard tiers the bar DRAWS as the row
+   scrolls into view by sliding in from the left inside its clipped track (native scroll-driven CSS,
+   no JavaScript, transform only, so the round cap stays round at every length); everywhere else it
+   simply is its final length. */
 .levelBarFill {
+  width: var(--fill, 100%);
   height: 100%;
   border-radius: 99px;
-  background: var(--lt-green);
+  background: var(--accent-strong);
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    :global(html[data-motion-tier="full"]) .levelBarFill,
+    :global(html[data-motion-tier="standard"]) .levelBarFill {
+      animation: level-fill linear both;
+      animation-timeline: view();
+      animation-range: entry 20% cover 38%;
+    }
+  }
+}
+
+@keyframes level-fill {
+  from {
+    transform: translateX(-101%);
+  }
 }
 
 .levelRowDark .levelBarFill {
-  background: var(--lt-green-light);
+  background: var(--accent);
 }
 
 /* ── Stats Strip ───────────────────────────────────────── */
@@ -906,7 +992,7 @@
 }
 
 .statFirst {
-  border-left: 3px solid var(--lt-green);
+  border-left: 3px solid var(--accent-strong);
 }
 
 .statOther {
@@ -915,11 +1001,12 @@
 
 .statValue {
   display: block;
+  font-variant-numeric: tabular-nums;
   font-family: var(--lt-font-heading);
   font-weight: 800;
   font-size: 46px;
   line-height: 1;
-  color: #fff !important;
+  color: var(--fg-on-inverse) !important;
 }
 
 .statValueGreen {
@@ -930,7 +1017,7 @@
 
 .statLabel {
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--fg-on-inverse-muted);
 }
 
 /* ── Tutor standards / safeguarding ──────────────────────────
@@ -948,25 +1035,27 @@
   align-items: center;
   padding: 44px;
   border-radius: 1.5rem;
-  background: var(--lt-navy);
-  color: #fff;
+  background: var(--surface-inverse);
+  color: var(--fg-on-inverse);
+  --focus-colour: var(--focus-colour-on-inverse);
+  background-image: var(--navy-light), var(--grain);
 }
 
 .trustCard .sectionTitle {
-  color: #fff !important;
+  color: var(--fg-on-inverse) !important;
 }
 
 /* The shared eyebrow colour is the dark green used on light surfaces (1.9:1 against this navy card).
    The site's on-navy accent is the mint used everywhere else on dark backgrounds (8.3:1). */
 .trustCard .eyebrow {
-  color: #8ed2ad;
+  color: var(--fg-accent-on-inverse);
 }
 
 .trustText {
   margin: 14px 0 20px;
   font-size: 16px;
   line-height: 1.6;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--fg-on-inverse-soft);
   max-width: 48ch;
 }
 
@@ -974,7 +1063,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: #8ed2ad;
+  color: var(--fg-accent-on-inverse);
   font-weight: 600;
   font-size: 15px;
   text-decoration: none;
@@ -993,7 +1082,7 @@
   align-items: flex-start;
   gap: 12px;
   font-size: 15.5px;
-  color: #fff;
+  color: var(--fg-on-inverse);
 }
 
 .trustListItem svg {
@@ -1001,7 +1090,7 @@
   height: 22px;
   flex: none;
   margin-top: 1px;
-  color: #8ed2ad;
+  color: var(--fg-accent-on-inverse);
 }
 
 @media (max-width: 900px) {
@@ -1026,66 +1115,147 @@
    an asymmetric composition instead of three equal cards, not a real carousel (no autoplay, no
    scroll-jacking is the task's own explicit rule). The centre item is simply bigger and fully
    opaque; the two either side read as present but secondary. */
+/* plan15 Wave 10 section 14.3: the testimonials as editorial quotes (same real wording and
+   attributions, untouched). One large statement quote on a navy ground, two supporting quotes beside
+   it. DOM order is [side, featured, side]; the grid places the featured one first and tall. */
 .testimonialsGrid {
   display: grid;
-  grid-template-columns: 0.86fr 1.16fr 0.86fr;
-  align-items: center;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: stretch;
   gap: 20px;
+  /* .sectionTitle's margin is !important, so the heading's gap to the quotes lives here. */
+  margin-top: 28px;
+}
+
+.testimonialsGrid > :nth-child(2) {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+
+.testimonialsGrid > :nth-child(1) {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.testimonialsGrid > :nth-child(3) {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+/* Each cell is Reveal (div) > [PointerDepth div > motion div >] figure: every wrapper becomes a flex
+   column that fills its cell, so the figure stretches to the cell's height (the tall featured quote). */
+.testimonialsGrid > div,
+.testimonialsGrid > div > div,
+.testimonialsGrid > div > div > div {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.testimonialsGrid figure {
+  flex: 1 1 auto;
 }
 
 .testimonialCard {
-  padding: 28px 26px;
-  border: 1px solid var(--lt-border);
-  border-radius: 1rem;
-  background: #fff;
-  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  margin: 0;
+  padding: 28px 28px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 1.1rem;
+  background: var(--surface-1);
+  box-shadow: var(--shadow-2);
 }
 
 .testimonialCardFeatured {
-  padding: 36px 32px;
-  box-shadow: var(--shadow-md, 0 20px 44px -24px rgba(20, 49, 82, 0.3));
+  position: relative;
+  padding: clamp(32px, 4vw, 56px);
+  border-color: transparent;
+  background: var(--surface-inverse);
+  color: var(--fg-on-inverse);
+  box-shadow: var(--shadow-4);
+  --focus-colour: var(--focus-colour-on-inverse);
+  background-image: var(--navy-light), var(--grain);
 }
 
-/* No opacity reduction on the side cards: axe caught that this dropped .testimonialAttribution's
-   text below AA contrast (the same class of bug docs/MOTION_PERFORMANCE_AUDIT.md's M-05 addendum
-   and this plan's own earlier .howStepPending fix both hit) — the size/shadow/padding difference
-   from .testimonialCardFeatured already reads as "settles forward" without touching real text. */
+/* No opacity reduction on the side cards: axe caught that this dropped the attribution's text below
+   AA contrast once — the size, ground and shadow difference already reads as "settles forward". */
 .testimonialCardSide {
-  box-shadow: none;
+  box-shadow: var(--shadow-1);
 }
 
 .testimonialQuote {
-  margin: 0 0 16px;
-  font-size: 15px;
+  margin: 0 0 20px;
+  font-size: 16px;
   line-height: 1.6;
-  color: var(--lt-ink);
+  color: var(--fg-ink);
+  text-wrap: pretty;
 }
 
 .testimonialCardFeatured .testimonialQuote {
-  font-size: 18px;
-  line-height: 1.55;
+  margin-bottom: 28px;
+  font-family: var(--lt-font-heading);
+  font-size: clamp(22px, 2.3vw, 31px);
+  font-weight: 700;
+  line-height: 1.28;
+  letter-spacing: -0.012em;
+  color: var(--fg-on-inverse);
+  text-wrap: balance;
 }
 
 .testimonialQuote::before {
   content: "\201C";
-  color: var(--lt-green-dark);
+  color: var(--fg-accent);
+}
+
+.testimonialCardFeatured .testimonialQuote::before {
+  display: block;
+  margin-bottom: -0.1em;
+  font-size: 2.6em;
+  line-height: 0.8;
+  color: var(--fg-accent-on-inverse);
 }
 
 .testimonialQuote::after {
   content: "\201D";
-  color: var(--lt-green-dark);
+  color: var(--fg-accent);
+}
+
+.testimonialCardFeatured .testimonialQuote::after {
+  color: var(--fg-accent-on-inverse);
 }
 
 .testimonialAttribution {
   font-family: var(--lt-font-mono);
   font-size: 11.5px;
   letter-spacing: 0.03em;
-  color: var(--lt-text);
+  color: var(--fg-muted);
+}
+
+.testimonialCardFeatured .testimonialAttribution {
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg-on-inverse-muted);
 }
 
 @media (max-width: 900px) {
   .testimonialsGrid {
     grid-template-columns: 1fr;
+    grid-template-rows: none;
+  }
+
+  .testimonialsGrid > :nth-child(n) {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  /* The statement quote leads on a narrow screen too. */
+  .testimonialsGrid > :nth-child(2) {
+    order: -1;
   }
 }
 
@@ -1116,7 +1286,7 @@
 .enquiryCopyLead {
   font-size: 16.5px;
   line-height: 1.6;
-  color: var(--lt-text);
+  color: var(--fg-muted);
   margin: 0 0 22px;
 }
 
@@ -1124,12 +1294,12 @@
   display: grid;
   gap: 10px;
   font-size: 15px;
-  color: var(--lt-navy);
+  color: var(--fg-strong);
 }
 
 .enquiryFormWrapper {
-  background: #fff;
-  border: 1px solid var(--lt-border);
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
   border-radius: 22px;
   padding: 30px;
   box-shadow: 0 22px 44px -30px rgba(20, 49, 82, 0.5);
@@ -1194,7 +1364,7 @@
   font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.65);
+  color: var(--fg-on-inverse-muted);
 }
 
 .closingSpineItem:not(:last-child)::after {
@@ -1224,7 +1394,7 @@
 }
 
 .closingCtaTitle {
-  color: #fff !important;
+  color: var(--fg-on-inverse) !important;
   font-size: clamp(32px, 5.5vw, 64px) !important;
   line-height: 1.03 !important;
   margin: 0 0 28px !important;
@@ -1239,24 +1409,26 @@
 
 /* ── Mini Footer ───────────────────────────────────────── */
 .miniFooter {
-  background: var(--lt-navy-deep);
-  color: rgba(255, 255, 255, 0.66);
+  background: var(--surface-inverse-deep);
+  color: var(--fg-on-inverse-muted);
   padding: 28px 40px;
   display: flex;
   justify-content: space-between;
   font-size: 13.5px;
+  --focus-colour: var(--focus-colour-on-inverse);
+  background-image: var(--navy-light), var(--grain);
 }
 
 .miniFooterBrand {
   font-family: var(--lt-font-heading);
   font-weight: 800;
-  color: #fff;
+  color: var(--fg-on-inverse);
   font-size: 16px;
   text-decoration: none;
 }
 
 .miniFooterBrand span {
-  color: var(--lt-green);
+  color: var(--fg-accent);
 }
 
 /* ── Responsive ────────────────────────────────────────── */

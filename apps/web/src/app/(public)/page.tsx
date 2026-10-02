@@ -4,6 +4,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { BodyClass } from "@/components/BodyClass";
 import { MaskedText } from "@/components/motion/primitives/MaskedText";
+import { imageBlur } from "@/lib/imageBlur.generated";
+import { imageFocus } from "@/lib/imageFocus";
+import { ScrubStatement } from "@/components/motion/primitives/ScrubStatement";
 import { PointerDepth } from "@/components/motion/primitives/PointerDepth";
 import { Reveal } from "@/components/motion/primitives/Reveal";
 import { SceneShell } from "@/components/motion/primitives/SceneShell";
@@ -21,6 +24,7 @@ import { SubjectIcon, SubjectMotif, SUBJECT_ACCENT, type SubjectKey } from "@/co
 import { createMetadata } from "@/lib/metadata";
 import { siteConfig, testimonials } from "@/lib/site";
 import styles from "./home.module.css";
+import { motionStagger, staggerDelay } from "@/lib/motion/tokens";
 
 export const metadata: Metadata = createMetadata({
   title: "Strong foundations. Brighter futures.",
@@ -104,7 +108,13 @@ export default function HomePage() {
     <div className={styles.page}>
       <BodyClass className="is-homepage" />
       {/* ── Hero ──────────────────────────────────────── */}
+      {/* plan15 Wave 5 section 9.4: the hero, the level marquee and the stats strip are one stack. On
+          the full tier the hero is pinned (position: sticky, only inside this stack) while the
+          marquee and the navy stats strip slide over it, and the hero copy eases up, scales to ~0.96
+          and fades as they arrive. Every other tier: the three simply scroll one after another. */}
+      <div className={styles.heroStack} data-hero-stack="">
       <HeroScene />
+      <div className={styles.heroCover}>
 
       {/* ── Level Marquee ─────────────────────────────── */}
       <Marquee items={marqueeItems} direction="right" />
@@ -145,15 +155,20 @@ export default function HomePage() {
           </Reveal>
         </div>
       </SceneShell>
+      </div>
+      </div>
 
       <SectionHandoff from="navy" to="cream" />
 
       {/* ── Why Us ────────────────────────────────────── */}
       <section id="why" className={styles.whySection}>
-        <MaskedText className={styles.homeStatement}>
-          Every child learns differently. We build the tuition around them —
-          not the other way round.
-        </MaskedText>
+        {/* plan15 Wave 6: read into focus. The words shift from muted to strong as the statement
+            scrolls through the viewport (native CSS scroll-driven animation, full/standard tier,
+            no JavaScript); everywhere else this is simply the finished, full-contrast sentence. */}
+        <ScrubStatement
+          className={styles.homeStatement}
+          text="Every child learns differently. We build the tuition around them — not the other way round."
+        />
         <Reveal variant="editorial">
           <p className={styles.eyebrow}>Why families choose us</p>
           <h2 className={styles.sectionTitle}>Three things we won&apos;t compromise on</h2>
@@ -164,7 +179,7 @@ export default function HomePage() {
             <div className={`${styles.whyCard} ${styles.whyCardNavy}`}>
               <div className={styles.whyCardHeader}>
                 <div className={`${styles.whyCardIcon} ${styles.whyCardIconNavy}`}>
-                  <svg viewBox="0 0 24 24" fill="none" width={22} height={22} style={{ color: "#087363" }} aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" width={22} height={22} style={{ color: "var(--fg-accent-on-inverse)" }} aria-hidden="true">
                     <circle cx="12" cy="8" r="3.4" stroke="currentColor" strokeWidth="1.8" />
                     <path d="M5 19c0-3.5 3.1-6 7-6s7 2.5 7 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                   </svg>
@@ -172,7 +187,7 @@ export default function HomePage() {
                 {/* rgba(8,115,99,.9) only cleared 2.09:1 against this card's navy background —
                     well under AA's 4.5:1. Matches the brighter green used elsewhere on navy
                     (home.module.css's .levelRowDark .levelYears / .statValueGreen). */}
-                <span className={styles.whyCardNumber} style={{ color: "#13c2a0" }}>01</span>
+                <span className={styles.whyCardNumber} style={{ color: "var(--fg-accent-bright)" }}>01</span>
               </div>
               <h3 className={styles.whyCardTitle}>Truly one-to-one</h3>
               <p className={styles.whyCardText}>No groups, no shared screens. The whole session belongs to your child.</p>
@@ -182,11 +197,11 @@ export default function HomePage() {
             <div className={`${styles.whyCard} ${styles.whyCardWhite}`}>
               <div className={styles.whyCardHeader}>
                 <div className={`${styles.whyCardIcon} ${styles.whyCardIconWhite}`}>
-                  <svg viewBox="0 0 24 24" fill="none" width={22} height={22} style={{ color: "#075f52" }} aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" width={22} height={22} style={{ color: "var(--fg-accent)" }} aria-hidden="true">
                     <path d="M4 12l5 5 11-11" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </div>
-                <span className={styles.whyCardNumber} style={{ color: "#075f52" }}>02</span>
+                <span className={styles.whyCardNumber} style={{ color: "var(--fg-accent)" }}>02</span>
               </div>
               <h3 className={styles.whyCardTitle}>Built around your child</h3>
               <p className={styles.whyCardText}>We start from where they are now and what they feel stuck on, then plan from there.</p>
@@ -196,11 +211,11 @@ export default function HomePage() {
             <div className={`${styles.whyCard} ${styles.whyCardGreen}`}>
               <div className={styles.whyCardHeader}>
                 <div className={`${styles.whyCardIcon} ${styles.whyCardIconGreen}`}>
-                  <svg viewBox="0 0 24 24" fill="none" width={22} height={22} style={{ color: "#fff" }} aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" width={22} height={22} style={{ color: "var(--fg-on-inverse)" }} aria-hidden="true">
                     <path d="M4 20V10M10 20V6M16 20v-5M22 20V4" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
                   </svg>
                 </div>
-                <span className={styles.whyCardNumber} style={{ color: "rgba(255,255,255,.85)" }}>03</span>
+                <span className={styles.whyCardNumber} style={{ color: "var(--fg-on-inverse-soft)" }}>03</span>
               </div>
               <h3 className={styles.whyCardTitle}>Progress you can see</h3>
               <p className={styles.whyCardText}>Confidence first, then the results that follow it.</p>
@@ -218,6 +233,8 @@ export default function HomePage() {
               alt="Parent and child going through homework together at the kitchen table"
               fill
               sizes="(max-width: 1100px) 100vw, 40vw"
+              placeholder="blur"
+              blurDataURL={imageBlur["/images/parent-child-homework.jpg"]}
               style={{ objectFit: "cover" }}
             />
           </div>
@@ -239,16 +256,18 @@ export default function HomePage() {
         </Reveal>
         <div className={styles.subjectsGrid}>
           {subjectCards.map((subject, i) => (
-            <Reveal variant="scale" key={subject.slug} delay={i * 0.09}>
-              <Link href={`/${subject.slug}`} className={styles.subjectCard}>
+            <Reveal variant="scale" key={subject.slug} delay={staggerDelay(i, motionStagger.cards)}>
+              <Link href={`/${subject.slug}`} className={styles.subjectCard} data-spotlight="">
                 <div className={styles.subjectCardImage}>
                   <Image
                     src={subject.image}
                     alt={subject.imageAlt}
                     width={600}
-                    height={300}
-                    sizes="(max-width: 1100px) 100vw, 50vw"
-                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                    height={260}
+                    sizes="(max-width: 700px) 100vw, (max-width: 1280px) 50vw, 640px"
+                    placeholder="blur"
+                    blurDataURL={imageBlur[subject.image]}
+                    style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: imageFocus[subject.image] }}
                   />
                   <div className={styles.subjectCardMotif}>
                     <SubjectMotif subject={subject.subject} />
@@ -267,7 +286,7 @@ export default function HomePage() {
                   <ViewTransition name={`subject-icon-${subject.slug}`}>
                     <div
                       className={styles.subjectCardIcon}
-                      style={{ color: SUBJECT_ACCENT[subject.subject], background: `${SUBJECT_ACCENT[subject.subject]}14` }}
+                      style={{ color: SUBJECT_ACCENT[subject.subject], background: `color-mix(in srgb, ${SUBJECT_ACCENT[subject.subject]} 8%, transparent)` }}
                     >
                       <SubjectIcon subject={subject.subject} />
                     </div>
@@ -317,7 +336,7 @@ export default function HomePage() {
         </Reveal>
         <div className={styles.levelsGrid}>
           {levels.map((level, i) => (
-            <Reveal variant="side" key={level.name} delay={i * 0.08}>
+            <Reveal variant="side" key={level.name} delay={staggerDelay(i, motionStagger.list)}>
               <div className={`${styles.levelRow} ${level.dark ? styles.levelRowDark : ""}`}>
                 <div>
                   <div className={styles.levelName}>{level.name}</div>
@@ -325,7 +344,7 @@ export default function HomePage() {
                 </div>
                 <p className={styles.levelDesc}>{level.desc}</p>
                 <div className={styles.levelBar}>
-                  <div className={styles.levelBarFill} style={{ width: `${level.fill}%` }} />
+                  <div className={styles.levelBarFill} style={{ "--fill": `${level.fill}%` } as React.CSSProperties} />
                 </div>
               </div>
             </Reveal>
@@ -359,7 +378,7 @@ export default function HomePage() {
       <section className={styles.testimonialsSection}>
         <Reveal variant="editorial">
           <p className={styles.eyebrow}>What families say</p>
-          <h2 className={styles.sectionTitle} style={{ marginBottom: 28 }}>
+          <h2 className={styles.sectionTitle}>
             Real progress, in their words
           </h2>
         </Reveal>
@@ -375,7 +394,7 @@ export default function HomePage() {
               </figure>
             );
             return (
-              <Reveal variant="soft" key={testimonial.attribution} delay={i * 0.09}>
+              <Reveal variant="soft" key={testimonial.attribution} delay={staggerDelay(i, motionStagger.cards)}>
                 {featured ? <PointerDepth>{figure}</PointerDepth> : figure}
               </Reveal>
             );
@@ -437,7 +456,7 @@ export default function HomePage() {
           <MaskedText>
             <h2 className={styles.closingCtaTitle}>Let&apos;s find the right tutor for your child.</h2>
           </MaskedText>
-          <p className={styles.sectionSubtitle} style={{ color: "rgba(255,255,255,0.78)" }}>
+          <p className={styles.sectionSubtitle} style={{ color: "var(--fg-on-inverse-soft)" }}>
             One conversation is all it takes to get started &mdash; no pressure, no obligation.
           </p>
           <div className={styles.closingCtaActions}>

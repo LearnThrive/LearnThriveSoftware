@@ -25,14 +25,21 @@ export type SectionHandoffProps = {
   className?: string;
 };
 
-// Kept in sync by hand with SceneShell.module.css's tone backgrounds.
+// The CSS variable each tone paints with: the same ones SceneShell.module.css's tone classes use, so
+// a handoff always meets the sections either side of it, in the light theme and the dark one. (They
+// used to be hex strings kept in sync by hand, which could not follow the theme.)
 const TONE_COLOR: Record<SceneTone, string> = {
-  navy: "#0e2a47", // --colour-navy-900
-  cream: "#fbf8f2", // --colour-cream
-  white: "#ffffff",
-  mint: "#e9f5ef", // --colour-mint-100
+  navy: "var(--surface-inverse)",
+  cream: "var(--surface-3)",
+  white: "var(--surface-1)",
+  mint: "var(--surface-accent)",
 };
 
+/**
+ * Scroll-linked: the band is solid `from`, with a solid `to` layer cross-fading in as `progress`
+ * advances. Opacity is compositor work and, unlike interpolating a colour string, it works with CSS
+ * variables — which is what lets the handoff follow the theme.
+ */
 function ScrollLinkedHandoff({
   progress,
   from,
@@ -44,8 +51,12 @@ function ScrollLinkedHandoff({
   to: string;
   className: string;
 }) {
-  const background = useTransform(progress, [0, 1], [from, to]);
-  return <m.div className={className} aria-hidden="true" data-section-handoff="" style={{ background }} />;
+  const opacity = useTransform(progress, [0, 1], [0, 1]);
+  return (
+    <div className={className} aria-hidden="true" data-section-handoff="" style={{ background: from }}>
+      <m.div style={{ position: "absolute", inset: 0, background: to, opacity }} />
+    </div>
+  );
 }
 
 export function SectionHandoff({ from, to, progress, className }: SectionHandoffProps) {

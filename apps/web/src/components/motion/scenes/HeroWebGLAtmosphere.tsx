@@ -12,6 +12,9 @@ import { useSceneActivity } from "@/lib/motion/activity";
  * pointer position — everything about the render itself lives in `heroGradient.ts`, kept as plain,
  * non-React code on purpose (see that file's own comment).
  *
+ * It fades in (opacity, ~0.8s) over the always-mounted static `.heroGlow` once its first frame
+ * is drawn, so arriving never shows as a pop. Reduced-motion users never mount it.
+ *
  * The pointer listener attaches only while `useSceneActivity` says this scene is on/near the
  * screen and the tab is visible — the same primitive `CinematicBackdrop` uses — so nothing here
  * does any work while the hero is scrolled away.
@@ -41,6 +44,17 @@ export function HeroWebGLAtmosphere() {
     const handle = createHeroGradient(canvas);
     handleRef.current = handle;
 
+    // createHeroGradient draws the first frame synchronously, so the canvas holds real pixels by
+    // now. The container starts at opacity 0 (below); revealing it a frame later, once that opacity
+    // has been committed, makes the transition run instead of the gradient simply appearing. If
+    // WebGL is unavailable the handle is null and the static glow underneath is all there is.
+    let revealFrame = 0;
+    if (handle) {
+      revealFrame = requestAnimationFrame(() => {
+        container.style.opacity = "1";
+      });
+    }
+
     let resizeObserver: ResizeObserver | undefined;
     if (handle) {
       const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
@@ -53,10 +67,12 @@ export function HeroWebGLAtmosphere() {
     }
 
     return () => {
+      cancelAnimationFrame(revealFrame);
       resizeObserver?.disconnect();
       handle?.dispose();
       handleRef.current = null;
       canvas.remove();
+      container.style.opacity = "0";
     };
   }, []);
 
@@ -74,5 +90,18 @@ export function HeroWebGLAtmosphere() {
     return () => window.removeEventListener("pointermove", onMove);
   }, [active]);
 
-  return <div ref={containerRef} aria-hidden="true" style={{ position: "absolute", inset: 0, pointerEvents: "none" }} />;
+  return (
+    <div
+      ref={containerRef}
+      aria-hidden="true"
+      style={{
+        position: "absolute",
+        inset: 0,
+        pointerEvents: "none",
+        opacity: 0,
+        // The one non-instant thing here: ~0.8s, ease-out (--ease-gentle), opacity only.
+        transition: "opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1)",
+      }}
+    />
+  );
 }

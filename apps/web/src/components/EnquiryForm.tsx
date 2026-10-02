@@ -456,13 +456,20 @@ export function EnquiryForm() {
               className="button button--primary"
               type="submit"
               disabled={status === "submitting"}
+              aria-busy={status === "submitting"}
             >
               <span>
                 {status === "submitting" ? "Sending…" : "Send enquiry"}
               </span>
-              <svg viewBox="0 0 20 20" aria-hidden="true">
-                <path d="M4 10h11M11 6l4 4-4 4" />
-              </svg>
+              {status === "submitting" ? (
+                <svg className="button-spinner" viewBox="0 0 20 20" aria-hidden="true">
+                  <circle cx="10" cy="10" r="6.5" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 20 20" aria-hidden="true">
+                  <path d="M4 10h11M11 6l4 4-4 4" />
+                </svg>
+              )}
             </button>
             <p>
               By submitting this form you agree to our{" "}

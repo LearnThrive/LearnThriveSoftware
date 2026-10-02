@@ -13,6 +13,7 @@ export const metadata = createMetadata({
 export default function PrivacyPage() {
   return (
     <LegalPage
+      path="/privacy"
       eyebrow="Privacy"
       title="Privacy notice"
       intro="This notice explains what personal information is involved when you browse this website or contact LearnThrive Tuition, and the choices and rights available to you."

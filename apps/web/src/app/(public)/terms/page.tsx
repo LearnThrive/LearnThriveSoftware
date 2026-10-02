@@ -11,6 +11,7 @@ export const metadata = createMetadata({
 export default function TermsPage() {
   return (
     <LegalPage
+      path="/terms"
       eyebrow="Website terms"
       title="Terms for using this website"
       intro="The ground rules for using LearnThrive’s public information and enquiry features."

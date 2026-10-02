@@ -7,6 +7,8 @@ import { useMotionValueEvent, useScroll } from "framer-motion";
 import { Brand } from "@/components/Brand";
 import { ButtonLink } from "@/components/ButtonLink";
 import { Container } from "@/components/Container";
+import { PaletteTrigger } from "@/components/palette/PaletteTrigger";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { navigation } from "@/lib/site";
 
 interface SiteHeaderSession {
@@ -73,6 +75,12 @@ export function SiteHeader() {
     return pathname.startsWith(href);
   }
 
+  // Where the visitor is in the menu, so each link knows which way it leads. A page that is not a
+  // menu item (a subject page, a legal page) counts as the Subjects/Home end of the menu: the
+  // plain fade is used for those in practice, because only menu links carry a direction.
+  const matchedIndex = navigation.findIndex((item) => item.href !== "/" && isCurrent(item.href));
+  const currentIndex = matchedIndex !== -1 ? matchedIndex : isCurrent("/") ? 0 : -1;
+
   return (
     <header className={`site-header${scrolled ? " site-header--scrolled" : ""}`}>
       <Container className="site-header__inner">
@@ -93,13 +101,17 @@ export function SiteHeader() {
         <div
           className={`navigation-shell ${open ? "navigation-shell--open" : ""}`}
           id="primary-navigation"
+          data-lenis-prevent
         >
           <nav className="primary-navigation" aria-label="Main navigation">
-            {navigation.map((item) => (
+            {navigation.map((item, index) => (
               <Link
                 key={item.href}
                 href={item.href}
                 aria-current={isCurrent(item.href) ? "page" : undefined}
+                // Route-transition direction by position in the menu (plan15 Wave 8): going to a
+                // later item slides the page in from the right, an earlier one from the left.
+                transitionTypes={[index > currentIndex ? "nav-forward" : "nav-back"]}
                 onClick={() => setOpen(false)}
               >
                 {item.label}
@@ -127,6 +139,8 @@ export function SiteHeader() {
               Login
             </Link>
           )}
+          <PaletteTrigger className="header-icon-button" />
+          <ThemeToggle variant="cycle" className="header-theme" />
           <ButtonLink href="/book" className="header-cta">
             Book a free consultation
           </ButtonLink>

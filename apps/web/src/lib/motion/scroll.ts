@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { useMotionValueEvent, useScroll, useSpring, type MotionValue } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
+import { useMotionValue, useMotionValueEvent, useScroll, useSpring, useTransform, type MotionValue } from "framer-motion";
 import type { RefObject } from "react";
 import { indexForProgress } from "./thresholds";
 
@@ -29,6 +29,42 @@ export function useSceneProgress(
     mass: 0.4,
   });
   return { rawProgress: scrollYProgress, smoothProgress };
+}
+
+/**
+ * Progress 0..1 through the PIN RANGE of a `position: sticky` element: how far the page has scrolled
+ * while the element is held in place by its parent (plan15 Wave 5 section 9.4's pinned hero).
+ *
+ * `useSceneProgress` measures where an element is, which is exactly wrong for one that is pinned: its
+ * position stops changing, so its progress would sit at 0 for the whole time the scene is playing.
+ * This reads the page's own scroll instead, divided by the room the element's parent gives it to
+ * stay pinned (parent height minus its own height, re-measured with a ResizeObserver). Same spring
+ * as `useSceneProgress`, so the two are interchangeable to the choreography that consumes them.
+ */
+export function usePinnedProgress(target: RefObject<HTMLElement | null>, enabled = true) {
+  const { scrollY } = useScroll();
+  const range = useMotionValue(1);
+  // When the scene is not pinned (every tier but full) its progress is never read, so it must cost
+  // nothing: a constant source instead of the live scroll, and no measuring. Otherwise a spring would
+  // step on every scroll frame of every page load for a value nothing consumes.
+  const idle = useMotionValue(0);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const element = target.current;
+    const parent = element?.parentElement;
+    if (!element || !parent) return;
+    const measure = () => range.set(Math.max(1, parent.offsetHeight - element.offsetHeight));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(parent);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [target, range, enabled]);
+
+  const rawProgress = useTransform([enabled ? scrollY : idle, range], ([y, r]: number[]) => Math.min(1, Math.max(0, y / r)));
+  const smoothProgress = useSpring(rawProgress, { stiffness: 240, damping: 40, mass: 0.4 });
+  return { rawProgress, smoothProgress };
 }
 
 /** Convenience: a ref plus the scene progress it drives, so a scene only destructures one thing. */

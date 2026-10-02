@@ -51,3 +51,6 @@ plan12.md
 
 # Storybook's own production build output (`npm run build-storybook`) — regenerable, not source.
 apps/web/storybook-static/
+
+# plan15 Wave 9: camera originals for scripts/optimise-images.mjs live here, never committed.
+apps/web/assets-src/

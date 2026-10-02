@@ -129,14 +129,14 @@
 
 .report-private {
   margin-top: var(--space-5); padding: var(--space-4);
-  background: #fdf7ed; border: 1px dashed #dfc9a3; border-radius: var(--app-radius);
+  background: var(--tone-private-bg); border: 1px dashed var(--tone-private-border); border-radius: var(--app-radius);
 }
 .report-private__heading {
   display: flex; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-3);
-  font-size: var(--text-small); font-weight: 700; color: #7a5a1d;
+  font-size: var(--text-small); font-weight: 700; color: var(--tone-private-fg);
 }
-.report-private .report-block__label { color: #96713a; }
-.report-private .report-block__body { color: #4f3c1c; }
+.report-private .report-block__label { color: var(--tone-private-label); }
+.report-private .report-block__body { color: var(--tone-private-body); }
 
 /* ============================================================ Alerts */
 
@@ -147,9 +147,9 @@
   font-size: var(--text-small);
 }
 .alert p { margin: 0; }
-.alert--info { background: #eef4fb; border-color: #cfe0f4; color: #1d4e87; }
-.alert--warning { background: #fdf7ea; border-color: #f0dcb4; color: #7a5a1d; }
-.alert--error { background: var(--colour-error-bg); border-color: #edc9cd; color: var(--colour-error); }
+.alert--info { background: var(--tone-info-soft-bg); border-color: var(--tone-info-soft-border); color: var(--tone-info-fg); }
+.alert--warning { background: var(--tone-warning-soft-bg); border-color: var(--tone-warning-soft-border); color: var(--tone-warning-soft-fg); }
+.alert--error { background: var(--error-bg); border-color: var(--tone-critical-border); color: var(--fg-error); }
 
 /* ============================================================ Error / 403 / 404 pages */
 
@@ -175,14 +175,14 @@
 .skeleton {
   position: relative;
   overflow: hidden;
-  background: #eef1f4;
+  background: var(--skeleton-base);
   border-radius: var(--app-radius-sm);
 }
 .skeleton::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent 0%, rgb(255 255 255 / 70%) 50%, transparent 100%);
+  background: linear-gradient(90deg, transparent 0%, var(--skeleton-sheen) 50%, transparent 100%);
   transform: translateX(-100%);
   animation: skeleton-shimmer 1.4s ease infinite;
 }
@@ -259,7 +259,7 @@
 .calendar-wrap .fc-event {
   position: relative;
   border: none; border-radius: 5px; padding: 1px 5px;
-  background: #e4eefb; color: #1d4e87; font-weight: 650;
+  background: var(--tone-info-bg); color: var(--tone-info-fg); font-weight: 650;
   cursor: pointer;
   transition: transform var(--duration-fast) var(--app-ease);
 }
@@ -283,13 +283,13 @@
 .calendar-wrap .fc-event:active { transform: scale(0.98); transition-duration: var(--duration-instant); }
 .calendar-wrap .fc-event.is-selected { transition: box-shadow var(--duration-fast) var(--app-ease); }
 .calendar-wrap .fc-event:focus-visible { outline: none; box-shadow: var(--app-focus-ring); }
-.calendar-wrap .fc-event.lesson-status-in_progress { background: #fdf0d9; color: #8a5a06; }
-.calendar-wrap .fc-event.lesson-status-completed { background: #e2f3e9; color: #1d6b42; }
+.calendar-wrap .fc-event.lesson-status-in_progress { background: var(--tone-warning-bg); color: var(--tone-warning-fg); }
+.calendar-wrap .fc-event.lesson-status-completed { background: var(--tone-positive-bg); color: var(--tone-positive-fg); }
 .calendar-wrap .fc-event.lesson-status-cancelled {
   background: transparent; border: 1px dashed var(--app-border-strong);
   color: var(--app-muted); text-decoration: line-through;
 }
-.calendar-wrap .fc-event.lesson-status-no_show { background: var(--colour-error-bg); color: var(--colour-error); }
+.calendar-wrap .fc-event.lesson-status-no_show { background: var(--error-bg); color: var(--fg-error); }
 /* Selected state: the peek panel is open for this event — a visible ring so it's clear which
    card the panel belongs to while it's up. */
 .calendar-wrap .fc-event.is-selected { box-shadow: 0 0 0 2px var(--app-surface), 0 0 0 4px var(--app-accent); }
@@ -307,7 +307,7 @@
 /* ============================================================ Lesson peek panel (section 56) */
 
 .lesson-peek { position: fixed; inset: 0; z-index: 70; display: flex; justify-content: flex-end; }
-.lesson-peek__scrim { position: absolute; inset: 0; border: 0; background: rgb(9 29 49 / 40%); cursor: pointer; padding: 0; }
+.lesson-peek__scrim { position: absolute; inset: 0; border: 0; background: var(--overlay); cursor: pointer; padding: 0; }
 .lesson-peek__panel {
   position: relative; z-index: 1; width: min(26rem, 100%); height: 100%; overflow-y: auto;
   background: var(--app-surface); box-shadow: var(--app-shadow-lg);

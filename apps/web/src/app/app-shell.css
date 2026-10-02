@@ -59,9 +59,10 @@
   --app-radius-sm: 0.5rem;
   --app-radius: 0.75rem;
   --app-radius-lg: 1rem;
-  --app-shadow-sm: 0 1px 2px rgb(16 42 67 / 6%), 0 1px 3px rgb(16 42 67 / 4%);
-  --app-shadow: 0 2px 4px rgb(16 42 67 / 5%), 0 8px 20px rgb(16 42 67 / 6%);
-  --app-shadow-lg: 0 12px 32px rgb(16 42 67 / 12%);
+  /* The product's three elevations are steps 1, 2 and 4 of the shared scale in tokens.css. */
+  --app-shadow-sm: var(--shadow-1);
+  --app-shadow: var(--shadow-2);
+  --app-shadow-lg: var(--shadow-4);
   /* Same curve as --ease-snappy (globals.css) under its pre-existing app-side name — kept so the
      ~30 rules already written against --app-ease don't need touching, now pointed at the one
      shared definition instead of carrying its own copy of the same cubic-bezier. */
@@ -139,14 +140,11 @@
 .app-brand:hover .app-brand__mark { transform: scale(1.04); }
 
 .app-brand__mark {
-  /* The LearnThrive mark (an open book + growth arrow) is drawn on a near-white matte, not
-     designed to sit directly on the navy sidebar — a small light chip behind it keeps the same
-     footprint the "LT" initials used to occupy while giving the actual logo room to read clearly. */
-  width: 2rem; height: 2rem; flex: none;
-  padding: 0.2rem;
-  border-radius: 0.625rem;
-  background: var(--colour-cream);
-  object-fit: contain;
+  /* The vector mark (components/brand/BrandMark.tsx) in its light inks, straight onto the navy
+     sidebar: it used to need a cream chip behind it because the raster was drawn for a light surface. */
+  --brand-ink: #eef4f8;
+  --brand-green: #5fd08e;
+  width: 2rem; height: 1.85rem; flex: none;
   transition: transform var(--duration-fast) var(--app-ease);
 }
 
@@ -194,7 +192,7 @@
   border-radius: 999px;
   /* green-600 clears only 4.36:1 against white text — under AA's 4.5:1 at this size. Matches
      .app-topbar__badge's already-correct green-700 (5.76:1). */
-  background: var(--colour-green-700); color: #fff;
+  background: var(--app-accent); color: var(--on-accent);
   font-size: var(--text-label); font-weight: 700; line-height: 1.25rem; text-align: center;
 }
 
@@ -278,8 +276,8 @@
    like a real production status indicator. */
 .dev-badge {
   flex: none; margin-right: var(--space-2);
-  padding: 0.15rem 0.5rem; border: 1px solid #f0dcb4; border-radius: 999px;
-  background: #fdf7ea; color: #8a5a06;
+  padding: 0.15rem 0.5rem; border: 1px solid var(--tone-warning-soft-border); border-radius: 999px;
+  background: var(--tone-warning-soft-bg); color: var(--tone-warning-fg);
   font-size: var(--text-label); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
   cursor: default;
 }
@@ -288,7 +286,7 @@
 .app-topbar__badge {
   position: absolute; top: 0.25rem; right: 0.2rem;
   min-width: 1rem; padding: 0 0.2rem;
-  border-radius: 999px; background: var(--colour-green-700); color: #fff;
+  border-radius: 999px; background: var(--app-accent); color: var(--on-accent);
   font-size: 0.625rem; font-weight: 700; line-height: 1rem; text-align: center;
   animation: app-pop var(--duration-fast) var(--app-ease);
 }
@@ -349,10 +347,11 @@
   background: transparent; color: var(--app-ink);
   font: inherit; font-size: var(--text-body); text-align: left; text-decoration: none; cursor: pointer;
 }
+.app-usermenu__appearance { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--app-border); }
 .app-usermenu__item:hover { background: var(--app-surface-sunken); }
 .app-usermenu__item:focus-visible { outline: none; box-shadow: var(--app-focus-ring); }
-.app-usermenu__item--danger { color: var(--colour-error); }
-.app-usermenu__item--danger:hover { background: var(--colour-error-bg); }
+.app-usermenu__item--danger { color: var(--fg-error); }
+.app-usermenu__item--danger:hover { background: var(--error-bg); }
 .app-usermenu__item:disabled { opacity: 0.6; cursor: progress; }
 
 /* The one dropdown/popover entrance, used by the account menu, QuickCreateMenu and every other
@@ -516,12 +515,12 @@
      repeatedly" the same section rules out. */
   transition: background var(--duration-standard) var(--ease-smooth), color var(--duration-standard) var(--ease-smooth);
 }
-.badge--neutral  { background: #eef2f5; color: #3d4f60; }
-.badge--positive { background: #e2f3e9; color: #1d6b42; }
-.badge--warning  { background: #fdf0d9; color: #8a5a06; }
-.badge--critical { background: var(--colour-error-bg); color: var(--colour-error); }
-.badge--info     { background: #e4eefb; color: #1d4e87; }
-.badge--muted    { background: #f1f3f5; color: #6b7c8c; }
+.badge--neutral  { background: var(--tone-neutral-bg); color: var(--tone-neutral-fg); }
+.badge--positive { background: var(--tone-positive-bg); color: var(--tone-positive-fg); }
+.badge--warning  { background: var(--tone-warning-bg); color: var(--tone-warning-fg); }
+.badge--critical { background: var(--error-bg); color: var(--fg-error); }
+.badge--info     { background: var(--tone-info-bg); color: var(--tone-info-fg); }
+.badge--muted    { background: var(--tone-muted-bg); color: var(--tone-muted-fg); }
 
 .avatar {
   display: inline-grid; place-items: center; flex: none;
@@ -538,11 +537,11 @@
 .avatar--sm { width: 2rem; height: 2rem; font-size: 0.6875rem; }
 .avatar--md { width: 2.5rem; height: 2.5rem; font-size: 0.8125rem; }
 .avatar--lg { width: 3.5rem; height: 3.5rem; font-size: 1.0625rem; }
-.avatar--tint-a { background: #dfeee6; color: #1d6b4f; }
-.avatar--tint-b { background: #e2eaf7; color: #274a80; }
-.avatar--tint-c { background: #f7e7dc; color: #8a4f22; }
-.avatar--tint-d { background: #e9e4f5; color: #4f3d86; }
-.avatar--tint-e { background: #dcecef; color: #1d5c6b; }
+.avatar--tint-a { background: var(--avatar-a-bg); color: var(--avatar-a-fg); }
+.avatar--tint-b { background: var(--avatar-b-bg); color: var(--avatar-b-fg); }
+.avatar--tint-c { background: var(--avatar-c-bg); color: var(--avatar-c-fg); }
+.avatar--tint-d { background: var(--avatar-d-bg); color: var(--avatar-d-fg); }
+.avatar--tint-e { background: var(--avatar-e-bg); color: var(--avatar-e-fg); }
 
 /* ============================================================ Empty state */
 
@@ -561,7 +560,7 @@
   background: var(--app-surface-accent); color: var(--app-accent);
   /* A soft ring rather than a heavier fill — enough presence to anchor the message without
      turning an "everything is fine" state into something that reads as an alert. */
-  box-shadow: 0 0 0 6px rgb(233 245 239 / 55%);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--app-surface-accent) 55%, transparent);
   animation: empty-state-in var(--duration-standard) var(--ease-gentle) both;
 }
 @keyframes empty-state-in { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: scale(1); } }
@@ -602,7 +601,7 @@
 .app-drawer__top .icon-button { color: var(--app-on-dark); }
 .app-drawer__top .icon-button:hover { background: var(--app-sidebar-hover); border-color: transparent; }
 .app-drawer__scrim {
-  position: absolute; inset: 0; border: 0; background: rgb(9 29 49 / 45%); cursor: pointer;
+  position: absolute; inset: 0; border: 0; background: var(--overlay); cursor: pointer;
   animation: app-scrim-in var(--duration-medium) var(--app-ease);
 }
 
