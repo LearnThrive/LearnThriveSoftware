@@ -102,7 +102,7 @@ export function ParticipantTile({
       {clickable && <span className="focus-affordance"><Icon name="expand" size={14} />Make main view</span>}
       <div className="participant-caption">
         <span className="participant-name">{name || 'You'}{local && name !== 'You' ? ' (You)' : ''}</span>
-        <span className="participant-media" aria-label={audio ? 'Microphone on' : 'Microphone off'} title={audio ? 'Microphone on' : 'Microphone off'}><Icon name={audio ? 'microphone' : 'microphone-off'} size={16} /></span>
+        <span className="participant-media" role="img" aria-label={audio ? 'Microphone on' : 'Microphone off'} title={audio ? 'Microphone on' : 'Microphone off'}><Icon name={audio ? 'microphone' : 'microphone-off'} size={16} /></span>
         {!video && <span className="participant-camera-state sr-only">Camera off</span>}
       </div>
       {needsPlayback && !local && <button type="button" className="button playback-button" onClick={(event) => { event.stopPropagation(); enablePlayback(); }}><Icon name="volume" />Click to enable audio</button>}

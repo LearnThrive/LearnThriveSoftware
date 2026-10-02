@@ -75,3 +75,14 @@ test.describe('automated accessibility in the dark theme (axe-core, WCAG 2 A/AA)
     await runAxe(page, '/dashboard/calendar');
   });
 });
+
+// plan15 Wave 3: the classroom's pre-join screen (the dev lab renders the real UI without a live lesson) in both
+// schemes. The classroom keeps its own look; plan 15 only aligns focus and contrast, which this guards.
+for (const scheme of ['light', 'dark'] as const) {
+  test(`the classroom pre-join screen is axe-clean (${scheme})`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: scheme });
+    await page.goto('/dev/classroom');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await runAxe(page, `/dev/classroom (${scheme})`);
+  });
+}
