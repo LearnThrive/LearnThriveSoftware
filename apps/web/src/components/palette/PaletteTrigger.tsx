@@ -13,6 +13,7 @@ export function PaletteTrigger({ className, label = "Search the site" }: { class
     <button
       type="button"
       className={className}
+      data-palette-trigger=""
       aria-label={label}
       aria-haspopup="dialog"
       onClick={() => window.dispatchEvent(new Event(OPEN_PALETTE_EVENT))}

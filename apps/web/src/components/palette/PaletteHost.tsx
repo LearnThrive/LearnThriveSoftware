@@ -12,7 +12,8 @@ const PublicPalette = dynamic(() => import("./PublicPalette"), { ssr: false });
 /**
  * Mounts once in the public layout. It is deliberately tiny: it owns the open state, listens for the
  * shortcut and for the header button's event, and loads the real palette the first time it is asked
- * for (or, once, when the browser is idle, so the first open is instant).
+ * for, or the first time someone shows intent (hovers or focuses the Search button, touches it, or presses
+ * Ctrl/Cmd), so the first open is usually instant without costing every page load the chunk.
  *
  * Ctrl/Cmd+K opens (and the browser's own binding is suppressed with preventDefault); `/` also opens
  * when focus is not in a text field. See lib/palette/shortcuts.ts for the rules and their tests.
@@ -39,20 +40,34 @@ export function PaletteHost() {
     document.addEventListener("keydown", onKeyDown);
     window.addEventListener(OPEN_PALETTE_EVENT, onOpen);
 
-    // Warm the chunk once the browser has nothing better to do.
-    // (requestIdleCallback is missing in Safari; fall back to a timer.)
-    const warm = () => void import("./PublicPalette");
-    const idleWindow = window as Window & {
-      requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;
-      cancelIdleCallback?: (h: number) => void;
+    // Warm the chunk the moment someone shows intent, not on page load: the palette (and the FAQ text inside it)
+    // is ~25 KB gz that most visitors never open, and the marketing JavaScript budget is tight (plan15 section 2).
+    // Intent is hovering or focusing the Search button, touching it, or pressing Ctrl/Cmd (the start of Ctrl+K),
+    // so by the time the shortcut or the click completes the chunk is usually already there.
+    let warmed = false;
+    const warm = () => {
+      if (warmed) return;
+      warmed = true;
+      void import("./PublicPalette");
     };
-    const handle = idleWindow.requestIdleCallback ? idleWindow.requestIdleCallback(warm, { timeout: 4000 }) : window.setTimeout(warm, 2500);
+    const onIntent = (event: Event) => {
+      if ((event.target as HTMLElement | null)?.closest?.("[data-palette-trigger]")) warm();
+    };
+    const onModifier = (event: KeyboardEvent) => {
+      if (event.key === "Control" || event.key === "Meta") warm();
+    };
+    document.addEventListener("pointerover", onIntent);
+    document.addEventListener("focusin", onIntent);
+    document.addEventListener("touchstart", onIntent, { passive: true });
+    document.addEventListener("keydown", onModifier);
 
     return () => {
       document.removeEventListener("keydown", onKeyDown);
       window.removeEventListener(OPEN_PALETTE_EVENT, onOpen);
-      if (idleWindow.cancelIdleCallback) idleWindow.cancelIdleCallback(handle);
-      else window.clearTimeout(handle);
+      document.removeEventListener("pointerover", onIntent);
+      document.removeEventListener("focusin", onIntent);
+      document.removeEventListener("touchstart", onIntent);
+      document.removeEventListener("keydown", onModifier);
     };
   }, []);
 
