@@ -25,6 +25,9 @@
  *                        fast*, and keep the two kinds of run separate.
  *   --reduced            emulate prefers-reduced-motion: reduce
  *   --quick              one short run, for smoke-testing the script itself
+ *   --js <text>          evaluate a script after load (same purpose: switch one behaviour off and compare)
+ *   --css <text>         inject a stylesheet after load (bisecting which effect costs frames: e.g.
+ *                        "[class*=heroStack]{position:static!important}")
  *
  * The frame numbers come from lib/motion/frameProfiler.ts itself — the script transpiles that file
  * and injects it into every page — so the overlay and this script cannot drift apart.
@@ -88,6 +91,8 @@ function parseArgs(argv) {
     trace: false,
     reduced: false,
     quick: false,
+    css: "",
+    js: "",
   };
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -99,6 +104,12 @@ function parseArgs(argv) {
     switch (argument) {
       case "--label":
         options.label = value();
+        break;
+      case "--css":
+        options.css = value();
+        break;
+      case "--js":
+        options.js = value();
         break;
       case "--runs":
         options.runs = Number(value());
@@ -495,6 +506,8 @@ async function profileOnce(browser, baseUrl, route, viewport, options) {
 
     const response = await page.goto(`${baseUrl}${route}`, { waitUntil: "load" });
     if (response?.status() !== 200) throw new Error(`${route} returned ${response?.status()}`);
+    if (options.css) await page.addStyleTag({ content: options.css });
+    if (options.js) await page.evaluate(options.js);
     await page.evaluate(() => document.fonts.ready);
     await page
       .waitForFunction(() => Array.from(document.images).every((image) => image.complete), null, { timeout: 10_000 })
