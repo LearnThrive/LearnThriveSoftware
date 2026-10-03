@@ -28,6 +28,19 @@ test.describe('StatCounter', () => {
       window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - window.innerHeight - 40, behavior: 'instant' });
     });
     await page.waitForTimeout(800);
+    // On a loaded machine late chunks hydrate after the scroll above and commit on their own schedule, which is
+    // not what this test measures. Wait until React has been quiet for a second, then count (the threshold below is
+    // unchanged).
+    let last = -1;
+    for (let quietSince = Date.now(); Date.now() - quietSince < 1000; ) {
+      const now = await reactCommits(page);
+      if (now !== last) {
+        last = now;
+        quietSince = Date.now();
+      }
+      await page.waitForTimeout(100);
+      if (Date.now() - quietSince > 15_000) break;
+    }
 
     await page.evaluate((selector) => {
       const el = document.querySelector(selector) as HTMLElement;
