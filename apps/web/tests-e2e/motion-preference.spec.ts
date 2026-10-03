@@ -11,7 +11,13 @@ const motionRadios = (page: Page) => motionGroup(page).getByRole('radio');
 async function chooseMotion(page: Page, choice: 'System' | 'Reduce') {
   const group = motionGroup(page);
   await group.scrollIntoViewIfNeeded();
-  await group.getByLabel(choice === 'Reduce' ? 'Reduce motion' : 'follow my device').check({ force: true });
+  // Before the page has hydrated a checked radio is re-rendered unchecked and the choice is lost, so repeat the
+  // choice until the preference it should set is actually on <html>.
+  await expect(async () => {
+    await group.getByLabel(choice === 'Reduce' ? 'Reduce motion' : 'follow my device').check({ force: true });
+    if (choice === 'Reduce') await expect(html(page)).toHaveAttribute('data-motion', 'reduce', { timeout: 1000 });
+    else await expect(html(page)).not.toHaveAttribute('data-motion', /.+/, { timeout: 1000 });
+  }).toPass({ timeout: 10_000 });
 }
 
 test.describe('the motion preference', () => {

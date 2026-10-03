@@ -118,17 +118,17 @@ Severity: blocker / high / medium / polish. "Tier" is where it shows.
 | ID | Route · viewport · tier | What was seen | Sev | Suspected cause | Fix | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | F1 | `/about` · 561-2560 · all | Founder portraits are 26-83 × 253 px slivers; 67-90% of each photo cropped | **blocker** | Flex item is the parallax wrapper; `flex:none` on the img does nothing; 3:4 frame forced on 1:1 sources | Square frame on the wrapper, `fill` image, container-query layout, geometry tests | **Fixed — `5473ee7`** |
-| F2 | `/` · ≥1024 · full | Hero left half jumps from flat navy to a teal gradient at ~0.5-0.9 s with no fade (H1) | high | WebGL branch replaces the static glow | Keep glow mounted, fade canvas in after first frame | Wave 1 |
-| F3 | `/` · ≥1024 · full | Hero chip text 2.7:1 over the gradient's brightest pixel (H10) | high (a11y) | Mint text on a translucent backing over a moving teal wash | Stronger navy chip backing; re-measure at worst frame | Wave 1 |
-| F4 | `/`, `/subjects` · all · all | Subject cards crop 52-87% of their photos (668×132 strips from 3:2 and 2:3 sources; 11+ is a portrait photo shown as a strip). Hero photo crops 41% horizontally. | medium | Fixed-height card banners using `object-fit: cover` on originals of other ratios | Re-crop deliberately in the image pipeline | Wave 9 §13.2 |
-| F5 | `/maths-tuition` · ≥1024 · full | The coordinate curve runs behind the hero lead paragraph | polish | Subject-world background not kept out of the text column | Route it around the copy in the worlds rebuild | Wave 9 §13.1 |
-| F6 | `/` · all | ProductStoryScene mock UI is a near-empty panel with two grey placeholder boxes (H7) | medium | Mock built from minimal primitives | Higher-fidelity lesson/report mock from real product components | Wave 6 |
-| F7 | 16 of 20 loads · prod | Console warning: a `chunks/…css` file preloaded but not used (it contains the shared public layout CSS incl. `MotionDebugOverlay`'s) | polish | Preload hint for a stylesheet that is already applied/used differently | Investigate in perf pass; budget says no new warnings | Wave 12 §16.5 |
-| F8 | all | Heading font loads as three static weights (600/700/800); no `opsz`/`wdth` axes | medium | `next/font` called with `weight: [...]` | Variable axes if payload allows | Wave 2 §6.4 |
-| F9 | all | Raster logos (292 KB / 134 KB), `favicon.svg` only (no .ico / apple-touch / PNG icons); single static OG image | medium | Never vectorised | Vector brand system | Wave 10 §14.1 |
-| F10 | `/` · all | Hero "Send an enquiry" triggers a ~9,000 px smooth scroll > 1.4 s; focus is not moved to the target (H5) | polish | Native `scroll-behavior: smooth` | Lenis scrollTo + focus move | Wave 4 |
+| F2 | `/` · ≥1024 · full | Hero left half jumps from flat navy to a teal gradient at ~0.5-0.9 s with no fade (H1) | high | WebGL branch replaces the static glow | Keep glow mounted, fade canvas in after first frame | **Fixed** (`04b8ed5`): the WebGL layer crossfades in over the static glow |
+| F3 | `/` · ≥1024 · full | Hero chip text 2.7:1 over the gradient's brightest pixel (H10) | high (a11y) | Mint text on a translucent backing over a moving teal wash | Stronger navy chip backing; re-measure at worst frame | **Fixed** (`04b8ed5`): navy backing, chip text measured >= 7:1 at the worst pointer position |
+| F4 | `/`, `/subjects` · all · all | Subject cards crop 52-87% of their photos (668×132 strips from 3:2 and 2:3 sources; 11+ is a portrait photo shown as a strip). Hero photo crops 41% horizontally. | medium | Fixed-height card banners using `object-fit: cover` on originals of other ratios | Re-crop deliberately in the image pipeline | **Fixed** (`04b8ed5`): subject cards use each photo's own aspect and focal point; originals optimised |
+| F5 | `/maths-tuition` · ≥1024 · full | The coordinate curve runs behind the hero lead paragraph | polish | Subject-world background not kept out of the text column | Route it around the copy in the worlds rebuild | **Fixed** (`1777c4a`): the maths hero curve fades out over the text column |
+| F6 | `/` · all | ProductStoryScene mock UI is a near-empty panel with two grey placeholder boxes (H7) | medium | Mock built from minimal primitives | Higher-fidelity lesson/report mock from real product components | **Fixed** (`04b8ed5`): the product-story mock is now six small, honest drawings of real features |
+| F7 | 16 of 20 loads · prod | Console warning: a `chunks/…css` file preloaded but not used (it contains the shared public layout CSS incl. `MotionDebugOverlay`'s) | polish | Preload hint for a stylesheet that is already applied/used differently | Investigate in perf pass; budget says no new warnings | **Fixed** (`1777c4a`): the debug overlay and its stylesheet are out of production builds |
+| F8 | all | Heading font loads as three static weights (600/700/800); no `opsz`/`wdth` axes | medium | `next/font` called with `weight: [...]` | Variable axes if payload allows | **Measured, not shipped**: adding the `opsz` axis makes the preloaded heading font 76.9 KB instead of 41.2 KB (+35.6 KB on the critical path) for a subtle optical-size gain |
+| F9 | all | Raster logos (292 KB / 134 KB), `favicon.svg` only (no .ico / apple-touch / PNG icons); single static OG image | medium | Never vectorised | Vector brand system | **Fixed** (`04b8ed5`): vector mark and wordmark, full icon set, per-page OG cards |
+| F10 | `/` · all | Hero "Send an enquiry" triggers a ~9,000 px smooth scroll > 1.4 s; focus is not moved to the target (H5) | polish | Native `scroll-behavior: smooth` | Lenis scrollTo + focus move | **Fixed** (`04b8ed5`): anchors glide with Lenis, update the hash and move focus |
 | F11 | app · dev only | Next.js dev indicator overlaps the sidebar "Collapse" label | polish (dev only) | Next dev overlay; absent in production | none | n/a |
-| F12 | `/` · 1440 | Lower-left of the hero (below the assurances) is ~300 px of empty navy; copy and photo are not balanced vertically | polish | Copy column shorter than the photo | Hero composition in Wave 5 | Wave 5 |
+| F12 | `/` · 1440 | Lower-left of the hero (below the assurances) is ~300 px of empty navy; copy and photo are not balanced vertically | polish | Copy column shorter than the photo | Hero composition in Wave 5 | **Fixed** (`1777c4a`): the hero copy is centred against the photo |
 
 `MotionDebugOverlay` is mounted in the public layout in production but renders nothing unless
 `?motionDebug=1` **and** a build-time opt-in are both present, so it is not reachable on a default
@@ -215,3 +215,22 @@ stretched-image guard over all 17 public routes); the founder tests fail against
 Remaining about the portraits: the files are 320×320. On a 2× screen a 200 px frame needs 400 px, so
 they are ~1.25× upscaled in device pixels — acceptable and not larger, but not premium. The 1200×1200
 originals the owner needs to supply are listed in `docs/PLAN15_OWNER_INPUTS.md`.
+
+## 8. After: the final measurements
+
+Same harness, same machine, production build served by `next start`, 3 runs per row (medians), measured on the
+final code (commit `8547324`). Baseline is the quiet re-run taken at the start (commit `5473ee7`).
+
+| Route | Viewport | LCP ms | CLS | JS KB gz | Scroll-down dropped frames | Long tasks / blocking ms |
+| --- | --- | --- | --- | --- | --- | --- |
+| `/` | desktop 1440x900 | 328 → **200** | 0 → 0 | 227.1 → 291.9 (+64.8) | 2.9 % → 5.7 % | 1 / 163 → 1 / 61 |
+| `/` | mobile 390x844 | 168 → **188** (5-run median; one 3-run set had a 332 outlier) | 0 → 0 | 225.3 → 277.1 (+51.8) | 2.6 % → ~7 % (5 runs: 4.6 to 9.4) | 1 / 48 → 1 / 181 (one run) |
+| `/subjects` | desktop | 200 → 228 | 0 → 0 | 230 → 290 (+60) | 9.3 % → 11.7 % | 0 → 0 |
+| `/subjects` | mobile | 172 → **148** | 0 → 0 | 225.3 → 277.1 (+51.8) | 3.3 % → 8.9 % | 0 → 0 |
+
+How these read against the budgets (plan 15 section 2):
+
+- **LCP** holds on every row (desktop budget +60 ms, mobile +40 ms; the home page is 128 ms *faster* on desktop). **CLS is 0** everywhere.
+- **JavaScript** is at or just over the +60 KB gz line on desktop (+64.8 KB home, +60 KB subjects) and under it on mobile. The figure counts everything the page transferred in the window, including route chunks that Next prefetches for visible links (the subject pages' stages are part of that), and Lenis, the theme and motion preference, the flyout and the mobile bar. A first version also loaded the ~25 KB command palette at idle on every page; it is now fetched on intent, which is what brought it from +78 KB to +65 KB. **Exception recorded: +4.8 KB over budget on the home page on desktop.**
+- **Dropped frames while scrolling** are the budget that does not hold. Desktop home is 5.7 % (budget 6 %), but mobile home (~7 %) and the subjects page (8.9 % mobile) are over 4 %, against a baseline that was already 9.3 % for desktop `/subjects`. Switching smooth scrolling off, hiding the WebGL canvas, un-pinning the hero, disabling scroll-driven CSS animation and freezing the marquee's scroll-speed coupling each moved the number by about one point or less, inside run-to-run noise (single runs of the same build range from 4.6 to 9.4 %); no single effect accounts for it. Style recalculation during the scroll is up about 30 % and the DOM is 27 % larger (945 nodes against 740: the footer sitemap, flyout, brand SVG and so on). **Exception recorded**, with the cheapest next step: `content-visibility: auto` on the long below-the-fold sections, which was not attempted because it interacts with find-in-page, anchors and the scroll-linked scenes and needs its own test pass.
+- The measurement is a programmatic scroll of a ~12,000 px page at 166 Hz on a desktop GPU with an emulated phone viewport; it is a comparison tool, not a phone.
