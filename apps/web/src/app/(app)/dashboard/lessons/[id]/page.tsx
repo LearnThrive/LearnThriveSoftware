@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { AlertCircle, CheckCircle2, Lock, Video, CalendarPlus } from "lucide-react";
+import { AlertCircle, CheckCircle2, Lock, Video, CalendarPlus, Download } from "lucide-react";
 import { requireSession } from "@/lib/auth/guard";
 import { createMetadata } from "@/lib/metadata";
 import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
@@ -294,6 +294,7 @@ export default async function LessonDetailPage({
                     engagement={report.engagement}
                     confidence={report.confidence}
                     privateNotes={report.internalTutorNotes}
+                    pdfHref={report.status === "APPROVED" ? `/api/reports/pdf?report=${report.id}` : undefined}
                   />
                 )}
 
@@ -319,6 +320,7 @@ export default async function LessonDetailPage({
                     areas={visibleReport.areasForImprovement}
                     nextSteps={visibleReport.nextSteps}
                     engagement={visibleReport.engagement}
+                    pdfHref={`/api/reports/pdf?report=${visibleReport.id}`}
                   />
                 ) : (
                   <EmptyState
@@ -397,7 +399,7 @@ export default async function LessonDetailPage({
 
 /** Read-only report display. Private notes are rendered in a visually distinct, clearly labelled
  * block so they can never be mistaken for the family-visible content (plan6 section 64). */
-function ReportReadOnly({ summary, progress, areas, nextSteps, engagement, confidence, privateNotes }: {
+function ReportReadOnly({ summary, progress, areas, nextSteps, engagement, confidence, privateNotes, pdfHref }: {
   summary: string;
   progress?: string;
   areas?: string;
@@ -405,6 +407,8 @@ function ReportReadOnly({ summary, progress, areas, nextSteps, engagement, confi
   engagement?: string;
   confidence?: string;
   privateNotes?: string;
+  /** An approved report can be downloaded; the file holds the family-visible fields only. */
+  pdfHref?: string;
 }) {
   return (
     <>
@@ -416,6 +420,12 @@ function ReportReadOnly({ summary, progress, areas, nextSteps, engagement, confi
       {areas && <div className="report-block"><p className="report-block__label">Areas to improve</p><p className="report-block__body">{areas}</p></div>}
       {nextSteps && <div className="report-block"><p className="report-block__label">Homework / next steps</p><p className="report-block__body">{nextSteps}</p></div>}
       {engagement && <div className="report-block"><p className="report-block__label">Engagement</p><p className="report-block__body">{engagement.charAt(0) + engagement.slice(1).toLowerCase()}</p></div>}
+
+      {pdfHref && (
+        <p>
+          <a href={pdfHref} className="btn btn--secondary" download><Download size={16} aria-hidden="true" />Download as PDF</a>
+        </p>
+      )}
 
       {(privateNotes || confidence) && (
         <div className="report-private">
