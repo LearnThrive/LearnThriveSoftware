@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { TrendingUp } from "lucide-react";
+import { Download, TrendingUp } from "lucide-react";
 import { requireSession } from "@/lib/auth/guard";
 import { createMetadata } from "@/lib/metadata";
 import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
@@ -55,6 +55,11 @@ export default async function ProgressPage({ params }: { params: Promise<{ stude
             : "Lessons and lesson reports over time, newest first."
         }
         backTo={back}
+        actions={progress.reportCount === 0 ? undefined : (
+          <a href={`/api/reports/pdf?student=${student.id}`} className="btn btn--secondary" download>
+            <Download size={16} aria-hidden="true" />Download reports (PDF)
+          </a>
+        )}
         meta={student.yearGroup ? <span>{student.yearGroup}</span> : undefined}
       />
 
