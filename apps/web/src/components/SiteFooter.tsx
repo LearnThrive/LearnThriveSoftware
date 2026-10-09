@@ -13,6 +13,7 @@ import { siteConfig, subjects } from "@/lib/site";
 // ("you agree to our privacy notice"), and UK GDPR expects a visible privacy notice link.
 const legalLinks = [
   { href: "/privacy", label: "Privacy" },
+  { href: "/careers/privacy", label: "Applicant privacy" },
   { href: "/cookies", label: "Cookies" },
   { href: "/terms", label: "Website Terms" },
   { href: "/tuition-terms", label: "Tuition Terms" },
@@ -70,6 +71,9 @@ export function SiteFooter() {
                 </li>
                 <li>
                   <Link href="/trust">Trust and policies</Link>
+                </li>
+                <li>
+                  <Link href="/careers">Careers</Link>
                 </li>
               </ul>
             </div>
