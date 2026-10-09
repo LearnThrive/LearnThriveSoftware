@@ -45,7 +45,8 @@ function buildRouteMap(directory = appDir, urlSegments = []) {
       const isRouteGroup = entry.name.startsWith("(") && entry.name.endsWith(")");
       const nextSegments = isRouteGroup ? urlSegments : [...urlSegments, entry.name];
       for (const [route, file] of buildRouteMap(fullPath, nextSegments)) routes.set(route, file);
-    } else if (entry.name === "page.tsx") {
+    } else if (entry.name === "page.tsx" || entry.name === "route.ts") {
+      // A route handler (an authenticated download such as /api/reports/pdf) is a real target for a link too.
       routes.set(`/${urlSegments.join("/")}`.replace(/\/$/, "") || "/", fullPath);
     }
   }
