@@ -1,3 +1,4 @@
+import { careerRoles } from "@/lib/careers";
 import { subjects } from "@/lib/site";
 
 /**
@@ -26,6 +27,10 @@ export const ogPages: Record<string, OgPage> = {
   "/tuition-terms": { eyebrow: "Terms", title: "Tuition terms" },
   "/complaints": { eyebrow: "Complaints", title: "Complaints procedure" },
   "/accessibility": { eyebrow: "Accessibility", title: "Accessibility statement" },
+  "/careers": { eyebrow: "Careers", title: "Careers: tutor with LearnThrive" },
+  "/careers/privacy": { eyebrow: "Privacy", title: "Applicant privacy notice" },
+  "/careers/safeguarding-agreement": { eyebrow: "Safeguarding", title: "Safeguarding agreement for tutors" },
+  ...Object.fromEntries(careerRoles.map((role) => [`/careers/${role.slug}`, { eyebrow: "Careers", title: role.title }] as const)),
   ...Object.fromEntries(
     subjects.map((subject) => [subject.path, { eyebrow: subject.hero.eyebrow, title: subject.seo.title }] as const),
   ),

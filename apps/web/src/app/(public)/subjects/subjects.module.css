@@ -244,15 +244,30 @@
   padding-bottom: 64px;
 }
 
+/* Each subject's header is three parts in DOM order: the text, the same hero card that subject's own page shows
+   (components/SubjectHeroCard.tsx), and the photograph. On a wide screen they sit in one row, the photograph
+   on the left for the reversed sections; below 1280px the card moves under the text with the photograph
+   beside both; on a phone they stack in DOM order, so it is always text, card, photograph. */
 .subjectHeader {
   display: grid;
-  grid-template-columns: 1.15fr 0.85fr;
+  grid-template-columns: minmax(0, 1.15fr) minmax(15rem, 0.65fr) minmax(0, 0.9fr);
+  grid-template-areas: "text card image";
   gap: 44px;
   align-items: center;
 }
 
 .subjectHeaderReverse {
-  grid-template-columns: 0.85fr 1.15fr;
+  grid-template-columns: minmax(0, 0.9fr) minmax(15rem, 0.65fr) minmax(0, 1.15fr);
+  grid-template-areas: "image card text";
+}
+
+.subjectText {
+  grid-area: text;
+  min-width: 0;
+}
+
+.subjectHeroCard {
+  grid-area: card;
 }
 
 .subjectIcon {
@@ -317,9 +332,10 @@
 
 .subjectImage {
   position: relative;
+  grid-area: image;
   border: 1px solid var(--border-subtle);
   border-radius: 22px;
-  aspect-ratio: 2 / 1;
+  aspect-ratio: 4 / 3;
   overflow: hidden;
 }
 
@@ -478,6 +494,17 @@
   background-image: var(--navy-light), var(--grain);
 }
 
+.elevenPlusTop {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(15rem, 20rem);
+  gap: 32px;
+  align-items: start;
+}
+
+.elevenPlusHeroCard {
+  align-self: start;
+}
+
 .elevenPlusDots {
   position: absolute;
   inset: 0 60% 0 0;
@@ -595,9 +622,49 @@
 }
 
 /* ── Responsive ────────────────────────────────────────── */
+@media (max-width: 1280px) {
+  .subjectHeader {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+    grid-template-areas:
+      "text image"
+      "card image";
+    align-items: start;
+  }
+
+  .subjectHeaderReverse {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    grid-template-areas:
+      "image text"
+      "image card";
+  }
+
+  .subjectImage {
+    align-self: stretch;
+    aspect-ratio: auto;
+    min-height: 16rem;
+  }
+
+  .elevenPlusTop {
+    grid-template-columns: minmax(0, 1fr) minmax(14rem, 18rem);
+  }
+}
+
 @media (max-width: 1100px) {
   .subjectHeader,
   .subjectHeaderReverse {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "text"
+      "card"
+      "image";
+  }
+
+  .subjectImage {
+    aspect-ratio: 2 / 1;
+    min-height: 0;
+  }
+
+  .elevenPlusTop {
     grid-template-columns: 1fr;
   }
 

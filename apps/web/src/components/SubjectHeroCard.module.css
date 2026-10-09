@@ -1,0 +1,113 @@
+/*
+ * The subject hero card in /subjects' own look: the same icon, label, stage and note as the card on each
+ * subject's page, in the subjects page's cream-and-green style, with each subject's own accent. `.dark` is the
+ * same card for the navy 11+ panel. Semantic tokens only, so both themes are right.
+ */
+.card {
+  --card-accent: var(--sp-maths-accent);
+  --card-ink: var(--sp-maths-ink);
+  --card-soft: var(--sp-maths-soft);
+  position: relative;
+  z-index: 1;
+  display: grid;
+  align-content: start;
+  gap: 0.55rem;
+  min-width: 0;
+  padding: 1.4rem 1.4rem 1.25rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 22px;
+  background: var(--surface-1);
+  box-shadow: var(--shadow-2);
+}
+
+.card[data-subject="english"] {
+  --card-accent: var(--sp-english-accent);
+  --card-ink: var(--sp-english-ink);
+  --card-soft: var(--sp-english-soft);
+}
+
+.card[data-subject="science"] {
+  --card-accent: var(--sp-science-accent);
+  --card-ink: var(--sp-science-ink);
+  --card-soft: var(--sp-science-soft);
+}
+
+.card[data-subject="11-plus"] {
+  --card-accent: var(--sp-plus-accent);
+  --card-ink: var(--sp-plus-ink);
+  --card-soft: var(--sp-plus-soft);
+}
+
+.icon {
+  display: grid;
+  width: 3rem;
+  height: 3rem;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--card-soft);
+  color: var(--card-ink);
+}
+
+.icon svg {
+  width: 1.6rem;
+  height: 1.6rem;
+}
+
+.label {
+  margin-top: 0.35rem;
+  color: var(--card-ink);
+  font-size: 0.75rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.stage {
+  color: var(--fg-strong);
+  font-family: var(--font-heading);
+  font-size: clamp(1.25rem, 2vw, 1.55rem);
+  line-height: 1.1;
+}
+
+.note {
+  margin: 0;
+  color: var(--fg-ink);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.link {
+  margin-top: 0.4rem;
+  color: var(--card-ink);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+/* The same card on the navy 11+ panel. The selector is as specific as the per-subject ones so it always wins. */
+.card.dark[data-subject] {
+  --card-ink: var(--fg-accent-on-inverse);
+  --card-soft: rgb(255 255 255 / 10%);
+}
+
+.dark {
+  border-color: var(--border-on-inverse);
+  background: rgb(255 255 255 / 8%);
+  box-shadow: none;
+  color: var(--fg-on-inverse);
+}
+
+.dark .stage {
+  color: var(--fg-on-inverse);
+}
+
+.dark .note {
+  color: var(--fg-on-inverse-soft);
+}
+
+.dark .link {
+  color: var(--fg-accent-on-inverse);
+}
