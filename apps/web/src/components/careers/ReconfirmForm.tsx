@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { fieldId, Honeypot, RadioGroup, TextField } from "@/components/forms/Fields";
 import forms from "@/components/forms/forms.module.css";
 import { HumanCheck } from "@/components/forms/HumanCheck";
+import { useFocusAfterRender } from "@/components/forms/useFocusAfterRender";
 import { useHumanCheck } from "@/components/forms/useHumanCheck";
 import { PhoneContacts } from "@/components/PhoneContacts";
 import { careersConfig } from "@/lib/careers-config";
@@ -36,6 +37,7 @@ export function ReconfirmForm() {
   const errorRef = useRef<HTMLDivElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
   const check = useHumanCheck();
+  const focusAfterRender = useFocusAfterRender();
 
   useEffect(() => {
     openedAt.current = performance.now();
@@ -69,14 +71,14 @@ export function ReconfirmForm() {
     setAttempted(true);
     if (problems.length > 0) {
       setStatus("idle");
-      window.requestAnimationFrame(() => summaryRef.current?.focus());
+      focusAfterRender(summaryRef);
       return;
     }
     const answer = check.getAnswer();
     if (!answer) {
       setStatus("error");
       setMessage("The check that you are a person has not finished yet. Please wait a moment, then send again.");
-      window.requestAnimationFrame(() => errorRef.current?.focus());
+      focusAfterRender(errorRef);
       return;
     }
 
@@ -94,18 +96,18 @@ export function ReconfirmForm() {
         setResult({ reference: data.reference, changeDeclared: Boolean(data.changeDeclared) });
         setStatus("sent");
         setValues({ ...emptyReconfirm(), agreementVersion: currentAgreement.version });
-        window.requestAnimationFrame(() => resultRef.current?.focus());
+        focusAfterRender(resultRef);
       } else {
         if (data?.errors) setServerErrors(data.errors);
         setMessage(data?.error ?? "We could not record your reconfirmation just now. Please try again shortly.");
         setStatus("error");
-        window.requestAnimationFrame(() => (data?.errors ? summaryRef : errorRef).current?.focus());
+        focusAfterRender(data?.errors ? summaryRef : errorRef);
       }
       if (![413, 429, 503].includes(response.status)) check.renew();
     } catch {
       setMessage("A network error occurred. Please check your connection and try again. Nothing has been sent.");
       setStatus("error");
-      window.requestAnimationFrame(() => errorRef.current?.focus());
+      focusAfterRender(errorRef);
     } finally {
       sending.current = false;
     }

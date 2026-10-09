@@ -1,4 +1,4 @@
-import { careersConfig } from "@/lib/careers-config";
+import { careersConfig, previewOpen } from "@/lib/careers-config";
 import { humanCheckAvailable, issuePowChallenge, issueTextChallenge } from "@/lib/human-check";
 import { SlidingWindowLimiter, clientAddress } from "@/lib/rate-limit";
 import { jsonResponse, logOutcome } from "@/lib/request-guards";
@@ -9,14 +9,16 @@ import { jsonResponse, logOutcome } from "@/lib/request-guards";
  * cannot run the proof of work.
  *
  * No Origin check: a same-origin GET carries none, and a challenge is useless without solving it. It is
- * rate limited so the endpoint cannot be used to generate work for free, and it is never cached.
+ * rate limited so the endpoint cannot be used to generate work for free, and it is never cached. The limit is
+ * skipped in development with the preview flag only (previewOpen is never true in a production build): the
+ * end-to-end suite opens far more forms from one address than any visitor would.
  */
 export const dynamic = "force-dynamic";
 
 const limiter = new SlidingWindowLimiter(careersConfig.rateLimits.challenge.perClient, careersConfig.rateLimits.challenge.global);
 
 export async function GET(request: Request) {
-  if (!limiter.allow(clientAddress(request.headers))) {
+  if (!previewOpen() && !limiter.allow(clientAddress(request.headers))) {
     logOutcome("human-check", "rate_limited");
     return jsonResponse(429, { error: "Too many requests. Please wait a few minutes and try again." });
   }

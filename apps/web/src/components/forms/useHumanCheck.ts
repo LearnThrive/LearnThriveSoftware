@@ -34,13 +34,19 @@ export interface HumanCheckHandle {
   /** In the fallback, the visitor's typed answer. */
   setTextAnswer: (value: string) => void;
   textAnswer: string;
-  /** Begin now (otherwise it begins when the page is idle). */
+  /** Begin now (otherwise it begins when the page is idle, unless the form asked to wait: `auto: false`). */
   start: () => void;
+  /** True while the form asked to wait for the visitor (`auto: false`) and has not been started yet. */
+  deferred: boolean;
   /** Throw away the current answer and get a fresh one (call after the server may have spent it). */
   renew: () => void;
 }
 
-export function useHumanCheck(): HumanCheckHandle {
+/**
+ * `auto: false` is for a form on a page most visitors only read (the subject request on /subjects): the check then
+ * starts when the visitor first touches the form, so a visit that never reaches the form costs no request and no work.
+ */
+export function useHumanCheck({ auto = true }: { auto?: boolean } = {}): HumanCheckHandle {
   const [state, setState] = useState<HumanCheckState>({ status: "idle" });
   const [textAnswer, setTextAnswerState] = useState("");
   const powAnswer = useRef<HumanCheckAnswer | null>(null);
@@ -148,6 +154,7 @@ export function useHumanCheck(): HumanCheckHandle {
 
   // Start when the page is idle (or after a short wait), so the work is usually finished by submit time.
   useEffect(() => {
+    if (!auto) return;
     type IdleWindow = Window & { requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number; cancelIdleCallback?: (handle: number) => void };
     const idleWindow = window as IdleWindow;
     if (typeof idleWindow.requestIdleCallback === "function") {
@@ -156,7 +163,7 @@ export function useHumanCheck(): HumanCheckHandle {
     }
     const timer = window.setTimeout(start, 1200);
     return () => window.clearTimeout(timer);
-  }, [start]);
+  }, [auto, start]);
 
   useEffect(() => stop, [stop]);
 
@@ -174,5 +181,5 @@ export function useHumanCheck(): HumanCheckHandle {
     setTextAnswerState(value);
   }, []);
 
-  return { state, getAnswer, setTextAnswer, textAnswer, start, renew };
+  return { state, getAnswer, setTextAnswer, textAnswer, start, deferred: !auto && state.status === "idle", renew };
 }

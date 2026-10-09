@@ -45,6 +45,15 @@ export function noisePng(width: number, height: number): Buffer {
 export const agreement = currentAgreement;
 export const rightAnswers = Object.fromEntries(currentAgreement.understanding.map((question) => [question.id, question.correctOptionId]));
 
+/**
+ * Waits until the page's scripts have run. MotionRuntime writes data-motion-tier onto <html> from an effect, so
+ * the attribute only exists once hydration has finished. A value typed into a controlled field before that is
+ * reset by hydration, which shows up only on a loaded machine.
+ */
+export async function hydrated(page: Page) {
+  await expect(page.locator('html')).toHaveAttribute('data-motion-tier', /.+/);
+}
+
 /** Waits for the human check to finish (the proof of work runs in a worker, usually well under a second). */
 export async function humanCheckDone(page: Page) {
   await expect(page.getByText('Checked: you are a person.')).toBeVisible({ timeout: 30_000 });
