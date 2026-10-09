@@ -1,11 +1,10 @@
 import Link from "next/link";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
-import { ViewTransition } from "react";
 import { ButtonLink } from "@/components/ButtonLink";
 import { Container } from "@/components/Container";
 import { CtaSection } from "@/components/CtaSection";
 import { FeatureCard } from "@/components/FeatureCard";
-import { Icon } from "@/components/Icon";
+import { SubjectHeroCard } from "@/components/SubjectHeroCard";
 import { PageHero } from "@/components/PageHero";
 import { SectionHeading } from "@/components/SectionHeading";
 import { MaskedText } from "@/components/motion/primitives/MaskedText";
@@ -70,24 +69,8 @@ export function SubjectLandingPage({ subject }: SubjectLandingPageProps) {
             </ButtonLink>
           </div>
         }
-        aside={
-          <div className="subject-landing-hero-card">
-            {/* plan11.md task 14's prototype transition — the other half of the pair in
-                (public)/page.tsx's subjectCards; see that file's comment. subject.path (e.g.
-                "/maths-tuition") is this config's own name for the same route the homepage card's
-                slug field spells without the leading slash, so both sides always agree. */}
-            <ViewTransition name={`subject-icon-${subject.path.slice(1)}`}>
-              <span className="subject-landing-hero-card__icon">
-                <Icon name={subject.icon} />
-              </span>
-            </ViewTransition>
-            <span className="subject-landing-hero-card__label">
-              {subject.hero.noteLabel}
-            </span>
-            <strong>{subject.stage}</strong>
-            <p>{subject.hero.note}</p>
-          </div>
-        }
+        // The card is shared with /subjects (components/SubjectHeroCard.tsx), one source for its words.
+        aside={<SubjectHeroCard subject={subject} />}
       />
 
       <section className="section subject-landing-support">

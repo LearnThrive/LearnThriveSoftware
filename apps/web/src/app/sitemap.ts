@@ -1,4 +1,6 @@
 import type { MetadataRoute } from "next";
+import { careerRoles } from "@/lib/careers";
+import { agreementOpen } from "@/lib/careers-config";
 import { siteConfig, subjects } from "@/lib/site";
 
 // Every indexable public page. A new public route belongs here and in lib/ogPages.ts; tests/site.test.mjs
@@ -19,6 +21,12 @@ const sitemapRoutes = [
   "/trust",
   "/complaints",
   "/accessibility",
+  "/careers",
+  "/careers/privacy",
+  // Role pages that are open. A closed or coming-soon role is not a search result.
+  ...careerRoles.filter((role) => role.status === "open").map((role) => `/careers/${role.slug}`),
+  // The agreement is listed once the owner has approved it; until then it is a draft and stays out.
+  ...(agreementOpen() ? ["/careers/safeguarding-agreement"] : []),
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {

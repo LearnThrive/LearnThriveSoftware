@@ -1,0 +1,257 @@
+/*
+ * Form pieces shared by the careers application, the safeguarding reconfirmation and the subject request:
+ * the shell that sets the label surface the site's text fields expect, grouped checkboxes and radios, the
+ * human-check status line and the success panel. Text fields themselves use the site's own .form-field
+ * styles (globals.css), so they match the enquiry form exactly. Semantic tokens only.
+ */
+.shell {
+  --form-surface: var(--surface-3);
+  padding: clamp(1.25rem, 3vw, 2.25rem);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--form-surface);
+  box-shadow: var(--shadow-2);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.35rem 1.2rem;
+}
+
+.full {
+  grid-column: 1 / -1;
+}
+
+/* ── Groups of checkboxes or radio buttons ─────────────────────────────────────────────────── */
+.group {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.group:focus-visible {
+  outline: var(--focus-width) solid var(--focus-colour);
+  outline-offset: var(--focus-offset);
+}
+
+.group legend {
+  padding: 0;
+  color: var(--fg-strong);
+  font-size: 0.92rem;
+  font-weight: 750;
+}
+
+.group legend span {
+  color: var(--fg-muted);
+  font-weight: 500;
+}
+
+.options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.65rem;
+}
+
+.optionsStacked {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.option {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  min-height: 2.75rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-1);
+  color: var(--fg-ink);
+  line-height: 1.4;
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) ease,
+    background-color var(--duration-fast) ease;
+}
+
+.option:hover {
+  border-color: var(--accent);
+}
+
+.option:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--surface-accent);
+}
+
+.option:has(input:focus-visible) {
+  outline: var(--focus-width) solid var(--focus-colour);
+  outline-offset: var(--focus-offset);
+}
+
+.option input {
+  flex: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-top: 0.15rem;
+  accent-color: var(--accent);
+}
+
+/* A hint or error under a group or a tick-box. */
+.message {
+  display: block;
+  margin-top: 0.5rem;
+}
+
+/* A single tick-box that carries its own sentence (a declaration, an agreement part). */
+.declaration {
+  composes: option;
+  width: 100%;
+}
+
+.invalidGroup .option {
+  border-color: var(--colour-error);
+}
+
+/* ── The human check ───────────────────────────────────────────────────────────────────────── */
+.humanCheck {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1rem;
+  min-height: 2.75rem;
+  color: var(--fg-ink);
+  font-size: 0.95rem;
+}
+
+.humanCheck button {
+  min-height: 2.75rem;
+}
+
+.humanCheckText {
+  display: grid;
+  gap: 0.4rem;
+  min-width: min(100%, 18rem);
+}
+
+.statusIcon {
+  display: inline-grid;
+  width: 1.4rem;
+  height: 1.4rem;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--tone-positive-bg);
+  color: var(--tone-positive-fg);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.spinner {
+  width: 1.1rem;
+  height: 1.1rem;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: forms-spin 0.8s linear infinite;
+}
+
+@keyframes forms-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+    border-top-color: var(--border-strong);
+  }
+}
+
+/* ── The honeypot: out of sight, out of the tab order and out of the accessibility tree ──── */
+.trap {
+  position: absolute;
+  left: -10000px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* ── Error summary and result panels ───────────────────────────────────────────────────────── */
+.summary {
+  margin-bottom: 1.5rem;
+}
+
+.summary:focus-visible {
+  outline: var(--focus-width) solid var(--focus-colour);
+  outline-offset: var(--focus-offset);
+}
+
+.summary ul {
+  margin: 0.6rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.summary a {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.result {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.result:focus-visible {
+  outline: var(--focus-width) solid var(--focus-colour);
+  outline-offset: var(--focus-offset);
+}
+
+.reference {
+  display: inline-block;
+  padding: 0.35rem 0.8rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-1);
+  color: var(--fg-strong);
+  font-family: var(--font-mono, monospace);
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.9rem 1.4rem;
+  margin-top: 1.75rem;
+}
+
+.note {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.fallback {
+  margin-top: 1.5rem;
+  padding: 1rem 1.2rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--fg-ink);
+}
+
+@media (max-width: 40rem) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

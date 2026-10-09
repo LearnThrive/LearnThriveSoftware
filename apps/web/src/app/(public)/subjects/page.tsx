@@ -14,7 +14,10 @@ import { SubjectsHeroScene, SubjectsListScene, SubjectIconScene } from "@/compon
 import { SubjectSectionMotif } from "@/components/motion/scenes/SubjectSectionMotif";
 import { ElevenPlusMotif } from "@/components/motion/scenes/ElevenPlusMotif";
 import { Marquee } from "@/components/Marquee";
+import { SubjectHeroCard } from "@/components/SubjectHeroCard";
+import { SubjectRequestSection } from "@/components/SubjectRequestSection";
 import { createMetadata } from "@/lib/metadata";
+import { subjectLandingPages } from "@/lib/site";
 import styles from "./subjects.module.css";
 import { motionStagger, staggerDelay } from "@/lib/motion/tokens";
 
@@ -218,90 +221,53 @@ export default function SubjectsPage() {
               paint. A reveal would hold it at opacity 0 until the script has loaded and the animation
               has run (LCP 204 -> 864 ms in the profile), so it is simply there; later ones reveal. */}
           <Reveal variant={subjectIndex === 0 ? "static" : "soft"}>
+            {/* One markup for both sides: the text, then the same hero card each subject's own page shows (a link to
+                that page), then the photograph. Where the photograph sits (left or right) is decided in CSS by
+                `subjectHeaderReverse`, so on a phone the order is always text, card, photograph. */}
             <div className={`${styles.subjectHeader} ${subject.reverse ? styles.subjectHeaderReverse : ""}`}>
-              {subject.reverse ? (
-                <>
-                  <div className={styles.subjectImage}>
-                    <Image
-                      src={subject.image}
-                      alt={subject.imageAlt}
-                      fill
-                      sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 40vw"
-                      placeholder="blur"
-                      blurDataURL={imageBlur[subject.image]}
-                      style={{ objectFit: "cover", objectPosition: imageFocus[subject.image] }}
-                    />
-                  </div>
+              <div className={styles.subjectText}>
+                <div className={styles.subjectTitleRow}>
+                  {/* plan12.md task 14: "strengthen subject-card -> subject-page continuity" —
+                      the badge's own coloured surface (SubjectIconScene's styles.subjectIcon,
+                      scale/opacity aside) is now inside the ViewTransition boundary, not just
+                      the bare glyph, matching the richer surface-expansion treatment the
+                      homepage's subjectCards already give this same navigation (page.tsx's own
+                      comment on subjectCardIcon). Same shared name either side (subject.id here
+                      equals the homepage/hero's slug-derived name), so the browser morphs
+                      whichever badge the visitor actually clicked from. */}
+                  <ViewTransition name={`subject-icon-${subject.id}-tuition`}>
+                    <SubjectIconScene range={[subjectIndex / subjects.length, (subjectIndex + 1) / subjects.length]}>
+                      <SubjectSvg icon={subject.icon} />
+                    </SubjectIconScene>
+                  </ViewTransition>
                   <div>
-                    <div className={styles.subjectTitleRow}>
-                      {/* plan12.md task 14: "strengthen subject-card -> subject-page continuity" —
-                          the badge's own coloured surface (SubjectIconScene's styles.subjectIcon,
-                          scale/opacity aside) is now inside the ViewTransition boundary, not just
-                          the bare glyph, matching the richer surface-expansion treatment the
-                          homepage's subjectCards already give this same navigation (page.tsx's own
-                          comment on subjectCardIcon). Same shared name either side (subject.id here
-                          equals the homepage/hero's slug-derived name), so the browser morphs
-                          whichever badge the visitor actually clicked from. */}
-                      <ViewTransition name={`subject-icon-${subject.id}-tuition`}>
-                        <SubjectIconScene range={[subjectIndex / subjects.length, (subjectIndex + 1) / subjects.length]}>
-                          <SubjectSvg icon={subject.icon} />
-                        </SubjectIconScene>
-                      </ViewTransition>
-                      <div>
-                        <h2 className={styles.subjectTitle}>
-                          {subject.id === "english" ? (
-                            <AnimatedUnderline drawOnView>{subject.title}</AnimatedUnderline>
-                          ) : (
-                            subject.title
-                          )}
-                        </h2>
-                        <div className={styles.subjectRange}>{subject.range}</div>
-                      </div>
-                    </div>
-                    <p className={styles.subjectDesc}>{subject.description}</p>
-                    <Link href={`/${subject.id}-tuition`} className={styles.subjectExploreLink}>
-                      Explore {subject.title} in depth <span aria-hidden="true">&rarr;</span>
-                    </Link>
+                    <h2 className={styles.subjectTitle}>
+                      {subject.id === "english" ? (
+                        <AnimatedUnderline drawOnView>{subject.title}</AnimatedUnderline>
+                      ) : (
+                        subject.title
+                      )}
+                    </h2>
+                    <div className={styles.subjectRange}>{subject.range}</div>
                   </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <div className={styles.subjectTitleRow}>
-                      <ViewTransition name={`subject-icon-${subject.id}-tuition`}>
-                        <SubjectIconScene range={[subjectIndex / subjects.length, (subjectIndex + 1) / subjects.length]}>
-                          <SubjectSvg icon={subject.icon} />
-                        </SubjectIconScene>
-                      </ViewTransition>
-                      <div>
-                        <h2 className={styles.subjectTitle}>
-                          {subject.id === "english" ? (
-                            <AnimatedUnderline drawOnView>{subject.title}</AnimatedUnderline>
-                          ) : (
-                            subject.title
-                          )}
-                        </h2>
-                        <div className={styles.subjectRange}>{subject.range}</div>
-                      </div>
-                    </div>
-                    <p className={styles.subjectDesc}>{subject.description}</p>
-                    <Link href={`/${subject.id}-tuition`} className={styles.subjectExploreLink}>
-                      Explore {subject.title} in depth <span aria-hidden="true">&rarr;</span>
-                    </Link>
-                  </div>
-                  <div className={styles.subjectImage}>
-                    <Image
-                      src={subject.image}
-                      alt={subject.imageAlt}
-                      fill
-                      sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 40vw"
-                      placeholder="blur"
-                      blurDataURL={imageBlur[subject.image]}
-                      style={{ objectFit: "cover", objectPosition: imageFocus[subject.image] }}
-                    />
-                  </div>
-                </>
-              )}
+                </div>
+                <p className={styles.subjectDesc}>{subject.description}</p>
+                <Link href={`/${subject.id}-tuition`} className={styles.subjectExploreLink}>
+                  Explore {subject.title} in depth <span aria-hidden="true">&rarr;</span>
+                </Link>
+              </div>
+              <SubjectHeroCard subject={subjectLandingPages[subject.id as "maths" | "english" | "science"]} variant="subjects" className={styles.subjectHeroCard} />
+              <div className={styles.subjectImage}>
+                <Image
+                  src={subject.image}
+                  alt={subject.imageAlt}
+                  fill
+                  sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 40vw"
+                  placeholder="blur"
+                  blurDataURL={imageBlur[subject.image]}
+                  style={{ objectFit: "cover", objectPosition: imageFocus[subject.image] }}
+                />
+              </div>
             </div>
           </Reveal>
 
@@ -344,13 +310,18 @@ export default function SubjectsPage() {
             <div className={styles.elevenPlusDots} aria-hidden="true" />
             <ElevenPlusMotif />
             <div className={styles.elevenPlusInner}>
-              <p className={styles.eyebrow}>Entrance exams</p>
-              <h2 className={styles.elevenPlusTitle}>11+ Preparation</h2>
-              <p className={styles.elevenPlusDesc}>
-                Tailored preparation across the four areas of the 11+, building
-                the confidence, accuracy, speed and exam technique that make the
-                difference on the day.
-              </p>
+              <div className={styles.elevenPlusTop}>
+                <div>
+                  <p className={styles.eyebrow}>Entrance exams</p>
+                  <h2 className={styles.elevenPlusTitle}>11+ Preparation</h2>
+                  <p className={styles.elevenPlusDesc}>
+                    Tailored preparation across the four areas of the 11+, building
+                    the confidence, accuracy, speed and exam technique that make the
+                    difference on the day.
+                  </p>
+                </div>
+                <SubjectHeroCard subject={subjectLandingPages["11-plus"]} variant="subjects" tone="dark" className={styles.elevenPlusHeroCard} />
+              </div>
               <div className={styles.elevenPlusGrid}>
                 {elevenPlusComponents.map((comp) => (
                   <div key={comp.title} className={styles.elevenPlusItem}>
@@ -367,6 +338,9 @@ export default function SubjectsPage() {
           </div>
         </Reveal>
       </section>
+
+      {/* ── Can't see your subject? ──────────────────── */}
+      <SubjectRequestSection />
 
       {/* ── CTA ───────────────────────────────────────── */}
       <section className={styles.ctaSection}>

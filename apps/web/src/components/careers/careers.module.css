@@ -1,0 +1,469 @@
+/*
+ * The careers section: the hub, the role pages, the process list, the notices and the safeguarding
+ * agreement's reading layout. Built from the site's semantic tokens (tokens.css), so every rule here is
+ * right in both themes; nothing hard-codes a colour. The application form has its own sheet (apply.module.css).
+ */
+
+/* ── Hero aside: the quick facts, on the same glass card the legal pages use ─────────────────── */
+.facts {
+  display: grid;
+  gap: 1rem;
+  margin: 0;
+}
+
+.facts dt {
+  color: var(--fg-on-inverse-muted);
+  font-size: 0.75rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.facts dd {
+  margin: 0.2rem 0 0;
+  color: var(--fg-on-inverse);
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+/* ── Notices (applications not open yet, a closed role, the agreement draft) ───────────────── */
+.notice {
+  display: grid;
+  gap: 0.35rem;
+  padding: 1.1rem 1.3rem;
+  border: 1px solid var(--tone-warning-soft-border);
+  border-radius: var(--radius-md);
+  background: var(--tone-warning-soft-bg);
+  color: var(--tone-warning-soft-fg);
+}
+
+.notice strong {
+  color: inherit;
+}
+
+.notice p {
+  margin: 0;
+  color: inherit;
+}
+
+.notice a {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.noticeWrap {
+  padding-block: 1.5rem 0;
+}
+
+/* ── Plain content blocks ──────────────────────────────────────────────────────────────────── */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(2rem, 5vw, 4.5rem);
+  align-items: start;
+}
+
+.prose p {
+  max-width: 44rem;
+  margin-top: 1rem;
+}
+
+.prose p:first-child {
+  margin-top: 0;
+}
+
+.checkList {
+  display: grid;
+  gap: 0.7rem;
+  margin: 1.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.checkList li {
+  position: relative;
+  padding-left: 1.7rem;
+  color: var(--fg-ink);
+}
+
+.checkList li::before {
+  position: absolute;
+  top: 0.5em;
+  left: 0.15rem;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: var(--accent);
+  content: "";
+}
+
+.expectPanel {
+  padding: clamp(1.4rem, 3vw, 2rem);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-2);
+}
+
+.expectPanel h3 {
+  font-size: 1.2rem;
+}
+
+.expectPanel > p {
+  margin-top: 0.4rem;
+  color: var(--fg-muted);
+}
+
+.expectList {
+  display: grid;
+  margin: 1rem 0 0;
+}
+
+.expectList div {
+  display: grid;
+  grid-template-columns: minmax(7rem, 9rem) minmax(0, 1fr);
+  gap: 0.25rem 1rem;
+  padding: 0.8rem 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.expectList dt {
+  color: var(--fg-strong);
+  font-weight: 750;
+}
+
+.expectList dd {
+  margin: 0;
+  color: var(--fg-ink);
+}
+
+/* ── Roles ─────────────────────────────────────────────────────────────────────────────────── */
+.roleGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: 1.25rem;
+  margin-top: 2rem;
+}
+
+.roleCard {
+  --role-accent: var(--sp-maths-accent);
+  --role-ink: var(--sp-maths-ink);
+  --role-soft: var(--sp-maths-soft);
+  display: grid;
+  align-content: start;
+  gap: 0.9rem;
+  padding: 1.5rem;
+  border: 1px solid var(--border-subtle);
+  border-top: 4px solid var(--role-accent);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-2);
+}
+
+.roleCard[data-subject="english"] {
+  --role-accent: var(--sp-english-accent);
+  --role-ink: var(--sp-english-ink);
+  --role-soft: var(--sp-english-soft);
+}
+
+.roleCard[data-subject="science"] {
+  --role-accent: var(--sp-science-accent);
+  --role-ink: var(--sp-science-ink);
+  --role-soft: var(--sp-science-soft);
+}
+
+.roleCard[data-subject="eleven-plus"] {
+  --role-accent: var(--sp-plus-accent);
+  --role-ink: var(--sp-plus-ink);
+  --role-soft: var(--sp-plus-soft);
+}
+
+.roleCard[data-subject="general"] {
+  --role-accent: var(--accent);
+  --role-ink: var(--fg-accent);
+  --role-soft: var(--surface-accent);
+}
+
+.roleTag {
+  justify-self: start;
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  background: var(--role-soft);
+  color: var(--role-ink);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.roleCard h3 {
+  font-size: 1.3rem;
+}
+
+.roleMeta {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.roleMeta div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.roleMeta dt {
+  color: var(--fg-muted);
+  font-weight: 600;
+}
+
+.roleMeta dd {
+  margin: 0;
+  color: var(--fg-strong);
+  font-weight: 650;
+}
+
+.roleActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.1rem;
+  margin-top: 0.25rem;
+}
+
+.emptyRoles {
+  margin-top: 2rem;
+  padding: 1.75rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-3);
+}
+
+/* ── The hiring steps ──────────────────────────────────────────────────────────────────────── */
+.steps {
+  display: grid;
+  gap: 0.85rem;
+  margin: 2rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+}
+
+.stepNumber {
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-accent);
+  color: var(--fg-accent);
+  font-family: var(--font-heading);
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.step h3 {
+  font-size: 1.05rem;
+}
+
+.step p {
+  margin-top: 0.25rem;
+  font-size: 0.95rem;
+}
+
+/* ── Safeguarding block ────────────────────────────────────────────────────────────────────── */
+.safeguardPanel {
+  display: grid;
+  gap: 1.5rem;
+  padding: clamp(1.5rem, 3vw, 2.25rem);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-2);
+}
+
+.safeguardPanel h3 {
+  font-size: 1.1rem;
+}
+
+.safeguardLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+}
+
+/* ── Role page ─────────────────────────────────────────────────────────────────────────────── */
+.roleLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(16rem, 0.8fr);
+  gap: clamp(2rem, 5vw, 4rem);
+  align-items: start;
+}
+
+.roleSide {
+  position: sticky;
+  top: 6rem;
+  display: grid;
+  gap: 1rem;
+  padding: 1.5rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-2);
+}
+
+.roleBlock + .roleBlock {
+  margin-top: 2.25rem;
+}
+
+.roleBlock h2 {
+  font-size: clamp(1.4rem, 2.4vw, 1.8rem);
+}
+
+/* ── The safeguarding agreement, laid out for reading ─────────────────────────────────────── */
+.agreementMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  margin: 0 0 1.5rem;
+  color: var(--fg-muted);
+  font-size: 0.92rem;
+}
+
+.agreementMeta strong {
+  color: var(--fg-strong);
+}
+
+.definitions {
+  display: grid;
+  gap: 0.6rem;
+  margin: 1rem 0 0;
+}
+
+.definitions div {
+  display: grid;
+  grid-template-columns: minmax(8rem, 12rem) minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.definitions dt {
+  color: var(--fg-strong);
+  font-weight: 750;
+}
+
+.definitions dd {
+  margin: 0;
+}
+
+.part {
+  margin-top: 2.25rem;
+}
+
+.part h3 {
+  font-size: 1.25rem;
+}
+
+.clauses {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.clause {
+  display: grid;
+  grid-template-columns: 3rem minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-1);
+}
+
+.clauseId {
+  color: var(--fg-accent);
+  font-family: var(--font-heading);
+  font-weight: 800;
+}
+
+.clause p {
+  margin: 0;
+  color: var(--fg-ink);
+}
+
+.clause ul {
+  margin: 0.6rem 0 0;
+  padding-left: 1.2rem;
+  color: var(--fg-ink);
+}
+
+.clause li + li {
+  margin-top: 0.3rem;
+}
+
+.versionTable {
+  width: 100%;
+  margin-top: 1rem;
+  border-collapse: collapse;
+}
+
+.versionTable th,
+.versionTable td {
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: left;
+}
+
+.applyAlt {
+  max-width: 44rem;
+  margin-top: 2rem;
+  color: var(--fg-muted);
+}
+
+.ctaRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.9rem 1.4rem;
+  margin-top: 1.75rem;
+}
+
+@media (max-width: 62rem) {
+  .split,
+  .roleLayout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .roleSide {
+    position: static;
+  }
+}
+
+@media (max-width: 40rem) {
+  .expectList div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .definitions div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.2rem;
+  }
+
+  .clause {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.25rem;
+  }
+}

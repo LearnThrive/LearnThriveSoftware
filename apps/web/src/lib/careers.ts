@@ -54,6 +54,9 @@ const COMMON_LOOKING = [
   "Willingness to read and agree to the safeguarding agreement as part of your application, and to agree to an Enhanced DBS check including the Children’s Barred List.",
 ] as const;
 
+/** What every applicant needs, in one list (the hub's "who we are looking for"). */
+export const requirements: readonly string[] = ["Confidence in the subject you want to teach.", ...COMMON_LOOKING];
+
 const STANDARD = {
   kind: "vacancy",
   status: "open",
