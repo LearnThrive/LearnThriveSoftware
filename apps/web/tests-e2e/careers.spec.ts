@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { testimonials } from '../src/lib/site';
-import { expectNoAxeViolations } from './careers-support';
+import { expectNoAxeViolations, hydrated } from './careers-support';
 
 // The careers hub, the role pages and the agreement and privacy pages (CAREERS_PROMPT.md). The dev server
 // opens the application forms for testing (playwright.config.ts), so these pages show the "open" state; the
@@ -237,5 +237,72 @@ test.describe('accessibility of the careers pages', () => {
     await page.goto('/careers');
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
     await expect(page.locator('#open-roles')).toBeAttached();
+  });
+});
+
+// ── the rest of the site ───────────────────────────────────────────────────────────────────────────────
+// The safeguarding wording pass and the places that point at careers: the home page, the About page, the
+// palette, the safeguarding page and the privacy and cookie notices.
+
+test.describe('the rest of the site', () => {
+  test('the home page says no tutor teaches until every check is complete, and ends with a careers band', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'No tutor teaches until every check is complete' })).toBeVisible();
+    const text = (await page.locator('main').innerText()).replace(/\s+/g, ' ');
+    expect(text).toContain('Enhanced DBS check including the Children’s Barred List');
+    expect(text).not.toMatch(/thorough hiring process/i);
+    const band = page.getByRole('region', { name: 'Tutor? Teach with LearnThrive.' });
+    await expect(band).toContainText('We are recruiting self-employed online tutors.');
+    await expect(band.getByRole('link', { name: /See open roles/ })).toHaveAttribute('href', '/careers');
+  });
+
+  test('the About page points tutors to the hub', async ({ page }) => {
+    await page.goto('/about');
+    await expect(page.getByRole('link', { name: 'See how to teach with LearnThrive' })).toHaveAttribute('href', '/careers');
+  });
+
+  test('the site search finds Careers', async ({ page }) => {
+    await page.goto('/about');
+    await hydrated(page);
+    await page.getByRole('button', { name: 'Search the site' }).click();
+    const palette = page.getByRole('dialog', { name: 'Search LearnThrive' });
+    await page.getByRole('combobox', { name: 'Search LearnThrive' }).fill('tutor jobs');
+    await expect(palette.getByRole('option', { name: /Careers/ }).first()).toBeVisible();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/\/careers$/);
+  });
+
+  test('the safeguarding page names the lead and deputy, states the rule firmly and keeps the independent numbers', async ({ page }) => {
+    await page.goto('/safeguarding');
+    const text = (await page.locator('main').innerText()).replace(/\s+/g, ' ');
+    for (const fact of [
+      'safeguarding lead is Tahasin Hasan',
+      'deputy safeguarding lead is Abdurrahman Mustafa',
+      'No tutor teaches any student, or has any contact with one, until every check is complete.',
+      'Enhanced DBS check including the Children’s Barred List',
+      'LearnThrive pays for it unless the tutor already holds a suitable certificate or chooses to pay for their own check',
+      'reconfirm the safeguarding agreement every year',
+      'If a child is in immediate danger, call 999 first.',
+      'LearnThrive lessons are not recorded by default.',
+      '0808 800 5000',
+      '0800 1111',
+    ]) {
+      expect(text, fact).toContain(fact);
+    }
+    for (const gone of [/thorough hiring process/i, /induction/i, /refresher/i, /code of conduct/i]) expect(text).not.toMatch(gone);
+    await expect(page.getByRole('link', { name: 'Read the safeguarding agreement' })).toHaveAttribute('href', '/careers/safeguarding-agreement');
+  });
+
+  test('the privacy notice covers applicants and subject requests and names the providers; the cookie notice covers the forms', async ({ page }) => {
+    await page.goto('/privacy');
+    await expect(page.getByRole('link', { name: 'applicant privacy notice' }).first()).toHaveAttribute('href', '/careers/privacy');
+    const privacy = (await page.locator('main').innerText()).replace(/\s+/g, ' ');
+    expect(privacy).toContain('Render hosts the website, Resend delivers the emails the website sends, and IONOS hosts');
+    expect(privacy).toContain('A subject request is kept until that subject is added, or for 12 months');
+    expect(privacy).not.toMatch(/Google/);
+    await page.goto('/cookies');
+    const cookies = (await page.locator('main').innerText()).replace(/\s+/g, ' ');
+    expect(cookies).toContain('the tutor application form and the subject request form');
+    expect(cookies).toContain('it sets no cookies, saves nothing and contacts no outside service');
   });
 });

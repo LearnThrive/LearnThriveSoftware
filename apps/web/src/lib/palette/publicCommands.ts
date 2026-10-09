@@ -15,6 +15,7 @@ import { setTheme } from "@/lib/theme";
  */
 const legalPages: ReadonlyArray<{ href: PaletteCommand["href"]; title: string; keywords: string[] }> = [
   { href: "/privacy", title: "Privacy notice", keywords: ["data", "gdpr", "personal information"] },
+  { href: "/careers/privacy", title: "Applicant privacy notice", keywords: ["tutor application", "data", "gdpr", "cv"] },
   { href: "/cookies", title: "Cookies", keywords: ["storage", "tracking"] },
   { href: "/terms", title: "Website terms", keywords: ["conditions", "legal"] },
   { href: "/tuition-terms", title: "Tuition terms", keywords: ["agreement", "fees", "cancellation", "legal"] },
@@ -28,6 +29,14 @@ export function buildPublicCommands(): PaletteCommand[] {
   for (const item of navigation) {
     commands.push({ id: `page:${item.href}`, title: item.label, group: "Pages", href: item.href, hint: item.href === "/" ? "/" : item.href });
   }
+  commands.push({
+    id: "page:/careers",
+    title: "Careers",
+    group: "Pages",
+    href: "/careers",
+    hint: "/careers",
+    keywords: ["tutor", "apply", "application", "jobs", "work", "teach", "vacancy", "roles"],
+  });
   commands.push({
     id: "page:/safeguarding",
     title: "Safeguarding",

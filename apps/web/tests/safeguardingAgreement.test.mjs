@@ -95,7 +95,8 @@ test("checkUnderstanding needs all six right, names the ones to look at again, a
   const oneWrong = { ...right, [first.id]: wrongOption };
   assert.deepEqual(checkUnderstanding(currentAgreement, oneWrong), { ok: false, needsAnotherLook: [first.id] });
 
-  const { [first.id]: _dropped, ...oneMissing } = right;
+  const oneMissing = { ...right };
+  delete oneMissing[first.id];
   assert.deepEqual(checkUnderstanding(currentAgreement, oneMissing).needsAnotherLook, [first.id]);
   assert.equal(checkUnderstanding(currentAgreement, {}).needsAnotherLook.length, 6);
   assert.equal(checkUnderstanding(currentAgreement, null).ok, false);
@@ -179,6 +180,33 @@ function sourceFiles(directory) {
     return /\.(?:ts|tsx)$/.test(name) ? [full] : [];
   });
 }
+
+test("pages, forms, routes and emails read the agreement through the shared module, never from a version file", () => {
+  const consumers = [
+    "components/careers/AgreementDocument.tsx",
+    "components/careers/AgreementSection.tsx",
+    "components/careers/ReconfirmForm.tsx",
+    "components/careers/apply/ApplicationForm.tsx",
+    "app/(public)/careers/safeguarding-agreement/page.tsx",
+    "app/api/careers/apply/route.ts",
+    "app/api/safeguarding/reconfirm/route.ts",
+    "lib/careers-validation.ts",
+    "lib/careers-apply-email.ts",
+    "lib/reconfirm.ts",
+    "lib/agreement-record.ts",
+  ];
+  for (const name of consumers) {
+    const source = readFileSync(join(srcDir, name), "utf8");
+    assert.match(source, /from "@\/lib\/(?:safeguarding-agreement|agreement-record)"/, `${name} reads the agreement through the shared module`);
+  }
+  // Only the registry imports a version file, so a new version is added in one place.
+  const versionImport = /from\s+["'][^"']*safeguarding-agreement-v\d+["']/;
+  for (const file of sourceFiles(srcDir)) {
+    const name = relative(srcDir, file).replaceAll("\\", "/");
+    if (name === "lib/safeguarding-agreement.ts") continue;
+    assert.doesNotMatch(readFileSync(file, "utf8"), versionImport, `${name} imports a version file directly`);
+  }
+});
 
 test("the agreement's words live in one file: no other source repeats a clause", () => {
   const distinctive = [

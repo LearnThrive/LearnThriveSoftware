@@ -14,6 +14,10 @@ const PUBLIC_ROUTES = [
   '/contact',
   '/faq',
   '/safeguarding',
+  '/careers',
+  '/careers/maths-tutor',
+  '/careers/register-interest',
+  '/careers/privacy',
   '/privacy',
   '/cookies',
   '/terms',
@@ -159,6 +163,77 @@ test.describe('crawlers and operations', () => {
     const response = await page.goto('/this-page-does-not-exist');
     expect(response?.status()).toBe(404);
     await expect(page.getByRole('heading', { level: 1 })).toContainText('not here');
+  });
+});
+
+// The safeguarding agreement ships as a draft (careersConfig.agreementApprovedByOwner is false) and a production
+// build ignores CAREERS_OPEN_FOR_TESTING, so these checks see the closed state that is deployed until the owner
+// approves the wording. Nothing here sends an email: a closed route refuses before it reads the request.
+test.describe('careers, closed until the owner approves the safeguarding agreement', () => {
+  const closedFromAnywhere = { 'X-Forwarded-For': `203.0.113.${Math.floor(Math.random() * 250) + 1}` };
+
+  test('the application page says applications open soon, offers no form and is not indexed', async ({ page }) => {
+    await page.goto('/careers/apply');
+    await expect(page.locator('strong', { hasText: 'Online applications open soon.' })).toBeVisible();
+    await expect(page.locator('#main-content form')).toHaveCount(0);
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
+  });
+
+  test('the reconfirmation page says it is not open yet and offers no form', async ({ page }) => {
+    await page.goto('/safeguarding/reconfirm');
+    await expect(page.locator('strong', { hasText: 'Online reconfirmation is not open yet.' })).toBeVisible();
+    await expect(page.locator('#main-content form')).toHaveCount(0);
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
+  });
+
+  test('the agreement page says it is a draft and is not indexed', async ({ page }) => {
+    await page.goto('/careers/safeguarding-agreement');
+    await expect(page.locator('strong', { hasText: 'This agreement is a draft.' })).toBeVisible();
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
+  });
+
+  test('the sitemap lists the hub, the role pages and the applicant privacy notice, and none of the closed pages', async ({ request }) => {
+    const body = await (await request.get('/sitemap.xml')).text();
+    for (const path of ['/careers', '/careers/privacy', '/careers/maths-tutor', '/careers/register-interest']) {
+      expect(body, path).toContain(`<loc>https://www.learnthrivetuition.co.uk${path}</loc>`);
+    }
+    for (const path of ['/careers/apply', '/careers/safeguarding-agreement', '/safeguarding/reconfirm']) {
+      expect(body, path).not.toContain(`${path}</loc>`);
+    }
+  });
+
+  test('no page carries job posting markup, and the home page has no careers band', async ({ page }) => {
+    for (const path of ['/careers', '/careers/maths-tutor', '/careers/register-interest']) {
+      await page.goto(path);
+      const markup = await page.locator('script[type="application/ld+json"]').allTextContents();
+      expect(markup.join(''), path).not.toContain('JobPosting');
+    }
+    await page.goto('/');
+    await expect(page.getByRole('link', { name: /See open roles/ })).toHaveCount(0);
+  });
+
+  test('the application and reconfirmation endpoints are closed and say how to get in touch', async ({ request }) => {
+    for (const path of ['/api/careers/apply', '/api/safeguarding/reconfirm']) {
+      const response = await request.post(path, { data: {}, headers: closedFromAnywhere });
+      expect(response.status(), path).toBe(503);
+      const body = await response.json();
+      expect(body.code, path).toBe('closed');
+      expect(body.error, path).toContain('info@learnthrivetuition.co.uk');
+    }
+  });
+
+  test('a subject request from another origin is refused, and a filled honeypot sends nothing', async ({ request }) => {
+    const subjectRequest = { subject: 'History', level: 'Year 9', askedBy: 'parent', notify: false };
+    expect((await request.post('/api/subject-request', { data: subjectRequest, headers: { ...closedFromAnywhere, Origin: 'https://evil.example' } })).status()).toBe(403);
+    // With email credentials the honeypot looks like success; without them the route says it is unavailable.
+    // Either way nothing is sent, and it is never an error.
+    const honeypot = await request.post('/api/subject-request', { data: { ...subjectRequest, website: 'https://spam.example', elapsedMs: 30000 }, headers: closedFromAnywhere });
+    const answer = await honeypot.json();
+    if (honeypot.status() === 200) expect(answer).toEqual({ success: true });
+    else {
+      expect(honeypot.status()).toBe(503);
+      expect(answer.code).toBe('unavailable');
+    }
   });
 });
 

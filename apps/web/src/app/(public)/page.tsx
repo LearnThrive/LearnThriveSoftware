@@ -21,6 +21,8 @@ import { LearningPathScene } from "@/components/motion/scenes/LearningPathScene"
 import { ProductStoryScene } from "@/components/motion/scenes/ProductStoryScene";
 import { SafeguardingScene } from "@/components/motion/scenes/SafeguardingScene";
 import { SubjectIcon, SubjectMotif, SUBJECT_ACCENT, type SubjectKey } from "@/components/SubjectIcon";
+import { openVacancies } from "@/lib/careers";
+import { applicationsOpen } from "@/lib/careers-config";
 import { createMetadata } from "@/lib/metadata";
 import { siteConfig, testimonials } from "@/lib/site";
 import styles from "./home.module.css";
@@ -104,6 +106,8 @@ const levels = [
 ];
 
 export default function HomePage() {
+  // The tutor-recruitment band shows only while applications are on and at least one real vacancy is open.
+  const showCareersBand = applicationsOpen() && openVacancies().length > 0;
   return (
     <div className={styles.page}>
       <BodyClass className="is-homepage" />
@@ -358,12 +362,13 @@ export default function HomePage() {
           <div className={styles.trustCard}>
             <div>
               <p className={styles.eyebrow}>Tutor standards</p>
-              <h2 className={styles.sectionTitle}>Every tutor is DBS-checked</h2>
+              <h2 className={styles.sectionTitle}>No tutor teaches until every check is complete</h2>
               <p className={styles.trustText}>
-                Every tutor goes through a thorough hiring process before
-                teaching a LearnThrive student, including a Disclosure and
-                Barring Service (DBS) check. No tutor begins teaching until
-                this process is complete.
+                Every tutor must pass identity and right-to-work checks, agree
+                to an Enhanced DBS check including the Children’s Barred List,
+                and agree to our safeguarding agreement. No tutor teaches any
+                student, or has any contact with one, until every check is
+                complete.
               </p>
               <Link href="/safeguarding" className={styles.trustLink}>
                 Read our full safeguarding commitment <span aria-hidden="true">&rarr;</span>
@@ -469,6 +474,17 @@ export default function HomePage() {
           </div>
         </div>
       </SceneShell>
+
+      {showCareersBand ? (
+        <section className={styles.careersBand} aria-labelledby="careers-band-title">
+          <p className={styles.careersBandText}>
+            <strong id="careers-band-title">Tutor? Teach with LearnThrive.</strong> We are recruiting self-employed online tutors.
+          </p>
+          <Link href="/careers" className={styles.careersBandLink}>
+            See open roles <span aria-hidden="true">&rarr;</span>
+          </Link>
+        </section>
+      ) : null}
     </div>
   );
 }

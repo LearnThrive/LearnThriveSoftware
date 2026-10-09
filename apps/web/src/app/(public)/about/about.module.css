@@ -416,6 +416,16 @@
   color: var(--fg-muted);
 }
 
+.ctaSection .ctaTutors {
+  margin: 26px auto 0;
+  font-size: 15px;
+}
+
+.ctaTutors a {
+  color: var(--fg-accent);
+  font-weight: 600;
+}
+
 .btnPrimary {
   display: inline-block;
   background: var(--accent-strong);
