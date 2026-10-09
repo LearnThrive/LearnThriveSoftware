@@ -197,7 +197,7 @@ export const faqSections: readonly FaqSection[] = [
   {
     id: "legal-and-compliance",
     title: "Legal and compliance",
-    intro: "Company information, privacy, bookings and safeguarding, including the working policies and proposed responsibilities described below.",
+    intro: "Company information, privacy, bookings and safeguarding, including the working policies described below.",
     items: legalFaqs,
   },
 ] as const;

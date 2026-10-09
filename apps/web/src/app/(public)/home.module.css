@@ -1034,9 +1034,10 @@
 }
 
 /* ── Tutor standards / safeguarding ──────────────────────────
-   Only claims plan9.md was explicitly told are true (a DBS check as part of every tutor's hiring
-   process) — not the fuller "identity checked / qualifications reviewed" checklist an earlier
-   draft of this section used, which nothing on the site actually substantiates. */
+   Only claims the owners have confirmed (identity and right-to-work checks, an Enhanced DBS check
+   including the Children's Barred List, and no teaching until every check is complete) — not the
+   fuller "qualifications reviewed" checklist an earlier draft of this section used, which nothing
+   on the site actually substantiates. */
 .trustSection {
   padding: 64px 40px;
 }
@@ -1110,6 +1111,43 @@
   .trustCard {
     grid-template-columns: 1fr;
     padding: 32px 26px;
+  }
+}
+
+/* ── Careers band ──────────────────────────────────────────
+   A quiet line at the very end of the page for tutors. Rendered only while applications are on and a
+   vacancy is open (see page.tsx), so it never advertises a role that cannot be applied for. */
+.careersBand {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding: 24px 40px;
+  background: var(--surface-1);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.careersBandText {
+  margin: 0;
+  font-size: 16px;
+  color: var(--fg-strong);
+}
+
+.careersBandLink {
+  color: var(--fg-accent);
+  font-weight: 600;
+  font-size: 15.5px;
+  text-decoration: none;
+}
+
+.careersBandLink:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 900px) {
+  .careersBand {
+    padding: 22px 26px;
   }
 }
 

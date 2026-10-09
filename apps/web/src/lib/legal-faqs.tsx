@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PhoneContacts } from "@/components/PhoneContacts";
 import type { FaqItem } from "@/lib/faqs";
 
@@ -24,25 +25,18 @@ export const legalFaqs: readonly FaqItem[] = [
     question: "Where does LearnThrive store information and who can access it?",
     answer: (
       <>
-        <p>{"LearnThrive primarily uses "}<strong>{"Google Workspace"}</strong>{" for business communications and records."}</p>
-        <p>{"This includes services such as:"}</p>
-        <ul>
-          <li>{"Gmail for company email"}</li>
-          <li>{"Google Drive for files and records"}</li>
-          <li>{"Google Docs and Sheets where appropriate"}</li>
-          <li>{"Google Meet for online tuition sessions"}</li>
-        </ul>
-        <p>{"Enquiries sent to LearnThrive are received through company-controlled communication channels."}</p>
+        <p>{"LearnThrive's company email is hosted with "}<strong>{"IONOS"}</strong>{". Enquiries, tutor applications and other messages sent through this website arrive in that company mailbox, which is a company-controlled communication channel."}</p>
         <p>{"Business, parent and learner records should be stored within company-controlled systems rather than personal accounts."}</p>
         <p>{"Routine administrative access to central LearnThrive records is currently restricted to "}<strong>{"Abdurrahman Mustafa and Tahasin Hasan"}</strong>{", except where information needs to be shared with another authorised person for a legitimate business or safeguarding purpose."}</p>
         <p>{"Tutors should only receive the information reasonably required to support the students they teach."}</p>
         <p>{"LearnThrive should maintain a record of the external providers it relies upon and review this whenever a new service is introduced."}</p>
         <p>{"Current key providers include:"}</p>
         <ul>
-          <li><strong>{"Google Workspace"}</strong>{" — email, documents, file storage and administration"}</li>
-          <li><strong>{"Google Meet"}</strong>{" — online tuition sessions and communications"}</li>
+          <li><strong>{"IONOS"}</strong>{" — company email and mailboxes"}</li>
+          <li><strong>{"Resend"}</strong>{" — delivery of the emails this website sends, such as enquiries, applications and confirmations"}</li>
+          <li><strong>{"Render"}</strong>{" — hosting of this website"}</li>
         </ul>
-        <p>{"Additional providers must be added to the record when services such as website hosting, payments, accounting, scheduling or other management systems are introduced."}</p>
+        <p>{"Additional providers must be added to the record when services such as payments, accounting, scheduling or other management systems are introduced."}</p>
       </>
     ),
   },
@@ -96,9 +90,15 @@ export const legalFaqs: readonly FaqItem[] = [
         <h3>{"Contracts, invoices and financial records"}</h3>
         <p>{"Relevant company accounting and financial records should normally be retained for "}<strong>{"6 years"}</strong>{", subject to applicable legal and tax requirements."}</p>
         <h3>{"Tutor applications"}</h3>
-        <p>{"Unsuccessful tutor applications should normally be retained for up to "}<strong>{"6 months after the recruitment decision"}</strong>{"."}</p>
+        <p>{"Unsuccessful tutor applications should normally be retained for up to "}<strong>{"6 months after the recruitment decision"}</strong>{", or up to "}<strong>{"12 months"}</strong>{" where the applicant has asked to be kept in mind for future roles. Identity and right-to-work documents sent with an unsuccessful application are deleted at 6 months in either case."}</p>
+        <h3>{"Tutor identity and right-to-work documents"}</h3>
+        <p>{"For a tutor who works with LearnThrive, identity and right-to-work documents are kept while they work with LearnThrive and for "}<strong>{"12 months after"}</strong>{", so that a returning tutor does not have to start again, and are then deleted."}</p>
+        <h3>{"Safeguarding agreement records"}</h3>
+        <p>{"The record of a tutor's agreement to the safeguarding agreement, and of their yearly reconfirmation, is kept while they work with LearnThrive and for "}<strong>{"6 years after"}</strong>{". Where it is linked to a safeguarding concern it is kept for longer, separately, with restricted access."}</p>
         <h3>{"Tutor and personnel records"}</h3>
-        <p>{"Relevant personnel records may normally be retained for up to "}<strong>{"6 years after the working relationship ends"}</strong>{", subject to the type of record and applicable requirements."}</p>
+        <p>{"Other relevant personnel records may normally be retained for up to "}<strong>{"6 years after the working relationship ends"}</strong>{", subject to the type of record and applicable requirements."}</p>
+        <h3>{"Subject requests"}</h3>
+        <p>{"A request for a subject LearnThrive does not yet offer is kept until that subject is added, or for "}<strong>{"12 months after the request"}</strong>{" if it has not been added by then, whichever comes first, or sooner if the person asks for it to be deleted."}</p>
         <h3>{"Safeguarding records"}</h3>
         <p>{"Safeguarding records may require significantly longer retention."}</p>
         <p>{"They should be kept separately from routine learner records and stored with restricted access."}</p>
@@ -225,9 +225,8 @@ export const legalFaqs: readonly FaqItem[] = [
     answer: (
       <>
         <p>{"LearnThrive places the safety and welfare of children and young people at the centre of its tuition services."}</p>
-        <p>{"The proposed internal safeguarding responsibilities are:"}</p>
         <p><strong>{"Safeguarding Lead:"}</strong>{" Tahasin Hasan"}<br /><strong>{"Deputy Safeguarding Lead:"}</strong>{" Abdurrahman Mustafa"}</p>
-        <p>{"These appointments should be formally approved and kept under review."}</p>
+        <p>{"Every tutor must read and agree to the "}<Link href="/careers/safeguarding-agreement">{"safeguarding agreement"}</Link>{", which sets out how a concern is reported to them."}</p>
         <p>{"Safeguarding concerns can be reported through:"}</p>
         <p><strong><a href="mailto:info@learnthrivetuition.co.uk">{"info@learnthrivetuition.co.uk"}</a></strong></p>
         <p>{"Urgent safeguarding messages should be clearly marked as such."}</p>
@@ -260,7 +259,7 @@ export const legalFaqs: readonly FaqItem[] = [
     question: "What rules apply to online tuition sessions?",
     answer: (
       <>
-        <p>{"LearnThrive currently uses "}<strong>{"Google Meet"}</strong>{" for online tuition."}</p>
+        <p>{"Online tuition takes place on the lesson platform LearnThrive provides."}</p>
         <p>{"Tutors should use approved LearnThrive systems wherever reasonably possible and maintain clear professional boundaries."}</p>
         <p>{"Tutors should not use personal social-media accounts to communicate privately with learners."}</p>
         <p>{"Parents or guardians should know when one-to-one online tuition is taking place and should remain reasonably contactable."}</p>
@@ -282,29 +281,26 @@ export const legalFaqs: readonly FaqItem[] = [
   },
   {
     id: "tutor-checks",
-    question: "What checks should LearnThrive carry out before a tutor teaches students?",
+    question: "What checks must a tutor complete before they teach students?",
     answer: (
       <>
-        <p>{"LearnThrive should maintain a documented safer-recruitment process."}</p>
-        <p>{"Before allowing a tutor to provide unsupervised tuition, appropriate checks should include:"}</p>
+        <p><strong>{"No tutor teaches any student, or has any contact with one, until every check is complete."}</strong></p>
+        <p>{"Every tutor must:"}</p>
         <ul>
-          <li>{"identity verification"}</li>
-          <li>{"verification of relevant qualifications where those qualifications are relied upon"}</li>
-          <li>{"appropriate references"}</li>
-          <li>{"right-to-work checks where applicable"}</li>
-          <li>{"an assessment of eligibility for the appropriate level of DBS check"}</li>
-          <li>{"safeguarding induction"}</li>
-          <li>{"agreement to the Tutor Code of Conduct"}</li>
+          <li>{"pass identity checks and right-to-work checks"}</li>
+          <li>{"agree to an Enhanced DBS check including the Children's Barred List, which LearnThrive arranges and pays for unless the tutor already holds a suitable certificate or chooses to pay for their own check"}</li>
+          <li>{"read and agree to the safeguarding agreement as part of applying, and agree to the same expectations in the tutor agreement they sign"}</li>
+          <li>{"reconfirm the safeguarding agreement every year, and whenever a new version is issued"}</li>
         </ul>
-        <p>{"LearnThrive should not request a level of DBS information that it is not legally entitled to obtain."}</p>
-        <p>{"The same safeguarding standards should apply regardless of whether a tutor is:"}</p>
+        <p>{"LearnThrive looks at each applicant's CV, experience and results at GCSE, A Level and degree level. There is no fixed number of references."}</p>
+        <p>{"LearnThrive should maintain a documented safer-recruitment process, and should not request a level of DBS information that it is not legally entitled to obtain."}</p>
+        <p>{"The same safeguarding standards apply regardless of whether a tutor is:"}</p>
         <ul>
           <li>{"employed"}</li>
           <li>{"self-employed"}</li>
           <li>{"contracted"}</li>
           <li>{"supplied through another arrangement"}</li>
         </ul>
-        <p>{"Tutors should receive safeguarding refresher training periodically, with "}<strong>{"annual refresher training"}</strong>{" used as the working standard."}</p>
       </>
     ),
   },

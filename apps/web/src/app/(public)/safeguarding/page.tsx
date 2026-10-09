@@ -1,6 +1,9 @@
+import Link from "next/link";
 import { LegalPage } from "@/components/LegalPage";
 import { PhoneContacts } from "@/components/PhoneContacts";
 import { SafeguardingTrustPath } from "@/components/motion/scenes/SafeguardingTrustPath";
+import { agreementCommitmentSummary, safeguardingTeam } from "@/lib/careers";
+import { agreementOpen } from "@/lib/careers-config";
 import { createMetadata } from "@/lib/metadata";
 import { siteConfig } from "@/lib/site";
 
@@ -17,11 +20,11 @@ export default function SafeguardingPage() {
       path="/safeguarding"
       eyebrow="Safeguarding"
       title="Safeguarding information"
-      intro="Children’s welfare comes first. This page explains how to raise a concern and the safety considerations that matter around online tuition."
-      reviewedOn="28 September 2026"
+      intro="Children’s welfare comes first. This page explains who is responsible for safeguarding, what every tutor must do before teaching, how to raise a concern and the safety considerations that matter around online tuition."
+      reviewedOn="9 October 2026"
       scope={
         <p>
-          This information is for parents, guardians, students and anyone
+          This information is for parents, guardians, students, tutors and anyone
           concerned about a child’s safety. The public website provides
           information and an enquiry route; it is not an online classroom,
           private messaging service or lesson-recording system.
@@ -48,18 +51,63 @@ export default function SafeguardingPage() {
           ),
         },
         {
-          id: "tutor-recruitment",
-          title: "Tutor recruitment and DBS checks",
+          id: "who-is-responsible",
+          title: "Who is responsible",
           content: (
             <>
               <p>
-                Every tutor goes through a thorough hiring process before
-                teaching a LearnThrive student, including a Disclosure and
-                Barring Service (DBS) check. No tutor begins teaching until
-                this process is complete.
+                LearnThrive’s <strong>safeguarding lead is {safeguardingTeam.lead}</strong> and its{" "}
+                <strong>deputy safeguarding lead is {safeguardingTeam.deputy}</strong>. Every tutor must report any
+                safeguarding concern to the safeguarding lead, or to the deputy if the lead cannot be reached.
+              </p>
+              <p>
+                You can reach them on <PhoneContacts /> or at{" "}
+                <a href={`mailto:${siteConfig.email}`}>{siteConfig.email}</a>.
+              </p>
+            </>
+          ),
+        },
+        {
+          id: "tutor-checks",
+          title: "Tutor checks and the safeguarding agreement",
+          content: (
+            <>
+              <p>
+                <strong>No tutor teaches any student, or has any contact with one, until every check is complete.</strong>
               </p>
               <SafeguardingTrustPath />
-              <p>This matters because it helps LearnThrive to:</p>
+              <p>Every tutor must:</p>
+              <ul>
+                <li>pass identity checks and right-to-work checks;</li>
+                <li>
+                  agree to an Enhanced DBS check including the Children’s
+                  Barred List, arranged by LearnThrive. LearnThrive pays for it
+                  unless the tutor already holds a suitable certificate or
+                  chooses to pay for their own check;
+                </li>
+                <li>
+                  read and agree to the safeguarding agreement as part of
+                  applying, and agree to the same expectations in the tutor
+                  agreement they sign; and
+                </li>
+                <li>
+                  reconfirm the safeguarding agreement every year, and whenever a
+                  new version is issued.
+                </li>
+              </ul>
+              {agreementOpen() ? (
+                <>
+                  <p>In plain language, the agreement requires every tutor to:</p>
+                  <ul>
+                    {agreementCommitmentSummary.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+              <p>
+                <Link href="/careers/safeguarding-agreement">Read the safeguarding agreement</Link>. It helps LearnThrive to:
+              </p>
               <ul>
                 <li>make safe recruitment decisions;</li>
                 <li>
@@ -88,9 +136,10 @@ export default function SafeguardingPage() {
                 <li>a way for a child or adult to say when something feels unsafe.</li>
               </ul>
               <p>
+                <strong>LearnThrive lessons are not recorded by default.</strong>{" "}
                 Before lessons begin, parents and guardians should discuss the
                 platform, contact arrangements, supervision and any recording
-                arrangements with LearnThrive. Do not assume lessons are recorded.
+                arrangements with LearnThrive.
               </p>
             </>
           ),
@@ -121,8 +170,10 @@ export default function SafeguardingPage() {
           content: (
             <>
               <p>
-                For a concern connected with LearnThrive that is not an
-                immediate emergency, contact us as soon as possible:
+                <strong>If a child is in immediate danger, call 999 first.</strong> For a concern connected with
+                LearnThrive that is not an immediate emergency, a parent, a
+                student, a tutor or anyone else can contact the safeguarding
+                lead as soon as possible:
               </p>
               <ul>
                 <li>
@@ -138,6 +189,11 @@ export default function SafeguardingPage() {
                 be contacted. LearnThrive will take the concern seriously and
                 consider appropriate action, including referral to relevant
                 safeguarding services where necessary.
+              </p>
+              <p>
+                A concern should be recorded factually, and safeguarding records
+                should be kept separately from routine learner records, with
+                restricted access.
               </p>
               <p>
                 Information should be handled sensitively, but complete

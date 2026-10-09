@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { LegalPage } from "@/components/LegalPage";
 import { PhoneContacts } from "@/components/PhoneContacts";
 import { createMetadata } from "@/lib/metadata";
@@ -17,19 +18,25 @@ export default function PrivacyPage() {
       eyebrow="Privacy"
       title="Privacy notice"
       intro="This notice explains what personal information is involved when you browse this website or contact LearnThrive Tuition, and the choices and rights available to you."
-      reviewedOn="10 September 2026"
+      reviewedOn="9 October 2026"
       scope={
         <>
           <p>
             LearnThrive Tuition provides online tuition information and an
             enquiry route through {siteConfig.url}. This notice covers the
-            public website, enquiries prepared through it, and the related
-            correspondence that you choose to send to us.
+            public website, enquiries and subject requests sent through it,
+            and the related correspondence that you choose to send to us.
           </p>
           <p>
             The current website is not a student, parent or tutor portal. It
             does not take payments, deliver lessons, or submit information to a
             customer database.
+          </p>
+          <p>
+            Tutors can apply through the website. If you are applying to
+            tutor, please read the{" "}
+            <Link href="/careers/privacy">applicant privacy notice</Link>,
+            which explains everything an application involves.
           </p>
         </>
       }
@@ -75,6 +82,15 @@ export default function PrivacyPage() {
                 once it has been received. The answers pass through our email
                 delivery provider as part of sending those messages, and are
                 not otherwise stored in a database by this website.
+              </p>
+              <p>
+                The “Can’t see your subject?” form on the subjects page asks
+                which subject you would like, the level, whether you are a
+                parent or guardian or a student, and, if you choose, a short
+                note. It asks for an email address only if you tick the
+                separate box asking us to email you if the subject becomes
+                available. It does not ask for a child’s name. The request is
+                sent to LearnThrive by email in the same way as an enquiry.
               </p>
               <p>
                 Our website host and the networks used to deliver the site may
@@ -127,6 +143,17 @@ export default function PrivacyPage() {
                         the requested support, and operating the tuition service,
                         balanced against the rights and interests of the people
                         involved, especially children
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>
+                        Considering a request for a subject we do not offer yet
+                      </td>
+                      <td>
+                        Our legitimate interests in understanding what subjects
+                        families want. Emailing you if the subject becomes
+                        available is based on your consent, given by ticking the
+                        box on the form, which you can withdraw at any time
                       </td>
                     </tr>
                     <tr>
@@ -183,10 +210,11 @@ export default function PrivacyPage() {
           content: (
             <>
               <p>
-                Information may be handled by service-provider categories
-                needed to run the website and communications, such as website
-                hosting, technical support and email providers. We share only
-                what is needed for the relevant purpose.
+                Information may be handled by the service providers needed to
+                run the website and communications. Render hosts the website,
+                Resend delivers the emails the website sends, and IONOS hosts
+                LearnThrive’s company mailbox, where enquiries and requests
+                arrive. We share only what is needed for the relevant purpose.
               </p>
               <p>
                 We may also disclose information where the law requires it, to
@@ -210,6 +238,13 @@ export default function PrivacyPage() {
                 of the enquiry and whether tuition is arranged. Information
                 that is no longer needed should be securely deleted or
                 anonymised.
+              </p>
+              <p>
+                A subject request is kept until that subject is added, or for 12
+                months after the request if it has not been added by then,
+                whichever comes first, or sooner if you ask us to delete it. How
+                long tutor application information is kept is set out in the{" "}
+                <Link href="/careers/privacy">applicant privacy notice</Link>.
               </p>
               <p>
                 We use reasonable organisational and technical measures suited

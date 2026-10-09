@@ -9,14 +9,13 @@ import styles from "./SafeguardingScene.module.css";
 
 /**
  * plan10.md section 17: "make it a major trust feature... Do not create fake certification
- * badges. Use only real checks you actually perform." Deliberately a shorter, plainer pipeline
- * than the plan's own illustrative example (which named stages like "References" and "Identity"
- * as if separately confirmed) — the only things actually confirmed for this site are a thorough
- * hiring process and a DBS check (plan9.md's safeguarding section, added on the user's explicit
- * confirmation). Padding the pipeline out with unconfirmed stages just to look more elaborate
- * would be exactly the fabrication this section warns against.
+ * badges. Use only real checks you actually perform." Every stage here is a check the owners have
+ * confirmed (CAREERS_PROMPT.md): identity and right-to-work checks, then an Enhanced DBS check
+ * including the Children's Barred List, and no teaching or student contact until all are complete.
+ * The agreement and yearly reconfirmation are in the page copy, not a stage, so the pipeline stays
+ * short. Keep these labels the same as SafeguardingTrustPath.tsx.
  */
-const STAGES = ["Tutor applies", "Hiring process", "DBS check", "Approved to teach"] as const;
+const STAGES = ["Tutor applies", "Identity and right-to-work checks", "Enhanced DBS check", "Approved to teach"] as const;
 
 export function SafeguardingScene() {
   const { ref, smoothProgress } = useScene(["start 0.8", "end 0.5"]);

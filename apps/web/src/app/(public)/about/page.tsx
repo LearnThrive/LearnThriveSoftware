@@ -225,6 +225,9 @@ export default function AboutPage() {
           <Link href="/#enquire" className={styles.btnPrimary}>
             Get in touch &rarr;
           </Link>
+          <p className={styles.ctaTutors}>
+            Are you a tutor? <Link href="/careers">See how to teach with LearnThrive</Link>.
+          </p>
         </Reveal>
       </section>
     </div>
