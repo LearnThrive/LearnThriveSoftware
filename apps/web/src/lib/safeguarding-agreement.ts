@@ -121,6 +121,12 @@ export function typedNameMatches(typed: string, firstName: string, lastName: str
   return expected.length > 0 && normaliseName(typed) === expected;
 }
 
+/** Whether a typed confirmation is the person's full name as they gave it in a single "full name" field. */
+export function fullNameMatches(typed: string, fullName: string): boolean {
+  const expected = normaliseName(fullName);
+  return expected.length > 0 && normaliseName(typed) === expected;
+}
+
 export interface UnderstandingResult {
   ok: boolean;
   /** Ids of the questions that are unanswered or wrong. */
