@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { CheckboxField, fieldId, Honeypot, RadioGroup, SelectField, TextAreaField, TextField } from "@/components/forms/Fields";
 import forms from "@/components/forms/forms.module.css";
 import { HumanCheck } from "@/components/forms/HumanCheck";
+import { useFocusAfterRender } from "@/components/forms/useFocusAfterRender";
 import { useHumanCheck } from "@/components/forms/useHumanCheck";
 import {
   ASKED_BY_OPTIONS,
@@ -40,7 +41,9 @@ export function SubjectRequestForm() {
   const summaryRef = useRef<HTMLDivElement>(null);
   const errorRef = useRef<HTMLDivElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
-  const check = useHumanCheck();
+  // Most visitors to /subjects only read the page, so the check starts when the form is first touched.
+  const check = useHumanCheck({ auto: false });
+  const focusAfterRender = useFocusAfterRender();
 
   useEffect(() => {
     openedAt.current = performance.now();
@@ -73,14 +76,14 @@ export function SubjectRequestForm() {
     setAttempted(true);
     if (problems.length > 0) {
       setStatus("idle");
-      window.requestAnimationFrame(() => summaryRef.current?.focus());
+      focusAfterRender(summaryRef);
       return;
     }
     const answer = check.getAnswer();
     if (!answer) {
       setStatus("error");
       setMessage("The check that you are a person has not finished yet. Please wait a moment, then send again.");
-      window.requestAnimationFrame(() => errorRef.current?.focus());
+      focusAfterRender(errorRef);
       return;
     }
     sending.current = true;
@@ -95,18 +98,18 @@ export function SubjectRequestForm() {
       const data = (await response.json().catch(() => null)) as { success?: boolean; error?: string; errors?: SubjectRequestErrors } | null;
       if (response.ok && data?.success) {
         setStatus("sent");
-        window.requestAnimationFrame(() => resultRef.current?.focus());
+        focusAfterRender(resultRef);
       } else {
         if (data?.errors) setServerErrors(data.errors);
         setMessage(data?.error ?? "We could not send your request just now. Please try again shortly.");
         setStatus("error");
-        window.requestAnimationFrame(() => (data?.errors ? summaryRef : errorRef).current?.focus());
+        focusAfterRender(data?.errors ? summaryRef : errorRef);
       }
       if (![413, 429, 503].includes(response.status)) check.renew();
     } catch {
       setMessage("A network error occurred. Please check your connection and try again.");
       setStatus("error");
-      window.requestAnimationFrame(() => errorRef.current?.focus());
+      focusAfterRender(errorRef);
     } finally {
       sending.current = false;
     }
@@ -137,7 +140,7 @@ export function SubjectRequestForm() {
   }
 
   return (
-    <form className={`${forms.shell} ${styles.form}`} noValidate onSubmit={onSubmit} aria-label="Request a subject">
+    <form className={`${forms.shell} ${styles.form}`} noValidate onSubmit={onSubmit} onFocus={check.start} aria-label="Request a subject">
       {attempted && problems.length > 0 ? (
         <div className={`form-message form-message--error ${forms.summary}`} role="alert" tabIndex={-1} ref={summaryRef}>
           <strong>{problems.length === 1 ? "There is 1 thing to check." : `There are ${problems.length} things to check.`}</strong>

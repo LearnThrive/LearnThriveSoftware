@@ -78,9 +78,10 @@ test.describe('SiteFooter', () => {
     await page.goto('/');
     const footer = page.locator('footer.site-footer');
     await footer.scrollIntoViewIfNeeded();
-    await expect(footer.getByRole('link', { name: 'Privacy' })).toBeVisible();
-    await expect(footer.getByRole('link', { name: 'Privacy' })).toHaveCSS('opacity', '1');
-    await footer.getByRole('link', { name: 'Privacy' }).click();
+    // exact: the footer also has an "Applicant privacy" link, whose name contains this one.
+    await expect(footer.getByRole('link', { name: 'Privacy', exact: true })).toBeVisible();
+    await expect(footer.getByRole('link', { name: 'Privacy', exact: true })).toHaveCSS('opacity', '1');
+    await footer.getByRole('link', { name: 'Privacy', exact: true }).click();
     await expect(page).toHaveURL(/\/privacy$/);
   });
 });

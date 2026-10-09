@@ -1,5 +1,5 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
-import { agreement, chooseByKeyboard, expectNoAxeViolations, humanCheckDone, JPEG, mockPost, noisePng, PDF } from './careers-support';
+import { agreement, chooseByKeyboard, expectNoAxeViolations, humanCheckDone, hydrated, JPEG, mockPost, noisePng, PDF } from './careers-support';
 
 // The one-page application (/careers/apply). The dev server opens it for testing while the safeguarding
 // agreement is still a draft (playwright.config.ts). EVERY test here mocks POST /api/careers/apply: this project
@@ -253,6 +253,7 @@ test.describe('completing and sending it', () => {
 
   test('the date cannot be in the past, and the minimum is today', async ({ page }) => {
     await page.goto('/careers/apply');
+    await hydrated(page);
     const date = page.getByLabel('Earliest date you could start');
     await expect(date).toHaveAttribute('min', /^\d{4}-\d{2}-\d{2}$/);
     await date.fill('2020-01-01');

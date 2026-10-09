@@ -34,7 +34,6 @@ export function asStringRecord(value: unknown, maxKeys = 20): Record<string, str
 
 /** A single line: control characters and line breaks become spaces, runs of spaces collapse, trimmed. */
 export function cleanLine(value: string): string {
-  // eslint-disable-next-line no-control-regex
   return value.replace(/[\u0000-\u001f\u007f-\u009f\p{Zl}\p{Zp}]+/gu, " ").replace(/\s+/g, " ").trim();
 }
 
@@ -43,7 +42,6 @@ export function cleanText(value: string): string {
   return (
     value
       .replace(/\r\n?/g, "\n")
-      // eslint-disable-next-line no-control-regex
       .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\p{Zl}\p{Zp}]/gu, "")
       .replace(/\n{3,}/g, "\n\n")
       .trim()

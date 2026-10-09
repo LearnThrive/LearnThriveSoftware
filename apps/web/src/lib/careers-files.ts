@@ -125,8 +125,7 @@ export interface CleanName {
 export function sanitiseFileName(raw: string): CleanName {
   let name = raw.normalize("NFC");
   name = name.split(/[\\/]/).pop() ?? "";
-  // eslint-disable-next-line no-control-regex
-  name = name.replace(/[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩﻿]/g, "");
+  name = name.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, "");
   const ext = extensionOf(name);
   const withoutExt = ext ? name.slice(0, name.length - ext.length - 1) : name;
   let base = withoutExt

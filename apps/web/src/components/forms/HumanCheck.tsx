@@ -14,7 +14,8 @@ export function HumanCheck({ check, error }: { check: HumanCheckHandle; error?: 
   return (
     <div className={styles.humanCheck}>
       <div role="status" aria-live="polite" className={styles.humanCheck}>
-        {state.status === "idle" || state.status === "working" ? (
+        {check.deferred ? <span>This form checks that you are a person once you start filling it in.</span> : null}
+        {!check.deferred && (state.status === "idle" || state.status === "working") ? (
           <>
             <span className={styles.spinner} aria-hidden="true" />
             <span>Checking that you are a person…</span>

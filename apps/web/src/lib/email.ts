@@ -60,7 +60,6 @@ export function escapeHtml(text: string): string {
 
 /** A value that is safe in a subject line: no line breaks or control characters, collapsed spaces, capped. */
 export function subjectSafe(text: string, max = 160): string {
-  // eslint-disable-next-line no-control-regex
   const cleaned = text.replace(/[\u0000-\u001f\u007f-\u009f\p{Zl}\p{Zp}]+/gu, " ").replace(/\s+/g, " ").trim();
   return cleaned.length > max ? `${cleaned.slice(0, max - 1)}…` : cleaned;
 }

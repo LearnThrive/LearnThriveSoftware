@@ -8,7 +8,6 @@ import { Container } from "@/components/Container";
 import { FaqList } from "@/components/FaqList";
 import { PageHero } from "@/components/PageHero";
 import { PhoneContacts } from "@/components/PhoneContacts";
-import { SectionHeading } from "@/components/SectionHeading";
 import { TestimonialCard } from "@/components/TestimonialCard";
 import { CinematicBackdrop } from "@/components/motion/primitives/CinematicBackdrop";
 import { Reveal } from "@/components/motion/primitives/Reveal";
