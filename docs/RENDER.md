@@ -86,7 +86,7 @@ The counts live in the server's memory: they reset on a restart or deploy and ar
 | slowed 4x | 0.30 s | 1.8 s |
 | slowed 6x | 0.42 s | 1.2 s |
 
-(18 bits: median 0.87 s, 0.75 s and 0.83 s, 90th percentile about 2.3 s, so 17 was kept.) The check starts when the page is idle, so it is nearly always finished long before the visitor reaches the send button. A real mid-range phone was not available to measure: the throttled figures are a stand-in. If real phones are slow, lower the number by one; each bit halves the work.
+(18 bits: median 0.87 s, 0.75 s and 0.83 s, 90th percentile about 2.3 s, so 17 was kept.) On the application and reconfirmation pages the check starts when the page is idle, so it is nearly always finished long before the visitor reaches the send button. On `/subjects`, which most families only read, it starts when the visitor first touches the request form instead, so a visit that never reaches the form costs no request and no work; filling in the form takes longer than the check does. A real mid-range phone was not available to measure: the throttled figures are a stand-in. If real phones are slow, lower the number by one; each bit halves the work.
 
 ## Email
 

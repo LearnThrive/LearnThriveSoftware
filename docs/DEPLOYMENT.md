@@ -50,7 +50,13 @@ Set these in the host's dashboard for the production environment. **Never commit
 | `RESEND_API_KEY` | **Yes** — the enquiry route fails closed (503, "email us directly") without it | Resend API key used to send the enquiry notification and the parent's auto-reply. | `re_...` (secret) |
 | `RESEND_FROM_EMAIL` | **Yes** — fails closed without it | The verified sender address on your Resend domain. The shared `onboarding@resend.dev` default is for development only. | `enquiries@learnthrivetuition.co.uk` |
 | `ENQUIRY_EMAIL` | **Yes** — fails closed without it | Where enquiry notifications are delivered. | `info@learnthrivetuition.co.uk` |
-| `ALLOWED_ORIGINS` | No (the default is right) | Comma-separated origins allowed to POST to `/api/enquiry`. The default is `https://www.learnthrivetuition.co.uk,https://learnthrivetuition.co.uk`. Set it only for a staging host. | `https://staging.example.com` |
+| `CAREERS_EMAIL` | No — falls back to `ENQUIRY_EMAIL`, then the site address | Where tutor applications (with their attachments, which can include identity documents) and agreement reconfirmations are delivered. Use the company mailbox. | `info@learnthrivetuition.co.uk` |
+| `SUBJECT_REQUEST_EMAIL` | No — falls back to `ENQUIRY_EMAIL` | Where "Can't see your subject?" requests are delivered. | `info@learnthrivetuition.co.uk` |
+| `CAPTCHA_SECRET` | **Yes** for applications, reconfirmations and subject requests — those routes fail closed (503) without it | Key that signs the human-check challenges (an HMAC). At least 32 characters; use 64 hex characters. Never sent to the browser. | `openssl rand -hex 32` (secret) |
+| `CLIENT_IP_HEADER` | No — see `docs/RENDER.md` | Name of the request header that carries the visitor's address, if the host sets a trusted one (for example `true-client-ip`). Used by the careers and subject-request rate limits. | unset |
+| `TRUSTED_PROXY_HOPS` | No (default `1`) | How many proxies sit in front of the app, when the address is taken from `X-Forwarded-For` (counted from the right). | `1` |
+| `CAREERS_OPEN_FOR_TESTING` | **Never in production** — a production build ignores it | Development and tests only: opens the application and reconfirmation forms while the safeguarding agreement is still a draft. The e2e config sets it to `1`. | unset |
+| `ALLOWED_ORIGINS` | No (the default is right) | Comma-separated origins allowed to POST to the enquiry, careers, reconfirmation and subject-request routes. The default is `https://www.learnthrivetuition.co.uk,https://learnthrivetuition.co.uk`. Set it only for a staging host. | `https://staging.example.com` |
 | `NEXT_PUBLIC_APP_PORTAL_ENABLED` | No — leave unset | `true` opens the portal (see above). Unset = closed in production. Build-time. | unset |
 | `NEXT_PUBLIC_THEME_TOGGLE` | No | `0` removes the dark theme and the theme switch (kill switch). Build-time. | unset (on) |
 | `NEXT_PUBLIC_SMOOTH_SCROLL` | No | `0` removes smooth scrolling entirely (kill switch). Build-time. | unset (on) |
@@ -62,7 +68,23 @@ Set these in the host's dashboard for the production environment. **Never commit
 | `CHROME_PATH` | No — local scripts only | Browser path for `scripts/profile-motion.mjs`. | unset |
 | `CI` | set by CI | Playwright retries and `forbidOnly`. | set by CI |
 
-Per environment: **production** sets the three email variables and nothing else. **Staging** sets the same three with a staging Resend address (a mailbox you control as `ENQUIRY_EMAIL`) and `ALLOWED_ORIGINS` for its host. **Local development** needs none: with no `RESEND_API_KEY` the form answers with the friendly 503.
+Per environment: **production** sets the three email variables and `CAPTCHA_SECRET`, plus `CAREERS_EMAIL` and `SUBJECT_REQUEST_EMAIL` if applications and subject requests should go to a different mailbox from enquiries. **Staging** sets the same with a staging Resend address (a mailbox you control as `ENQUIRY_EMAIL`) and `ALLOWED_ORIGINS` for its host. **Local development** needs none: with no `RESEND_API_KEY` the forms answer with the friendly 503.
+
+To keep `apps/web/.env.example` complete, paste this block into it (names only, no values):
+
+```
+RESEND_API_KEY=
+RESEND_FROM_EMAIL=
+ENQUIRY_EMAIL=
+CAREERS_EMAIL=
+SUBJECT_REQUEST_EMAIL=
+CAPTCHA_SECRET=
+ALLOWED_ORIGINS=
+CLIENT_IP_HEADER=
+TRUSTED_PROXY_HOPS=
+```
+
+`CAREERS_OPEN_FOR_TESTING` is deliberately left out: it must never be set in production.
 
 ## Security headers
 
@@ -80,6 +102,14 @@ Layers, in order: origin check (403 for a foreign `Origin`), per-address rate li
 **The in-memory limiter is per server instance.** On a serverless or multi-instance host it limits each instance separately, so it is a second layer, not the first. Add a platform rate-limit rule on `POST /api/enquiry` (for example 5 requests per 10 minutes per IP at the host's firewall / WAF); the owner chooses the host, so the rule itself is an owner-blocked item. A third-party CAPTCHA is deliberately not added (privacy and cookie implications; owner decision, see the owner inputs).
 
 The rate limiter trusts the first `X-Forwarded-For` address. Confirm the chosen host overwrites that header rather than passing a client-supplied one through.
+
+## Careers, reconfirmation and subject-request endpoints in production
+
+Three more write paths, all email-only (no database, no file storage): `POST /api/careers/apply` (multipart, with the CV, cover letter and supporting documents attached to one email), `POST /api/safeguarding/reconfirm` and `POST /api/subject-request`, plus `POST /api/careers/challenge`, which issues the signed human-check challenge. Each answers in this order: the gate (`applicationsOpen` / `agreementOpen`), the origin check, the per-address and whole-route rate limits, the fail-closed configuration check (no `RESEND_API_KEY`, no verified sender or no `CAPTCHA_SECRET` is a friendly 503 "email us"), then a size-limited read of the body, the honeypot and minimum-time checks, the human check, validation and file inspection, and only then the send. Outcomes are logged as one JSON line each with no personal data.
+
+**The application and reconfirmation forms stay closed until the owner approves the safeguarding agreement.** `careersConfig.agreementApprovedByOwner` ships `false`: the pages say applications open soon, the forms are not offered and the two routes answer 503 `closed`. To open them, review every clause marked `ownerApproved: false` in `apps/web/src/lib/safeguarding-agreement-v1.ts`, mark them approved, set the flag to `true`, and update the agreement version date. `tests/safeguardingAgreement.test.mjs` fails the build if the flag is `true` while any clause is unapproved. A production build ignores `CAREERS_OPEN_FOR_TESTING`.
+
+**Before opening applications on Render**, run the probes in `docs/RENDER.md`: the upload size the service really accepts (the limits are deliberately cautious), and which header carries the visitor's address (set `CLIENT_IP_HEADER` or `TRUSTED_PROXY_HOPS` to match). The rate limits are in memory, so they are correct for one instance and reset on a restart; `docs/RENDER.md` says what to add if the service ever runs on several.
 
 ## Email deliverability checklist (owner)
 
@@ -105,7 +135,7 @@ The rate limiter trusts the first `X-Forwarded-For` address. Confirm the chosen 
 1. In the host's dashboard, redeploy or "promote" the previous successful deployment (the fastest rollback on any immutable-deploy host).
 2. If the host cannot, revert the merge on `main` (`git revert -m 1 <merge commit>`), let CI pass and deploy that.
 3. A bad environment variable is rolled back by restoring the previous value and redeploying (build-time `NEXT_PUBLIC_*` values need a rebuild).
-4. The enquiry form is the only write path. If it must be stopped at once, remove `RESEND_API_KEY`: the route then answers with the "email us directly" message and sends nothing.
+4. The enquiry, application, reconfirmation and subject-request forms are the only write paths. If they must be stopped at once, remove `RESEND_API_KEY`: every route then answers with its "email us directly" message and sends nothing. To close only applications, set `acceptingApplications` to `false` in `apps/web/src/lib/careers-config.ts` and redeploy.
 
 ## Pre-launch smoke checklist
 
@@ -122,3 +152,5 @@ Run against the **staging** deployment, then again on production after the first
 - [ ] A social-preview check of the home page and one subject page shows the branded card.
 - [ ] The host's firewall/rate-limit rule on `POST /api/enquiry` is active.
 - [ ] The owner has signed off the cookie notice change ([apps/web/LEGAL_REVIEW.md](../apps/web/LEGAL_REVIEW.md)).
+- [ ] Careers, while the agreement is a draft: `/careers/apply` and `/safeguarding/reconfirm` say they are not open yet and show no form; the application and reconfirmation routes answer 503 `closed`; the agreement page is a draft and out of the sitemap; no page carries job posting markup.
+- [ ] Before opening applications: the owner has approved the agreement and set `agreementApprovedByOwner`; the upload-size and client-address probes in [RENDER.md](RENDER.md) have been run on the deployed service; one real application with a CV and an identity document arrives in the `CAREERS_EMAIL` mailbox with its attachments, the applicant's confirmation arrives, and a subject request and a reconfirmation arrive too (check spam).
