@@ -85,3 +85,85 @@ test.describe('SiteFooter', () => {
     await expect(page).toHaveURL(/\/privacy$/);
   });
 });
+
+// plan18: Careers is in the main navigation (it was reachable only from the footer), on the desktop header and in the
+// mobile menu, and the header still fits and never collides at the widths in between.
+test.describe('Careers in the main navigation', () => {
+  test('is a link in the desktop navigation, between FAQ and Book, and marks the careers pages as current', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/');
+    const nav = page.getByRole('navigation', { name: 'Main navigation' });
+    const careers = nav.getByRole('link', { name: 'Careers', exact: true });
+    await expect(careers).toBeVisible();
+    await expect(careers).toHaveAttribute('href', '/careers');
+    const order = await nav.getByRole('link').allInnerTexts();
+    expect(order.map((text) => text.trim())).toEqual(['Home', 'About', 'Subjects', 'FAQ', 'Careers', 'Book', 'Contact']);
+    await careers.click();
+    await expect(page).toHaveURL(/\/careers$/);
+    await expect(nav.getByRole('link', { name: 'Careers', exact: true })).toHaveAttribute('aria-current', 'page');
+    await page.goto('/careers/maths-tutor');
+    await expect(nav.getByRole('link', { name: 'Careers', exact: true })).toHaveAttribute('aria-current', 'page');
+  });
+
+  test('can be reached and followed with the keyboard alone', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/about');
+    const nav = page.getByRole('navigation', { name: 'Main navigation' });
+    await nav.getByRole('link', { name: 'Careers', exact: true }).focus();
+    await expect(nav.getByRole('link', { name: 'Careers', exact: true })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/\/careers$/);
+  });
+
+  test('is in the mobile menu, and opens the hub from it', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Open main menu' }).click();
+    const careers = page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Careers', exact: true });
+    await expect(careers).toBeVisible();
+    await careers.click();
+    await expect(page).toHaveURL(/\/careers$/);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Tutor with LearnThrive');
+  });
+
+  // The whole desktop header (seven links, Login while the portal is open, the two icon buttons and the booking button)
+  // fits on one line from 1121px; at 1120px and below the menu opens from the toggle instead, so nothing collides at
+  // tablet widths.
+  for (const width of [1121, 1150, 1200, 1280, 1440, 1920]) {
+    test(`at ${width}px the desktop header fits on one line, with every control clear of its neighbours`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto('/about');
+      const result = await page.evaluate(() => {
+        const inner = document.querySelector('.site-header__inner')!;
+        const boxes = [...inner.querySelectorAll('.brand, .primary-navigation > a, .nav-flyout > *:first-child, .header-login, .header-icon-button, .header-cta')]
+          .filter((el) => el.getClientRects().length > 0)
+          .map((el) => el.getBoundingClientRect())
+          .sort((a, b) => a.left - b.left);
+        let smallestGap = Infinity;
+        for (let i = 1; i < boxes.length; i += 1) smallestGap = Math.min(smallestGap, boxes[i].left - boxes[i - 1].right);
+        return {
+          toggleShown: getComputedStyle(document.querySelector('.menu-toggle')!).display !== 'none',
+          innerOverflow: inner.scrollWidth - inner.clientWidth,
+          pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          smallestGap,
+          lastRight: Math.max(...boxes.map((box) => box.right)),
+        };
+      });
+      expect(result.toggleShown).toBe(false);
+      expect(result.innerOverflow).toBeLessThanOrEqual(0);
+      expect(result.pageOverflow).toBeLessThanOrEqual(0);
+      expect(result.smallestGap).toBeGreaterThanOrEqual(8);
+      expect(result.lastRight).toBeLessThanOrEqual(width);
+    });
+  }
+
+  for (const width of [1120, 1024, 960, 834, 768, 390, 360]) {
+    test(`at ${width}px the header is the logo and the menu button, and the page does not scroll sideways`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto('/about');
+      await expect(page.getByRole('button', { name: 'Open main menu' })).toBeVisible();
+      await expect(page.getByRole('navigation', { name: 'Main navigation' })).toBeHidden();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+    });
+  }
+});

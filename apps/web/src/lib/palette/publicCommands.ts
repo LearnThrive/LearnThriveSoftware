@@ -23,20 +23,24 @@ const legalPages: ReadonlyArray<{ href: PaletteCommand["href"]; title: string; k
   { href: "/accessibility", title: "Accessibility statement", keywords: ["a11y", "screen reader", "wcag"] },
 ];
 
+/** Words people search with that are not in a navigation label ("tutor" and "jobs" for Careers). */
+const navigationKeywords: Record<string, string[]> = {
+  "/careers": ["tutor", "apply", "application", "jobs", "work", "teach", "vacancy", "roles"],
+};
+
 export function buildPublicCommands(): PaletteCommand[] {
   const commands: PaletteCommand[] = [];
 
   for (const item of navigation) {
-    commands.push({ id: `page:${item.href}`, title: item.label, group: "Pages", href: item.href, hint: item.href === "/" ? "/" : item.href });
+    commands.push({
+      id: `page:${item.href}`,
+      title: item.label,
+      group: "Pages",
+      href: item.href,
+      hint: item.href === "/" ? "/" : item.href,
+      keywords: navigationKeywords[item.href],
+    });
   }
-  commands.push({
-    id: "page:/careers",
-    title: "Careers",
-    group: "Pages",
-    href: "/careers",
-    hint: "/careers",
-    keywords: ["tutor", "apply", "application", "jobs", "work", "teach", "vacancy", "roles"],
-  });
   commands.push({
     id: "page:/safeguarding",
     title: "Safeguarding",

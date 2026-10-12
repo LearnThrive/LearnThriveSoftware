@@ -59,6 +59,16 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
+.optionsInline {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.optionsInline .option {
+  flex: 0 1 auto;
+  padding-right: 1.1rem;
+}
+
 .option {
   position: relative;
   display: flex;

@@ -140,7 +140,7 @@ export function SubjectRequestForm() {
   }
 
   return (
-    <form className={`${forms.shell} ${styles.form}`} noValidate onSubmit={onSubmit} onFocus={check.start} aria-label="Request a subject">
+    <form className={styles.form} noValidate onSubmit={onSubmit} onFocus={check.start} aria-label="Request a subject">
       {attempted && problems.length > 0 ? (
         <div className={`form-message form-message--error ${forms.summary}`} role="alert" tabIndex={-1} ref={summaryRef}>
           <strong>{problems.length === 1 ? "There is 1 thing to check." : `There are ${problems.length} things to check.`}</strong>
@@ -194,7 +194,24 @@ export function SubjectRequestForm() {
             value={values.askedBy}
             onChange={(v) => set("askedBy", v)}
             error={shown.askedBy}
+            inline
           />
+        </div>
+        <div className={styles.stack}>
+          <TextField
+            name="email"
+            label="Email address"
+            optional
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            hint="We only use it if you tick the box below."
+            value={values.email}
+            onChange={(v) => set("email", v)}
+            error={shown.email}
+            maxLength={160}
+          />
+          <CheckboxField name="notify" checked={values.notify} onChange={(on) => set("notify", on)} label="Email me if this subject becomes available." />
         </div>
         <TextAreaField
           name="note"
@@ -207,43 +224,25 @@ export function SubjectRequestForm() {
           rows={4}
           maxLength={NOTE_MAX}
           counter
-          full
         />
-        <TextField
-          name="email"
-          label="Email address"
-          optional
-          type="email"
-          inputMode="email"
-          autoComplete="email"
-          hint="We only use it if you tick the box below."
-          value={values.email}
-          onChange={(v) => set("email", v)}
-          error={shown.email}
-          maxLength={160}
-          full
-        />
-        <div className={forms.full}>
-          <CheckboxField name="notify" checked={values.notify} onChange={(on) => set("notify", on)} label="Email me if this subject becomes available." />
-        </div>
       </div>
 
       <Honeypot id="subject-request-website" value={trap} onChange={setTrap} />
-      <div id={fieldId("humanCheck")} tabIndex={-1}>
-        <HumanCheck check={check} />
-      </div>
-      <div className={forms.actions}>
+      <div className={styles.actions}>
         <button className="button button--primary" type="submit" disabled={status === "sending" || check.state.status === "unavailable"} aria-busy={status === "sending"}>
           <span>{status === "sending" ? "Sending…" : "Send request"}</span>
           <svg viewBox="0 0 20 20" aria-hidden="true">
             <path d="M4 10h11M11 6l4 4-4 4" />
           </svg>
         </button>
-        <p className={forms.note}>
-          Your request is sent to LearnThrive by email and nothing is stored on this website. If you give an email address and tick the box, we use it only to tell
-          you if the subject becomes available. See our <Link href="/privacy">privacy notice</Link>. Or email <a href={`mailto:${siteConfig.email}`}>{siteConfig.email}</a>.
-        </p>
+        <div id={fieldId("humanCheck")} tabIndex={-1}>
+          <HumanCheck check={check} />
+        </div>
       </div>
+      <p className={`${forms.note} ${styles.privacy}`}>
+        Your request is sent to LearnThrive by email and nothing is stored on this website. If you give an email address and tick the box, we use it only to tell
+        you if the subject becomes available. See our <Link href="/privacy">privacy notice</Link>. Or email <a href={`mailto:${siteConfig.email}`}>{siteConfig.email}</a>.
+      </p>
       <div className="sr-only" role="status" aria-live="polite">
         {announcement}
       </div>

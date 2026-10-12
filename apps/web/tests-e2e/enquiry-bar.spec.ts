@@ -56,6 +56,14 @@ test.describe('on a phone', () => {
     }
   });
 
+  test('it is not on the careers pages or the tutor forms: a parent booking button has no place there', async ({ page }) => {
+    for (const route of ['/careers', '/careers/maths-tutor', '/careers/apply', '/careers/privacy', '/safeguarding/reconfirm']) {
+      await page.goto(route);
+      await page.evaluate(() => window.scrollTo({ top: window.innerHeight * 1.5, behavior: 'instant' }));
+      await expect(bar(page), route).toHaveCount(0);
+    }
+  });
+
   test('it leaves the footer uncovered', async ({ page }) => {
     await page.goto('/about');
     await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));

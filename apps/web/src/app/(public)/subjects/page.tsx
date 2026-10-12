@@ -14,10 +14,8 @@ import { SubjectsHeroScene, SubjectsListScene, SubjectIconScene } from "@/compon
 import { SubjectSectionMotif } from "@/components/motion/scenes/SubjectSectionMotif";
 import { ElevenPlusMotif } from "@/components/motion/scenes/ElevenPlusMotif";
 import { Marquee } from "@/components/Marquee";
-import { SubjectHeroCard } from "@/components/SubjectHeroCard";
 import { SubjectRequestSection } from "@/components/SubjectRequestSection";
 import { createMetadata } from "@/lib/metadata";
-import { subjectLandingPages } from "@/lib/site";
 import styles from "./subjects.module.css";
 import { motionStagger, staggerDelay } from "@/lib/motion/tokens";
 
@@ -221,9 +219,9 @@ export default function SubjectsPage() {
               paint. A reveal would hold it at opacity 0 until the script has loaded and the animation
               has run (LCP 204 -> 864 ms in the profile), so it is simply there; later ones reveal. */}
           <Reveal variant={subjectIndex === 0 ? "static" : "soft"}>
-            {/* One markup for both sides: the text, then the same hero card each subject's own page shows (a link to
-                that page), then the photograph. Where the photograph sits (left or right) is decided in CSS by
-                `subjectHeaderReverse`, so on a phone the order is always text, card, photograph. */}
+            {/* One markup for both sides: the text, then the photograph. Where the photograph sits (left or right) is
+                decided in CSS by `subjectHeaderReverse`, so on a phone the order is always text, then photograph.
+                "Explore ... in depth" is the section's one link to the subject's own page. */}
             <div className={`${styles.subjectHeader} ${subject.reverse ? styles.subjectHeaderReverse : ""}`}>
               <div className={styles.subjectText}>
                 <div className={styles.subjectTitleRow}>
@@ -256,7 +254,6 @@ export default function SubjectsPage() {
                   Explore {subject.title} in depth <span aria-hidden="true">&rarr;</span>
                 </Link>
               </div>
-              <SubjectHeroCard subject={subjectLandingPages[subject.id as "maths" | "english" | "science"]} variant="subjects" className={styles.subjectHeroCard} />
               <div className={styles.subjectImage}>
                 <Image
                   src={subject.image}
@@ -311,7 +308,7 @@ export default function SubjectsPage() {
             <ElevenPlusMotif />
             <div className={styles.elevenPlusInner}>
               <div className={styles.elevenPlusTop}>
-                <div>
+                <div className={styles.elevenPlusText}>
                   <p className={styles.eyebrow}>Entrance exams</p>
                   <h2 className={styles.elevenPlusTitle}>11+ Preparation</h2>
                   <p className={styles.elevenPlusDesc}>
@@ -319,16 +316,18 @@ export default function SubjectsPage() {
                     the confidence, accuracy, speed and exam technique that make the
                     difference on the day.
                   </p>
+                  <Link href="/11-plus-tuition" className={styles.elevenPlusLink}>
+                    Explore 11+ Preparation in depth <span aria-hidden="true">&rarr;</span>
+                  </Link>
                 </div>
-                <SubjectHeroCard subject={subjectLandingPages["11-plus"]} variant="subjects" tone="dark" className={styles.elevenPlusHeroCard} />
-              </div>
-              <div className={styles.elevenPlusGrid}>
-                {elevenPlusComponents.map((comp) => (
-                  <div key={comp.title} className={styles.elevenPlusItem}>
-                    <b>{comp.title}</b>
-                    <span>{comp.sub}</span>
-                  </div>
-                ))}
+                <div className={styles.elevenPlusGrid}>
+                  {elevenPlusComponents.map((comp) => (
+                    <div key={comp.title} className={styles.elevenPlusItem}>
+                      <b>{comp.title}</b>
+                      <span>{comp.sub}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
               <p className={styles.elevenPlusFooter}>
                 Every learner is supported to reach their full potential &mdash;

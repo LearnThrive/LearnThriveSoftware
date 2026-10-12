@@ -12,7 +12,7 @@ import { useMotionValueEvent, useScroll } from "framer-motion";
  *  - Phones only: it is `display: none` above the mobile breakpoint (globals.css), so the desktop header's
  *    own persistent CTA is the only one there.
  *  - Never over a form: it is not rendered on the pages that ARE the enquiry (/book, /contact, the portal
- *    notice), and it hides while any form field has focus (the on-screen keyboard is up and the bar would
+ *    notice) or on the careers pages, and it hides while any form field has focus (the on-screen keyboard is up and the bar would
  *    sit on top of what is being typed) and while the footer is on screen.
  *  - Safe-area aware (the iPhone home indicator), a 44px dismiss target, and a plain link otherwise.
  *  - Dismissal lasts until the page is reloaded and is kept in memory, not in browser storage (the
@@ -21,7 +21,14 @@ import { useMotionValueEvent, useScroll } from "framer-motion";
  * Tiers: no motion beyond a CSS slide; under reduced motion globals.css removes the transition.
  */
 const HIDDEN_ON = new Set(["/book", "/contact", "/portal-opening-soon"]);
+// The careers pages are for people who want to teach, and the tutor's own forms (the application and the yearly
+// reconfirmation) must not sit under a parent's "Book a free consultation".
+const HIDDEN_UNDER = ["/careers", "/safeguarding/reconfirm"];
 let dismissedThisPageLoad = false;
+
+function hiddenOn(pathname: string) {
+  return HIDDEN_ON.has(pathname) || HIDDEN_UNDER.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
 
 export function MobileEnquiryBar() {
   const pathname = usePathname();
@@ -60,7 +67,7 @@ export function MobileEnquiryBar() {
     return () => observer.disconnect();
   }, [pathname]);
 
-  if (dismissed || HIDDEN_ON.has(pathname)) return null;
+  if (dismissed || hiddenOn(pathname)) return null;
 
   const visible = pastHero && !typing && !footerInView;
   return (

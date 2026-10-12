@@ -686,8 +686,10 @@ img[src*="%2Fimages%2F"] {
 }
 
 /* The sliding indicator (SiteHeader.tsx): one 1px-wide bar scaled to the link's width and moved with
-   translateX, so the glide is transform-only. Desktop only: under 59rem the menu is a vertical list and the
-   links carry their own current-page style. */
+   translateX, so the glide is transform-only. Desktop only: under 70rem the menu is a vertical list and the
+   links carry their own current-page style. 70rem is the narrowest width at which the whole desktop header (seven
+   links, Login, the two icon buttons and the booking button) fits on one line with room to spare; narrower than
+   that, a link and a button would collide, so the menu opens from the toggle instead. */
 .primary-navigation {
   position: relative;
 }
@@ -709,13 +711,13 @@ img[src*="%2Fimages%2F"] {
   transition: transform 0.28s var(--ease-out), opacity 0.2s ease;
 }
 
-@media (min-width: 59.01rem) {
+@media (min-width: 70.01rem) {
   .primary-navigation a::after {
     display: none;
   }
 }
 
-@media (max-width: 59rem) {
+@media (max-width: 70rem) {
   .nav-indicator {
     display: none;
   }
@@ -1433,15 +1435,41 @@ img[src*="%2Fimages%2F"] {
   font-size: 0.92rem;
 }
 
+/* Three cards side by side from 70rem, the navy one leading on two columns below that, one column on a phone.
+   Each card keeps the height its own text needs (align-items: start), so a short review is not stretched to
+   match a long one. The grid items are the Reveal wrappers around the cards, so a card's own `grid-column`
+   would do nothing: the wrapper that has to span carries .testimonial-grid__featured. */
 .testimonial-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(1rem, 2.2vw, 1.5rem);
+  align-items: start;
+}
+
+@media (max-width: 70rem) {
+  .testimonial-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .testimonial-grid__featured {
+    grid-column: 1 / -1;
+    order: -1;
+  }
+
+  /* On the full-width card the line would run past 100 characters; keep it to a comfortable measure. */
+  .testimonial-grid__featured .testimonial-card blockquote {
+    max-width: 62ch;
+  }
+}
+
+@media (max-width: 40rem) {
+  .testimonial-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .testimonial-card {
   position: relative;
-  grid-column: span 2;
   min-width: 0;
   margin: 0;
   padding: clamp(1.4rem, 2.4vw, 2rem);
@@ -1459,16 +1487,11 @@ img[src*="%2Fimages%2F"] {
 }
 
 .testimonial-card--featured {
-  grid-column: span 3;
   background:
     radial-gradient(circle at 100% 0, rgb(142 210 173 / 12%), transparent 13rem),
     var(--surface-inverse);
   color: var(--fg-on-inverse-soft);
   box-shadow: 0 16px 38px rgb(9 29 49 / 15%);
-}
-
-.testimonial-card:nth-child(2) {
-  grid-column: span 3;
 }
 
 .testimonial-card__quote {
@@ -1506,6 +1529,8 @@ img[src*="%2Fimages%2F"] {
 .testimonial-card blockquote {
   margin: 0;
   color: var(--fg-body);
+  font-size: 1.0625rem;
+  line-height: 1.65;
 }
 
 .testimonial-card--featured blockquote {
@@ -3802,7 +3827,9 @@ img[src*="%2Fimages%2F"] {
   }
 }
 
-@media (max-width: 59rem) {
+/* The header's menu: below 70rem it opens from the toggle (see the note on the sliding indicator above). The
+   page layout has its own, narrower breakpoint in the block after this one. */
+@media (max-width: 70rem) {
   .menu-toggle {
     display: grid;
   }
@@ -3909,7 +3936,9 @@ img[src*="%2Fimages%2F"] {
   .header-cta {
     width: 100%;
   }
+}
 
+@media (max-width: 59rem) {
   .home-hero__inner,
   .page-hero__inner,
   .split-layout,
@@ -3956,20 +3985,6 @@ img[src*="%2Fimages%2F"] {
 
   .learning-path {
     width: min(100%, 36rem);
-  }
-
-  .testimonial-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .testimonial-card,
-  .testimonial-card--featured,
-  .testimonial-card:nth-child(2) {
-    grid-column: auto;
-  }
-
-  .testimonial-card--featured {
-    grid-column: 1 / -1;
   }
 
   .cta-section__inner {
@@ -4090,7 +4105,6 @@ img[src*="%2Fimages%2F"] {
   .subject-benefit-grid,
   .subject-pathway-grid,
   .steps-grid,
-  .testimonial-grid,
   .approach-grid,
   .values-grid,
   .contact-cards,
@@ -4131,10 +4145,6 @@ img[src*="%2Fimages%2F"] {
 
   .subject-card {
     min-height: 19rem;
-  }
-
-  .testimonial-card--featured {
-    grid-column: auto;
   }
 
   .cta-section__inner .button-group {
@@ -4497,7 +4507,7 @@ html[data-motion="reduce"] .testimonial-card:hover {
 
 /* ── Subjects flyout (components/SubjectsFlyout.tsx) ─────────────────────────────────────────────
    Desktop: a floating card under the "Subjects" link, opened by the chevron button (and by a mouse
-   hovering). Under 59rem (the mobile menu): an inline block in the open menu. */
+   hovering). Under 70rem (the mobile menu): an inline block in the open menu. */
 .nav-flyout {
   position: relative;
   display: inline-flex;
@@ -4636,7 +4646,7 @@ html[data-motion="reduce"] .testimonial-card:hover {
   font-size: 0.85rem;
 }
 
-@media (max-width: 59rem) {
+@media (max-width: 70rem) {
   .nav-flyout {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
