@@ -42,6 +42,7 @@
 }
 
 .notice p {
+  max-width: 80ch;
   margin: 0;
   color: inherit;
 }
@@ -163,6 +164,19 @@
 @media (max-width: 40rem) {
   .roleGrid {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The "Also open" strip on a role page holds up to three cards: all of them across where they fit, one column below
+   that, so there is never a pair with one left alone beneath it. It follows the rules above in the file, so it wins
+   at the same specificity. */
+.roleGridRelated {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 62rem) {
+  .roleGridRelated {
+    grid-template-columns: repeat(var(--related-columns, 3), minmax(0, 1fr));
   }
 }
 
@@ -397,10 +411,63 @@
   font-size: 1.1rem;
 }
 
+.safeguardFacts {
+  margin-top: 0;
+}
+
 .safeguardLinks {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem 1.5rem;
+}
+
+/* Wide: the heading beside the confirmed facts, so a line is about seventy characters rather than a hundred and more
+   across the whole card; then the agreement's commitments, in two columns, and the links, each across the card.
+   Narrow: heading, facts, commitments, links, one under the other. (The commitments appear once the agreement is
+   open, so their row may not exist; the rows therefore carry their own top margins instead of a grid gap.) */
+@media (min-width: 62rem) {
+  .safeguardPanel {
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.45fr);
+    grid-template-areas:
+      "intro facts"
+      "commitments commitments"
+      "links links";
+    column-gap: clamp(2rem, 5vw, 4rem);
+    row-gap: 0;
+    align-items: start;
+  }
+
+  .safeguardIntro {
+    grid-area: intro;
+  }
+
+  .safeguardFacts {
+    grid-area: facts;
+  }
+
+  .safeguardCommitments {
+    grid-area: commitments;
+    margin-top: 1.75rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .safeguardCommitments .checkList {
+    display: block;
+    margin-top: 1rem;
+    column-count: 2;
+    column-gap: clamp(2rem, 5vw, 4rem);
+  }
+
+  .safeguardCommitments .checkList li {
+    margin-bottom: 0.7rem;
+    break-inside: avoid;
+  }
+
+  .safeguardLinks {
+    grid-area: links;
+    margin-top: 1.75rem;
+  }
 }
 
 /* ── Role page ─────────────────────────────────────────────────────────────────────────────── */
@@ -421,6 +488,11 @@
   border-radius: var(--radius-md);
   background: var(--surface-1);
   box-shadow: var(--shadow-2);
+}
+
+/* In the single column of a tablet the aside's notes would run the whole width of the page on one line. */
+.roleSide p {
+  max-width: 60ch;
 }
 
 .roleBlock + .roleBlock {

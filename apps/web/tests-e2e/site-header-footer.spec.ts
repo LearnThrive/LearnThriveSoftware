@@ -87,7 +87,8 @@ test.describe('SiteFooter', () => {
 });
 
 // plan18: Careers is in the main navigation (it was reachable only from the footer), on the desktop header and in the
-// mobile menu, and the header still fits and never collides at the widths in between.
+// mobile menu, and the header still fits and never collides at the widths in between. The dev server compiles a page the
+// first time it is visited, so the checks that follow a click to /careers wait up to 15 seconds rather than five.
 test.describe('Careers in the main navigation', () => {
   test('is a link in the desktop navigation, between FAQ and Book, and marks the careers pages as current', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -99,7 +100,7 @@ test.describe('Careers in the main navigation', () => {
     const order = await nav.getByRole('link').allInnerTexts();
     expect(order.map((text) => text.trim())).toEqual(['Home', 'About', 'Subjects', 'FAQ', 'Careers', 'Book', 'Contact']);
     await careers.click();
-    await expect(page).toHaveURL(/\/careers$/);
+    await expect(page).toHaveURL(/\/careers$/, { timeout: 15_000 });
     await expect(nav.getByRole('link', { name: 'Careers', exact: true })).toHaveAttribute('aria-current', 'page');
     await page.goto('/careers/maths-tutor');
     await expect(nav.getByRole('link', { name: 'Careers', exact: true })).toHaveAttribute('aria-current', 'page');
@@ -112,7 +113,7 @@ test.describe('Careers in the main navigation', () => {
     await nav.getByRole('link', { name: 'Careers', exact: true }).focus();
     await expect(nav.getByRole('link', { name: 'Careers', exact: true })).toBeFocused();
     await page.keyboard.press('Enter');
-    await expect(page).toHaveURL(/\/careers$/);
+    await expect(page).toHaveURL(/\/careers$/, { timeout: 15_000 });
   });
 
   test('is in the mobile menu, and opens the hub from it', async ({ page }) => {
@@ -122,7 +123,7 @@ test.describe('Careers in the main navigation', () => {
     const careers = page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Careers', exact: true });
     await expect(careers).toBeVisible();
     await careers.click();
-    await expect(page).toHaveURL(/\/careers$/);
+    await expect(page).toHaveURL(/\/careers$/, { timeout: 15_000 });
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Tutor with LearnThrive');
   });
 

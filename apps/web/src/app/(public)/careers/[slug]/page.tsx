@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { ButtonLink } from "@/components/ButtonLink";
 import { ApplicationsClosedNotice, ApplyLink, CareersCta, HiringSteps, RoleCard } from "@/components/careers/CareersBlocks";
@@ -83,9 +84,6 @@ export default async function RolePage({ params }: { params: Promise<{ slug: str
                   </svg>
                 </a>
               )}
-              <ButtonLink href="/careers" variant="text">
-                All roles
-              </ButtonLink>
             </div>
           ) : undefined
         }
@@ -207,7 +205,7 @@ export default async function RolePage({ params }: { params: Promise<{ slug: str
               <p className="eyebrow">Other roles</p>
               <h2 id="related-heading">Also open</h2>
             </div>
-            <div className={styles.roleGrid}>
+            <div className={`${styles.roleGrid} ${styles.roleGridRelated}`} style={{ "--related-columns": Math.min(others.length, 3) } as CSSProperties}>
               {others.slice(0, 3).map((entry) => (
                 <RoleCard key={entry.slug} role={entry} open={open} />
               ))}

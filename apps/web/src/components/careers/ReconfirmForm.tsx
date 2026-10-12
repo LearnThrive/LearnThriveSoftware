@@ -137,7 +137,7 @@ export function ReconfirmForm() {
   }
 
   return (
-    <form className={styles.sections} noValidate onSubmit={onSubmit} aria-label="Reconfirm the safeguarding agreement">
+    <form className={`${styles.sections} ${styles.single}`} noValidate onSubmit={onSubmit} aria-label="Reconfirm the safeguarding agreement">
       <p className={forms.note}>
         Nothing you type is saved: if you leave this page before sending, you will lose it. All fields are required.
       </p>

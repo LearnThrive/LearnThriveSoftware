@@ -190,17 +190,17 @@ export default function CareersPage() {
         <Container>
           <Reveal variant="soft">
             <div className={styles.safeguardPanel}>
-              <div>
+              <div className={styles.safeguardIntro}>
                 <p className="eyebrow">Safeguarding</p>
                 <h2 id="safeguarding-heading">Children’s safety comes first</h2>
-                <ul className={styles.checkList}>
-                  {confirmedSafeguardingFacts.map((fact) => (
-                    <li key={fact}>{fact}</li>
-                  ))}
-                </ul>
               </div>
+              <ul className={`${styles.checkList} ${styles.safeguardFacts}`}>
+                {confirmedSafeguardingFacts.map((fact) => (
+                  <li key={fact}>{fact}</li>
+                ))}
+              </ul>
               {agreementOpen() ? (
-                <div>
+                <div className={styles.safeguardCommitments}>
                   <h3>The main commitments in the agreement</h3>
                   <ul className={styles.checkList}>
                     {agreementCommitmentSummary.map((item) => (

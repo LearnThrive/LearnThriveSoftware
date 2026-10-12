@@ -254,6 +254,24 @@
   max-width: 70ch;
 }
 
+/* An odd number of cards ahead of the wide last one would leave one of them alone on its row, with the other half of
+   the row empty. That card takes the row instead, its questions in two columns like the last card's. (Below 1100px
+   every card has a row to itself already.) */
+@media (min-width: 1101px) {
+  .faqSections > *:nth-last-child(2):nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  .faqSections > *:nth-last-child(2):nth-child(odd) .categoryIntro {
+    max-width: 70ch;
+  }
+
+  .faqSections > *:nth-last-child(2):nth-child(odd) .faqWrapper :global(.faq-list) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
 /* ── FAQ accordion items (override global FaqList styles) */
 .faqWrapper :global(.faq-list) {
   display: grid;
