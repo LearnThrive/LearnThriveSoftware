@@ -14,6 +14,7 @@ const navigationRoutes = [
   "/about",
   "/subjects",
   "/faq",
+  "/careers",
   "/book",
   "/contact",
 ];
@@ -80,10 +81,11 @@ test("every primary marketing route has a page", () => {
   }
 });
 
-test("navigation exposes the requested primary routes", () => {
-  for (const route of navigationRoutes) {
-    assert.match(siteSource, new RegExp(`href: [\"']${route.replace("/", "\\/")}[\"']`));
-  }
+test("navigation exposes the requested primary routes, Careers among them", () => {
+  // The `navigation` list itself, not any href in the file: the header, the mobile menu and the search all read it.
+  const block = siteSource.match(/export const navigation = \[([\s\S]*?)\] as const;/)?.[1] ?? "";
+  const hrefs = [...block.matchAll(/href: ["']([^"']+)["']/g)].map((match) => match[1]);
+  assert.deepEqual(hrefs, navigationRoutes);
 });
 
 test("removed tutor directory routes redirect permanently without public links", () => {

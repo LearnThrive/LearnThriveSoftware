@@ -39,6 +39,9 @@ export const metadata: Metadata = createMetadata({
 export default function CareersPage() {
   const open = applicationsOpen();
   const roles = openRoles();
+  // The subject roles are a group of their own; "Register your interest" is the open invitation after them.
+  const subjectRoles = roles.filter((role) => role.kind === "vacancy");
+  const interestRole = roles.find((role) => role.kind === "general");
 
   return (
     <>
@@ -126,10 +129,15 @@ export default function CareersPage() {
             </div>
           </Reveal>
           {roles.length > 0 ? (
-            <div className={styles.roleGrid}>
-              {roles.map((role) => (
-                <RoleCard key={role.slug} role={role} open={open} />
-              ))}
+            <div className={styles.roles}>
+              {subjectRoles.length > 0 ? (
+                <div className={styles.roleGrid}>
+                  {subjectRoles.map((role) => (
+                    <RoleCard key={role.slug} role={role} open={open} />
+                  ))}
+                </div>
+              ) : null}
+              {interestRole ? <RoleCard role={interestRole} open={open} wide /> : null}
             </div>
           ) : (
             <div className={styles.emptyRoles}>
@@ -240,7 +248,7 @@ export default function CareersPage() {
           </Reveal>
           <div className="testimonial-grid">
             {testimonials.slice(0, 3).map((testimonial, index) => (
-              <Reveal variant="soft" key={testimonial.attribution}>
+              <Reveal variant="soft" key={testimonial.attribution} className={index === 1 ? "testimonial-grid__featured" : undefined}>
                 <TestimonialCard {...testimonial} featured={index === 1} />
               </Reveal>
             ))}

@@ -139,11 +139,31 @@
 }
 
 /* ── Roles ─────────────────────────────────────────────────────────────────────────────────── */
-.roleGrid {
+.roles {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
   gap: 1.25rem;
   margin-top: 2rem;
+}
+
+/* The four subject roles: four across where a card has room to read well (78rem and up), two by two below that,
+   one column on a phone. Four cards always fill that grid, so none is ever left alone on a row; "Register your
+   interest" is set apart underneath as a wide card of its own. */
+.roleGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
+@media (max-width: 78rem) {
+  .roleGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 40rem) {
+  .roleGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .roleCard {
@@ -159,6 +179,15 @@
   border-radius: var(--radius-md);
   background: var(--surface-1);
   box-shadow: var(--shadow-2);
+}
+
+/* Where subgrid is available, the five parts of every card in a row (tag, title, summary, facts, actions) line up
+   across the row, so a shorter summary does not shift the facts and buttons of its card out of line with the rest. */
+@supports (grid-template-rows: subgrid) {
+  .roleGrid > .roleCard {
+    grid-row: span 5;
+    grid-template-rows: subgrid;
+  }
 }
 
 .roleCard[data-subject="english"] {
@@ -199,17 +228,19 @@
   font-size: 1.3rem;
 }
 
+/* Label and value sit in two fixed columns, so a long value (the hours) wraps inside its own column instead of
+   dropping under its label and breaking the alignment of the rows above it. */
 .roleMeta {
   display: grid;
-  gap: 0.3rem;
+  gap: 0.45rem;
   margin: 0;
   font-size: 0.92rem;
 }
 
 .roleMeta div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
+  display: grid;
+  grid-template-columns: 4.1rem minmax(0, 1fr);
+  gap: 0.6rem;
 }
 
 .roleMeta dt {
@@ -229,6 +260,76 @@
   align-items: center;
   gap: 0.75rem 1.1rem;
   margin-top: 0.25rem;
+}
+
+/* "Register your interest": the same content as a subject card, laid out across the full width as intro, facts
+   and actions in a row (stacked below 62rem). A tinted surface sets it apart as an open invitation. */
+.roleCardWide {
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.45fr) auto;
+  grid-template-areas:
+    "tag facts actions"
+    "title facts actions"
+    "text facts actions";
+  align-content: center;
+  align-items: start;
+  column-gap: clamp(1.5rem, 3vw, 2.75rem);
+  padding: 1.75rem clamp(1.5rem, 3vw, 2.25rem);
+  background: var(--surface-accent);
+}
+
+.roleCardWide > .roleTag {
+  grid-area: tag;
+  background: var(--surface-1);
+}
+
+.roleCardWide > h3 {
+  grid-area: title;
+}
+
+.roleCardWide > p {
+  grid-area: text;
+  max-width: 44ch;
+  margin: 0;
+}
+
+.roleCardWide > .roleMeta {
+  grid-area: facts;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem 1.5rem;
+}
+
+.roleCardWide > .roleMeta div:last-child {
+  grid-column: 1 / -1;
+}
+
+.roleCardWide > .roleActions {
+  grid-area: actions;
+  align-self: center;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+@media (max-width: 62rem) {
+  .roleCardWide {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "tag"
+      "title"
+      "text"
+      "facts"
+      "actions";
+  }
+
+  .roleCardWide > .roleActions {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+@media (max-width: 40rem) {
+  .roleCardWide > .roleMeta {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .emptyRoles {

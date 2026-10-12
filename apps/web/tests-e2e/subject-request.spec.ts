@@ -172,3 +172,84 @@ test.describe('requesting a subject', () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
   });
 });
+
+// plan18: the introduction and the form are one card. Before, the copy sat in a small column beside a much taller form
+// and the rest of that column was empty.
+test.describe('the layout of the section', () => {
+  const boxes = (page: Page) =>
+    page.evaluate(() => {
+      const root = document.querySelector('#request-a-subject')!;
+      const rect = (el: Element) => {
+        const r = el.getBoundingClientRect();
+        return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height };
+      };
+      const form = root.querySelector('form')!;
+      const heading = root.querySelector('h2')!;
+      const card = form.parentElement!;
+      return {
+        card: rect(card),
+        heading: rect(heading),
+        form: rect(form),
+        subject: rect(root.querySelector('#field-subject')!),
+        level: rect(root.querySelector('#field-level')!),
+        email: rect(root.querySelector('#field-email')!),
+        note: rect(root.querySelector('#field-note')!),
+        send: rect(root.querySelector('button[type="submit"]')!),
+        privacy: rect([...root.querySelectorAll('p')].find((p) => (p.textContent ?? '').startsWith('Your request is sent'))!),
+        sectionHeight: rect(root).height,
+      };
+    });
+
+  test('the heading and the form share one card, the form as wide as the card, nothing beside it left empty', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/subjects');
+    const b = await boxes(page);
+    expect(b.heading.left, 'the heading and the form start at the same edge').toBeLessThanOrEqual(b.form.left + 1);
+    expect(b.heading.top).toBeLessThan(b.form.top);
+    expect(b.form.width / b.card.width, 'the form uses the card').toBeGreaterThan(0.9);
+    expect(b.card.width, 'a wide card, not a narrow column').toBeGreaterThan(900);
+    expect(b.sectionHeight, 'compact: it used to be about 950px tall').toBeLessThan(900);
+  });
+
+  test('subject and level sit side by side, and the email address and its tick-box sit beside the note', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/subjects');
+    const b = await boxes(page);
+    expect(Math.abs(b.subject.top - b.level.top)).toBeLessThan(2);
+    expect(b.subject.right).toBeLessThan(b.level.left);
+    expect(b.email.right).toBeLessThan(b.note.left);
+    expect(Math.abs(b.email.top - b.note.top)).toBeLessThan(40);
+  });
+
+  test('the button, with the person check beside it, and the privacy note come last, inside the card', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/subjects');
+    const b = await boxes(page);
+    expect(b.send.top).toBeGreaterThan(b.note.bottom - 1);
+    expect(b.privacy.top).toBeGreaterThan(b.send.bottom - 1);
+    expect(b.privacy.bottom).toBeLessThanOrEqual(b.card.bottom);
+    await expect(page.locator('#request-a-subject').getByRole('link', { name: 'privacy notice' })).toHaveAttribute('href', '/privacy');
+    await expect(page.locator('#request-a-subject').getByText('once you start filling it in')).toBeVisible();
+  });
+
+  test('one column on a phone, in the order the questions are asked', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/subjects');
+    const b = await boxes(page);
+    expect(b.level.top).toBeGreaterThan(b.subject.bottom - 1);
+    expect(b.email.top).toBeGreaterThan(b.level.bottom - 1);
+    expect(b.note.top).toBeGreaterThan(b.email.bottom - 1);
+    expect(b.send.top).toBeGreaterThan(b.note.bottom - 1);
+  });
+
+  for (const width of [1440, 1024, 834, 768, 390, 360]) {
+    test(`no horizontal overflow at ${width}px, with the Other box open`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/subjects');
+      await page.locator('#request-a-subject').getByLabel('Subject you would like').selectOption('Other');
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+      const clipped = await page.evaluate(() => [...document.querySelectorAll('#request-a-subject input, #request-a-subject select, #request-a-subject textarea, #request-a-subject button')].filter((el) => el.getBoundingClientRect().right > window.innerWidth + 1).length);
+      expect(clipped).toBe(0);
+    });
+  }
+});

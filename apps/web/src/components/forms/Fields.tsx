@@ -241,6 +241,7 @@ export function RadioGroup({
   hint,
   optional,
   stacked,
+  inline,
 }: {
   name: string;
   legend: ReactNode;
@@ -250,7 +251,10 @@ export function RadioGroup({
   error?: string;
   hint?: ReactNode;
   optional?: boolean;
+  /** One choice under another, each as wide as the group. */
   stacked?: boolean;
+  /** Short choices side by side, each only as wide as its own label (so "A parent or guardian" never wraps). */
+  inline?: boolean;
 }) {
   return (
     <fieldset className={`${styles.group}${error ? ` ${styles.invalidGroup}` : ""}`} id={fieldId(name)} tabIndex={-1} aria-describedby={describedBy(name, hint, error)}>
@@ -258,7 +262,7 @@ export function RadioGroup({
         {legend}
         {optional ? <span> (optional)</span> : null}
       </legend>
-      <div className={`${styles.options}${stacked ? ` ${styles.optionsStacked}` : ""}`}>
+      <div className={`${styles.options}${stacked ? ` ${styles.optionsStacked}` : ""}${inline ? ` ${styles.optionsInline}` : ""}`}>
         {options.map((option) => (
           <label className={styles.option} key={option.value}>
             <input type="radio" name={name} value={option.value} checked={value === option.value} onChange={() => onChange(option.value)} />

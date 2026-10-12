@@ -1,6 +1,6 @@
 /*
- * The subject-request panel on /subjects ("Can't see your subject?"): the section around the form and the
- * form's small amount of own layout. The fields, groups and the human-check line come from components/forms.
+ * The subject-request panel on /subjects ("Can't see your subject?"): one card holding the introduction and the
+ * form. The fields, groups and the human-check line come from components/forms. Semantic tokens only.
  */
 .section {
   position: relative;
@@ -8,22 +8,32 @@
   padding: 32px 24px 72px;
 }
 
-.inner {
-  display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
-  gap: clamp(1.75rem, 4vw, 3.5rem);
-  align-items: start;
+/* The card carries the surface the form's fields expect (forms.module.css .shell). */
+.card {
+  composes: shell from "./forms/forms.module.css";
   max-width: 1120px;
   margin: 0 auto;
 }
 
-.copy h2 {
-  margin-top: 0.25rem;
+/* The introduction across the top: the heading on the left, the explanation beside it, a rule under both. */
+.header {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 1rem clamp(2rem, 5vw, 4rem);
+  align-items: end;
+  margin-bottom: clamp(1.25rem, 2.5vw, 1.75rem);
+  padding-bottom: clamp(1.25rem, 2.5vw, 1.75rem);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.header h2 {
+  margin: 0.25rem 0 0;
   font-size: clamp(1.7rem, 3vw, 2.4rem);
 }
 
-.copy p {
-  margin-top: 0.9rem;
+.intro {
+  max-width: 52ch;
+  margin: 0;
   color: var(--fg-ink);
 }
 
@@ -37,7 +47,7 @@
 }
 
 .fallback {
-  margin-top: 1.1rem;
+  margin: 1.1rem 0 0;
   color: var(--fg-muted);
   font-size: 0.92rem;
 }
@@ -47,8 +57,29 @@
   gap: 1.5rem;
 }
 
+/* The email address and the tick-box that says what it is for sit together, beside the note. */
+.stack {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+}
+
+/* Under the fields: the button with the human-check line beside it, then the small print across the full width. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.9rem 1.4rem;
+}
+
+.privacy {
+  max-width: 78ch;
+  margin: 0;
+}
+
 @media (max-width: 62rem) {
-  .inner {
+  .header {
     grid-template-columns: minmax(0, 1fr);
+    align-items: start;
   }
 }

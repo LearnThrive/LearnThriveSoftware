@@ -37,9 +37,14 @@ export function subjectKey(role: CareerRole): string {
   return role.kind === "general" ? "general" : (SUBJECT_KEY[role.subject] ?? "general");
 }
 
-export function RoleCard({ role, open }: { role: CareerRole; open: boolean }) {
+/**
+ * One role. `wide` lays the same content out across the full width (intro, facts, actions in a row): used for
+ * "Register your interest", which is an open invitation and not one more subject vacancy, so it is set apart
+ * from the four subject cards instead of sitting alone on a second row.
+ */
+export function RoleCard({ role, open, wide = false }: { role: CareerRole; open: boolean; wide?: boolean }) {
   return (
-    <article className={styles.roleCard} data-subject={subjectKey(role)}>
+    <article className={`${styles.roleCard}${wide ? ` ${styles.roleCardWide}` : ""}`} data-subject={subjectKey(role)}>
       <span className={styles.roleTag}>{role.kind === "general" ? "Any subject" : role.subject}</span>
       <h3>{role.title}</h3>
       <p>{role.summary}</p>

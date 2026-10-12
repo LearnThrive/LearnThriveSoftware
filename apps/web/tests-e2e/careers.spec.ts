@@ -306,3 +306,179 @@ test.describe('the rest of the site', () => {
     expect(cookies).toContain('it sets no cookies, saves nothing and contacts no outside service');
   });
 });
+
+// ── the layout of the hub (plan18) ─────────────────────────────────────────────────────────────────────
+// The four subject roles are one balanced group and "Register your interest" is a wide card of its own beneath them,
+// so no card is left alone on a row. The families' reviews have room to read, each at the height its own text needs.
+
+const roleBoxes = (page: Page) =>
+  page.evaluate(() => {
+    const cards = [...document.querySelectorAll<HTMLElement>('#open-roles article')].map((card) => {
+      const r = card.getBoundingClientRect();
+      const value = card.querySelectorAll('dd');
+      const facts = [...card.querySelectorAll('dl > div')].map((row) => {
+        const label = row.querySelector('dt')!.getBoundingClientRect();
+        const text = row.querySelector('dd')!.getBoundingClientRect();
+        return { labelRight: label.right, labelTop: label.top, valueLeft: text.left, valueTop: text.top };
+      });
+      return { title: card.querySelector('h3')!.textContent!.trim(), left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height, facts, valueLefts: [...value].map((dd) => Math.round(dd.getBoundingClientRect().left)) };
+    });
+    return cards;
+  });
+
+test.describe('the open roles layout', () => {
+  test('on a wide screen: four equal subject cards in one row, then Register your interest across the full width', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/careers');
+    const cards = await roleBoxes(page);
+    expect(cards.map((c) => c.title)).toEqual(['Maths Tutor', 'English Tutor', 'Science Tutor', '11+ Preparation Tutor', 'Register your interest']);
+    const subjects = cards.slice(0, 4);
+    const interest = cards[4];
+    expect(new Set(subjects.map((c) => Math.round(c.top))).size, 'the four subject cards share one row').toBe(1);
+    expect(new Set(subjects.map((c) => Math.round(c.height))).size, 'and are the same height').toBe(1);
+    expect(Math.max(...subjects.map((c) => c.width)) - Math.min(...subjects.map((c) => c.width))).toBeLessThan(2);
+    expect(interest.top, 'Register your interest is under them').toBeGreaterThanOrEqual(subjects[0].bottom);
+    const span = Math.max(...subjects.map((c) => c.right)) - Math.min(...subjects.map((c) => c.left));
+    expect(interest.width, 'and as wide as the group above').toBeGreaterThanOrEqual(span - 2);
+    expect(interest.left).toBeLessThanOrEqual(subjects[0].left + 2);
+  });
+
+  test('the title, summary, facts and buttons line up across the four cards', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/careers');
+    const tops = await page.evaluate(() => {
+      const row = [...document.querySelectorAll<HTMLElement>('#open-roles article')].slice(0, 4);
+      const of = (selector: string) => row.map((card) => Math.round(card.querySelector(selector)!.getBoundingClientRect().top));
+      return { title: of('h3'), summary: of('h3 + p'), facts: of('dl') };
+    });
+    expect(new Set(tops.title).size, 'titles').toBe(1);
+    expect(new Set(tops.summary).size, 'summaries').toBe(1);
+    expect(new Set(tops.facts).size, 'facts').toBe(1);
+  });
+
+  test('two by two below 1248px, with Register your interest underneath, and one column on a phone', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 900 });
+    await page.goto('/careers');
+    let cards = await roleBoxes(page);
+    expect(new Set(cards.slice(0, 4).map((c) => Math.round(c.left))).size, 'two columns').toBe(2);
+    expect(new Set(cards.slice(0, 4).map((c) => Math.round(c.top))).size, 'two rows').toBe(2);
+    expect(cards[4].top).toBeGreaterThanOrEqual(cards[3].bottom);
+    expect(cards[4].width).toBeGreaterThan(cards[0].width * 1.8);
+    await page.setViewportSize({ width: 390, height: 844 });
+    cards = await roleBoxes(page);
+    expect(new Set(cards.map((c) => Math.round(c.left))).size, 'one column').toBe(1);
+  });
+
+  test('every fact keeps its value beside its label, and the values of a card line up in their column', async ({ page }) => {
+    for (const width of [1440, 834, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/careers');
+      for (const card of await roleBoxes(page)) {
+        for (const fact of card.facts) {
+          expect(fact.valueLeft, `${card.title} at ${width}px: a value starts after its label`).toBeGreaterThanOrEqual(fact.labelRight);
+          expect(Math.abs(fact.valueTop - fact.labelTop), `${card.title} at ${width}px: and on the same line as its label`).toBeLessThan(4);
+        }
+        // One column of facts has one left edge. The wide card sets its facts in two columns of its own above a phone.
+        const columns = card.title === 'Register your interest' && width > 640 ? 2 : 1;
+        expect(new Set(card.valueLefts).size, `${card.title} at ${width}px: the values start at ${columns} left edge(s)`).toBeLessThanOrEqual(columns);
+      }
+    }
+  });
+
+  test('every role still states its terms and has a way to view it and to apply', async ({ page }) => {
+    await page.goto('/careers');
+    const roles = page.locator('#open-roles article');
+    await expect(roles).toHaveCount(5);
+    for (let i = 0; i < 5; i += 1) {
+      const card = roles.nth(i);
+      await expect(card).toContainText('Self-employed');
+      await expect(card).toContainText('Online, one to one');
+      await expect(card).toContainText('£10 an hour per student.');
+      await expect(card).toContainText('Hours depend on student availability.');
+      await expect(card.getByRole('link', { name: /^View role/ })).toHaveAttribute('href', /^\/careers\/[a-z0-9-]+$/);
+      await expect(card.getByRole('link', { name: /^Apply/ })).toBeVisible();
+    }
+  });
+
+  for (const width of [1440, 1280, 1100, 834, 768, 390, 360]) {
+    test(`no horizontal overflow in the roles at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/careers');
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+      const overflowing = await page.evaluate(() => [...document.querySelectorAll('#open-roles article')].filter((el) => el.getBoundingClientRect().right > window.innerWidth + 1).length);
+      expect(overflowing).toBe(0);
+    });
+  }
+});
+
+const familyBoxes = (page: Page) =>
+  page.evaluate(() => {
+    const section = document.querySelector('section[aria-labelledby="families-heading"]')!;
+    const container = section.querySelector('.container')!.getBoundingClientRect();
+    return {
+      container: { left: container.left, right: container.right, width: container.width },
+      cards: [...section.querySelectorAll('figure')].map((figure) => {
+        const r = figure.getBoundingClientRect();
+        const quote = figure.querySelector('blockquote')!;
+        const lh = parseFloat(getComputedStyle(quote).lineHeight);
+        const lines = Math.max(1, Math.round(quote.getBoundingClientRect().height / lh));
+        return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height, charsPerLine: (quote.textContent ?? '').length / lines, featured: figure.classList.contains('testimonial-card--featured') };
+      }),
+    };
+  });
+
+test.describe('the families section layout', () => {
+  test('three cards side by side across the container, each wide enough to read, at the height its own text needs', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/careers');
+    const { container, cards } = await familyBoxes(page);
+    expect(cards).toHaveLength(3);
+    expect(new Set(cards.map((c) => Math.round(c.top))).size, 'one row').toBe(1);
+    for (const card of cards) {
+      expect(card.width, 'a card is at least 320px wide').toBeGreaterThanOrEqual(320);
+      expect(card.charsPerLine, 'about 30 to 60 characters a line').toBeGreaterThan(28);
+      expect(card.charsPerLine).toBeLessThan(62);
+      expect(card.right).toBeLessThanOrEqual(container.right + 1);
+    }
+    const used = Math.max(...cards.map((c) => c.right)) - Math.min(...cards.map((c) => c.left));
+    expect(used / container.width, 'the cards use the whole width of the container').toBeGreaterThan(0.95);
+    // Natural heights: a card is as tall as its own words need, not stretched to match its neighbour.
+    expect(cards[2].height).toBeLessThan(cards[0].height);
+  });
+
+  test('on a tablet the navy review leads on its own row, and the other two sit side by side under it', async ({ page }) => {
+    await page.setViewportSize({ width: 834, height: 1112 });
+    await page.goto('/careers');
+    const { container, cards } = await familyBoxes(page);
+    const featured = cards.find((c) => c.featured)!;
+    const others = cards.filter((c) => !c.featured);
+    expect(featured.width).toBeGreaterThan(container.width * 0.95);
+    expect(others.every((c) => c.top >= featured.bottom)).toBe(true);
+    expect(new Set(others.map((c) => Math.round(c.top))).size, 'the other two share a row').toBe(1);
+    expect(featured.charsPerLine, 'the wide card keeps a readable line').toBeLessThan(75);
+  });
+
+  test('one column on a phone, nothing clipped', async ({ page }) => {
+    for (const width of [390, 360]) {
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto('/careers');
+      const { container, cards } = await familyBoxes(page);
+      expect(new Set(cards.map((c) => Math.round(c.left))).size).toBe(1);
+      for (const card of cards) {
+        expect(card.right).toBeLessThanOrEqual(container.right + 1);
+        expect(card.left).toBeGreaterThanOrEqual(container.left - 1);
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+    }
+  });
+
+  test('the reviews are the real ones, word for word', async ({ page }) => {
+    await page.goto('/careers');
+    const text = (await page.locator('section[aria-labelledby="families-heading"]').innerText()).replace(/\s+/g, ' ');
+    for (const review of testimonials.slice(0, 3)) {
+      expect(text).toContain(review.title);
+      expect(text).toContain(review.quote.replace(/\s+/g, ' '));
+      expect(text).toContain(review.attribution);
+    }
+  });
+});
