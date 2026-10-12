@@ -241,6 +241,19 @@
   animation: lt-rise var(--duration-hero) var(--ease-gentle) both 0.42s;
 }
 
+/* On a phone the two do not fit side by side without breaking their labels ("Send an enquiry" and its arrow, or
+   "How it works", over two lines), so they stack, each the width of the column. */
+@media (max-width: 30rem) {
+  .heroButtons {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .heroButtons > a {
+    text-align: center;
+  }
+}
+
 .btnPrimary {
   display: inline-block;
   background: var(--accent-strong);
@@ -1554,6 +1567,9 @@
   .whySection,
   .subjectsSection,
   .levelsSection,
+  .productSection,
+  .trustSection,
+  .testimonialsSection,
   .enquirySection {
     padding-left: 16px;
     padding-right: 16px;

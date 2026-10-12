@@ -17,17 +17,22 @@ interface AxeViolation {
   nodes: Array<{ target: string[]; failureSummary?: string }>;
 }
 
-async function runAxe(page: Page, label: string) {
+// WCAG 2.0 A/AA for the signed-in app. The public site is held to WCAG 2.2 AA (plan18): 2.1 and 2.2 add the rules
+// that decide whether a control can be hit (target size, 2.5.8), which 2.0 does not have.
+const WCAG2 = ['wcag2a', 'wcag2aa'];
+const WCAG22 = ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'];
+
+async function runAxe(page: Page, label: string, tags: string[] = WCAG2) {
   await page.addScriptTag({ content: AXE_SOURCE });
-  const results = await page.evaluate(async () => {
+  const results = await page.evaluate(async (values) => {
     // @ts-expect-error injected global, no types installed for the browser build
     return await window.axe.run(document, {
       // Landmark/region rules fire a lot of noise on component-library-style pages that don't
       // put every pixel inside a named landmark; the rest of WCAG 2 A/AA is what actually
       // matters for the roles this product serves (keyboard users, screen readers, low vision).
-      runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa'] },
+      runOnly: { type: 'tag', values },
     });
-  }) as { violations: AxeViolation[] };
+  }, tags) as { violations: AxeViolation[] };
 
   if (results.violations.length > 0) {
     const summary = results.violations
@@ -51,7 +56,7 @@ async function login(page: Page, email: string, password: string) {
 const ADMIN = { email: 'admin@learnthrive.dev', password: 'dev-admin-pass' };
 const TUTOR = { email: 'tutor@learnthrive.dev', password: 'dev-tutor-pass' };
 
-test.describe('automated accessibility (axe-core, WCAG 2 A/AA)', () => {
+test.describe('automated accessibility (axe-core: WCAG 2.2 AA on the public site, WCAG 2 A/AA in the app)', () => {
   // The marketing site's own entrance animations (home.module.css's lt-rise: opacity 0 -> 1 over
   // ~0.8s) fade elements in from transparent, and axe scores contrast on whatever's actually
   // rendered at the instant it runs — catching one mid-fade is a real reading, just of a state
@@ -63,10 +68,10 @@ test.describe('automated accessibility (axe-core, WCAG 2 A/AA)', () => {
   });
 
   // plan11.md task 19: "run axe over all public routes" — was just marketing home.
-  for (const route of PUBLIC_ROUTES) {
+  for (const route of [...PUBLIC_ROUTES, '/portal-opening-soon']) {
     test(`public route: ${route}`, async ({ page }) => {
       await page.goto(route);
-      await runAxe(page, route);
+      await runAxe(page, route, WCAG22);
     });
   }
 

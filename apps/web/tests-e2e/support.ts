@@ -39,6 +39,7 @@ export const PUBLIC_ROUTES = [
   '/tuition-terms',
   '/complaints',
   '/accessibility',
+  '/trust',
   // plan: careers (CAREERS_PROMPT.md). The dev server opens the forms for testing, so the form pages are swept too.
   '/careers',
   '/careers/maths-tutor',

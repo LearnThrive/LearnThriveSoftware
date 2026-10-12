@@ -106,7 +106,7 @@ export function SubjectsFlyout({
         type="button"
         aria-expanded={open}
         aria-controls={panelId}
-        aria-label="Open the what we teach menu"
+        aria-label="What we teach"
         onClick={() => setPinnedOn(pinnedOn === pathname ? null : pathname)}
       >
         <svg viewBox="0 0 20 20" aria-hidden="true">

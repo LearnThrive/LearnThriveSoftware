@@ -99,6 +99,12 @@
   gap: 1.5rem;
 }
 
+/* A form with no section list beside it (the yearly reconfirmation) would otherwise run the whole width of the
+   page, with lines of well over a hundred characters. This is about the width the application's own column has. */
+.single {
+  max-width: 54rem;
+}
+
 .section {
   scroll-margin-top: 6.5rem;
   padding: clamp(1.25rem, 3vw, 2rem);

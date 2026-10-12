@@ -1730,6 +1730,27 @@ img[src*="%2Fimages%2F"] {
   box-shadow: var(--shadow-2);
 }
 
+/* Seven policies would leave the last card alone on its row at two columns and at three. With exactly seven, the first
+   (safeguarding, the one a parent looks for first) takes a row of its own as a banner, its title and text side by
+   side, and the other six fill rows of two or of three exactly. Any other count keeps the plain grid. */
+@media (min-width: 41rem) {
+  .trust-hub > li:first-child:nth-last-child(7) {
+    grid-column: 1 / -1;
+  }
+
+  .trust-hub > li:first-child:nth-last-child(7) .trust-hub__card {
+    display: grid;
+    grid-template-columns: minmax(0, 15rem) minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: clamp(1.5rem, 4vw, 3rem);
+  }
+
+  .trust-hub > li:first-child:nth-last-child(7) .trust-hub__go {
+    margin-top: 0;
+    padding-top: 0;
+  }
+}
+
 .trust-hub__title {
   font-family: var(--lt-font-heading);
   font-size: 1.15rem;
@@ -3549,7 +3570,9 @@ img[src*="%2Fimages%2F"] {
   max-width: 10ch;
 }
 
-.not-found__inner > p:not(.eyebrow) {
+/* The copy sits in a wrapper beside the picture, so this has to reach the paragraph inside it (a child selector
+   matched nothing and left the paragraph touching the heading and the buttons). */
+.not-found__inner p:not(.eyebrow) {
   max-width: 40rem;
   margin-block: 1.4rem 2rem;
   font-size: 1.1rem;
@@ -3705,7 +3728,7 @@ img[src*="%2Fimages%2F"] {
   padding-top: 0.9rem;
   border-top: 1px solid rgb(255 255 255 / 8%);
   color: #7a8f9c;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   line-height: 1.6;
 }
 
@@ -4517,9 +4540,11 @@ html[data-motion="reduce"] .testimonial-card:hover {
 .nav-flyout__toggle {
   display: inline-grid;
   place-items: center;
-  width: 1.6rem;
+  /* 1.75rem x 2.75rem, and clear of the link beside it: a target that overlaps its neighbour keeps less than the
+     24px WCAG 2.2 asks for (2.5.8), which a negative margin here used to cost. */
+  width: 1.75rem;
   height: 2.75rem;
-  margin-left: -0.15rem;
+  margin-left: 0;
   padding: 0;
   border: 0;
   background: none;

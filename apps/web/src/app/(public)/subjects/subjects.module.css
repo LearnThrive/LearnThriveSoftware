@@ -350,6 +350,22 @@
   margin-top: 28px;
 }
 
+/* Each card sits inside three wrappers (the reveal, then the two layers of the pointer-depth effect), so a card stayed
+   as short as its own text while its neighbour was taller (Science's GCSE card lists three subjects). The wrappers
+   pass the height of the row down, so the cards of a row are one height. */
+.levelCards > *,
+.levelCards > * > *,
+.levelCards > * > * > * {
+  display: flex;
+  flex-direction: column;
+}
+
+.levelCards > * > *,
+.levelCards > * > * > *,
+.levelCards > * > * > * > .levelCard {
+  flex: 1;
+}
+
 /* The hover shadow lives on a pseudo-element that is drawn once and only fades in. Interpolating
    `box-shadow` itself repaints the whole 44px-blurred region on every frame of the transition;
    an opacity change on an already-painted layer is compositor work (plan11.md task 5). The colour

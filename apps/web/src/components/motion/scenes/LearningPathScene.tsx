@@ -65,7 +65,7 @@ export function LearningPathScene({ steps }: { steps: readonly LearningPathStep[
               {i + 1}
             </span>
             <div className={styles.howStepContent}>
-              <h4 className={styles.howStepTitle}>{step.title}</h4>
+              <h3 className={styles.howStepTitle}>{step.title}</h3>
               <p className={styles.howStepText}>{step.text}</p>
             </div>
           </div>

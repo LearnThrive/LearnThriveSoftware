@@ -187,6 +187,30 @@ test.describe('the section layouts', () => {
   });
 });
 
+test.describe('the level cards', () => {
+  // The cards sit inside three wrappers (the reveal and the two layers of the pointer-depth effect), so each used to be
+  // as tall as its own text: Science's GCSE card, which lists three sciences, stood well above its neighbours. They are
+  // one height along a row now.
+  for (const width of [1440, 834]) {
+    test(`at ${width}px the cards of a row are the same height, for every subject`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/subjects');
+      for (const { id } of SECTIONS) {
+        const cards = await page.evaluate((sectionId) => [...document.querySelectorAll(`#${sectionId} [class*="levelCards"] > * > * > * > *`)].map((card) => {
+          const r = card.getBoundingClientRect();
+          return { top: Math.round(r.top), height: Math.round(r.height) };
+        }), id);
+        expect(cards, `${id}: four level cards`).toHaveLength(4);
+        const rows = new Map<number, number[]>();
+        for (const card of cards) rows.set(card.top, [...(rows.get(card.top) ?? []), card.height]);
+        for (const [top, heights] of rows) {
+          expect(Math.max(...heights) - Math.min(...heights), `${id} at ${width}px, row at ${top}: heights ${heights.join(', ')}`).toBeLessThanOrEqual(1);
+        }
+      }
+    });
+  }
+});
+
 test.describe('the subject landing pages are unchanged', () => {
   for (const slug of ['maths', 'english', 'science', '11-plus'] as const) {
     test(`${subjectLandingPages[slug].path}: the hero card has its icon, label, stage and note, and the icon keeps its view-transition name`, async ({ page }) => {

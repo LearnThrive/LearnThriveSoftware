@@ -482,3 +482,62 @@ test.describe('the families section layout', () => {
     }
   });
 });
+
+// ── the role pages and the safeguarding block (plan18 audit) ───────────────────────────────────────────────
+
+test.describe('a role page', () => {
+  test('has one way back to the hub in its hero, the breadcrumb, and no second link worded "All roles"', async ({ page }) => {
+    await page.goto('/careers/maths-tutor');
+    const hero = page.locator('section.page-hero');
+    await expect(hero.getByRole('link', { name: 'All roles' })).toHaveCount(0);
+    await expect(hero.locator('a[href="/careers"]')).toHaveCount(1);
+    await expect(hero.getByRole('link', { name: 'Apply for this role' })).toBeVisible();
+  });
+
+  test('"Also open" is three cards across on a wide screen and one column below that, never a pair with one alone', async ({ page }) => {
+    for (const [width, columns] of [[1440, 3], [1100, 3], [834, 1], [390, 1]] as const) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/careers/maths-tutor');
+      const boxes = await page.evaluate(() => [...document.querySelectorAll('section[aria-labelledby="related-heading"] article')].map((card) => {
+        const r = card.getBoundingClientRect();
+        return { left: Math.round(r.left), right: r.right };
+      }));
+      expect(boxes, `three cards at ${width}px`).toHaveLength(3);
+      expect(new Set(boxes.map((b) => b.left)).size, `${columns} column(s) at ${width}px`).toBe(columns);
+      expect(Math.max(...boxes.map((b) => b.right)), `nothing past the screen at ${width}px`).toBeLessThanOrEqual(width);
+    }
+  });
+});
+
+test.describe('the safeguarding block on the hub', () => {
+  test('on a wide screen the heading sits beside the facts, and no line of the lists runs past about ninety characters', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/careers');
+    const result = await page.evaluate(() => {
+      const section = document.querySelector('section[aria-labelledby="safeguarding-heading"]')!;
+      const heading = section.querySelector('h2')!.getBoundingClientRect();
+      const firstFact = section.querySelector('li')!.getBoundingClientRect();
+      const measures = [...section.querySelectorAll('li')].map((li) => {
+        const style = getComputedStyle(li);
+        const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.5;
+        const lines = Math.max(1, Math.round(li.getBoundingClientRect().height / lineHeight));
+        return (li.textContent ?? '').length / lines;
+      });
+      return { headingRight: heading.right, factLeft: firstFact.left, longest: Math.max(...measures) };
+    });
+    expect(result.factLeft, 'the facts start to the right of the heading').toBeGreaterThan(result.headingRight - 1);
+    expect(result.longest, 'a line is about 90 characters at most (it was 105 and more across the whole card)').toBeLessThan(95);
+  });
+
+  test('keeps its order on a phone: heading, facts, commitments, links', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/careers');
+    const tops = await page.evaluate(() => {
+      const section = document.querySelector('section[aria-labelledby="safeguarding-heading"]')!;
+      const top = (el: Element | null) => el!.getBoundingClientRect().top;
+      const links = [...section.querySelectorAll('a')].find((a) => (a.textContent ?? '').includes('Read the safeguarding agreement'));
+      return [top(section.querySelector('h2')), top(section.querySelector('li')), top(section.querySelector('h3')), top(links ?? null)];
+    });
+    expect(tops).toEqual([...tops].sort((a, b) => a - b));
+  });
+});

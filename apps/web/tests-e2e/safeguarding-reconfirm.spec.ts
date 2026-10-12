@@ -123,6 +123,16 @@ test.describe('reconfirming the safeguarding agreement', () => {
     });
   }
 
+  // The form has no section list beside it, so without a limit it ran the whole 1200px of the page, with lines of 130
+  // characters or more. It is the width of the application form's own column now.
+  test('is a readable column on a wide screen, not the whole width of the page', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/safeguarding/reconfirm');
+    const width = await page.getByRole('form', { name: 'Reconfirm the safeguarding agreement' }).evaluate((el) => el.getBoundingClientRect().width);
+    expect(width).toBeLessThanOrEqual(54 * 16 + 1);
+    expect(width).toBeGreaterThan(600);
+  });
+
   test('has no horizontal overflow at 360px', async ({ page }) => {
     await page.setViewportSize({ width: 360, height: 800 });
     await page.goto('/safeguarding/reconfirm');

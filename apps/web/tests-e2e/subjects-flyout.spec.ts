@@ -3,7 +3,7 @@ import { test, expect, type Page } from '@playwright/test';
 // plan15 Wave 10 section 14.2: the Subjects flyout in the header. A disclosure beside the Subjects link:
 // keyboard and touch operable, nothing hover-only, closes on Escape / outside press / navigation.
 
-const toggle = (page: Page) => page.getByRole('button', { name: 'Open the what we teach menu' });
+const toggle = (page: Page) => page.getByRole('button', { name: 'What we teach' });
 const panel = (page: Page) => page.getByRole('group', { name: 'What we teach' });
 
 test.describe('desktop', () => {
@@ -18,6 +18,17 @@ test.describe('desktop', () => {
     await expect(page.locator('.nav-flyout__panel')).toHaveAttribute('inert', '');
     await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Subjects', exact: true }).click();
     await expect(page).toHaveURL(/\/subjects$/);
+  });
+
+  // WCAG 2.2 (2.5.8): a target is at least 24 by 24 CSS pixels, and a target that overlaps its neighbour keeps less. The
+  // toggle used to tuck 2px under the Subjects link, which left it 23.2px wide.
+  test('the toggle is a proper target: at least 24px each way, and clear of the Subjects link beside it', async ({ page }) => {
+    await page.goto('/about');
+    const link = await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Subjects', exact: true }).boundingBox();
+    const button = await toggle(page).boundingBox();
+    expect(button!.width).toBeGreaterThanOrEqual(24);
+    expect(button!.height).toBeGreaterThanOrEqual(24);
+    expect(button!.x, 'it starts where the link ends').toBeGreaterThanOrEqual(link!.x + link!.width - 0.5);
   });
 
   test('a click opens it with the four subjects and an all-subjects link; choosing one navigates and closes it', async ({ page }) => {
