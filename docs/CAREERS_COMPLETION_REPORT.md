@@ -12,7 +12,7 @@ Everything the brief asks for is built and tested, with one deliberate exception
 
 - 6 of the agreement's 66 clauses restate a rule you confirmed and are marked approved. The other 60 are proposals (section 5).
 - While `careersConfig.agreementApprovedByOwner` is `false` (the shipped value): the agreement page carries a draft notice and is kept out of the sitemap and search; `/careers/apply` and `/safeguarding/reconfirm` say they open soon and show no form; `POST /api/careers/apply` and `POST /api/safeguarding/reconfirm` answer 503 and send nothing; no page carries job-posting markup; the home page shows no recruitment band.
-- The hub, the role pages, the applicant privacy notice, the subject-request form and the subject hero cards are live now.
+- The hub, the role pages, the applicant privacy notice, the subject-request form and the subject hero cards are live now. (The hero cards were later taken off `/subjects`, where they repeated each section's heading and carried a second link to the same page; they remain on each subject's own page. See `docs/UI_UX_COMPLETION_REPORT.md`.)
 
 To open applications: approve or edit the proposals, set `agreementApprovedByOwner` to `true` in `apps/web/src/lib/careers-config.ts`, bump the agreement version date, set the production variables listed in `docs/DEPLOYMENT.md`, and run the probes in `docs/RENDER.md`. A test fails the build if the flag is `true` while any clause is still unapproved.
 
@@ -55,7 +55,9 @@ On `/subjects`, before the closing call to action: a subject list ending in "Oth
 
 ### The subject hero cards
 
-One shared `SubjectHeroCard`, used on each subject's own page and in each subject section of `/subjects`. One source of words (`subjectLandingPages` in `src/lib/site.ts`). On a wide screen: text, card, photograph in one row; between 1100px and 1280px the card sits under the text with the photograph beside both; on a phone, text, card, photograph stacked. The 11+ panel has its card inside it.
+One shared `SubjectHeroCard`, used on each subject's own page. One source of words (`subjectLandingPages` in `src/lib/site.ts`).
+
+**Since this report was first written:** the card was also set in each subject section of `/subjects`, between the section's text and its photograph. The plan18 audit removed it from that page: it repeated the section's heading, stage range and description, and its "Explore Maths Tuition" link went to the same page as the section's own "Explore Maths in depth" link. Each section on `/subjects` now has the text, one link and the photograph; the 11+ panel sets its four areas beside its text. The card on each subject's own page is unchanged, and `tests-e2e/subjects-layout.spec.ts` (which replaced `subjects-hero-cards.spec.ts`) checks both.
 
 ### Supporting changes
 
@@ -417,7 +419,7 @@ No escalation process was invented. Where the site describes what happens after 
 | `subjectRequest.test.mjs` | 14 | The subject-request route and its confirmation rule |
 | `careers.test.mjs` | 8 | The gates, the roles and their terms, the JobPosting markup, and that no source says refresher training, induction or names Google as a provider |
 
-**End-to-end specs added** (every POST is mocked, because this project has real email credentials; the routes themselves are covered by the unit tests above): `careers.spec.ts` (25), `careers-apply.spec.ts` (39), `safeguarding-reconfirm.spec.ts` (10), `subject-request.spec.ts` (13) and `subjects-hero-cards.spec.ts` (15), plus the seven new routes in the shared sweeps in `tests-e2e/support.ts` (motion and reveal, axe in light and dark, images, content consistency, theme, 360px overflow). They cover keyboard-only completion, error summaries and focus, the live region, files added, replaced and refused, the date rule, the human check and its fallback, the unsent-work guards, JavaScript off, axe at WCAG 2 A and AA in light and dark, no horizontal overflow from 360px to 1440px, and touch targets of at least 44px.
+**End-to-end specs added** (every POST is mocked, because this project has real email credentials; the routes themselves are covered by the unit tests above): `careers.spec.ts` (25), `careers-apply.spec.ts` (39), `safeguarding-reconfirm.spec.ts` (10), `subject-request.spec.ts` (13) and `subjects-hero-cards.spec.ts` (15, since renamed `subjects-layout.spec.ts` and rewritten for plan18), plus the seven new routes in the shared sweeps in `tests-e2e/support.ts` (motion and reveal, axe in light and dark, images, content consistency, theme, 360px overflow). They cover keyboard-only completion, error summaries and focus, the live region, files added, replaced and refused, the date rule, the human check and its fallback, the unsent-work guards, JavaScript off, axe at WCAG 2 A and AA in light and dark, no horizontal overflow from 360px to 1440px, and touch targets of at least 44px.
 
 ### Problems the full run found, and what was done
 
@@ -494,7 +496,7 @@ npx playwright test tests-e2e/careers.spec.ts
 npx playwright test tests-e2e/careers-apply.spec.ts
 npx playwright test tests-e2e/safeguarding-reconfirm.spec.ts
 npx playwright test tests-e2e/subject-request.spec.ts
-npx playwright test tests-e2e/subjects-hero-cards.spec.ts
+npx playwright test tests-e2e/subjects-layout.spec.ts
 ```
 
 To try the forms in development while the agreement is still a draft, start the dev server with `CAREERS_OPEN_FOR_TESTING=1` (a production build ignores it). Nothing in the e2e suite sends a real email.
