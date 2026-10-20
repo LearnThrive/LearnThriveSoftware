@@ -1,4 +1,5 @@
-import type { AccessRepository, AccountRepository, DownloadRepository, LibraryStore, ResourceRepository, SqlExecutor } from "./ports";
+import { deriveEntitlement, type AdminGrantRecord, type PlanInterval, type SubscriptionRecord, type SubscriptionStatus } from "./billing";
+import type { AccessRepository, AccountRepository, BillingRepository, DownloadRepository, LibraryStore, ResourceRepository, SqlExecutor } from "./ports";
 import type { AccessFacts, Account, Facet, FacetScope, Level, Resource, ResourceFacets, ResourceFile, ResourcePage, ResourceQuery, ResourceType } from "./types";
 
 const DEFAULT_LIMIT = 24;
@@ -28,6 +29,25 @@ function toResource(row: Row): Resource {
 
 function toFile(row: Row): ResourceFile {
   return { id: row.id, resourceId: row.resource_id, storagePath: row.storage_path, bytes: Number(row.bytes), contentType: row.content_type, checksumSha256: row.checksum_sha256 };
+}
+
+const date = (value: unknown): Date | null => (value ? new Date(value as string | number | Date) : null);
+
+function toSubscription(row: Row): SubscriptionRecord {
+  return {
+    id: row.id,
+    clientId: row.client_id,
+    stripeSubscriptionId: row.stripe_subscription_id,
+    stripePriceId: row.stripe_price_id,
+    status: row.status as SubscriptionStatus,
+    planInterval: row.plan_interval as PlanInterval,
+    currentPeriodEnd: date(row.current_period_end),
+    cancelAtPeriodEnd: row.cancel_at_period_end === true,
+    canceledAt: date(row.canceled_at),
+    endedAt: date(row.ended_at),
+    createdAt: new Date(row.created_at),
+    refundedAt: date(row.refunded_at),
+  };
 }
 
 function clamp(value: number | undefined, fallback: number, max: number): number {
@@ -191,6 +211,115 @@ export class SqlLibraryStore implements LibraryStore {
       );
       const r = rows[0] ?? {};
       return { enrolled: r.enrolled === true, subscription: r.subscription === true, adminGrant: r.admin_grant === true };
+    },
+  };
+
+  billing: BillingRepository = {
+    getStripeCustomerId: async (clientId) => {
+      const rows = await this.db.query<Row>(`select stripe_customer_id from public.billing_customers where client_id = $1`, [clientId]);
+      return rows[0]?.stripe_customer_id ?? null;
+    },
+    getClientByStripeCustomer: async (stripeCustomerId) => {
+      const rows = await this.db.query<Row>(`select client_id from public.billing_customers where stripe_customer_id = $1`, [stripeCustomerId]);
+      return rows[0]?.client_id ?? null;
+    },
+    linkCustomer: async (clientId, stripeCustomerId) => {
+      let inserted: Row[];
+      try {
+        inserted = await this.db.query<Row>(`insert into public.billing_customers (client_id, stripe_customer_id) values ($1, $2) on conflict (client_id) do nothing returning client_id`, [clientId, stripeCustomerId]);
+      } catch {
+        throw new Error("that Stripe customer belongs to another account");
+      }
+      if (inserted[0]) return;
+      const current = await this.db.query<Row>(`select stripe_customer_id from public.billing_customers where client_id = $1`, [clientId]);
+      if (current[0]?.stripe_customer_id !== stripeCustomerId) throw new Error("this account already has a different Stripe customer");
+    },
+    upsertSubscription: async (clientId, input) => {
+      const rows = await this.db.query<Row>(
+        `insert into public.subscriptions
+           (client_id, stripe_subscription_id, stripe_price_id, status, plan_interval, current_period_end, cancel_at_period_end, canceled_at, ended_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         on conflict (stripe_subscription_id) do update set
+           stripe_price_id = excluded.stripe_price_id, status = excluded.status, plan_interval = excluded.plan_interval,
+           current_period_end = excluded.current_period_end, cancel_at_period_end = excluded.cancel_at_period_end,
+           canceled_at = excluded.canceled_at, ended_at = excluded.ended_at
+           where public.subscriptions.client_id = excluded.client_id
+         returning *`,
+        [clientId, input.stripeSubscriptionId, input.stripePriceId, input.status, input.planInterval, input.currentPeriodEnd, input.cancelAtPeriodEnd, input.canceledAt, input.endedAt],
+      );
+      if (!rows[0]) throw new Error("that subscription belongs to another account");
+      return toSubscription(rows[0]);
+    },
+    getSubscriptionByStripeId: async (stripeSubscriptionId) => {
+      const rows = await this.db.query<Row>(`select * from public.subscriptions where stripe_subscription_id = $1`, [stripeSubscriptionId]);
+      return rows[0] ? toSubscription(rows[0]) : null;
+    },
+    listSubscriptions: async (clientId) => {
+      const rows = await this.db.query<Row>(`select * from public.subscriptions where client_id = $1 order by created_at desc`, [clientId]);
+      return rows.map(toSubscription);
+    },
+    listAllSubscriptions: async () => (await this.db.query<Row>(`select * from public.subscriptions order by created_at`)).map(toSubscription),
+    markRefunded: async (stripeSubscriptionId, at) => {
+      const rows = await this.db.query<Row>(`update public.subscriptions set refunded_at = coalesce(refunded_at, $2) where stripe_subscription_id = $1 returning id`, [stripeSubscriptionId, at]);
+      return rows.length > 0;
+    },
+    syncEntitlement: async (subscription, now) => {
+      const fresh = await this.db.query<Row>(`select * from public.subscriptions where id = $1`, [subscription.id]);
+      const current = fresh[0] ? toSubscription(fresh[0]) : subscription;
+      const window = deriveEntitlement(current, now);
+      if (!window) {
+        await this.db.query(`delete from public.entitlements where subscription_id = $1 and source = 'subscription'`, [subscription.id]);
+        return null;
+      }
+      await this.db.query(
+        `with upd as (
+           update public.entitlements set starts_at = $3, ends_at = $4 where subscription_id = $2 and source = 'subscription' returning id)
+         insert into public.entitlements (client_id, source, subscription_id, starts_at, ends_at)
+         select $1, 'subscription', $2, $3, $4 where not exists (select 1 from upd)`,
+        [subscription.clientId, subscription.id, window.startsAt, window.endsAt],
+      );
+      return window;
+    },
+    claimEvent: async (eventId, eventType, livemode, now) => {
+      const rows = await this.db.query<Row>(
+        `insert into public.stripe_webhook_events (event_id, event_type, livemode, received_at, attempts) values ($1, $2, $3, $4, 1)
+         on conflict (event_id) do update set attempts = public.stripe_webhook_events.attempts + 1
+           where public.stripe_webhook_events.processed_at is null
+         returning event_id`,
+        [eventId, eventType, livemode, now],
+      );
+      return rows.length > 0 ? "process" : "duplicate";
+    },
+    completeEvent: async (eventId, now) => {
+      await this.db.query(`update public.stripe_webhook_events set processed_at = $2, last_error_code = null where event_id = $1`, [eventId, now]);
+    },
+    failEvent: async (eventId, errorCode) => {
+      await this.db.query(`update public.stripe_webhook_events set last_error_code = $2 where event_id = $1`, [eventId, errorCode.slice(0, 80)]);
+    },
+    createGrant: async (input) => {
+      const startsAt = input.startsAt ?? new Date();
+      const rows = await this.db.query<Row>(
+        `with g as (
+           insert into public.admin_grants (client_id, granted_by, reason, starts_at, ends_at) values ($1, $2, $3, $4, $5) returning *),
+         e as (
+           insert into public.entitlements (client_id, source, admin_grant_id, starts_at, ends_at)
+           select client_id, 'admin_grant', id, starts_at, ends_at from g)
+         select * from g`,
+        [input.clientId, input.grantedBy ?? null, input.reason, startsAt, input.endsAt ?? null],
+      );
+      const row = rows[0]!;
+      const grant: AdminGrantRecord = { id: row.id, clientId: row.client_id, reason: row.reason, startsAt: new Date(row.starts_at), endsAt: date(row.ends_at), revokedAt: date(row.revoked_at) };
+      return grant;
+    },
+    revokeGrant: async (grantId, at) => {
+      const rows = await this.db.query<Row>(
+        `with g as (update public.admin_grants set revoked_at = $2 where id = $1 and revoked_at is null returning id, starts_at),
+              gone as (delete from public.entitlements where admin_grant_id in (select id from g where starts_at >= $2)),
+              cut as (update public.entitlements set ends_at = least(coalesce(ends_at, $2), $2) where admin_grant_id in (select id from g where starts_at < $2))
+         select id from g`,
+        [grantId, at],
+      );
+      return rows.length > 0;
     },
   };
 

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { AccessRepository, AccountRepository, DownloadRepository, LibraryStore, ResourceRepository } from "./ports";
+import { deriveEntitlement, type AdminGrantRecord, type SubscriptionRecord } from "./billing";
+import type { AccessRepository, AccountRepository, BillingRepository, DownloadRepository, LibraryStore, ResourceRepository } from "./ports";
 import type {
   AccessFacts,
   Account,
@@ -31,6 +32,8 @@ interface EntitlementRow {
   source: "subscription" | "admin_grant";
   startsAt: Date;
   endsAt: Date | null;
+  subscriptionId?: string;
+  grantId?: string;
 }
 
 const stem = (word: string) => word.replace(/(ing|es|s)$/, "");
@@ -65,6 +68,10 @@ export class InMemoryLibraryStore implements LibraryStore {
   private resourceRows = new Map<string, Resource>();
   private fileRows = new Map<string, ResourceFile[]>();
   private downloadRows: DownloadEvent[] = [];
+  private customers = new Map<string, string>(); // clientId -> Stripe customer id
+  private subscriptionRows = new Map<string, SubscriptionRecord>(); // by id
+  private eventRows = new Map<string, { processed: boolean; attempts: number }>();
+  private grantRows = new Map<string, AdminGrantRecord>();
 
   seedProfile(input: { id?: string; role?: AccountRole; displayName?: string; adultConfirmed?: boolean } = {}): string {
     const id = input.id ?? randomUUID();
@@ -197,6 +204,76 @@ export class InMemoryLibraryStore implements LibraryStore {
       const open = (source: EntitlementRow["source"]) =>
         this.entitlementRows.some((e) => e.clientId === clientId && e.source === source && e.startsAt <= now && (e.endsAt === null || e.endsAt > now));
       return { enrolled, subscription: open("subscription"), adminGrant: open("admin_grant") };
+    },
+  };
+
+  billing: BillingRepository = {
+    getStripeCustomerId: async (clientId) => this.customers.get(clientId) ?? null,
+    getClientByStripeCustomer: async (stripeCustomerId) => [...this.customers].find(([, customer]) => customer === stripeCustomerId)?.[0] ?? null,
+    linkCustomer: async (clientId, stripeCustomerId) => {
+      const owner = [...this.customers].find(([, customer]) => customer === stripeCustomerId)?.[0];
+      if (owner && owner !== clientId) throw new Error("that Stripe customer belongs to another account");
+      const current = this.customers.get(clientId);
+      if (current && current !== stripeCustomerId) throw new Error("this account already has a different Stripe customer");
+      this.customers.set(clientId, stripeCustomerId);
+    },
+    upsertSubscription: async (clientId, input) => {
+      const existing = [...this.subscriptionRows.values()].find((s) => s.stripeSubscriptionId === input.stripeSubscriptionId);
+      if (existing && existing.clientId !== clientId) throw new Error("that subscription belongs to another account");
+      const record: SubscriptionRecord = { ...input, id: existing?.id ?? randomUUID(), clientId, createdAt: existing?.createdAt ?? new Date(), refundedAt: existing?.refundedAt ?? null };
+      this.subscriptionRows.set(record.id, record);
+      return { ...record };
+    },
+    getSubscriptionByStripeId: async (stripeSubscriptionId) => {
+      const found = [...this.subscriptionRows.values()].find((s) => s.stripeSubscriptionId === stripeSubscriptionId);
+      return found ? { ...found } : null;
+    },
+    listSubscriptions: async (clientId) =>
+      [...this.subscriptionRows.values()].filter((s) => s.clientId === clientId).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).map((s) => ({ ...s })),
+    listAllSubscriptions: async () => [...this.subscriptionRows.values()].map((s) => ({ ...s })),
+    markRefunded: async (stripeSubscriptionId, at) => {
+      const found = [...this.subscriptionRows.values()].find((s) => s.stripeSubscriptionId === stripeSubscriptionId);
+      if (!found) return false;
+      found.refundedAt = at;
+      return true;
+    },
+    syncEntitlement: async (subscription, now) => {
+      const current = this.subscriptionRows.get(subscription.id) ?? subscription;
+      const window = deriveEntitlement(current, now);
+      this.entitlementRows = this.entitlementRows.filter((e) => e.subscriptionId !== subscription.id);
+      if (window) this.entitlementRows.push({ clientId: subscription.clientId, source: "subscription", subscriptionId: subscription.id, startsAt: window.startsAt, endsAt: window.endsAt });
+      return window;
+    },
+    claimEvent: async (eventId) => {
+      const row = this.eventRows.get(eventId);
+      if (row?.processed) return "duplicate";
+      this.eventRows.set(eventId, { processed: false, attempts: (row?.attempts ?? 0) + 1 });
+      return "process";
+    },
+    completeEvent: async (eventId) => {
+      const row = this.eventRows.get(eventId);
+      if (row) row.processed = true;
+    },
+    failEvent: async () => {},
+    createGrant: async (input) => {
+      const startsAt = input.startsAt ?? new Date();
+      const endsAt = input.endsAt ?? null;
+      if (endsAt && endsAt <= startsAt) throw new Error("a grant must end after it starts");
+      const record: AdminGrantRecord = { id: randomUUID(), clientId: input.clientId, reason: input.reason, startsAt, endsAt, revokedAt: null };
+      this.grantRows.set(record.id, record);
+      this.entitlementRows.push({ clientId: input.clientId, source: "admin_grant", grantId: record.id, startsAt, endsAt });
+      return { ...record };
+    },
+    revokeGrant: async (grantId, at) => {
+      const grant = this.grantRows.get(grantId);
+      if (!grant || grant.revokedAt) return false;
+      grant.revokedAt = at;
+      const row = this.entitlementRows.find((e) => e.grantId === grantId);
+      if (row) {
+        if (at <= row.startsAt) this.entitlementRows = this.entitlementRows.filter((e) => e !== row);
+        else if (!row.endsAt || row.endsAt > at) row.endsAt = at;
+      }
+      return true;
     },
   };
 
