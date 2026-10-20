@@ -11,6 +11,7 @@
  *   LIBRARY_PRICE_MONTHLY    pounds, for example 9.99 (shown as a price only if set and valid)
  *   LIBRARY_PRICE_ANNUAL     pounds, for example 99 or 99.00
  *   LIBRARY_WAITLIST_EMAIL   where waitlist sign-ups go (then ENQUIRY_EMAIL, then the site's own address)
+ *   LIBRARY_DOWNLOADS_PER_HOUR   downloads one family account may make in an hour (default 60)
  */
 
 type Env = Record<string, string | undefined>;
@@ -25,6 +26,12 @@ const PHASES: readonly LibraryPhase[] = ["info", "enrolled", "live"];
  */
 export function libraryEnabled(env: Env = process.env): boolean {
   return env.LIBRARY_ENABLED?.trim() === "true";
+}
+
+/** LIBRARY_DOWNLOADS_PER_HOUR: a whole number from 1 to 1000; anything else is the default of 60. */
+export function downloadsPerHour(env: Env = process.env): number {
+  const n = Number(env.LIBRARY_DOWNLOADS_PER_HOUR?.trim());
+  return Number.isInteger(n) && n >= 1 && n <= 1000 ? n : 60;
 }
 
 /** LIBRARY_PHASE. Anything missing or unrecognised is `info`, the safe reading. */

@@ -186,5 +186,9 @@ export class SqlLibraryStore implements LibraryStore {
       const rows = await this.db.query<Row>(`select count(*)::int as n from public.download_events where client_id = $1 and at >= $2`, [clientId, since]);
       return rows[0]?.n ?? 0;
     },
+    countForResourceSince: async (clientId, resourceId, since) => {
+      const rows = await this.db.query<Row>(`select count(*)::int as n from public.download_events where client_id = $1 and resource_id = $2 and at >= $3`, [clientId, resourceId, since]);
+      return rows[0]?.n ?? 0;
+    },
   };
 }
