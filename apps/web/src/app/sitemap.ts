@@ -13,6 +13,8 @@ const sitemapRoutes = [
   "/book",
   "/contact",
   "/faq",
+  "/library",
+  "/pricing",
   "/privacy",
   "/cookies",
   "/terms",

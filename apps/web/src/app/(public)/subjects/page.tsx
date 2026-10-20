@@ -352,6 +352,9 @@ export default function SubjectsPage() {
           <Link href="/#enquire" className={styles.btnPrimary}>
             Send an enquiry &rarr;
           </Link>
+          <p style={{ margin: "28px auto 0" }}>
+            Looking for study material? <Link href="/library" style={{ color: "var(--fg-accent)", fontWeight: 700 }}>The LearnThrive Library is coming soon</Link>.
+          </p>
         </Reveal>
       </section>
     </div>

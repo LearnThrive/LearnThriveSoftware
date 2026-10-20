@@ -19,6 +19,8 @@ export const ogPages: Record<string, OgPage> = {
   "/book": { eyebrow: "Free consultation", title: "Book a Free Consultation" },
   "/contact": { eyebrow: "Get in touch", title: "Contact" },
   "/faq": { eyebrow: "Questions", title: "Frequently Asked Questions" },
+  "/library": { eyebrow: "Library · Coming soon", title: "The LearnThrive Library" },
+  "/pricing": { eyebrow: "Library · Coming soon", title: "LearnThrive Library: pricing" },
   "/safeguarding": { eyebrow: "Safeguarding", title: "Safeguarding information" },
   "/trust": { eyebrow: "Trust", title: "Trust and policies" },
   "/privacy": { eyebrow: "Privacy", title: "Privacy notice" },

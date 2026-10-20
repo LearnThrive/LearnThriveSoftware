@@ -303,6 +303,13 @@ export default function HomePage() {
             </Reveal>
           ))}
         </div>
+        <p className={styles.sectionSubtitle} style={{ margin: "28px 0 0", textAlign: "center" }}>
+          Study material is on its way too:{" "}
+          <Link href="/library" className="text-link">
+            the LearnThrive Library is coming soon
+          </Link>
+          .
+        </p>
       </section>
 
       {/* ── Product demonstration ────────────────────── */}

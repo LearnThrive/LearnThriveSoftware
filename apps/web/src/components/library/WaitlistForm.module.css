@@ -1,0 +1,31 @@
+/*
+ * The Library waitlist form: one email field and the separate consent box, then the button with the human-check
+ * line beside it and the small print under. Field, group and result styles come from components/forms.
+ * Semantic tokens only.
+ */
+.form {
+  display: grid;
+  gap: 1.4rem;
+}
+
+/* `hidden` is the form's state before the page's scripts have run; make sure display:grid never overrides it. */
+.form[hidden] {
+  display: none;
+}
+
+.fields {
+  display: grid;
+  gap: 1.1rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.9rem 1.4rem;
+}
+
+.privacy {
+  max-width: 62ch;
+  margin: 0;
+}
