@@ -40,6 +40,15 @@ The development authentication provider refuses to run when `NODE_ENV=production
 
 The flag is a build-time value (`NEXT_PUBLIC_*`), so changing it means rebuilding.
 
+### The Library carve-out (`LIBRARY_ENABLED`)
+
+`LIBRARY_ENABLED=true` (a server variable, read on each request; anything but exactly `true` is closed) opens **only** the account and Library routes in production while everything above stays closed. `decide()` in `src/lib/portal.ts` is the one place that says which, and `tests/portal.test.mjs` pins it:
+
+- Opened: `/login` (it redirects to `/account/sign-in`), `/account/**`, `/library/**`, and `/api/account/**`, `/api/library/**`, `/api/billing/**` (the Stripe webhook needs no cookie) and `/api/assistant/**`. All of them are `noindex`.
+- Still closed: `/dashboard/**`, `/403`, `/api/auth/**`, `/api/lessons/**`, the classroom, `/dev/**` and `/api/dev/**`.
+- It fails closed twice over. With the flag on but **no Supabase settings**, the account routes answer 503 ("Accounts are not open yet"), `/account` is a 404, and nothing is signed in. The in-memory account backend that development uses refuses to run when `NODE_ENV=production`.
+- Before setting it: Supabase is created and the migrations applied (`docs/SUPABASE_MIGRATION.md`), the Supabase Auth settings in `docs/AUTHENTICATION.md` are made, and the gates in `plan19.md` section 6 are done. `tests-prod/library-enabled.spec.ts` checks the closed-backend state on a production build.
+
 ## Environment variables
 
 Set these in the host's dashboard for the production environment. **Never commit values.** (The assistant that wrote this could not edit `apps/web/.env.example`, because access to `.env*` files is blocked in its environment; paste the block below into it so the example stays complete.)
@@ -56,6 +65,10 @@ Set these in the host's dashboard for the production environment. **Never commit
 | `LIBRARY_PRICE_MONTHLY` | No — leave unset until the owner has set a price | Monthly price in pounds, **display only**: `9.99`, no `£`. The pricing page shows it only if it is a valid amount (up to four digits, optional two decimals, above zero); otherwise it says "Price announced at launch". Nothing is sold: no payment is taken whatever this says. **Build-time.** | unset |
 | `LIBRARY_PRICE_ANNUAL` | No — as above | Annual price in pounds, display only: `99` or `99.00`. **Build-time.** | unset |
 | `LIBRARY_WAITLIST_EMAIL` | No — falls back to `ENQUIRY_EMAIL`, then the site address | Where Library waitlist sign-ups are delivered. Use the company mailbox. | `info@learnthrivetuition.co.uk` |
+| `LIBRARY_ENABLED` | No — leave unset until the account backend is ready | `true` opens the account and Library routes in production (see "The Library carve-out" above). Server variable, read per request. | unset (closed) |
+| `SUPABASE_URL` | **Yes** for accounts | The project URL, for Supabase Auth. Server only: never a `NEXT_PUBLIC_` variable. With this, `SUPABASE_ANON_KEY` and `DATABASE_URL` not all set, production runs no account backend. | `https://abcdefgh.supabase.co` |
+| `SUPABASE_ANON_KEY` | **Yes** for accounts | The project's anon (publishable) key. It grants only what Auth allows anyone. Server only. | (secret-ish) |
+| `DATABASE_URL` | **Yes** for accounts | Postgres connection string for the server's own queries (use Supabase's **pooler**, transaction mode, port 6543). Connect as a role that bypasses RLS only on the server; this key must never reach the browser or a log. | `postgres://...` (secret) |
 | `CAPTCHA_SECRET` | **Yes** for applications, reconfirmations, subject requests and the Library waitlist — those routes fail closed (503) without it | Key that signs the human-check challenges (an HMAC). At least 32 characters; use 64 hex characters. Never sent to the browser. | `openssl rand -hex 32` (secret) |
 | `CLIENT_IP_HEADER` | No — see `docs/RENDER.md` | Name of the request header that carries the visitor's address, if the host sets a trusted one (for example `true-client-ip`). Used by the careers, subject-request and Library waitlist rate limits. | unset |
 | `TRUSTED_PROXY_HOPS` | No (default `1`) | How many proxies sit in front of the app, when the address is taken from `X-Forwarded-For` (counted from the right). | `1` |
@@ -86,6 +99,10 @@ LIBRARY_WAITLIST_EMAIL=
 LIBRARY_PHASE=
 LIBRARY_PRICE_MONTHLY=
 LIBRARY_PRICE_ANNUAL=
+LIBRARY_ENABLED=
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
+DATABASE_URL=
 CAPTCHA_SECRET=
 ALLOWED_ORIGINS=
 CLIENT_IP_HEADER=

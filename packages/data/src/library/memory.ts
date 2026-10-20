@@ -65,8 +65,8 @@ export class InMemoryLibraryStore implements LibraryStore {
   private fileRows = new Map<string, ResourceFile[]>();
   private downloadRows: DownloadEvent[] = [];
 
-  seedProfile(input: { role?: AccountRole; displayName?: string; adultConfirmed?: boolean } = {}): string {
-    const id = randomUUID();
+  seedProfile(input: { id?: string; role?: AccountRole; displayName?: string; adultConfirmed?: boolean } = {}): string {
+    const id = input.id ?? randomUUID();
     this.profiles.set(id, { id, role: input.role ?? "CLIENT", displayName: input.displayName ?? "", adultConfirmed: input.adultConfirmed ?? true });
     return id;
   }

@@ -1,0 +1,16 @@
+/* Room for the fixed HubNav: a bottom bar under 64rem, a side rail from 64rem (see HubNav's own notes). */
+.shell {
+  min-height: 100dvh;
+  padding-block-end: 5.5rem;
+  scroll-padding-block-end: 5.5rem;
+  background: var(--surface-0);
+  color: var(--fg);
+}
+
+@media (min-width: 64rem) {
+  .shell {
+    padding-block-end: 0;
+    padding-inline-start: 6rem;
+    scroll-padding-block-end: 0;
+  }
+}

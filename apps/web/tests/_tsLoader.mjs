@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { compileFunction } from "node:vm";
 import ts from "typescript";
@@ -30,7 +30,8 @@ function loadTsModule(fileUrl) {
     // the repo root) doesn't change per caller, so there's nothing to re-derive.
     if (specifier.startsWith("@learnthrive/data/")) {
       const subpath = specifier.slice("@learnthrive/data/".length);
-      return loadTsModule(new URL(`../../../packages/data/src/${subpath}.ts`, import.meta.url));
+      const file = new URL(`../../../packages/data/src/${subpath}.ts`, import.meta.url);
+      return loadTsModule(existsSync(file) ? file : new URL(`../../../packages/data/src/${subpath}/index.ts`, import.meta.url));
     }
     // apps/web's own tsconfig path alias (@/* -> ./src/*) — same reasoning as @learnthrive/data/*
     // above: real Node require() has no idea this alias exists at all.

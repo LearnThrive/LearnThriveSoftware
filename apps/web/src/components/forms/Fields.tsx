@@ -52,7 +52,7 @@ export function TextField(
   props: Common & {
     value: string;
     onChange: (value: string) => void;
-    type?: "text" | "email" | "tel" | "date";
+    type?: "text" | "email" | "tel" | "date" | "password";
     autoComplete?: string;
     inputMode?: "text" | "email" | "tel" | "numeric";
     maxLength?: number;

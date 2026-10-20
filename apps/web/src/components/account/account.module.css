@@ -1,0 +1,45 @@
+/* Small pieces around the account forms. Colours and spacing are tokens; nothing here moves. */
+
+.notice {
+  min-height: 1.5rem;
+  margin: var(--space-3) 0 0;
+  color: var(--fg-muted);
+  font-size: var(--text-small);
+}
+
+.check {
+  margin-top: var(--space-3);
+}
+
+.panel {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 24rem;
+}
+
+.lead {
+  margin: 0;
+  color: var(--fg-muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.error {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--fg);
+}
+
+.link {
+  color: var(--fg-link, inherit);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}

@@ -1,5 +1,5 @@
 import { emailWrapper, escapeHtml, htmlHeading, htmlParagraph, htmlSubheading, htmlTable, SITE_URL, textTable } from "@/lib/email";
-import { asBoolean, asString, cleanLine } from "@/lib/forms-common";
+import { asBoolean, asString, cleanLine, isPlainEmail } from "@/lib/forms-common";
 import { libraryConfig } from "@/lib/library-config";
 import { siteConfig } from "@/lib/site";
 
@@ -33,23 +33,10 @@ export function parseWaitlist(raw: unknown): WaitlistFields {
   return { email: cleanLine(asString(r.email)), consent: asBoolean(r.consent) };
 }
 
-/**
- * One plain address, ASCII only. Stricter than the shared EMAIL_PATTERN on purpose: this address becomes the
- * recipient of the confirmation and the Reply-To of the owners' email, so it must not be able to carry a second
- * recipient (`a@x.com,b@y.com`, `Name<b@y.com>`), a quoted name, brackets or markup. Anything the pattern lets
- * through is still escaped wherever it is shown.
- */
-const WAITLIST_EMAIL = /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+(?:[A-Za-z]{2,63}|xn--[A-Za-z0-9-]{1,59})$/;
-
-function plainAddress(email: string): boolean {
-  const local = email.slice(0, email.lastIndexOf("@"));
-  return WAITLIST_EMAIL.test(email) && !local.startsWith(".") && !local.endsWith(".") && !local.includes("..");
-}
-
 export function validateWaitlist(f: WaitlistFields): WaitlistErrors {
   const e: WaitlistErrors = {};
   if (!f.email) e.email = "Enter your email address.";
-  else if (f.email.length > libraryConfig.waitlist.emailMaxLength || !plainAddress(f.email)) e.email = "Enter a valid email address.";
+  else if (f.email.length > libraryConfig.waitlist.emailMaxLength || !isPlainEmail(f.email)) e.email = "Enter a valid email address.";
   if (!f.consent) e.consent = "Tick the box if you would like us to email you once when the Library launches.";
   return e;
 }
