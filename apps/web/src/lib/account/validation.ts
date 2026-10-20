@@ -20,6 +20,11 @@ export function parseEmail(raw: unknown): string {
   return cleanLine(asString(raw)).toLowerCase();
 }
 
+/** A name for a download watermark, cleaned to one line with no control characters. It may be empty. The caller checks the length. */
+export function parseDisplayName(raw: unknown): string {
+  return cleanLine(asString(raw));
+}
+
 export function emailError(email: string): string | undefined {
   if (!email) return "Enter your email address.";
   if (email.length > EMAIL_MAX || !isPlainEmail(email)) return "Enter a valid email address.";

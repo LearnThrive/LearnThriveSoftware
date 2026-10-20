@@ -431,3 +431,29 @@ test("forgot and resend: the same answer for every address; reset needs the emai
   assert.equal((await h.handleSignIn(post("login", FORM), { rt, jar: jar() })).status, 401, "the old password no longer works");
   assert.equal((await h.handleSignIn(post("login", { ...FORM, password: "a brand new password" }), { rt, jar: jar() })).status, 200);
 });
+
+test("name on downloads: needs a session, is cleaned and bounded, may be emptied, and is rate limited", async (t) => {
+  environment(t, {});
+  h.resetAccountLimiters();
+  session.resetSessionCache();
+  quiet(t);
+  const rt = runtime();
+  const c = jar();
+  await verified(rt, c);
+  const name = (body, options) => h.handleSetName(post("profile", body, options), { rt, jar: c });
+  assert.equal((await h.handleSetName(post("profile", { displayName: "Pat" }), { rt, jar: jar() })).status, 401);
+
+  const ok = await name({ displayName: "  Pat \n Example  " });
+  assert.equal(ok.status, 200);
+  assert.deepEqual(await ok.json(), { success: true, displayName: "Pat Example" });
+  const user = await rt.auth.getUser(c.values.get(session.ACCESS_COOKIE));
+  assert.equal((await rt.store.accounts.getAccount(user.id)).displayName, "Pat Example");
+
+  assert.equal((await (await name({ displayName: "" })).json()).displayName, "");
+  assert.equal((await (await name({ displayName: 42 })).json()).displayName, "", "a non-string is an empty name");
+  const long = await name({ displayName: "x".repeat(81) });
+  assert.equal(long.status, 422);
+  assert.ok((await long.json()).errors.displayName);
+  assert.equal((await name({ displayName: "Pat" }, { headers: { origin: "https://evil.example" } })).status, 403);
+  assert.equal((await h.handleSetName(post("profile", { displayName: "Pat" }), { rt: null, jar: c })).status, 503);
+});

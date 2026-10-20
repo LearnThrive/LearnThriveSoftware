@@ -62,6 +62,15 @@ export function libraryContract(name: string, make: () => Promise<{ harness: Con
       await assert.rejects(() => store.accounts.ensureClient("00000000-0000-4000-8000-000000000000"));
     });
 
+    test("accounts: the display name can be changed, and only for a profile that exists", async () => {
+      const id = await h.profile();
+      await store.accounts.updateDisplayName(id, "Pat Example");
+      assert.equal((await store.accounts.getAccount(id))?.displayName, "Pat Example");
+      await store.accounts.updateDisplayName(id, "");
+      assert.equal((await store.accounts.getAccount(id))?.displayName, "");
+      await assert.rejects(() => store.accounts.updateDisplayName("00000000-0000-4000-8000-000000000000", "Nobody"));
+    });
+
     test("accounts: the adult declaration is read back", async () => {
       const id = await h.profile({ adult: false });
       assert.equal((await store.accounts.getAccount(id))?.adultConfirmed, false);
