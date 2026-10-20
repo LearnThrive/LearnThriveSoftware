@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AccountAuthPanel } from "@/components/account/AccountAuthPanel";
 import { AccountShell } from "@/components/account/AccountShell";
 import { currentSession } from "@/lib/account/pages";
+import { libraryTermsHref } from "@/lib/billing/offer";
 import { safeNextPath } from "@/lib/account/session";
 import { createMetadata } from "@/lib/metadata";
 
@@ -18,7 +19,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
   if (state.status === "ok") redirect(next);
   return (
     <AccountShell>
-      {rt ? <AccountAuthPanel initialMode="sign-in" next={next} /> : <p>Accounts are not open yet. Please check back soon.</p>}
+      {rt ? <AccountAuthPanel initialMode="sign-in" next={next} termsHref={libraryTermsHref()} /> : <p>Accounts are not open yet. Please check back soon.</p>}
     </AccountShell>
   );
 }

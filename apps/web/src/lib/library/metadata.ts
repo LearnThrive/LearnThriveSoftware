@@ -19,7 +19,7 @@ export interface PlannedMetadata {
 export const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 /** Addresses under /library that belong to pages, so no resource may take them. */
-export const RESERVED_SLUGS = ["search", "subject", "free-samples", "study-buddy"];
+export const RESERVED_SLUGS = ["search", "subject", "free-samples", "study-buddy", "terms"];
 
 /** Names that, as the author, mean the material is not ours. */
 const NOT_OURS = /\b(AQA|Edexcel|Pearson|OCR|WJEC|Eduqas|CCEA|SQA|Cambridge|DfE|Department for Education|STA|Oxford University Press|CGP|Collins|BBC)\b/i;

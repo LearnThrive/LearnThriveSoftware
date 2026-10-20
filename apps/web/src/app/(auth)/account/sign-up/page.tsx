@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AccountAuthPanel } from "@/components/account/AccountAuthPanel";
 import { AccountShell } from "@/components/account/AccountShell";
 import { currentSession } from "@/lib/account/pages";
+import { libraryTermsHref } from "@/lib/billing/offer";
 import { createMetadata } from "@/lib/metadata";
 
 export const metadata: Metadata = {
@@ -15,7 +16,7 @@ export default async function SignUpPage() {
   if (state.status === "ok") redirect("/account");
   return (
     <AccountShell>
-      {rt ? <AccountAuthPanel initialMode="sign-up" /> : <p>Accounts are not open yet. Please check back soon.</p>}
+      {rt ? <AccountAuthPanel initialMode="sign-up" termsHref={libraryTermsHref()} /> : <p>Accounts are not open yet. Please check back soon.</p>}
     </AccountShell>
   );
 }

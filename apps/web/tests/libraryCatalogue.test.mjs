@@ -45,10 +45,10 @@ test("subject and topic addresses come from names, and only published names are 
   assert.equal(cat.findBySlug(facets, "MATHS"), null, "addresses are lowercase");
 });
 
-test("phases: the catalogue opens at enrolled and live, never at info, and an odd value is info", () => {
+test("phases: the catalogue opens at enrolled and live, never at info, live closes the waitlist, and an odd value is info", () => {
   assert.deepEqual(cfg.libraryShows("info"), { comingSoon: true, waitlist: true, catalogue: false });
   assert.deepEqual(cfg.libraryShows("enrolled"), { comingSoon: true, waitlist: true, catalogue: true });
-  assert.deepEqual(cfg.libraryShows("live"), { comingSoon: true, waitlist: true, catalogue: true });
+  assert.deepEqual(cfg.libraryShows("live"), { comingSoon: false, waitlist: false, catalogue: true }, "subscriptions open: nothing is coming soon and the waitlist closes");
   assert.equal(cfg.libraryShows(cfg.libraryPhase({ LIBRARY_PHASE: "nonsense" })).catalogue, false);
   assert.equal(cfg.libraryShows(cfg.libraryPhase({})).catalogue, false);
   assert.equal(cfg.libraryShows(cfg.libraryPhase({ LIBRARY_PHASE: " Enrolled " })).catalogue, true);

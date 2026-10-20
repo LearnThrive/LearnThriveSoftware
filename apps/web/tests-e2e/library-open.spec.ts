@@ -214,3 +214,11 @@ test('the catalogue pages have no horizontal scroll at 360px and are axe clean',
     await expectAxeClean(page, path);
   }
 });
+
+test('the Library terms exist in development but say plainly that they are a draft, and are not indexed', async ({ page }) => {
+  await page.goto('/library/terms');
+  await expect(page.getByRole('heading', { level: 1, name: 'Library terms and content licence' })).toBeVisible();
+  await expect(page.locator('main')).toContainText('Draft for the owners and a legal reviewer');
+  await expect(page.locator('main')).toContainText('[OWNER TO CONFIRM');
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
+});
