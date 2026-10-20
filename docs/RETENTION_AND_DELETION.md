@@ -1,12 +1,12 @@
 # Retention and deletion: what is kept, where, and who deletes it
 
-For the owners. The website stores **nothing** about applications, reconfirmations, subject requests or enquiries: each is sent by email and then handled by hand. So deleting means deleting emails and copies. This page sets out the rules you chose, where each kind of data actually lives, and a log to keep. It is a draft for the owners and their adviser to approve, not legal advice.
+For the owners. The website stores **nothing** about applications, reconfirmations, subject requests, Library waitlist sign-ups or enquiries: each is sent by email and then handled by hand. So deleting means deleting emails and copies. This page sets out the rules you chose, where each kind of data actually lives, and a log to keep. It is a draft for the owners and their adviser to approve, not legal advice.
 
 ## Where the data is
 
 | Place | What is in it |
 | --- | --- |
-| The **info@ mailbox on IONOS** (or the careers address, when there is one) | Every application with its attachments, every reconfirmation, every subject request and enquiry. This is the main place. |
+| The **info@ mailbox on IONOS** (or the careers address, when there is one) | Every application with its attachments, every reconfirmation, every subject request, Library waitlist sign-up and enquiry. This is the main place. (Waitlist sign-ups go to `LIBRARY_WAITLIST_EMAIL`, then `ENQUIRY_EMAIL`, then the site address. Someone who uses the page's "email us" link instead of the form writes to the site address, so check that mailbox too.) |
 | **Resend's sending log** | A copy of each email the website sent through Resend, including the applicant's files attached to the message to you. Check Resend's own retention setting and what you can delete from its dashboard: it was not verified here. |
 | Your **spreadsheets and devices** | The tutor list, the reconfirmation tracker, the subject-request tally, anything downloaded or forwarded. |
 | **Render's logs** | Only outcomes: a reference, a status, counts and sizes. No names, addresses, answers or file content. |
@@ -25,9 +25,10 @@ Holding identity scans in a shared mailbox is a real security risk. Limit who ca
 | Anything **linked to a safeguarding concern, allegation or investigation** | Longer, as the safeguarding lead and legal advice require | Kept separately, with restricted access. |
 | **Other tutor and personnel records** | Normally up to 6 years after the working relationship ends | Review each type. |
 | A **subject request** | Until the subject is added, or **12 months** after the request, whichever comes first, or sooner if the person asks | Delete the email and the spreadsheet row. |
+| A **Library waitlist sign-up** (an email address and a ticked consent box) | Until the launch email has been sent, or **12 months** after the sign-up, whichever comes first, or sooner if the person asks | Delete the email, any copy in a spreadsheet or mailing tool, and Resend's log copy. Delete everyone's at once after the launch email has gone out. The confirmation email tells people they can reply to be removed: do it promptly. The launch email is one message to people who ticked the box, and to no one else. |
 | An **enquiry** | As the existing schedule says: up to 12 months after the last meaningful contact if it did not become tuition | Delete. |
 
-The privacy notices (`/careers/privacy`, `/privacy`) state the same periods. If you change a period, change the notice, the FAQ and `careers-config.ts` together.
+The privacy notices (`/careers/privacy`, `/privacy`) state the same periods. If you change a period, change the notice, the FAQ and `careers-config.ts` together (for the Library waitlist, the notice and `retentionMonths` in `apps/web/src/lib/library-config.ts`).
 
 ## Who does what
 

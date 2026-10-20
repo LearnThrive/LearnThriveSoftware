@@ -16,7 +16,7 @@ export default function CookiesPage() {
       eyebrow="Website information"
       title="Cookie notice"
       intro="A plain-language explanation of the cookies and similar technologies used by the current LearnThrive Tuition website."
-      reviewedOn="10 September 2026"
+      reviewedOn="20 October 2026"
       scope={
         <>
           <p>
@@ -78,9 +78,12 @@ export default function CookiesPage() {
                 The enquiry form, the tutor application form and the subject
                 request form hold your answers temporarily while the page is
                 open, and send them directly to LearnThrive by email when you
-                submit. They do not use cookies or browser storage to save the
-                answers. Closing or reloading the page before submitting clears
-                those in-page values. The short check that these forms run to
+                submit. The Library waitlist form on the Library and pricing
+                pages works the same way: it holds your email address while the
+                page is open and sends it to LearnThrive by email when you
+                submit. None of these forms uses cookies or browser storage to
+                save the answers. Closing or reloading the page before submitting clears
+                those in-page values. The short check that the forms run to
                 tell a person from a bot happens in your browser; it sets no
                 cookies, saves nothing and contacts no outside service.
               </p>

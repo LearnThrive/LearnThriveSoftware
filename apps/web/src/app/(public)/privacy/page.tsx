@@ -18,14 +18,15 @@ export default function PrivacyPage() {
       eyebrow="Privacy"
       title="Privacy notice"
       intro="This notice explains what personal information is involved when you browse this website or contact LearnThrive Tuition, and the choices and rights available to you."
-      reviewedOn="9 October 2026"
+      reviewedOn="20 October 2026"
       scope={
         <>
           <p>
             LearnThrive Tuition provides online tuition information and an
             enquiry route through {siteConfig.url}. This notice covers the
-            public website, enquiries and subject requests sent through it,
-            and the related correspondence that you choose to send to us.
+            public website, enquiries, subject requests and Library waitlist
+            sign-ups sent through it, and the related correspondence that you
+            choose to send to us.
           </p>
           <p>
             The current website is not a student, parent or tutor portal. It
@@ -93,6 +94,18 @@ export default function PrivacyPage() {
                 sent to LearnThrive by email in the same way as an enquiry.
               </p>
               <p>
+                The Library is not open yet. The waitlist form on the Library
+                and pricing pages asks for an email address and has a separate
+                box, which starts unticked, reading “Email me once when the
+                Library launches”. We use the address only to send you that one
+                email. It is sent to LearnThrive by email in the same way as an
+                enquiry, and you receive a short confirmation with a way to be
+                removed. The website does not store it in a database. The form
+                sets no cookies, uses no browser storage and uses no analytics,
+                and your browser makes no request to any outside service when
+                you use it.
+              </p>
+              <p>
                 Our website host and the networks used to deliver the site may
                 necessarily receive basic request information, such as an IP
                 address, browser and device details, requested pages, and the
@@ -154,6 +167,17 @@ export default function PrivacyPage() {
                         families want. Emailing you if the subject becomes
                         available is based on your consent, given by ticking the
                         box on the form, which you can withdraw at any time
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>
+                        Emailing you once when the Library launches, if you
+                        joined the Library waitlist
+                      </td>
+                      <td>
+                        Your consent, given by ticking the separate box on the
+                        form, which you can withdraw at any time by asking us
+                        to remove you
                       </td>
                     </tr>
                     <tr>
@@ -242,8 +266,12 @@ export default function PrivacyPage() {
               <p>
                 A subject request is kept until that subject is added, or for 12
                 months after the request if it has not been added by then,
-                whichever comes first, or sooner if you ask us to delete it. How
-                long tutor application information is kept is set out in the{" "}
+                whichever comes first, or sooner if you ask us to delete it. A
+                Library waitlist sign-up is kept in our mailbox until we have
+                sent the launch email, or for 12 months after you sign up if we
+                have not sent it by then, whichever comes first, or sooner if
+                you ask us to delete it. How long tutor application information is kept is
+                set out in the{" "}
                 <Link href="/careers/privacy">applicant privacy notice</Link>.
               </p>
               <p>
