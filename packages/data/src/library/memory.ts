@@ -25,6 +25,7 @@ interface Profile {
   role: AccountRole;
   displayName: string;
   adultConfirmed: boolean;
+  email: string | null;
 }
 
 interface EntitlementRow {
@@ -72,10 +73,11 @@ export class InMemoryLibraryStore implements LibraryStore {
   private subscriptionRows = new Map<string, SubscriptionRecord>(); // by id
   private eventRows = new Map<string, { processed: boolean; attempts: number }>();
   private grantRows = new Map<string, AdminGrantRecord>();
+  private consentRows: Array<{ profileId: string; kind: string; version: string; textSha256: string; at: Date }> = [];
 
-  seedProfile(input: { id?: string; role?: AccountRole; displayName?: string; adultConfirmed?: boolean } = {}): string {
+  seedProfile(input: { id?: string; role?: AccountRole; displayName?: string; adultConfirmed?: boolean; email?: string } = {}): string {
     const id = input.id ?? randomUUID();
-    this.profiles.set(id, { id, role: input.role ?? "CLIENT", displayName: input.displayName ?? "", adultConfirmed: input.adultConfirmed ?? true });
+    this.profiles.set(id, { id, role: input.role ?? "CLIENT", displayName: input.displayName ?? "", adultConfirmed: input.adultConfirmed ?? true, email: input.email ?? null });
     return id;
   }
 
@@ -94,6 +96,11 @@ export class InMemoryLibraryStore implements LibraryStore {
 
   seedEntitlement(profileId: string, source: "subscription" | "admin_grant", startsAt: Date, endsAt: Date | null): void {
     this.entitlementRows.push({ clientId: this.clientFor(profileId), source, startsAt, endsAt });
+  }
+
+  /** For tests: the consents recorded so far. */
+  consents() {
+    return this.consentRows.map((c) => ({ ...c }));
   }
 
   /** For tests: every download recorded so far, flags included. */
@@ -121,6 +128,8 @@ export class InMemoryLibraryStore implements LibraryStore {
       if (!this.profiles.has(profileId)) throw new Error("no such profile");
       return this.clientFor(profileId);
     },
+    getEmail: async (profileId) => this.profiles.get(profileId)?.email ?? null,
+    getOwnerProfileId: async (clientId) => [...this.clients].find(([, id]) => id === clientId)?.[0] ?? null,
     updateDisplayName: async (profileId, displayName) => {
       const profile = this.profiles.get(profileId);
       if (!profile) throw new Error("no such profile");
@@ -255,6 +264,10 @@ export class InMemoryLibraryStore implements LibraryStore {
       if (row) row.processed = true;
     },
     failEvent: async () => {},
+    recordConsent: async (input) => {
+      if (!this.profiles.has(input.profileId)) throw new Error("no such profile");
+      this.consentRows.push({ ...input });
+    },
     createGrant: async (input) => {
       const startsAt = input.startsAt ?? new Date();
       const endsAt = input.endsAt ?? null;

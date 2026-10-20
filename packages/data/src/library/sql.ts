@@ -92,6 +92,14 @@ export class SqlLibraryStore implements LibraryStore {
       if (!rows[0]) throw new Error("no such profile");
       return rows[0].id;
     },
+    getEmail: async (profileId) => {
+      const rows = await this.db.query<Row>(`select email from auth.users where id = $1`, [profileId]);
+      return rows[0]?.email ?? null;
+    },
+    getOwnerProfileId: async (clientId) => {
+      const rows = await this.db.query<Row>(`select owner_profile_id from public.clients where id = $1`, [clientId]);
+      return rows[0]?.owner_profile_id ?? null;
+    },
     updateDisplayName: async (profileId, displayName) => {
       const rows = await this.db.query<Row>(`update public.profiles set display_name = $2 where id = $1 returning id`, [profileId, displayName]);
       if (!rows[0]) throw new Error("no such profile");
@@ -295,6 +303,9 @@ export class SqlLibraryStore implements LibraryStore {
     },
     failEvent: async (eventId, errorCode) => {
       await this.db.query(`update public.stripe_webhook_events set last_error_code = $2 where event_id = $1`, [eventId, errorCode.slice(0, 80)]);
+    },
+    recordConsent: async (input) => {
+      await this.db.query(`insert into public.consents (profile_id, kind, version, text_sha256, granted_at) values ($1, $2, $3, $4, $5)`, [input.profileId, input.kind, input.version, input.textSha256, input.at]);
     },
     createGrant: async (input) => {
       const startsAt = input.startsAt ?? new Date();

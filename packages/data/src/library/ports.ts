@@ -23,6 +23,10 @@ export interface AccountRepository {
   getAccount(profileId: string): Promise<Account | null>;
   /** The family account for a profile, created if it does not exist yet. Idempotent. */
   ensureClient(profileId: string): Promise<string>;
+  /** The profile that owns a family account, or null if there is no such account. For webhooks, which carry a client id. */
+  getOwnerProfileId(clientId: string): Promise<string | null>;
+  /** The sign-in email address of a profile, for the billing emails. Server only. null if there is none. */
+  getEmail(profileId: string): Promise<string | null>;
   /** The name printed on downloads. The caller has already cleaned it (at most 80 characters). Throws if there is no such profile. */
   updateDisplayName(profileId: string, displayName: string): Promise<void>;
 }
@@ -84,6 +88,8 @@ export interface BillingRepository {
   completeEvent(eventId: string, now: Date): Promise<void>;
   failEvent(eventId: string, errorCode: string): Promise<void>;
 
+  /** Records that a person ticked an express consent (the exact text is identified by its version and SHA-256). */
+  recordConsent(input: { profileId: string; kind: string; version: string; textSha256: string; at: Date }): Promise<void>;
   /** An administrator's override of access (and its entitlement row). */
   createGrant(input: AdminGrantInput): Promise<AdminGrantRecord>;
   /** Ends a grant now. Returns false if there is no such grant, or it was already revoked. */

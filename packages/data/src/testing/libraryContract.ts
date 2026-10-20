@@ -8,7 +8,7 @@ import type { AccountRole, LibraryStore, ResourceInput, SubscriptionInput } from
 
 export interface ContractHarness {
   store: LibraryStore;
-  profile(options?: { role?: AccountRole; adult?: boolean }): Promise<string>;
+  profile(options?: { role?: AccountRole; adult?: boolean; email?: string }): Promise<string>;
   student(profileId: string): Promise<string>;
   assignment(studentId: string, status?: "ACTIVE" | "PAUSED" | "ENDED"): Promise<void>;
   entitlement(profileId: string, source: "subscription" | "admin_grant", startsAt: Date, endsAt: Date | null): Promise<void>;
@@ -69,6 +69,19 @@ export function libraryContract(name: string, make: () => Promise<{ harness: Con
       await store.accounts.updateDisplayName(id, "");
       assert.equal((await store.accounts.getAccount(id))?.displayName, "");
       await assert.rejects(() => store.accounts.updateDisplayName("00000000-0000-4000-8000-000000000000", "Nobody"));
+    });
+
+    test("accounts: the sign-in email is readable for the billing emails", async () => {
+      const id = await h.profile({ email: "billing-contract@example.com" });
+      assert.equal(await store.accounts.getEmail(id), "billing-contract@example.com");
+      assert.equal(await store.accounts.getEmail("00000000-0000-4000-8000-000000000000"), null);
+    });
+
+    test("accounts: the owner of a family account is found by its id", async () => {
+      const id = await h.profile();
+      const clientId = await store.accounts.ensureClient(id);
+      assert.equal(await store.accounts.getOwnerProfileId(clientId), id);
+      assert.equal(await store.accounts.getOwnerProfileId("00000000-0000-4000-8000-000000000000"), null);
     });
 
     test("accounts: the adult declaration is read back", async () => {
@@ -291,6 +304,12 @@ export function libraryContract(name: string, make: () => Promise<{ harness: Con
       await store.billing.syncEntitlement(ended, later);
       assert.equal((await store.access.facts(client, later)).subscription, true, "a cancelled subscription runs to the end of the paid period");
       assert.equal((await store.access.facts(client, new Date(now.getTime() + 4 * HOUR))).subscription, false);
+    });
+
+    test("billing: a consent is recorded against a profile that exists", async () => {
+      const id = await h.profile();
+      await store.billing.recordConsent({ profileId: id, kind: "digital_content_waiver", version: "v1", textSha256: "d".repeat(64), at: new Date() });
+      await assert.rejects(() => store.billing.recordConsent({ profileId: "00000000-0000-4000-8000-000000000000", kind: "digital_content_waiver", version: "v1", textSha256: "d".repeat(64), at: new Date() }));
     });
 
     test("billing: a webhook event is processed once; one that did not finish is tried again", async () => {
