@@ -2,6 +2,7 @@
 // Converted from UI Components/Sub.html: Tailwind classes, the "$25 /mo" and "Starter" placeholders, the
 // `nline-flex` typo and the dangling aria-describedby are gone (plan19.md section 7).
 import { useId, type FormEvent, type ReactNode } from "react";
+import { ACKNOWLEDGEMENT, COOLING_OFF_DRAFT } from "@/lib/billing/consumer";
 import { PricingCardCheckout } from "./PricingCardCheckout";
 import styles from "./PricingCard.module.css";
 
@@ -36,16 +37,13 @@ export interface PricingCardProps {
   submitting?: boolean;
   disabled?: boolean;
   onCheckout?: (event: FormEvent<HTMLFormElement>) => void;
+  /** Live: the owners and a solicitor have approved the wording (LIBRARY_TERMS_APPROVED). Until then it is labelled as a draft. */
+  wordingApproved?: boolean;
 }
 
-/** DRAFT wording for legal review (LEGAL_REVIEW.md). Not final: the owner and a solicitor must approve it. */
-const COOLING_OFF_DRAFT =
-  "You normally have 14 days to change your mind. The Library is digital content that starts straight away, so once you are given access you lose your right to cancel within those 14 days.";
 /** Plan19 phase B2 wording, shown on a coming-soon card unless the caller supplies its own note. */
 const COMING_SOON_NOTE =
   "Terms, price, renewal and cancellation details will be shown in full before anyone pays. No payment is taken now.";
-const ACKNOWLEDGEMENT =
-  "I ask for access to start now, and I understand I lose my 14-day right to cancel once access begins.";
 
 function Check() {
   return (
@@ -72,6 +70,7 @@ export function PricingCard({
   submitting = false,
   disabled = false,
   onCheckout,
+  wordingApproved = false,
 }: PricingCardProps) {
   const uid = useId();
   const titleId = `${uid}-title`;
@@ -120,10 +119,16 @@ export function PricingCard({
             <li>Renews automatically every {period} until you cancel.</li>
             <li>You can cancel online, in your account.</li>
           </ul>
-          <div className={styles.draft} data-pricing-draft>
-            <p className={styles.draftLabel}>Draft wording for legal review</p>
-            <p>{COOLING_OFF_DRAFT}</p>
-          </div>
+          {wordingApproved ? (
+            <div className={styles.notes}>
+              <p>{COOLING_OFF_DRAFT}</p>
+            </div>
+          ) : (
+            <div className={styles.draft} data-pricing-draft>
+              <p className={styles.draftLabel}>Draft wording for legal review</p>
+              <p>{COOLING_OFF_DRAFT}</p>
+            </div>
+          )}
           <PricingCardCheckout
             action={checkoutAction}
             fields={checkoutFields}

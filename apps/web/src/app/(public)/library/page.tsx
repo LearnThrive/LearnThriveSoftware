@@ -8,6 +8,7 @@ import { Reveal } from "@/components/motion/primitives/Reveal";
 import { CatalogueView } from "@/components/library/CatalogueView";
 import { heroCopy, LEVELS, LIBRARY_ITEMS, libraryFaqs, priceSummary, SUBJECT_SENTENCE, SUBJECT_TITLES } from "@/components/library/libraryCopy";
 import { WaitlistSection } from "@/components/library/WaitlistSection";
+import { effectivePhase, subscriptionOffer } from "@/lib/billing/offer";
 import { libraryPhase, libraryPrices, libraryShows } from "@/lib/library-config";
 import { parseCatalogueQuery, toResourceQuery } from "@/lib/library/catalogue";
 import { catalogueStore } from "@/lib/library/server";
@@ -18,11 +19,14 @@ import styles from "./library.module.css";
 // follows the address bar (?q=&subject=&level=&type=&page=).
 export const dynamic = "force-dynamic";
 
-export function generateMetadata(): Metadata {
+export async function generateMetadata(): Promise<Metadata> {
   const open = libraryShows().catalogue;
+  const live = open && libraryPhase() === "live" && (await subscriptionOffer(await catalogueStore())).open;
   return createMetadata({
     title: open ? "The LearnThrive Library" : "The LearnThrive Library: coming soon",
-    description: open
+    description: live
+      ? "Worksheets, exam-style papers, mark schemes and notes made by LearnThrive. Included for enrolled students, and available to everyone else by subscription."
+      : open
       ? "Worksheets, exam-style papers, mark schemes and notes made by LearnThrive. Open to enrolled students; a subscription for everyone else is coming soon."
       : "Worksheets, exam-style papers, mark schemes and notes made by LearnThrive. Coming soon: included for enrolled students, and available to everyone else by subscription.",
     path: "/library",
@@ -30,18 +34,18 @@ export function generateMetadata(): Metadata {
 }
 
 /**
- * The Library information page (plan19 phase B2). Until the later phases exist (sign-in, downloads, billing), every
- * LIBRARY_PHASE shows this coming-soon content (lib/library-config.ts: libraryShows). Static: the phase and any price
- * are read when the site is built. Draft copy for the owners to approve (components/library/libraryCopy.ts).
+ * The Library overview and catalogue (plan19 phases B2 and D, E). What it says follows the phase the Library is REALLY in:
+ * `live` without everything subscriptions need behaves as `enrolled` (lib/billing/offer.ts). Rendered per request.
+ * Draft copy for the owners to approve (components/library/libraryCopy.ts).
  */
 export default async function LibraryPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const phase = libraryPhase();
+  const store = libraryShows().catalogue ? await catalogueStore() : null;
+  const phase = effectivePhase(libraryPhase(), await subscriptionOffer(store));
   const prices = libraryPrices();
   const { waitlist, catalogue } = libraryShows(phase);
   const priceText = priceSummary(prices);
   const copy = heroCopy(phase);
 
-  const store = catalogue ? await catalogueStore() : null;
   const query = parseCatalogueQuery(await searchParams);
   const view = store ? { facets: await store.resources.facets(), results: await store.resources.list(toResourceQuery(query)) } : null;
 

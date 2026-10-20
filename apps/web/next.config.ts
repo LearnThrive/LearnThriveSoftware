@@ -18,6 +18,8 @@ const nextConfig: NextConfig = {
           production: process.env.NODE_ENV === "production",
           classroomUrl: process.env.NEXT_PUBLIC_CLASSROOM_URL,
           cspReportOnly: process.env.CSP_REPORT_ONLY === "1",
+          // Read when the server starts: hosted Stripe pages are form targets only while subscriptions are on.
+          billing: process.env.LIBRARY_PHASE?.trim().toLowerCase() === "live",
         }),
       },
       // The signed-in app and the API are never search results, whatever the portal flag says.

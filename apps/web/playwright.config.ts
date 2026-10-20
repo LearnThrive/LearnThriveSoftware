@@ -49,10 +49,39 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
     stdout: 'pipe',
+  },
+  {
+    // Subscriptions open (phase E): the live phase with the FAKE Stripe (never reachable in production) and every setting
+    // checkout needs. The keys and secrets here are made-up test values, not credentials.
+    command: 'npm run dev -- -p 3102',
+    env: {
+      NEXT_PUBLIC_THEME_TOGGLE: '1',
+      CAREERS_OPEN_FOR_TESTING: '1',
+      NEXT_DIST_DIR: '.next-3102',
+      LIBRARY_PHASE: 'live',
+      STRIPE_FAKE: '1',
+      STRIPE_SECRET_KEY: 'sk_test_e2efakekey000000001',
+      STRIPE_WEBHOOK_SECRET: 'whsec_e2efakesecret0000000001',
+      STRIPE_PRICE_MONTHLY: 'price_e2emonthly',
+      STRIPE_PRICE_ANNUAL: 'price_e2eannual',
+      LIBRARY_PRICE_MONTHLY: '9.99',
+      LIBRARY_PRICE_ANNUAL: '99',
+      LIBRARY_VAT_STATUS: 'registered',
+      LIBRARY_MIN_PER_SUBJECT: '1',
+      LIBRARY_REQUIRED_SUBJECTS: 'Maths',
+      LIBRARY_TERMS_APPROVED: 'true',
+      NEXT_PUBLIC_SITE_URL: 'http://localhost:3102',
+    },
+    url: 'http://localhost:3102',
+    reuseExistingServer: !process.env.CI,
+    timeout: 60_000,
+    stdout: 'pipe',
   }],
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] }, testIgnore: /library-open\.spec\.ts/ },
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] }, testIgnore: /library-(open|live)\.spec\.ts/ },
     // The Library with its catalogue open (phase D onwards): its own server and its own in-memory data.
     { name: 'library-open', use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:3101' }, testMatch: /library-open\.spec\.ts/ },
+    // Subscriptions open (phase E), with the fake Stripe.
+    { name: 'library-live', use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:3102' }, testMatch: /library-live\.spec\.ts/ },
   ],
 });
