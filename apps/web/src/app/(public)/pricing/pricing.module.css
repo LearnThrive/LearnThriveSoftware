@@ -1,0 +1,26 @@
+/*
+ * /pricing: the coming-soon plan. The card is components/ui/PricingCard (its own styles); this sheet only lays the
+ * cards out and sets the line under them. Semantic tokens only.
+ */
+.cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1.5rem;
+  align-items: stretch;
+}
+
+.cards > * {
+  flex: 1 1 18rem;
+}
+
+.after {
+  max-width: 44rem;
+  margin: 1.75rem auto 0;
+  text-align: center;
+  color: var(--fg-ink);
+}
+
+.after p + p {
+  margin-top: 0.75rem;
+}

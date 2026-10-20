@@ -40,6 +40,9 @@ export const PUBLIC_ROUTES = [
   '/complaints',
   '/accessibility',
   '/trust',
+  // plan19 phase B2: the Library information pages.
+  '/library',
+  '/pricing',
   // plan: careers (CAREERS_PROMPT.md). The dev server opens the forms for testing, so the form pages are swept too.
   '/careers',
   '/careers/maths-tutor',

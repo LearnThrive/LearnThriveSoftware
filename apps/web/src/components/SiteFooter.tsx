@@ -73,6 +73,9 @@ export function SiteFooter() {
                   <Link href="/trust">Trust and policies</Link>
                 </li>
                 <li>
+                  <Link href="/library">Library</Link>
+                </li>
+                <li>
                   <Link href="/careers">Careers</Link>
                 </li>
               </ul>
