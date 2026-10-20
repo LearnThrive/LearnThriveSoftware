@@ -1,0 +1,68 @@
+/**
+ * Study Buddy records (plan19 phase F). The schema is supabase/migrations/0004_assistant.sql: chat text is kept 30 days,
+ * uploads 7 days or until the chat is deleted, and nothing here is ever logged. Plain data only; behaviour is in the stores.
+ */
+export type ChatRole = "user" | "assistant";
+
+export const CHAT_TEXT_DAYS = 30;
+export const CHAT_UPLOAD_DAYS = 7;
+export const DAY_MS = 24 * 60 * 60 * 1000;
+
+export interface ChatSessionRecord {
+  id: string;
+  clientId: string;
+  /** The student profile the chat is for, if any. Null means the account holder's own chat. */
+  studentId: string | null;
+  title: string;
+  createdAt: Date;
+  lastActivityAt: Date;
+  deleteAfter: Date;
+  deletionRequestedAt: Date | null;
+}
+
+export interface ChatMessageRecord {
+  id: string;
+  sessionId: string;
+  role: ChatRole;
+  content: string;
+  createdAt: Date;
+  deleteAfter: Date;
+}
+
+export interface ChatFileRecord {
+  id: string;
+  sessionId: string;
+  messageId: string | null;
+  /** In the private `chat-uploads` bucket. */
+  storagePath: string;
+  bytes: number;
+  contentType: "image/jpeg" | "image/png" | "application/pdf";
+  createdAt: Date;
+  deleteAfter: Date;
+}
+
+export interface ChatFileInput {
+  messageId?: string | null;
+  storagePath: string;
+  bytes: number;
+  contentType: ChatFileRecord["contentType"];
+}
+
+/** Everything held for one family, for "export my data". Dates are ISO strings so it serialises as is. */
+export interface ChatExport {
+  exportedAt: string;
+  sessions: Array<{
+    id: string;
+    title: string;
+    createdAt: string;
+    lastActivityAt: string;
+    messages: Array<{ role: ChatRole; content: string; createdAt: string }>;
+    files: Array<{ contentType: string; bytes: number; createdAt: string; deleteAfter: string }>;
+  }>;
+}
+
+export interface PurgeResult {
+  sessions: number;
+  messages: number;
+  files: number;
+}

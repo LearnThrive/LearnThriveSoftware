@@ -1,5 +1,6 @@
 import { deriveEntitlement, type AdminGrantRecord, type PlanInterval, type SubscriptionRecord, type SubscriptionStatus } from "./billing";
-import type { AccessRepository, AccountRepository, BillingRepository, DownloadRepository, LibraryStore, ResourceRepository, SqlExecutor } from "./ports";
+import type { ChatExport, ChatFileRecord, ChatMessageRecord, ChatSessionRecord } from "./chat";
+import type { AccessRepository, AccountRepository, BillingRepository, ChatRepository, DownloadRepository, LibraryStore, ResourceRepository, SqlExecutor } from "./ports";
 import type { AccessFacts, Account, Facet, FacetScope, Level, Resource, ResourceFacets, ResourceFile, ResourcePage, ResourceQuery, ResourceType } from "./types";
 
 const DEFAULT_LIMIT = 24;
@@ -49,6 +50,27 @@ function toSubscription(row: Row): SubscriptionRecord {
     refundedAt: date(row.refunded_at),
   };
 }
+
+function toSession(row: Row): ChatSessionRecord {
+  return {
+    id: row.id, clientId: row.client_id, studentId: row.student_id, title: row.title, createdAt: new Date(row.created_at), lastActivityAt: new Date(row.last_activity_at),
+    deleteAfter: new Date(row.delete_after), deletionRequestedAt: date(row.deletion_requested_at),
+  };
+}
+
+function toMessage(row: Row): ChatMessageRecord {
+  return { id: row.id, sessionId: row.session_id, role: row.role, content: row.content, createdAt: new Date(row.created_at), deleteAfter: new Date(row.delete_after) };
+}
+
+function toChatFile(row: Row): ChatFileRecord {
+  return {
+    id: row.id, sessionId: row.session_id, messageId: row.message_id, storagePath: row.storage_path, bytes: Number(row.bytes), contentType: row.content_type,
+    createdAt: new Date(row.created_at), deleteAfter: new Date(row.delete_after),
+  };
+}
+
+/** A session this family owns and has not deleted. The first parameter of every statement using it is the client id. */
+const OWN = "s.client_id = $1 and s.deletion_requested_at is null";
 
 function clamp(value: number | undefined, fallback: number, max: number): number {
   if (value === undefined || !Number.isFinite(value)) return fallback;
@@ -331,6 +353,144 @@ export class SqlLibraryStore implements LibraryStore {
         [grantId, at],
       );
       return rows.length > 0;
+    },
+  };
+
+  chat: ChatRepository = {
+    createSession: async (clientId, options, now) => {
+      const rows = await this.db.query<Row>(
+        `insert into public.chat_sessions (client_id, student_id, title, created_at, last_activity_at, delete_after)
+         select $1, $2::uuid, $3, $4, $4, $4::timestamptz + interval '30 days'
+          where $2::uuid is null or exists (select 1 from public.students st where st.id = $2::uuid and st.client_id = $1)
+         returning *`,
+        [clientId, options.studentId ?? null, options.title ?? "", now],
+      );
+      if (!rows[0]) throw new Error("that student is not in this family");
+      return toSession(rows[0]);
+    },
+    listSessions: async (clientId) => {
+      const rows = await this.db.query<Row>(`select * from public.chat_sessions s where ${OWN} order by s.last_activity_at desc`, [clientId]);
+      return rows.map(toSession);
+    },
+    getSession: async (clientId, sessionId) => {
+      const rows = await this.db.query<Row>(`select * from public.chat_sessions s where ${OWN} and s.id = $2`, [clientId, sessionId]);
+      return rows[0] ? toSession(rows[0]) : null;
+    },
+    listMessages: async (clientId, sessionId) => {
+      const rows = await this.db.query<Row>(
+        `select m.* from public.chat_messages m join public.chat_sessions s on s.id = m.session_id where ${OWN} and s.id = $2 order by m.created_at, m.id`,
+        [clientId, sessionId],
+      );
+      return rows.map(toMessage);
+    },
+    appendMessage: async (clientId, sessionId, role, content, now) => {
+      const rows = await this.db.query<Row>(
+        `with s as (select id from public.chat_sessions s where ${OWN} and s.id = $2),
+              t as (select greatest($4::timestamptz, coalesce((select max(created_at) + interval '1 millisecond' from public.chat_messages where session_id = $2), $4::timestamptz)) as ts),
+              ins as (insert into public.chat_messages (session_id, role, content, created_at, delete_after)
+                      select s.id, $3, $5, t.ts, t.ts + interval '30 days' from s, t returning *),
+              upd as (update public.chat_sessions set last_activity_at = (select ts from t), delete_after = (select ts from t) + interval '30 days'
+                       where id in (select id from s))
+         select * from ins`,
+        [clientId, sessionId, role, now, content],
+      );
+      if (!rows[0]) throw new Error("no such chat");
+      return toMessage(rows[0]);
+    },
+    addFile: async (clientId, sessionId, file, now) => {
+      const rows = await this.db.query<Row>(
+        `insert into public.chat_files (session_id, message_id, storage_path, bytes, content_type, created_at, delete_after)
+         select s.id, null, $3, $4, $5, $6, $6::timestamptz + interval '7 days' from public.chat_sessions s where ${OWN} and s.id = $2
+         returning *`,
+        [clientId, sessionId, file.storagePath, file.bytes, file.contentType, now],
+      );
+      if (!rows[0]) throw new Error("no such chat");
+      return toChatFile(rows[0]);
+    },
+    attachFiles: async (clientId, sessionId, fileIds, messageId) => {
+      if (fileIds.length === 0) return 0;
+      const rows = await this.db.query<Row>(
+        `update public.chat_files f set message_id = $4
+           from public.chat_sessions s
+          where f.session_id = s.id and ${OWN} and s.id = $2 and f.id = any($3::uuid[]) and f.message_id is null
+            and exists (select 1 from public.chat_messages m where m.id = $4 and m.session_id = s.id)
+         returning f.id`,
+        [clientId, sessionId, fileIds, messageId],
+      );
+      return rows.length;
+    },
+    listFiles: async (clientId, sessionId) => {
+      const rows = await this.db.query<Row>(`select f.* from public.chat_files f join public.chat_sessions s on s.id = f.session_id where ${OWN} and s.id = $2 order by f.created_at`, [clientId, sessionId]);
+      return rows.map(toChatFile);
+    },
+    getUnattachedFiles: async (clientId, sessionId, fileIds) => {
+      if (fileIds.length === 0) return [];
+      const rows = await this.db.query<Row>(
+        `select f.* from public.chat_files f join public.chat_sessions s on s.id = f.session_id where ${OWN} and s.id = $2 and f.id = any($3::uuid[]) and f.message_id is null order by f.created_at`,
+        [clientId, sessionId, fileIds],
+      );
+      return rows.map(toChatFile);
+    },
+    requestDeletion: async (clientId, sessionId, now) => {
+      const rows = await this.db.query<Row>(`update public.chat_sessions s set deletion_requested_at = $3 where ${OWN} and s.id = $2 returning s.id`, [clientId, sessionId, now]);
+      return rows.length > 0;
+    },
+    requestDeletionAll: async (clientId, now) => {
+      const rows = await this.db.query<Row>(`update public.chat_sessions s set deletion_requested_at = $2 where ${OWN} returning s.id`, [clientId, now]);
+      return rows.length;
+    },
+    exportAll: async (clientId, now): Promise<ChatExport> => {
+      const sessions = await this.db.query<Row>(`select * from public.chat_sessions s where ${OWN} order by s.created_at`, [clientId]);
+      const messages = await this.db.query<Row>(
+        `select m.* from public.chat_messages m join public.chat_sessions s on s.id = m.session_id where ${OWN} order by m.created_at, m.id`,
+        [clientId],
+      );
+      const files = await this.db.query<Row>(`select f.* from public.chat_files f join public.chat_sessions s on s.id = f.session_id where ${OWN} order by f.created_at`, [clientId]);
+      return {
+        exportedAt: now.toISOString(),
+        sessions: sessions.map((s) => ({
+          id: s.id,
+          title: s.title,
+          createdAt: new Date(s.created_at).toISOString(),
+          lastActivityAt: new Date(s.last_activity_at).toISOString(),
+          messages: messages.filter((m) => m.session_id === s.id).map((m) => ({ role: m.role, content: m.content, createdAt: new Date(m.created_at).toISOString() })),
+          files: files.filter((f) => f.session_id === s.id).map((f) => ({ contentType: f.content_type, bytes: Number(f.bytes), createdAt: new Date(f.created_at).toISOString(), deleteAfter: new Date(f.delete_after).toISOString() })),
+        })),
+      };
+    },
+    dueStoragePaths: async (now) => {
+      const rows = await this.db.query<Row>(
+        `select f.storage_path from public.chat_files f join public.chat_sessions s on s.id = f.session_id
+          where f.delete_after <= $1 or s.deletion_requested_at is not null or s.delete_after <= $1`,
+        [now],
+      );
+      return [...new Set(rows.map((r) => r.storage_path as string))];
+    },
+    purgeDue: async (now) => {
+      const counts = await this.db.query<Row>(
+        `with due as (select id from public.chat_sessions where deletion_requested_at is not null or delete_after <= $1)
+         select (select count(*)::int from due) as sessions,
+                (select count(*)::int from public.chat_messages where session_id in (select id from due) or delete_after <= $1) as messages,
+                (select count(*)::int from public.chat_files where session_id in (select id from due) or delete_after <= $1) as files`,
+        [now],
+      );
+      await this.db.query(`delete from public.chat_files where delete_after <= $1`, [now]);
+      await this.db.query(`delete from public.chat_messages where delete_after <= $1`, [now]);
+      await this.db.query(`delete from public.chat_sessions where deletion_requested_at is not null or delete_after <= $1`, [now]);
+      const c = counts[0] ?? {};
+      return { sessions: c.sessions ?? 0, messages: c.messages ?? 0, files: c.files ?? 0 };
+    },
+    incrementUsage: async (clientId, kind, windowStart, by) => {
+      const rows = await this.db.query<Row>(
+        `insert into public.usage_counters (client_id, kind, window_start, count) values ($1, $2, $3, $4)
+         on conflict (client_id, kind, window_start) do update set count = public.usage_counters.count + excluded.count returning count`,
+        [clientId, kind, windowStart, by],
+      );
+      return rows[0]?.count ?? by;
+    },
+    usageCount: async (clientId, kind, windowStart) => {
+      const rows = await this.db.query<Row>(`select count from public.usage_counters where client_id = $1 and kind = $2 and window_start = $3`, [clientId, kind, windowStart]);
+      return rows[0]?.count ?? 0;
     },
   };
 
