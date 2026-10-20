@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { deriveEntitlement, type AdminGrantRecord, type SubscriptionRecord } from "./billing";
-import type { AccessRepository, AccountRepository, BillingRepository, DownloadRepository, LibraryStore, ResourceRepository } from "./ports";
+import { CHAT_TEXT_DAYS, CHAT_UPLOAD_DAYS, DAY_MS, type ChatExport, type ChatFileRecord, type ChatMessageRecord, type ChatSessionRecord } from "./chat";
+import type { AccessRepository, AccountRepository, BillingRepository, ChatRepository, DownloadRepository, LibraryStore, ResourceRepository } from "./ports";
 import type {
   AccessFacts,
   Account,
@@ -73,6 +74,10 @@ export class InMemoryLibraryStore implements LibraryStore {
   private subscriptionRows = new Map<string, SubscriptionRecord>(); // by id
   private eventRows = new Map<string, { processed: boolean; attempts: number }>();
   private grantRows = new Map<string, AdminGrantRecord>();
+  private chatSessions = new Map<string, ChatSessionRecord>();
+  private chatMessages: ChatMessageRecord[] = [];
+  private chatFiles: ChatFileRecord[] = [];
+  private usage = new Map<string, number>();
   private consentRows: Array<{ profileId: string; kind: string; version: string; textSha256: string; at: Date }> = [];
 
   seedProfile(input: { id?: string; role?: AccountRole; displayName?: string; adultConfirmed?: boolean; email?: string } = {}): string {
@@ -288,6 +293,119 @@ export class InMemoryLibraryStore implements LibraryStore {
       }
       return true;
     },
+  };
+
+  chat: ChatRepository = {
+    createSession: async (clientId, options, now) => {
+      if (options.studentId && !this.studentLinks.some((l) => l.clientId === clientId && l.studentId === options.studentId)) throw new Error("that student is not in this family");
+      const record: ChatSessionRecord = {
+        id: randomUUID(), clientId, studentId: options.studentId ?? null, title: options.title ?? "", createdAt: now, lastActivityAt: now,
+        deleteAfter: new Date(now.getTime() + CHAT_TEXT_DAYS * DAY_MS), deletionRequestedAt: null,
+      };
+      this.chatSessions.set(record.id, record);
+      return { ...record };
+    },
+    listSessions: async (clientId) =>
+      [...this.chatSessions.values()].filter((s) => s.clientId === clientId && !s.deletionRequestedAt).sort((a, b) => b.lastActivityAt.getTime() - a.lastActivityAt.getTime()).map((s) => ({ ...s })),
+    getSession: async (clientId, sessionId) => {
+      const s = this.chatSessions.get(sessionId);
+      return s && s.clientId === clientId && !s.deletionRequestedAt ? { ...s } : null;
+    },
+    listMessages: async (clientId, sessionId) => {
+      const s = this.chatSessions.get(sessionId);
+      if (!s || s.clientId !== clientId || s.deletionRequestedAt) return [];
+      return this.chatMessages.filter((m) => m.sessionId === sessionId).map((m) => ({ ...m }));
+    },
+    appendMessage: async (clientId, sessionId, role, content, now) => {
+      const s = this.chatSessions.get(sessionId);
+      if (!s || s.clientId !== clientId || s.deletionRequestedAt) throw new Error("no such chat");
+      const last = this.chatMessages.filter((m) => m.sessionId === sessionId).at(-1);
+      const at = last && last.createdAt.getTime() >= now.getTime() ? new Date(last.createdAt.getTime() + 1) : now;
+      const message: ChatMessageRecord = { id: randomUUID(), sessionId, role, content, createdAt: at, deleteAfter: new Date(at.getTime() + CHAT_TEXT_DAYS * DAY_MS) };
+      this.chatMessages.push(message);
+      s.lastActivityAt = at;
+      s.deleteAfter = message.deleteAfter;
+      return { ...message };
+    },
+    addFile: async (clientId, sessionId, file, now) => {
+      const s = this.chatSessions.get(sessionId);
+      if (!s || s.clientId !== clientId || s.deletionRequestedAt) throw new Error("no such chat");
+      const record: ChatFileRecord = { id: randomUUID(), sessionId, messageId: file.messageId ?? null, storagePath: file.storagePath, bytes: file.bytes, contentType: file.contentType, createdAt: now, deleteAfter: new Date(now.getTime() + CHAT_UPLOAD_DAYS * DAY_MS) };
+      this.chatFiles.push(record);
+      return { ...record };
+    },
+    attachFiles: async (clientId, sessionId, fileIds, messageId) => {
+      const s = this.chatSessions.get(sessionId);
+      if (!s || s.clientId !== clientId || !this.chatMessages.some((m) => m.id === messageId && m.sessionId === sessionId)) return 0;
+      let count = 0;
+      for (const f of this.chatFiles) {
+        if (f.sessionId === sessionId && fileIds.includes(f.id) && f.messageId === null) {
+          f.messageId = messageId;
+          count += 1;
+        }
+      }
+      return count;
+    },
+    listFiles: async (clientId, sessionId) => {
+      const s = this.chatSessions.get(sessionId);
+      if (!s || s.clientId !== clientId || s.deletionRequestedAt) return [];
+      return this.chatFiles.filter((f) => f.sessionId === sessionId).map((f) => ({ ...f }));
+    },
+    getUnattachedFiles: async (clientId, sessionId, fileIds) => {
+      const s = this.chatSessions.get(sessionId);
+      if (!s || s.clientId !== clientId || s.deletionRequestedAt) return [];
+      return this.chatFiles.filter((f) => f.sessionId === sessionId && f.messageId === null && fileIds.includes(f.id)).map((f) => ({ ...f }));
+    },
+    requestDeletion: async (clientId, sessionId, now) => {
+      const s = this.chatSessions.get(sessionId);
+      if (!s || s.clientId !== clientId || s.deletionRequestedAt) return false;
+      s.deletionRequestedAt = now;
+      return true;
+    },
+    requestDeletionAll: async (clientId, now) => {
+      let count = 0;
+      for (const s of this.chatSessions.values()) {
+        if (s.clientId === clientId && !s.deletionRequestedAt) {
+          s.deletionRequestedAt = now;
+          count += 1;
+        }
+      }
+      return count;
+    },
+    exportAll: async (clientId, now): Promise<ChatExport> => ({
+      exportedAt: now.toISOString(),
+      sessions: [...this.chatSessions.values()]
+        .filter((s) => s.clientId === clientId && !s.deletionRequestedAt)
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+        .map((s) => ({
+          id: s.id,
+          title: s.title,
+          createdAt: s.createdAt.toISOString(),
+          lastActivityAt: s.lastActivityAt.toISOString(),
+          messages: this.chatMessages.filter((m) => m.sessionId === s.id).map((m) => ({ role: m.role, content: m.content, createdAt: m.createdAt.toISOString() })),
+          files: this.chatFiles.filter((f) => f.sessionId === s.id).map((f) => ({ contentType: f.contentType, bytes: f.bytes, createdAt: f.createdAt.toISOString(), deleteAfter: f.deleteAfter.toISOString() })),
+        })),
+    }),
+    dueStoragePaths: async (now) => {
+      const gone = (s: ChatSessionRecord) => s.deletionRequestedAt !== null || s.deleteAfter <= now;
+      return [...new Set(this.chatFiles.filter((f) => f.deleteAfter <= now || gone(this.chatSessions.get(f.sessionId)!)).map((f) => f.storagePath))];
+    },
+    purgeDue: async (now) => {
+      const gone = new Set([...this.chatSessions.values()].filter((s) => s.deletionRequestedAt !== null || s.deleteAfter <= now).map((s) => s.id));
+      const filesBefore = this.chatFiles.length;
+      const messagesBefore = this.chatMessages.length;
+      this.chatFiles = this.chatFiles.filter((f) => !(f.deleteAfter <= now || gone.has(f.sessionId)));
+      this.chatMessages = this.chatMessages.filter((m) => !(m.deleteAfter <= now || gone.has(m.sessionId)));
+      for (const id of gone) this.chatSessions.delete(id);
+      return { sessions: gone.size, messages: messagesBefore - this.chatMessages.length, files: filesBefore - this.chatFiles.length };
+    },
+    incrementUsage: async (clientId, kind, windowStart, by) => {
+      const key = `${clientId}|${kind}|${windowStart.getTime()}`;
+      const total = (this.usage.get(key) ?? 0) + by;
+      this.usage.set(key, total);
+      return total;
+    },
+    usageCount: async (clientId, kind, windowStart) => this.usage.get(`${clientId}|${kind}|${windowStart.getTime()}`) ?? 0,
   };
 
   downloads: DownloadRepository = {

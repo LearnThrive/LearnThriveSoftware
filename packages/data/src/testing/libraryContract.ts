@@ -345,6 +345,168 @@ export function libraryContract(name: string, make: () => Promise<{ harness: Con
       await assert.rejects(() => store.billing.createGrant({ clientId: client, reason: "backwards", startsAt: now, endsAt: new Date(now.getTime() - HOUR) }));
     });
 
+    const DAYS = 24 * HOUR;
+    const family = async () => {
+      const profile = await h.profile();
+      return { profile, clientId: await store.accounts.ensureClient(profile) };
+    };
+
+    test("chat: a session belongs to one family; another family cannot read, write, list, attach to or delete it", async () => {
+      const now = new Date();
+      const a = await family();
+      const b = await family();
+      const student = await h.student(a.profile);
+      const session = await store.chat.createSession(a.clientId, { title: "Fractions" }, now);
+      assert.equal(session.title, "Fractions");
+      assert.equal(session.studentId, null);
+      assert.equal(session.deletionRequestedAt, null);
+      assert.equal(session.deleteAfter.getTime(), now.getTime() + 30 * DAYS);
+      assert.deepEqual((await store.chat.listSessions(a.clientId)).map((s) => s.id), [session.id]);
+      assert.deepEqual(await store.chat.listSessions(b.clientId), []);
+      assert.equal((await store.chat.getSession(a.clientId, session.id))?.id, session.id);
+      assert.equal(await store.chat.getSession(b.clientId, session.id), null);
+      await store.chat.appendMessage(a.clientId, session.id, "user", "What is 1/2 + 1/3?", now);
+      assert.deepEqual(await store.chat.listMessages(b.clientId, session.id), []);
+      await assert.rejects(() => store.chat.appendMessage(b.clientId, session.id, "user", "intruder", now), /no such chat/);
+      await assert.rejects(() => store.chat.addFile(b.clientId, session.id, { storagePath: "x/y.png", bytes: 5, contentType: "image/png" }, now), /no such chat/);
+      assert.equal(await store.chat.requestDeletion(b.clientId, session.id, now), false);
+      assert.deepEqual(await store.chat.listFiles(b.clientId, session.id), []);
+      assert.equal((await store.chat.listMessages(a.clientId, session.id)).length, 1, "the intruder wrote nothing");
+
+      const forStudent = await store.chat.createSession(a.clientId, { studentId: student }, now);
+      assert.equal(forStudent.studentId, student);
+      await assert.rejects(() => store.chat.createSession(b.clientId, { studentId: student }, now), /not in this family/);
+    });
+
+    test("chat: messages keep their order, and each one moves the chat's last activity and deletion date on", async () => {
+      const now = new Date();
+      const { clientId } = await family();
+      const s = await store.chat.createSession(clientId, {}, now);
+      const first = await store.chat.appendMessage(clientId, s.id, "user", "one", now);
+      const second = await store.chat.appendMessage(clientId, s.id, "assistant", "two", now);
+      const later = new Date(now.getTime() + 5 * DAYS);
+      const third = await store.chat.appendMessage(clientId, s.id, "user", "three", later);
+      assert.deepEqual((await store.chat.listMessages(clientId, s.id)).map((m) => m.content), ["one", "two", "three"], "even two messages sent at the same instant");
+      assert.ok(second.createdAt.getTime() > first.createdAt.getTime());
+      assert.equal(third.deleteAfter.getTime(), later.getTime() + 30 * DAYS);
+      const moved = await store.chat.getSession(clientId, s.id);
+      assert.equal(moved?.lastActivityAt.getTime(), later.getTime());
+      assert.equal(moved?.deleteAfter.getTime(), later.getTime() + 30 * DAYS);
+      const other = await store.chat.createSession(clientId, {}, new Date(later.getTime() + 1000));
+      assert.deepEqual((await store.chat.listSessions(clientId)).slice(0, 2).map((x) => x.id), [other.id, s.id], "newest activity first");
+    });
+
+    test("chat: uploads expire in 7 days, attach once, and only to the family's own message", async () => {
+      const now = new Date();
+      const a = await family();
+      const b = await family();
+      const s = await store.chat.createSession(a.clientId, {}, now);
+      const f1 = await store.chat.addFile(a.clientId, s.id, { storagePath: `${s.id}/one.png`, bytes: 100, contentType: "image/png" }, now);
+      const f2 = await store.chat.addFile(a.clientId, s.id, { storagePath: `${s.id}/two.pdf`, bytes: 200, contentType: "application/pdf" }, now);
+      assert.equal(f1.deleteAfter.getTime(), now.getTime() + 7 * DAYS);
+      assert.equal(f1.messageId, null);
+      assert.equal((await store.chat.getUnattachedFiles(a.clientId, s.id, [f1.id, f2.id])).length, 2);
+      assert.deepEqual(await store.chat.getUnattachedFiles(b.clientId, s.id, [f1.id]), []);
+      const msg = await store.chat.appendMessage(a.clientId, s.id, "user", "see my working", now);
+      assert.equal(await store.chat.attachFiles(b.clientId, s.id, [f1.id], msg.id), 0, "not another family's");
+      assert.equal(await store.chat.attachFiles(a.clientId, s.id, [f1.id], "00000000-0000-4000-8000-000000000000"), 0, "not a message that is not in this chat");
+      assert.equal(await store.chat.attachFiles(a.clientId, s.id, [f1.id], msg.id), 1);
+      assert.equal(await store.chat.attachFiles(a.clientId, s.id, [f1.id], msg.id), 0, "once");
+      assert.deepEqual((await store.chat.getUnattachedFiles(a.clientId, s.id, [f1.id, f2.id])).map((f) => f.id), [f2.id]);
+      assert.equal((await store.chat.listFiles(a.clientId, s.id)).find((f) => f.id === f1.id)?.messageId, msg.id);
+      assert.equal(await store.chat.attachFiles(a.clientId, s.id, [], msg.id), 0);
+    });
+
+    test("chat: deleting a chat hides it at once; the retention job then removes it and says which files to delete", async () => {
+      const now = new Date();
+      const a = await family();
+      const b = await family();
+      const gone = await store.chat.createSession(a.clientId, { title: "to delete" }, now);
+      const kept = await store.chat.createSession(a.clientId, { title: "to keep" }, now);
+      const theirs = await store.chat.createSession(b.clientId, { title: "theirs" }, now);
+      await store.chat.appendMessage(a.clientId, gone.id, "user", "secret", now);
+      await store.chat.appendMessage(a.clientId, kept.id, "user", "fine", now);
+      await store.chat.addFile(a.clientId, gone.id, { storagePath: `${gone.id}/a.png`, bytes: 1, contentType: "image/png" }, now);
+      await store.chat.addFile(a.clientId, kept.id, { storagePath: `${kept.id}/b.png`, bytes: 1, contentType: "image/png" }, now);
+
+      assert.equal(await store.chat.requestDeletion(a.clientId, gone.id, now), true);
+      assert.equal(await store.chat.requestDeletion(a.clientId, gone.id, now), false, "once");
+      assert.equal(await store.chat.getSession(a.clientId, gone.id), null, "hidden at once");
+      assert.deepEqual(await store.chat.listMessages(a.clientId, gone.id), []);
+      assert.deepEqual((await store.chat.listSessions(a.clientId)).map((s) => s.id), [kept.id]);
+      await assert.rejects(() => store.chat.appendMessage(a.clientId, gone.id, "user", "again", now), /no such chat/);
+
+      assert.deepEqual(await store.chat.dueStoragePaths(now), [`${gone.id}/a.png`], "only the deleted chat's file");
+      const purged = await store.chat.purgeDue(now);
+      assert.deepEqual(purged, { sessions: 1, messages: 1, files: 1 });
+      assert.deepEqual(await store.chat.dueStoragePaths(now), []);
+      assert.equal((await store.chat.listMessages(a.clientId, kept.id)).length, 1, "the other chat is untouched");
+      assert.deepEqual(await store.chat.purgeDue(now), { sessions: 0, messages: 0, files: 0 }, "nothing left to do");
+
+      assert.equal(await store.chat.requestDeletionAll(a.clientId, now), 1);
+      assert.deepEqual(await store.chat.listSessions(a.clientId), []);
+      assert.equal((await store.chat.listSessions(b.clientId)).length, 1);
+      assert.equal(theirs.title, "theirs");
+      await store.chat.purgeDue(now);
+      assert.equal((await store.chat.listSessions(b.clientId)).length, 1, "another family's chats are never touched");
+    });
+
+    test("chat: text is removed after 30 days and uploads after 7, with the chat itself going when its last message does", async () => {
+      // Dated years ago, so the job's global counts cannot include rows other tests made.
+      const now = new Date("2020-03-01T00:00:00Z");
+      const { clientId } = await family();
+      const s = await store.chat.createSession(clientId, {}, now);
+      const old = await store.chat.appendMessage(clientId, s.id, "user", "old question", now);
+      await store.chat.addFile(clientId, s.id, { storagePath: `${s.id}/early.png`, bytes: 1, contentType: "image/png" }, now);
+      const recent = new Date(now.getTime() + 29 * DAYS);
+      await store.chat.appendMessage(clientId, s.id, "user", "recent question", recent);
+      await store.chat.addFile(clientId, s.id, { storagePath: `${s.id}/late.png`, bytes: 1, contentType: "image/png" }, recent);
+
+      const day8 = new Date(now.getTime() + 8 * DAYS);
+      assert.deepEqual(await store.chat.dueStoragePaths(day8), [`${s.id}/early.png`], "the first upload is a week old");
+      assert.deepEqual(await store.chat.purgeDue(day8), { sessions: 0, messages: 0, files: 1 });
+      const day31 = new Date(now.getTime() + 31 * DAYS);
+      assert.deepEqual(await store.chat.purgeDue(day31), { sessions: 0, messages: 1, files: 0 }, "the old message goes; the chat stays and so does the second upload (a week from day 29)");
+      assert.deepEqual((await store.chat.listMessages(clientId, s.id)).map((m) => m.content), ["recent question"]);
+      assert.equal(old.deleteAfter.getTime(), now.getTime() + 30 * DAYS);
+      const day60 = new Date(now.getTime() + 60 * DAYS);
+      assert.deepEqual(await store.chat.purgeDue(day60), { sessions: 1, messages: 1, files: 1 });
+      assert.deepEqual(await store.chat.listSessions(clientId), []);
+    });
+
+    test("chat: an export holds the family's own chats and not deleted ones or anyone else's", async () => {
+      const now = new Date();
+      const a = await family();
+      const b = await family();
+      const mine = await store.chat.createSession(a.clientId, { title: "Mine" }, now);
+      await store.chat.appendMessage(a.clientId, mine.id, "user", "hello", now);
+      await store.chat.appendMessage(a.clientId, mine.id, "assistant", "hi", now);
+      await store.chat.addFile(a.clientId, mine.id, { storagePath: `${mine.id}/x.png`, bytes: 7, contentType: "image/png" }, now);
+      const hidden = await store.chat.createSession(a.clientId, { title: "Deleted" }, now);
+      await store.chat.requestDeletion(a.clientId, hidden.id, now);
+      await store.chat.createSession(b.clientId, { title: "Theirs" }, now);
+      const out = await store.chat.exportAll(a.clientId, now);
+      assert.equal(out.exportedAt, now.toISOString());
+      assert.deepEqual(out.sessions.map((s) => s.title), ["Mine"]);
+      assert.deepEqual(out.sessions[0]!.messages.map((m) => [m.role, m.content]), [["user", "hello"], ["assistant", "hi"]]);
+      assert.deepEqual(out.sessions[0]!.files.map((f) => [f.contentType, f.bytes]), [["image/png", 7]]);
+      assert.ok(!JSON.stringify(out).includes("storage"), "no storage path in an export");
+      assert.deepEqual((await store.chat.exportAll(b.clientId, now)).sessions.map((s) => s.title), ["Theirs"]);
+    });
+
+    test("chat: usage counters add up per family, kind and window", async () => {
+      const a = await family();
+      const b = await family();
+      const window = new Date("2026-10-20T00:00:00Z");
+      assert.equal(await store.chat.usageCount(a.clientId, "assistant_message_day", window), 0);
+      assert.equal(await store.chat.incrementUsage(a.clientId, "assistant_message_day", window, 1), 1);
+      assert.equal(await store.chat.incrementUsage(a.clientId, "assistant_message_day", window, 2), 3);
+      assert.equal(await store.chat.usageCount(a.clientId, "assistant_message_day", window), 3);
+      assert.equal(await store.chat.usageCount(b.clientId, "assistant_message_day", window), 0);
+      assert.equal(await store.chat.usageCount(a.clientId, "assistant_message_minute", window), 0);
+      assert.equal(await store.chat.usageCount(a.clientId, "assistant_message_day", new Date("2026-10-21T00:00:00Z")), 0);
+    });
+
     test("teardown", async () => {
       await close();
     });
