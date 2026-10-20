@@ -17,6 +17,8 @@ plan6.md
 plan7.md
 plan10.md
 .next/
+.next-*/
+.library-dev-storage/
 out/
 build/
 artifacts/

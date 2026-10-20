@@ -1,5 +1,5 @@
 import type { AccessRepository, AccountRepository, DownloadRepository, LibraryStore, ResourceRepository, SqlExecutor } from "./ports";
-import type { AccessFacts, Account, Facet, Level, Resource, ResourceFacets, ResourceFile, ResourcePage, ResourceQuery, ResourceType } from "./types";
+import type { AccessFacts, Account, Facet, FacetScope, Level, Resource, ResourceFacets, ResourceFile, ResourcePage, ResourceQuery, ResourceType } from "./types";
 
 const DEFAULT_LIMIT = 24;
 const MAX_LIMIT = 100;
@@ -117,15 +117,23 @@ export class SqlLibraryStore implements LibraryStore {
       const rows = await this.db.query<Row>(`select * from public.resources where id = $1`, [id]);
       return rows[0] ? toResource(rows[0]) : null;
     },
-    facets: async (now = new Date()): Promise<ResourceFacets> => {
-      const one = async (column: "subject" | "level" | "resource_type" | "exam_board"): Promise<Facet[]> => {
+    facets: async (now = new Date(), scope: FacetScope = {}): Promise<ResourceFacets> => {
+      const one = async (column: "subject" | "level" | "resource_type" | "exam_board" | "topic"): Promise<Facet[]> => {
+        const params: unknown[] = [now];
+        if (scope.subject) params.push(scope.subject);
         const rows = await this.db.query<Row>(
-          `select ${column} as value, count(*)::int as count from public.resources where ${PUBLISHED} and ${column} is not null group by 1 order by 2 desc, 1 asc`,
-          [now],
+          `select ${column} as value, count(*)::int as count from public.resources where ${PUBLISHED} and ${column} is not null${scope.subject ? " and subject = $2" : ""} group by 1 order by 2 desc, 1 asc`,
+          params,
         );
         return rows.map((r) => ({ value: r.value, count: r.count }));
       };
-      return { subjects: await one("subject"), levels: await one("level"), resourceTypes: await one("resource_type"), examBoards: await one("exam_board") };
+      return {
+        subjects: await one("subject"),
+        levels: await one("level"),
+        resourceTypes: await one("resource_type"),
+        examBoards: await one("exam_board"),
+        topics: await one("topic"),
+      };
     },
     upsert: async (input) => {
       const rows = await this.db.query<Row>(

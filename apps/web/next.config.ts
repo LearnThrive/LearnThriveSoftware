@@ -3,6 +3,9 @@ import { buildSecurityHeaders } from "./src/lib/securityHeaders";
 import { siteConfig } from "./src/lib/site";
 
 const nextConfig: NextConfig = {
+  // A second dev server in the same folder (the e2e run for the Library phases) needs its own build folder: Next locks
+  // the first. Unset, nothing changes.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   poweredByHeader: false,
   images: {
     formats: ["image/avif", "image/webp"],

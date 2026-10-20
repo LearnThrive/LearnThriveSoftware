@@ -26,7 +26,6 @@ async function makePdf(pages = 2) {
   return new Uint8Array(await doc.save({ useObjectStreams: false }));
 }
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
-const text = (bytes) => Buffer.from(bytes).toString("latin1");
 /** Everything drawn on the pages: pdf-lib compresses content streams, so inflate them first. */
 async function drawn(bytes) {
   const doc = await PDFDocument.load(bytes);

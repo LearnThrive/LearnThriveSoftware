@@ -68,6 +68,11 @@ export class MemoryAccountAuth implements AccountAuth {
     return { accessToken, refreshToken, expiresAt };
   }
 
+  /** Development and tests only: the id of the account for an address, for the seed route. */
+  userIdFor(email: string): string | null {
+    return this.users.get(email)?.id ?? null;
+  }
+
   async signUp(input: SignUpInput) {
     if (!input.email.includes("@")) return { ok: false as const, reason: "invalid_email" as const };
     if (passwordError(input.password)) return { ok: false as const, reason: "weak_password" as const };

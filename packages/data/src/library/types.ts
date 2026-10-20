@@ -75,6 +75,12 @@ export interface ResourceFacets {
   levels: Facet[];
   resourceTypes: Facet[];
   examBoards: Facet[];
+  topics: Facet[];
+}
+
+/** Narrows `facets()` to one subject (its levels, types and topics). */
+export interface FacetScope {
+  subject?: string;
 }
 
 /** A signed-in person, as the Library sees them. */

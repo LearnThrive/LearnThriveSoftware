@@ -112,6 +112,11 @@ export function libraryContract(name: string, make: () => Promise<{ harness: Con
       assert.ok(facets.levels.some((f) => f.value === "KS3"));
       assert.ok(facets.examBoards.some((f) => f.value === "AQA"));
       assert.ok(!facets.subjects.some((f) => f.value === "Nothing"));
+      assert.ok(facets.topics.some((f) => f.value === "Writing" && f.count === 1));
+      const english = await store.resources.facets(new Date(), { subject: "English" });
+      assert.deepEqual(english.subjects.map((f) => f.value), ["English"], "a scoped facet list holds only that subject");
+      assert.ok(english.topics.every((f) => f.value === "Writing"));
+      assert.ok(!english.levels.some((f) => f.value === "GCSE"));
     });
 
     test("resources: search matches every word, plurals, and ranks a title hit above a description hit", async () => {

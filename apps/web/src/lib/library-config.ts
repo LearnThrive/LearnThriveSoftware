@@ -2,9 +2,10 @@
  * Everything the public Library and pricing pages, and the Library waitlist, run on, in one place
  * (plan19 phase B2). Nothing here is personal data and nothing here is a secret.
  *
- * The pages are static: the phase and the prices are read when the site is built, so changing either one
- * means a new deploy. Nothing is invented. A price is shown only when the owner has set one, and until the
- * later phases exist (sign-in, downloads, billing) every phase other than `info` reads as `info`.
+ * /pricing is static: its phase and prices are read when the site is built, so changing either means a new
+ * deploy. /library is rendered per request (the catalogue follows the address bar), so it reads the phase then.
+ * Nothing is invented. A price is shown only when the owner has set one, and until billing exists (phase E)
+ * `live` reads as `enrolled`.
  *
  * Environment variables (documented in docs/DEPLOYMENT.md):
  *   LIBRARY_PHASE            info (the default), enrolled or live
@@ -41,13 +42,18 @@ export function libraryPhase(env: Env = process.env): LibraryPhase {
 }
 
 /**
- * What the pages and the waitlist may honestly show for the phase. Only `info` exists so far: the waitlist is
- * open, nothing can be bought and nothing can be signed in to. The later phases (D: enrolled access, E:
- * billing) turn the other two on as they are built, and update this function and its test with them.
+ * What the pages and the waitlist may honestly show for the phase.
+ *
+ *   info      the default: nothing can be signed in to, bought or downloaded. The waitlist is open.
+ *   enrolled  phase D: the catalogue is open and enrolled students (and everyone, for free samples) can sign in and
+ *             download. A subscription for everyone else is still "coming soon", so the waitlist stays open.
+ *   live      phase E turns subscriptions on and updates this function and its test with them. Until it does, `live`
+ *             reads as `enrolled`: no page may claim something that does not exist yet.
+ *
+ * `comingSoon` is about subscriptions (what the waitlist is for), not about the catalogue.
  */
-export function libraryShows(phase: LibraryPhase = libraryPhase()): { comingSoon: boolean; waitlist: boolean } {
-  void phase;
-  return { comingSoon: true, waitlist: true };
+export function libraryShows(phase: LibraryPhase = libraryPhase()): { comingSoon: boolean; waitlist: boolean; catalogue: boolean } {
+  return { comingSoon: true, waitlist: true, catalogue: phase !== "info" };
 }
 
 export interface LibraryPrices {
