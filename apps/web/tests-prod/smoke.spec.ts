@@ -24,6 +24,9 @@ const PUBLIC_ROUTES = [
   '/tuition-terms',
   '/complaints',
   '/accessibility',
+  // plan19: the Library information pages (coming soon unless the phase is turned up and a backend exists).
+  '/library',
+  '/pricing',
 ];
 
 /** Collects console errors, uncaught exceptions, CSP violations and every host the page talks to. */
@@ -111,6 +114,30 @@ test.describe('the portal is closed in production', () => {
     expect((await request.get('/api/auth/session')).status()).toBe(404);
     expect((await request.post('/api/auth/login', { data: { email: 'a@b.co', password: 'x' } })).status()).toBe(404);
     expect((await request.get('/api/lessons/anything/ics')).status()).toBe(404);
+  });
+});
+
+test.describe('the Library carve-out is closed by default (LIBRARY_ENABLED unset)', () => {
+  for (const route of ['/library/search', '/library/free-samples', '/library/some-resource', '/library/terms', '/account', '/account/sign-in', '/account/sign-up']) {
+    test(`${route} sends a visitor to the "Portal opening soon" page`, async ({ page }) => {
+      await page.goto(route);
+      await expect(page).toHaveURL(/\/portal-opening-soon$/);
+    });
+  }
+  test('the account, library and billing APIs are 404s, including the Stripe webhook', async ({ request }) => {
+    expect((await request.get('/api/account/me')).status()).toBe(404);
+    expect((await request.post('/api/account/login', { data: { email: 'a@b.co', password: 'x' } })).status()).toBe(404);
+    expect((await request.post('/api/library/download/x')).status()).toBe(404);
+    expect((await request.post('/api/billing/create-checkout', { data: {} })).status()).toBe(404);
+    expect((await request.post('/api/billing/webhook', { data: '{}' })).status()).toBe(404);
+  });
+  test('/library and /pricing are the coming-soon pages, with no catalogue and no payment form', async ({ page }) => {
+    await page.goto('/library');
+    await expect(page.locator('.page-hero')).toContainText('Coming soon');
+    await expect(page.locator('#catalogue')).toHaveCount(0);
+    await page.goto('/pricing');
+    await expect(page.locator('main')).toContainText('Coming soon');
+    await expect(page.getByRole('button', { name: 'Continue to checkout' })).toHaveCount(0);
   });
 });
 

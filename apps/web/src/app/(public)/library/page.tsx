@@ -20,8 +20,9 @@ import styles from "./library.module.css";
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
-  const open = libraryShows().catalogue;
-  const live = open && libraryPhase() === "live" && (await subscriptionOffer(await catalogueStore())).open;
+  const store = libraryShows().catalogue ? await catalogueStore() : null;
+  const open = store !== null;
+  const live = open && libraryPhase() === "live" && (await subscriptionOffer(store)).open;
   return createMetadata({
     title: open ? "The LearnThrive Library" : "The LearnThrive Library: coming soon",
     description: live
@@ -40,7 +41,9 @@ export async function generateMetadata(): Promise<Metadata> {
  */
 export default async function LibraryPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const store = libraryShows().catalogue ? await catalogueStore() : null;
-  const phase = effectivePhase(libraryPhase(), await subscriptionOffer(store));
+  // No backend (production before Supabase is configured) means nothing can be browsed or downloaded, whatever the phase
+  // says, so the page stays the coming-soon page: it never claims what is not working.
+  const phase = store ? effectivePhase(libraryPhase(), await subscriptionOffer(store)) : "info";
   const prices = libraryPrices();
   const { waitlist } = libraryShows(phase);
   const priceText = priceSummary(prices);
