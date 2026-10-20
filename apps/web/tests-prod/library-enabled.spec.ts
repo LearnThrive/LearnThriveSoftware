@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test';
 // Library routes are reachable, and everything else stays closed, and the account backend fails CLOSED (503/404),
 // never open.
 //
-//   LIBRARY_ENABLED=true NODE_ENV=production npx next start -p 3201      (after `npm run build`)
+//   LIBRARY_ENABLED=true LIBRARY_PHASE=live NODE_ENV=production npx next start -p 3201      (after `npm run build`)
 //   LIBRARY_ENABLED_BASE_URL=http://localhost:3201 npm run test:prod-smoke -- tests-prod/library-enabled.spec.ts
 //
 // Skipped unless LIBRARY_ENABLED_BASE_URL is set, so the plain smoke run needs only the one server.
@@ -58,6 +58,27 @@ test.describe('LIBRARY_ENABLED=true opens the account and Library routes and not
     const sitemap = await (await request.get('/sitemap.xml')).text();
     for (const path of ['/account', '/login']) expect(sitemap).not.toContain(`${path}<`);
     expect(await (await request.get('/robots.txt')).text()).toContain('Disallow: /account');
+  });
+
+  test('with the phase turned up but no backend and no Stripe, the pages stay coming soon and the billing routes fail closed', async ({ page, request }) => {
+    // The server for this suite is started with LIBRARY_PHASE=live and none of the Supabase or Stripe settings.
+    await page.goto('/library');
+    await expect(page.locator('.page-hero')).toContainText('Coming soon');
+    await expect(page.locator('#catalogue')).toHaveCount(0);
+    await page.goto('/pricing');
+    await expect(page.locator('main')).toContainText('Coming soon');
+    await expect(page.getByRole('button', { name: 'Continue to checkout' })).toHaveCount(0);
+    await expect(page.locator('#waitlist')).toBeVisible();
+    for (const path of ['/library/search', '/library/free-samples', '/library/subject/maths', '/library/some-resource']) expect((await request.get(path)).status(), path).toBe(404);
+    expect((await request.get('/library/terms')).status(), 'the terms are not approved').toBe(404);
+    const checkout = await request.post('/api/billing/create-checkout', { data: { plan: 'monthly', acknowledged: 'yes' } });
+    expect(checkout.status()).toBe(503);
+    expect((await checkout.json()).code).toBe('unavailable');
+    expect((await request.post('/api/billing/create-portal-session')).status()).toBe(503);
+    expect((await request.post('/api/billing/webhook', { data: '{}', headers: { 'stripe-signature': 't=1,v1=' + 'a'.repeat(64) } })).status()).toBe(503);
+    expect((await request.post('/api/library/download/some-resource')).status()).toBe(503);
+    expect((await request.get('/api/dev/billing-fake')).status()).toBe(404);
+    expect((await request.post('/api/dev/library-seed', { data: { action: 'catalogue' } })).status()).toBe(404);
   });
 
   test('the public Library and pricing pages are still public and cookie-free', async ({ page }) => {
