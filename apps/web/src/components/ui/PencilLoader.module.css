@@ -1,0 +1,245 @@
+/* The pencil loader (from Uiverse.io by gustavofusco, MIT). Colours are theme tokens, so the pencil follows
+   light and dark by itself. The markup carries a finished still pose; this file only animates away from it
+   when motion is allowed, so every "reduce" path (OS setting, the visitor's toggle, the "reduced" tier) is
+   simply the absence of the animation rules below, with no override to get wrong. */
+
+.root {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  max-inline-size: 100%;
+  color: var(--fg-muted);
+}
+
+.pencil {
+  display: block;
+  flex: none;
+  aspect-ratio: 1;
+  max-inline-size: 100%;
+  block-size: auto;
+}
+
+.sm {
+  inline-size: 2.5rem;
+}
+
+.md {
+  inline-size: 5rem;
+}
+
+.lg {
+  inline-size: 10rem;
+}
+
+.thinking {
+  color: var(--fg-body);
+}
+
+.thinkingText {
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  color: var(--fg-body);
+}
+
+/* Colours: three bands of the body, the rubber, the metal band, the wood and the lead. */
+.body1 {
+  stroke: var(--accent);
+}
+
+.body2 {
+  stroke: color-mix(in srgb, var(--accent) 65%, var(--surface-1));
+}
+
+.body3 {
+  stroke: var(--accent-strong);
+}
+
+.eraserFace {
+  fill: color-mix(in srgb, var(--accent) 40%, var(--surface-1));
+}
+
+.eraserEdge {
+  fill: color-mix(in srgb, var(--accent) 70%, var(--surface-1));
+}
+
+/* The eraser and the point sit rigidly at the ends of the body arc; the classes are kept as stable hooks. */
+.eraser,
+.point {
+  transform-box: view-box;
+}
+
+.ferrule {
+  fill: var(--border-strong);
+}
+
+.ferruleShade {
+  fill: var(--fg-muted);
+}
+
+.ferruleEdge {
+  fill: var(--surface-sunken);
+}
+
+.ferruleRing {
+  fill: color-mix(in srgb, var(--fg-strong) 22%, transparent);
+}
+
+.wood {
+  fill: color-mix(in srgb, var(--tone-warning-fg) 45%, var(--surface-1));
+}
+
+.woodShade {
+  fill: var(--tone-warning-fg);
+}
+
+.graphite {
+  fill: var(--fg-strong);
+}
+
+/* Forced colours replaces authored colours with a few system ones, which would flatten the pencil into one
+   blob. Keep the parts apart with system colours chosen on purpose. */
+@media (forced-colors: active) {
+  .pencil {
+    forced-color-adjust: none;
+  }
+
+  .body1 {
+    stroke: CanvasText;
+  }
+
+  .body2 {
+    stroke: Highlight;
+  }
+
+  .body3 {
+    stroke: GrayText;
+  }
+
+  .eraserFace {
+    fill: Highlight;
+  }
+
+  .eraserEdge {
+    fill: GrayText;
+  }
+
+  .ferrule {
+    fill: ButtonText;
+  }
+
+  .ferruleShade {
+    fill: GrayText;
+  }
+
+  .ferruleEdge {
+    fill: ButtonText;
+  }
+
+  .ferruleRing {
+    fill: Canvas;
+  }
+
+  .wood {
+    fill: Highlight;
+  }
+
+  .woodShade {
+    fill: GrayText;
+  }
+
+  .graphite {
+    fill: CanvasText;
+  }
+}
+
+/* Motion: only when the OS has no reduce preference AND the visitor has not chosen Reduce AND the tier is not
+   "reduced". Only transform and opacity change (the compositor rule bans animating stroke-dashoffset), so the
+   pencil is a rigid 225 degree arc that spins, and the written circle is a static arc that sweeps in and out. */
+@media (prefers-reduced-motion: no-preference) {
+  :global(html:not([data-motion-tier="reduced"]):not([data-motion="reduce"])) .root :is(.eraserSkew, .rotate, .stroke) {
+    animation-duration: 3s;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+  }
+
+  /* Off screen: stop spending frames on it. */
+  :global(html:not([data-motion-tier="reduced"]):not([data-motion="reduce"])) .root[data-paused] :is(.eraserSkew, .rotate, .stroke) {
+    animation-play-state: paused;
+  }
+
+  :global(html:not([data-motion-tier="reduced"]):not([data-motion="reduce"])) .root .eraserSkew {
+    animation-name: pencilEraserSkew;
+    animation-timing-function: ease-in-out;
+  }
+
+  :global(html:not([data-motion-tier="reduced"]):not([data-motion="reduce"])) .root .rotate {
+    animation-name: pencilRotate;
+  }
+
+  :global(html:not([data-motion-tier="reduced"]):not([data-motion="reduce"])) .root .stroke {
+    animation-name: pencilStroke;
+  }
+}
+
+@keyframes pencilEraserSkew {
+  from,
+  32.5%,
+  67.5%,
+  to {
+    transform: skewX(0);
+  }
+
+  35%,
+  65% {
+    transform: skewX(-4deg);
+  }
+
+  37.5%,
+  62.5% {
+    transform: skewX(8deg);
+  }
+
+  40%,
+  45%,
+  50%,
+  55%,
+  60% {
+    transform: skewX(-15deg);
+  }
+
+  42.5%,
+  47.5%,
+  52.5%,
+  57.5% {
+    transform: skewX(15deg);
+  }
+}
+
+@keyframes pencilRotate {
+  from {
+    transform: translate(100px, 100px) rotate(0);
+  }
+
+  to {
+    transform: translate(100px, 100px) rotate(720deg);
+  }
+}
+
+/* The written circle: the finished 225 degree arc sweeps in (fading up) to its still pose, then on and out. */
+@keyframes pencilStroke {
+  from {
+    opacity: 0;
+    transform: translate(100px, 100px) rotate(-338deg);
+  }
+
+  50% {
+    opacity: 1;
+    transform: translate(100px, 100px) rotate(-113deg);
+  }
+
+  75%,
+  to {
+    opacity: 0;
+    transform: translate(100px, 100px) rotate(112deg);
+  }
+}

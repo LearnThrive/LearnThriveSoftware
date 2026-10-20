@@ -10,6 +10,11 @@ The following references are retained for attribution and licence traceability:
 - Testimonial quote hierarchy: [Alex Maracinaru](https://uiverse.io/alexmaracinaru/tender-fly-40) — Copyright (c) 2026 alexmaracinaru (Alex Maracinaru).
 - Persistent outlined form labels: [kameHame HA](https://uiverse.io/kamehame-ha/lovely-fly-87) — Copyright (c) 2026 kamehame-ha (kameHame HA).
 - Static dotted surface: [kotsu](https://uiverse.io/kennyotsu/short-warthog-33) — credited to kennyotsu (kotsu).
+- Study Buddy input and voice orb (`AiInput`, `VoiceOrb`): [Cobp](https://uiverse.io/Cobp) — rebuilt as React with CSS Modules from the Uiverse "Chat" component (plan19). Copyright (c) Cobp.
+- Library menu (`HubNav`): [Admin12121](https://uiverse.io/Admin12121) — icon artwork and the expanding-label idea from the Uiverse "Radio" menu, with newly written CSS. Copyright (c) Admin12121.
+- Sign-in card (`AuthCard`): [JohnnyCSilva](https://uiverse.io/JohnnyCSilva) — rebuilt from the Uiverse login card. Copyright (c) JohnnyCSilva.
+- Pricing card (`PricingCard`): [emmanuelh-dev](https://uiverse.io/emmanuelh-dev) — rebuilt from the Uiverse subscription card without Tailwind. Copyright (c) emmanuelh-dev.
+- Loading pencil (`PencilLoader`): [gustavofusco](https://uiverse.io/gustavofusco) — rebuilt from the Uiverse pencil loader as a compositor-only animation. Copyright (c) gustavofusco.
 
 Each referenced Uiverse element is offered under the MIT License. The licence text follows.
 

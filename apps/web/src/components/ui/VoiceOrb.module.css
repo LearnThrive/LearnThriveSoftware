@@ -1,0 +1,263 @@
+/* From Uiverse.io by Cobp (rebuilt from Chat.css: .ai, .container, .c, .glass, .rings). Module classes, token
+   colours, relative sizes. Static by default; the infinite animations and the backdrop-filter lens are only
+   switched on for the "full" motion tier (data-animated, set by VoiceOrb.tsx) and only when motion is allowed. */
+
+.orb {
+  --orb-1: var(--accent);
+  --orb-2: var(--fg-accent);
+  --orb-3: var(--tone-info-fg);
+  --orb-4: var(--surface-accent);
+  position: relative;
+  inline-size: min(100%, 13rem);
+  aspect-ratio: 1;
+  margin-inline: auto;
+  isolation: isolate;
+}
+
+.sphere,
+.glass,
+.wave {
+  position: absolute;
+  inset: 18%;
+  border-radius: 50%;
+}
+
+.sphere {
+  overflow: hidden;
+  background: color-mix(in srgb, var(--orb-3) 35%, var(--surface-1));
+  box-shadow: 0 0.75rem 2rem -0.5rem color-mix(in srgb, var(--orb-1) 45%, transparent);
+}
+
+.blob {
+  --a: 0deg;
+  --r: 25%;
+  --size: 80%;
+  position: absolute;
+  inline-size: var(--size);
+  aspect-ratio: 1;
+  inset-block-start: calc(50% - var(--size) / 2);
+  inset-inline-start: calc(50% - var(--size) / 2);
+  border-radius: 50%;
+  transform: rotate(var(--a)) translateX(var(--r));
+}
+
+.blob1 {
+  --a: 20deg;
+  --size: 85%;
+  background: radial-gradient(circle at center, var(--orb-2), color-mix(in srgb, var(--orb-3) 70%, transparent));
+}
+
+.blob2 {
+  --a: 140deg;
+  --size: 55%;
+  --r: 40%;
+  background: radial-gradient(circle at center, var(--orb-4), var(--orb-2));
+}
+
+.blob3 {
+  --a: 250deg;
+  --size: 70%;
+  --r: 30%;
+  background: radial-gradient(circle at center, var(--orb-1), transparent);
+  opacity: 0.7;
+}
+
+.blob4 {
+  --a: 320deg;
+  --size: 100%;
+  --r: 15%;
+  background: radial-gradient(circle at center, color-mix(in srgb, var(--orb-3) 80%, transparent), transparent 70%);
+  opacity: 0.8;
+}
+
+.rings {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  perspective: 11rem;
+  opacity: 0.8;
+}
+
+.rings::before,
+.rings::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 0.3rem solid transparent;
+  background: conic-gradient(var(--orb-4), var(--orb-2), var(--orb-1), var(--orb-3), var(--orb-4)) border-box;
+  mask:
+    linear-gradient(currentColor 0 0) padding-box,
+    linear-gradient(currentColor 0 0);
+  mask-composite: exclude;
+}
+
+.rings::before {
+  transform: rotateY(70deg) rotateX(20deg);
+}
+
+.rings::after {
+  transform: rotateX(70deg) rotateY(20deg);
+}
+
+.glass {
+  pointer-events: none;
+  background: radial-gradient(circle at 70% 28%, color-mix(in srgb, var(--surface-1) 75%, transparent), transparent 42%);
+  box-shadow: inset 0 0 1.2rem color-mix(in srgb, var(--surface-1) 55%, transparent);
+}
+
+/* The pulse rings: drawn still for listening and speaking, so the state is not shown by motion alone. */
+.wave {
+  border: 0.15rem solid color-mix(in srgb, var(--orb-2) 80%, transparent);
+  opacity: 0;
+}
+
+.wave1 {
+  transform: scale(1.3);
+}
+
+.wave2 {
+  transform: scale(1.6);
+}
+
+.orb[data-state="listening"] .wave,
+.orb[data-state="speaking"] .wave {
+  opacity: 0.45;
+}
+
+.orb[data-state="speaking"] .wave2 {
+  opacity: 0;
+}
+
+.orb[data-state="idle"] .blob {
+  opacity: 0.55;
+}
+
+/* ── Animated: full tier only, never under any reduced-motion setting ───────────────────────────── */
+
+@media (prefers-reduced-motion: no-preference) {
+  :global(html:not([data-motion="reduce"], [data-motion-tier="reduced"])) .orb[data-animated="true"] .glass {
+    backdrop-filter: blur(6px);
+  }
+
+  :global(html:not([data-motion="reduce"], [data-motion-tier="reduced"])) .orb[data-animated="true"] .sphere {
+    animation: breathe 5s ease-in-out infinite;
+  }
+
+  :global(html:not([data-motion="reduce"], [data-motion-tier="reduced"])) .orb[data-animated="true"] .blob1 {
+    animation: orbit 5.5s linear infinite;
+  }
+
+  :global(html:not([data-motion="reduce"], [data-motion-tier="reduced"])) .orb[data-animated="true"] .blob2 {
+    animation: orbit 6s linear infinite reverse;
+  }
+
+  :global(html:not([data-motion="reduce"], [data-motion-tier="reduced"])) .orb[data-animated="true"] .blob3 {
+    animation: orbit 4.8s linear infinite;
+  }
+
+  :global(html:not([data-motion="reduce"], [data-motion-tier="reduced"])) .orb[data-animated="true"] .blob4 {
+    animation: orbit 5.2s linear infinite reverse;
+  }
+
+  :global(html:not([data-motion="reduce"], [data-motion-tier="reduced"])) .orb[data-animated="true"] .rings::before {
+    animation: ring-a 10s ease-in-out infinite;
+  }
+
+  :global(html:not([data-motion="reduce"], [data-motion-tier="reduced"])) .orb[data-animated="true"] .rings::after {
+    animation: ring-b 10s ease-in-out infinite;
+  }
+
+  :global(html:not([data-motion="reduce"], [data-motion-tier="reduced"])) .orb[data-animated="true"][data-state="listening"] .wave,
+  :global(html:not([data-motion="reduce"], [data-motion-tier="reduced"])) .orb[data-animated="true"][data-state="speaking"] .wave {
+    animation: pulse 1.8s linear infinite;
+  }
+
+  :global(html:not([data-motion="reduce"], [data-motion-tier="reduced"])) .orb[data-animated="true"] .wave2 {
+    animation-delay: 0.6s;
+  }
+
+  /* Scrolled out of view: keep the state, stop the work. */
+  :global(html:not([data-motion="reduce"], [data-motion-tier="reduced"])) .orb[data-animated="true"][data-paused="true"] .sphere,
+  :global(html:not([data-motion="reduce"], [data-motion-tier="reduced"])) .orb[data-animated="true"][data-paused="true"] .blob,
+  :global(html:not([data-motion="reduce"], [data-motion-tier="reduced"])) .orb[data-animated="true"][data-paused="true"][data-state] .wave,
+  :global(html:not([data-motion="reduce"], [data-motion-tier="reduced"])) .orb[data-animated="true"][data-paused="true"] .rings::before,
+  :global(html:not([data-motion="reduce"], [data-motion-tier="reduced"])) .orb[data-animated="true"][data-paused="true"] .rings::after {
+    animation-play-state: paused;
+  }
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(0.97);
+  }
+
+  50% {
+    transform: scale(1);
+  }
+}
+
+@keyframes orbit {
+  from {
+    transform: rotate(var(--a)) translateX(var(--r));
+  }
+
+  to {
+    transform: rotate(calc(var(--a) + 360deg)) translateX(var(--r));
+  }
+}
+
+@keyframes ring-a {
+  0%,
+  25% {
+    transform: rotateY(70deg) rotateX(20deg);
+  }
+
+  50%,
+  80% {
+    transform: rotateY(250deg) rotateX(200deg);
+  }
+
+  100% {
+    transform: rotateY(430deg) rotateX(380deg);
+  }
+}
+
+@keyframes ring-b {
+  0%,
+  25% {
+    transform: rotateX(70deg) rotateY(20deg);
+  }
+
+  50%,
+  75% {
+    transform: rotateX(250deg) rotateY(200deg);
+  }
+
+  100% {
+    transform: rotateX(430deg) rotateY(380deg);
+  }
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0;
+  }
+
+  35% {
+    opacity: 0.6;
+  }
+
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+@media (forced-colors: active) {
+  .sphere {
+    border: 1px solid CanvasText;
+  }
+}
