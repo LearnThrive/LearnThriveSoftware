@@ -187,6 +187,11 @@ export function libraryContract(name: string, make: () => Promise<{ harness: Con
       assert.equal(await store.downloads.countSince(a, new Date(now.getTime() - HOUR)), 1);
       assert.equal(await store.downloads.countSince(a, new Date(now.getTime() - 3 * HOUR)), 2);
       assert.equal(await store.downloads.countSince(b, new Date(now.getTime() - HOUR)), 1);
+      const other = await store.resources.upsert(resource({ slug: "dl-2" }));
+      await store.downloads.record({ clientId: a, resourceId: other.id, at: new Date(now.getTime() - 60_000) });
+      assert.equal(await store.downloads.countForResourceSince(a, res.id, new Date(now.getTime() - HOUR)), 1);
+      assert.equal(await store.downloads.countForResourceSince(a, other.id, new Date(now.getTime() - HOUR)), 1);
+      assert.equal(await store.downloads.countForResourceSince(b, other.id, new Date(now.getTime() - HOUR)), 0);
     });
 
     test("teardown", async () => {

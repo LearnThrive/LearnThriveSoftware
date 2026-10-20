@@ -88,6 +88,11 @@ export class InMemoryLibraryStore implements LibraryStore {
     this.entitlementRows.push({ clientId: this.clientFor(profileId), source, startsAt, endsAt });
   }
 
+  /** For tests: every download recorded so far, flags included. */
+  downloadEvents(): DownloadEvent[] {
+    return this.downloadRows.map((e) => ({ ...e, flags: [...(e.flags ?? [])] }));
+  }
+
   private clientFor(profileId: string): string {
     let id = this.clients.get(profileId);
     if (!id) {
@@ -192,5 +197,7 @@ export class InMemoryLibraryStore implements LibraryStore {
       this.downloadRows.push({ ...event, flags: [...(event.flags ?? [])] });
     },
     countSince: async (clientId, since) => this.downloadRows.filter((d) => d.clientId === clientId && d.at >= since).length,
+    countForResourceSince: async (clientId, resourceId, since) =>
+      this.downloadRows.filter((d) => d.clientId === clientId && d.resourceId === resourceId && d.at >= since).length,
   };
 }

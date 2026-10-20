@@ -46,6 +46,8 @@ export interface DownloadRepository {
   record(event: DownloadEvent): Promise<void>;
   /** Downloads by this family account at or after `since`. For the hourly cap. */
   countSince(clientId: string, since: Date): Promise<number>;
+  /** The same, for one resource: a quick repeat of one file is an anomaly flag. */
+  countForResourceSince(clientId: string, resourceId: string, since: Date): Promise<number>;
 }
 
 export interface LibraryStore {

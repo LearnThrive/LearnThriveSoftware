@@ -50,7 +50,7 @@ const PDF_FEATURES: ReadonlyArray<[pattern: RegExp, verdict: FileVerdict]> = [
   [/\/(?:EmbeddedFile|RichMedia|XFA)\b/, reject("embedded", "This PDF contains embedded files or interactive content, which we cannot accept. Please print it to a new PDF and upload that.")],
 ];
 
-function inspectPdf(bytes: Uint8Array): FileVerdict {
+export function inspectPdf(bytes: Uint8Array): FileVerdict {
   const text = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength)
     .toString("latin1")
     // A PDF name can hide a letter as #xx (/J#61vaScript is /JavaScript); read them as written.
