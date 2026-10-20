@@ -8,6 +8,18 @@
 export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const PHONE_PATTERN = /^[0-9+()\s-]{7,25}$/;
 
+/**
+ * One plain address, ASCII only. Stricter than EMAIL_PATTERN on purpose, for the places where the address becomes
+ * a recipient or an account identity (the Library waitlist, account sign-up): it must not be able to carry a second
+ * recipient (`a@x.com,b@y.com`, `Name<b@y.com>`), a quoted name, brackets or markup.
+ */
+const PLAIN_EMAIL = /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+(?:[A-Za-z]{2,63}|xn--[A-Za-z0-9-]{1,59})$/;
+
+export function isPlainEmail(email: string): boolean {
+  const local = email.slice(0, email.lastIndexOf("@"));
+  return PLAIN_EMAIL.test(email) && !local.startsWith(".") && !local.endsWith(".") && !local.includes("..");
+}
+
 export function asString(value: unknown): string {
   return typeof value === "string" ? value : "";
 }

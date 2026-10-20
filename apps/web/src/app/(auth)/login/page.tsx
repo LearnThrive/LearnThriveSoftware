@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { LoginForm } from "@/components/LoginForm";
 import { createMetadata } from "@/lib/metadata";
+import { libraryEnabled } from "@/lib/library-config";
 import { getSession } from "@/lib/auth/session";
 
 export const metadata: Metadata = createMetadata({
@@ -19,6 +20,9 @@ export const metadata: Metadata = createMetadata({
  * comes from the account, never from the person signing in.
  */
 export default async function LoginPage() {
+  // With the Library open in production the staff sign-in does not exist (its provider refuses to run); the only
+  // sign-in is the account one.
+  if (libraryEnabled()) redirect("/account/sign-in");
   const session = await getSession();
   if (session) redirect("/dashboard");
 

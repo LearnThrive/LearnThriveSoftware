@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
         }),
       },
       // The signed-in app and the API are never search results, whatever the portal flag says.
-      ...["/login", "/403", "/dashboard/:path*", "/api/:path*"].map((source) => ({
+      ...["/login", "/403", "/account/:path*", "/dashboard/:path*", "/api/:path*"].map((source) => ({
         source,
         headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
       })),
