@@ -29,6 +29,7 @@ const ENV = {
   LIBRARY_VAT_STATUS: "not_registered",
   LIBRARY_MIN_PER_SUBJECT: "1",
   LIBRARY_REQUIRED_SUBJECTS: "Maths",
+  LIBRARY_TERMS_APPROVED: "true",
   LIBRARY_PHASE: "live",
 };
 const GOOD = "correct horse battery staple";
@@ -66,6 +67,8 @@ test("checkoutConfigured: live phase, Stripe, a price, a VAT decision and a cont
   assert.equal(cfg.checkoutConfigured("live", { ...ENV, LIBRARY_VAT_STATUS: "maybe" }).reason, "vat");
   assert.equal(cfg.checkoutConfigured("live", { ...ENV, LIBRARY_MIN_PER_SUBJECT: "0" }).reason, "gate");
   assert.equal(cfg.checkoutConfigured("live", { ...ENV, LIBRARY_REQUIRED_SUBJECTS: "" }).reason, "gate");
+  assert.equal(cfg.checkoutConfigured("live", { ...ENV, LIBRARY_TERMS_APPROVED: undefined }).reason, "legal", "terms not approved is no checkout");
+  assert.equal(cfg.checkoutConfigured("live", { ...ENV, LIBRARY_TERMS_APPROVED: "yes" }).reason, "legal");
   assert.equal(cfg.checkoutConfigured("live", { ...ENV, LIBRARY_VAT_STATUS: " Registered " }).vat, "registered");
 });
 
@@ -606,4 +609,70 @@ test("access matrix: every combination of enrolled, subscription state, grant an
           checked += 1;
         }
   assert.equal(checked, 48);
+});
+
+// ---- reconciliation and the command lines ----------------------------------------------------------------------
+
+const rec = loadTsFrom(import.meta.url, "../src/lib/billing/reconcile.ts");
+
+test("reconcile: a dry run reports and writes nothing; apply brings the mirror and entitlements into line", async (t) => {
+  const w = world(t);
+  const a = await w.family();
+  const b = await w.family();
+  const c = await w.family();
+  // a: mirrored as active, but Stripe says canceled (a missed webhook). b: never mirrored. One for nobody. One mirrored that Stripe lost.
+  w.putSub({ id: "sub_r1", customer: "cus_R1", clientId: a.clientId });
+  await events.processStripeEvent(w.evt("customer.subscription.created", { id: "sub_r1", customer: "cus_R1" }), w.deps);
+  w.putSub({ id: "sub_r1", customer: "cus_R1", clientId: a.clientId, status: "canceled", endedAt: sec(w.now.getTime() - DAY) });
+  w.putSub({ id: "sub_r2", customer: "cus_R2", clientId: b.clientId });
+  w.putSub({ id: "sub_r3", customer: "cus_NOBODY" });
+  w.api.subscriptions.set("sub_bad", { id: "sub_bad", status: "nonsense" });
+  await w.store.billing.upsertSubscription(c.clientId, { stripeSubscriptionId: "sub_lost", stripePriceId: "price_x1", status: "active", planInterval: "month", currentPeriodEnd: new Date(w.now.getTime() + 5 * DAY), cancelAtPeriodEnd: false, canceledAt: null, endedAt: null });
+
+  const dry = await rec.reconcile({ store: w.store, stripe: w.api, now: () => w.now }, { apply: false });
+  assert.equal(dry.seenAtStripe, 4);
+  assert.deepEqual(dry.changed.map((c) => c.id).sort(), ["sub_r1", "sub_r2"]);
+  assert.match(dry.changed.find((c) => c.id === "sub_r1").why, /status active -> canceled/);
+  assert.deepEqual(dry.unresolved, ["sub_r3"]);
+  assert.deepEqual(dry.unreadable, ["sub_bad"]);
+  assert.deepEqual(dry.missingAtStripe, ["sub_lost"]);
+  assert.equal(dry.resynced, 0);
+  assert.equal((await w.store.billing.getSubscriptionByStripeId("sub_r1")).status, "active", "a dry run changes nothing");
+  assert.equal(await w.store.billing.getSubscriptionByStripeId("sub_r2"), null);
+
+  const done = await rec.reconcile({ store: w.store, stripe: w.api, now: () => w.now }, { apply: true });
+  assert.deepEqual(done.changed.map((c) => c.id).sort(), ["sub_r1", "sub_r2"]);
+  assert.equal((await w.store.billing.getSubscriptionByStripeId("sub_r1")).status, "canceled");
+  assert.equal((await w.store.access.facts(a.clientId, w.now)).subscription, false, "the missed cancellation now closes access");
+  assert.equal(await w.store.billing.getClientByStripeCustomer("cus_R2"), b.clientId, "linked from the metadata hint");
+  assert.equal((await w.store.access.facts(b.clientId, w.now)).subscription, true);
+  assert.equal(await w.store.billing.getSubscriptionByStripeId("sub_r3"), null, "nothing is created for a stranger");
+  assert.equal((await w.store.billing.getSubscriptionByStripeId("sub_lost")).status, "active", "and a record Stripe lost is left alone");
+  const again = await rec.reconcile({ store: w.store, stripe: w.api, now: () => w.now }, { apply: true });
+  assert.equal(again.changed.length, 0, "a second run has nothing left to do");
+  assert.equal(again.unchanged, 2);
+
+  assert.equal(await rec.markRefunded({ store: w.store, now: () => w.now }, "sub_r2"), true);
+  assert.equal((await w.store.access.facts(b.clientId, w.now)).subscription, false);
+  assert.equal(await rec.markRefunded({ store: w.store, now: () => w.now }, "sub_nope"), false);
+});
+
+test("the billing and grant command lines explain themselves and refuse to run without their settings", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const dir = new URL("..", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
+  const env = { ...process.env };
+  for (const key of ["DATABASE_URL", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"]) delete env[key];
+  const run = (script, ...args) => spawnSync(process.execPath, ["--import", "tsx", `scripts/${script}`, ...args], { env, encoding: "utf8", cwd: dir });
+  assert.equal(run("billing-reconcile.mjs", "--help").status, 0);
+  assert.match(run("billing-reconcile.mjs").stderr, /DATABASE_URL is required/);
+  assert.equal(run("billing-reconcile.mjs").status, 2);
+  assert.match(run("billing-reconcile.mjs", "--mark-refunded", "nope").stderr, /Stripe subscription id/);
+  assert.equal(run("library-grant.mjs", "--help").status, 0);
+  assert.match(run("library-grant.mjs").stderr, /DATABASE_URL is required/);
+  const withDb = { ...env, DATABASE_URL: "postgres://nobody@127.0.0.1:1/none" };
+  const grant = (...args) => spawnSync(process.execPath, ["--import", "tsx", "scripts/library-grant.mjs", ...args], { env: withDb, encoding: "utf8", cwd: dir });
+  assert.match(grant().stderr, /--email is required/);
+  assert.match(grant("--email", "a@b.co").stderr, /--reason/);
+  assert.match(grant("--email", "a@b.co", "--reason", "x", "--ends", "tomorrow").stderr, /--ends must be a date/);
+  assert.match(grant("--email", "a@b.co", "--reason", "x", "--ends", "2020-01-01").stderr, /must be in the future/);
 });

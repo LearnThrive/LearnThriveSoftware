@@ -24,3 +24,20 @@
 .after p + p {
   margin-top: 0.75rem;
 }
+
+.notice {
+  max-width: 44rem;
+  margin: 0 auto 1.5rem;
+  padding: 0.85rem 1.1rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  color: var(--fg-strong);
+}
+
+.disclosures {
+  margin: 0;
+  padding-inline-start: 1.1rem;
+  display: grid;
+  gap: 0.5rem;
+}

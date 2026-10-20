@@ -17,6 +17,8 @@
     "test:e2e": "playwright test",
     "test:prod-smoke": "playwright test -c playwright.prod.config.ts",
     "library:import": "node --import tsx scripts/library-import.mjs",
+    "library:grant": "node --import tsx scripts/library-grant.mjs",
+    "billing:reconcile": "node --import tsx scripts/billing-reconcile.mjs",
     "profile:motion": "node scripts/profile-motion.mjs",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"

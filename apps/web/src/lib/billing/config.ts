@@ -14,6 +14,8 @@ type Env = Record<string, string | undefined>;
  *   STRIPE_PRICE_ANNUAL       price_... of the annual recurring price (GBP)
  *   STRIPE_API_VERSION        optional; the Stripe API version the server's calls use
  *   STRIPE_AUTOMATIC_TAX      "true" asks Stripe to calculate tax at checkout (needs Stripe Tax set up)
+ *   LIBRARY_TERMS_APPROVED     "true" once the owners and a solicitor have approved the subscription terms, the content licence
+ *                             and the checkout wording (consumer.ts). Until then checkout is not offered
  *   LIBRARY_VAT_STATUS        "registered" (the prices include VAT) or "not_registered". REQUIRED, set by the owner
  *                             once the accountant has confirmed the treatment: no default is safe
  *   LIBRARY_MIN_PER_SUBJECT   whole number: the least published resources each required subject must have first
@@ -76,7 +78,7 @@ export function readinessConfig(env: Env = process.env): Readiness {
   };
 }
 
-export type Unavailable = "phase" | "stripe" | "price" | "vat" | "gate";
+export type Unavailable = "phase" | "stripe" | "price" | "vat" | "gate" | "legal";
 
 /**
  * Whether paid sign-up may be offered at all, and if not, the first thing that is missing. The content gate's counts
@@ -91,6 +93,7 @@ export function checkoutConfigured(phase: string, env: Env = process.env): { ok:
   if (!vat) return { ok: false, reason: "vat" };
   const gate = readinessConfig(env);
   if (gate.minPerSubject === null || gate.subjects.length === 0) return { ok: false, reason: "gate" };
+  if (pick(env.LIBRARY_TERMS_APPROVED) !== "true") return { ok: false, reason: "legal" };
   return { ok: true, config, vat, gate };
 }
 

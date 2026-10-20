@@ -36,6 +36,19 @@ test("the policy allows nothing from another origin, no eval, no plugins, no bas
   }
 });
 
+test("form-action allows Stripe's two hosted pages only while subscriptions are on, and nothing else changes", () => {
+  const off = buildContentSecurityPolicy({});
+  const on = buildContentSecurityPolicy({ billing: true });
+  assert.match(on, /form-action 'self' https:\/\/checkout\.stripe\.com https:\/\/billing\.stripe\.com;/);
+  assert.doesNotMatch(off, /stripe/);
+  // Everything but the form-action directive is identical: no script, frame, connection or image source is added.
+  const without = (csp) => csp.split("; ").filter((d) => !d.startsWith("form-action")).join("; ");
+  assert.equal(without(on), without(off));
+  assert.doesNotMatch(on, /js\.stripe\.com|script-src[^;]*stripe|connect-src[^;]*stripe|frame-src[^;]*stripe/);
+  assert.ok(buildSecurityHeaders({ production: true, billing: true }).some((h) => h.key === "Content-Security-Policy" && h.value.includes("checkout.stripe.com")));
+  assert.ok(!buildSecurityHeaders({ production: true }).some((h) => h.value.includes("stripe")));
+});
+
 test("the classroom origin is allowed for connections and frames only when it is a real http(s) URL", () => {
   const csp = buildContentSecurityPolicy({ classroomUrl: "https://classroom.example.test/some/path" });
   assert.match(csp, /connect-src 'self' https:\/\/classroom\.example\.test wss:\/\/classroom\.example\.test/);

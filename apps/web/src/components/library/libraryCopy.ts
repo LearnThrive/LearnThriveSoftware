@@ -33,6 +33,16 @@ export function priceSummary(prices: LibraryPrices): string {
 
 /** The overview page's hero and at-a-glance words for a phase. `info` is the coming-soon copy from phase B2, unchanged. */
 export function heroCopy(phase: LibraryPhase) {
+  if (phase === "live") {
+    return {
+      eyebrow: "Library",
+      intro: "Worksheets, exam-style papers, mark schemes and notes, all made by LearnThrive. Included for enrolled students, and available to everyone else by subscription.",
+      status: "Open",
+      everyoneElse: "By subscription",
+      howEyebrow: "How it works",
+      howNote: "Sign in, browse and download. Free samples are open to anyone with an account. The price, renewal and cancellation details are shown in full before you pay.",
+    };
+  }
   const open = phase !== "info";
   return {
     eyebrow: open ? "Library · Open to enrolled students" : "Library · Coming soon",
@@ -50,6 +60,7 @@ export function heroCopy(phase: LibraryPhase) {
 
 export function libraryFaqs(prices: LibraryPrices, phase: LibraryPhase = "info"): FaqItem[] {
   const priced = Boolean(prices.monthly || prices.annual);
+  const live = phase === "live";
   const open = phase !== "info";
   return [
     {
@@ -60,7 +71,9 @@ export function libraryFaqs(prices: LibraryPrices, phase: LibraryPhase = "info")
     {
       id: "library-who-is-it-for",
       question: "Who is it for?",
-      answer: "It is included for students enrolled with LearnThrive. Anyone else will be able to pay a subscription for all of it.",
+      answer: live
+        ? "It is included for students enrolled with LearnThrive. Anyone else can pay a subscription for all of it."
+        : "It is included for students enrolled with LearnThrive. Anyone else will be able to pay a subscription for all of it.",
     },
     {
       id: "library-subjects-and-levels",
@@ -70,9 +83,11 @@ export function libraryFaqs(prices: LibraryPrices, phase: LibraryPhase = "info")
     {
       id: "library-when",
       question: "When will it open?",
-      answer: open
-        ? "It is open now to enrolled students. A subscription for everyone else is coming soon, and we do not have a date to give you yet. Join the waitlist and we will email you once, when subscriptions launch."
-        : "It is coming soon, and we do not have a date to give you yet. Join the waitlist and we will email you once, when it launches.",
+      answer: live
+        ? "It is open now. Enrolled students have it included, and anyone else can subscribe."
+        : open
+          ? "It is open now to enrolled students. A subscription for everyone else is coming soon, and we do not have a date to give you yet. Join the waitlist and we will email you once, when subscriptions launch."
+          : "It is coming soon, and we do not have a date to give you yet. Join the waitlist and we will email you once, when it launches.",
     },
     {
       id: "library-cost",
@@ -83,9 +98,11 @@ export function libraryFaqs(prices: LibraryPrices, phase: LibraryPhase = "info")
     {
       id: "library-access",
       question: "How will I get access?",
-      answer: open
-        ? "Sign in, browse the Library and download what you need. It is included for enrolled students, and free samples are open to anyone with an account. Anyone else will be able to subscribe once subscriptions open."
-        : "You will sign in, browse the Library and download what you need. Enrolled students will have it included, and anyone else will be able to subscribe. None of this is open yet.",
+      answer: live
+        ? "Sign in, browse the Library and download what you need. It is included for enrolled students, free samples are open to anyone with an account, and anyone else can subscribe from the pricing page."
+        : open
+          ? "Sign in, browse the Library and download what you need. It is included for enrolled students, and free samples are open to anyone with an account. Anyone else will be able to subscribe once subscriptions open."
+          : "You will sign in, browse the Library and download what you need. Enrolled students will have it included, and anyone else will be able to subscribe. None of this is open yet.",
     },
     {
       id: "library-waitlist-data",

@@ -47,13 +47,15 @@ export function libraryPhase(env: Env = process.env): LibraryPhase {
  *   info      the default: nothing can be signed in to, bought or downloaded. The waitlist is open.
  *   enrolled  phase D: the catalogue is open and enrolled students (and everyone, for free samples) can sign in and
  *             download. A subscription for everyone else is still "coming soon", so the waitlist stays open.
- *   live      phase E turns subscriptions on and updates this function and its test with them. Until it does, `live`
- *             reads as `enrolled`: no page may claim something that does not exist yet.
+ *   live      phase E: subscriptions are open (checkout, the customer portal) and the waitlist closes. A page must pass
+ *             the phase it is REALLY in, `effectivePhase()` in lib/billing/offer.ts: `live` without Stripe, a price, a
+ *             VAT decision and the content threshold behaves as `enrolled`, because nothing may claim what is not ready.
  *
  * `comingSoon` is about subscriptions (what the waitlist is for), not about the catalogue.
  */
 export function libraryShows(phase: LibraryPhase = libraryPhase()): { comingSoon: boolean; waitlist: boolean; catalogue: boolean } {
-  return { comingSoon: true, waitlist: true, catalogue: phase !== "info" };
+  if (phase === "live") return { comingSoon: false, waitlist: false, catalogue: true };
+  return { comingSoon: true, waitlist: true, catalogue: phase === "enrolled" };
 }
 
 export interface LibraryPrices {
