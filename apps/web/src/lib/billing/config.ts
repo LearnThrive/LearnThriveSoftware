@@ -78,6 +78,11 @@ export function readinessConfig(env: Env = process.env): Readiness {
   };
 }
 
+/** The owners and a solicitor have approved the Library terms, the licence and the checkout wording. */
+export function termsApproved(env: Env = process.env): boolean {
+  return pick(env.LIBRARY_TERMS_APPROVED) === "true";
+}
+
 export type Unavailable = "phase" | "stripe" | "price" | "vat" | "gate" | "legal";
 
 /**
@@ -93,7 +98,7 @@ export function checkoutConfigured(phase: string, env: Env = process.env): { ok:
   if (!vat) return { ok: false, reason: "vat" };
   const gate = readinessConfig(env);
   if (gate.minPerSubject === null || gate.subjects.length === 0) return { ok: false, reason: "gate" };
-  if (pick(env.LIBRARY_TERMS_APPROVED) !== "true") return { ok: false, reason: "legal" };
+  if (!termsApproved(env)) return { ok: false, reason: "legal" };
   return { ok: true, config, vat, gate };
 }
 

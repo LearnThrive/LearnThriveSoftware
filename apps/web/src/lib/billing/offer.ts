@@ -1,6 +1,6 @@
 import type { LibraryStore } from "@learnthrive/data/library";
 import { libraryPhase, libraryPrices, type LibraryPhase, type LibraryPrices } from "@/lib/library-config";
-import { checkoutConfigured, contentReady, type Unavailable } from "./config";
+import { checkoutConfigured, contentReady, termsApproved, type Unavailable } from "./config";
 import type { VatStatus } from "./consumer";
 
 type Env = Record<string, string | undefined>;
@@ -29,6 +29,11 @@ export async function subscriptionOffer(store: LibraryStore | null, env: Env = p
   if (configured.config.prices.year && prices.annual) plans.push({ plan: "annual", period: "year", price: prices.annual });
   if (plans.length === 0) return { open: false, reason: "display_price" };
   return { open: true, vat: configured.vat, prices, plans };
+}
+
+/** Where sign-up's "terms" link goes: the Library terms once they exist for visitors (approved, or development), else the website terms. */
+export function libraryTermsHref(env: Env = process.env): string {
+  return env.NODE_ENV !== "production" || termsApproved(env) ? "/library/terms" : "/terms";
 }
 
 /** The phase the pages should behave as: `live` only when the offer really is open, otherwise `enrolled`. */

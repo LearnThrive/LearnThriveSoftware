@@ -145,6 +145,13 @@ export default async function PricingPage({ searchParams }: { searchParams: Prom
               </p>
               {offer.open ? (
                 <p>
+                  <Link className="text-link" href="/library/terms">
+                    Read the Library terms and content licence <span aria-hidden="true">→</span>
+                  </Link>
+                </p>
+              ) : null}
+              {offer.open ? (
+                <p>
                   Already subscribed? <Link href="/account">Manage your subscription</Link>. Questions about paying? <Link href="/contact">Get in touch</Link>.
                 </p>
               ) : null}

@@ -4,10 +4,11 @@
 
 | Piece | State |
 | --- | --- |
-| Postgres schema and Row Level Security (`supabase/migrations/0001` to `0005`) | **Written and proven in-process** with PGlite (WASM Postgres). See "Proof" below. |
+| Postgres schema and Row Level Security (`supabase/migrations/0001` to `0006`) | **Written and proven in-process** with PGlite (WASM Postgres). See "Proof" below. |
 | A Supabase project (hosted) | **Not created.** The owner creates it and applies the settings under "Project settings the owner applies by hand". |
 | Local stack with the Supabase CLI (`supabase start`) | **Not run here**: this machine has no Docker daemon and no Supabase CLI. The SQL is plain Postgres 15+ written for Supabase, and is exercised through PGlite with a Supabase prelude, but it has not been run on the real stack. |
-| `SupabaseAuthProvider` and Supabase repository implementations in `packages/data` | **Not part of this document's work.** They are built against this schema (see "What other code must call"). The in-memory provider and the development auth provider are unchanged. |
+| Library repositories (`packages/data/src/library`): accounts, resources, access facts, downloads, billing | **Built (plan19 phases C to E).** `SqlLibraryStore` over a two-line `SqlExecutor`, and an in-memory twin, held to one contract suite that runs on both (the SQL one on PGlite). See "The repositories" below. |
+| Account auth against Supabase Auth | **Built** (`apps/web/src/lib/account/supabaseAuth.ts`, REST over `fetch`, no SDK), tested against a faked `fetch`. **Not run against a real project.** The in-memory provider and the development auth provider are unchanged. |
 | Lessons, attendance, reports, notifications, availability, platform settings | **Still future.** They keep the table map further down; no migration exists for them yet. |
 
 `packages/data`'s repository interfaces (`packages/data/src/repositories.ts`) remain the only thing application code talks to. A Supabase-backed provider implements the same interfaces.
@@ -23,8 +24,26 @@ All files are in `supabase/migrations/`, numbered so the Supabase CLI applies th
 | `0003_billing.sql` | `billing_customers`, `subscriptions`, `admin_grants`, `entitlements`, `download_events`, `stripe_webhook_events` |
 | `0004_assistant.sql` | `chat_sessions`, `chat_messages`, `chat_files` (with deletion deadlines), `usage_counters` |
 | `0005_rls.sql` | Grants, SECURITY DEFINER helpers, `ENABLE`/`FORCE ROW LEVEL SECURITY` and every policy |
+| `0006_billing_refunds.sql` | `subscriptions.refunded_at` (a full refund ends access) and `subscriptions.ended_at` (when Stripe ended it) |
 
 The pgvector table for phase H is deliberately **not** created; `0002_library.sql` carries a clearly marked comment block describing it. It will be its own later migration (for example `0006_library_embeddings.sql`), service-role only.
+
+## The repositories
+
+`packages/data/src/library/` has one small interface per concern (`ports.ts`): `AccountRepository` (profile, the family account `clients` row, the name on downloads, the owner of a client, the sign-in email), `ResourceRepository` (published listing with full-text search, filters and facets, drafts for the import tool, file records), `AccessRepository` (what a family holds right now: enrolled, subscription, admin grant), `DownloadRepository` (counter-only audit and the hourly count) and `BillingRepository` (Stripe customer link, the subscription mirror, derived entitlements, webhook idempotency, consents, admin grants). `InMemoryLibraryStore` is used for development and tests; `SqlLibraryStore` runs the SQL below every method, and takes any driver with a `query(sql, params)` method.
+
+- **One contract, two stores**: `src/testing/libraryContract.ts` is run by `libraryMemory.test.ts` and `librarySql.test.ts` (PGlite with these migrations). If the two ever disagree a test fails for one of them.
+- **Production connection**: `apps/web/src/lib/db.ts` opens a pooled `postgres` (porsager, exact 3.4.9, no dependencies) connection from `DATABASE_URL`, with `prepare: false` for Supabase's transaction pooler (port 6543). Every statement is parameterised, and every family-scoped statement names its `client_id`, because this connection **bypasses Row Level Security**; RLS (proven in `rls.test.ts`) is the second wall, not the first. It also reads `auth.users.email` for the billing emails.
+- **A narrower role, recommended**: instead of the `postgres` user, create a login role for the server with only what these repositories touch (verify the exact grants on the staging project, and that your plan allows a `bypassrls` role). Sketch:
+
+  ```sql
+  create role learnthrive_server login password '<generated>' bypassrls;
+  grant usage on schema public to learnthrive_server;
+  grant select, insert, update, delete on all tables in schema public to learnthrive_server;
+  grant usage, select on all sequences in schema public to learnthrive_server;
+  grant select (id, email) on auth.users to learnthrive_server;
+  ```
+- **Not tested against a real server**: the `postgres` driver's handling of arrays (`tags`, `flags`), timestamps and `bigint` was reasoned from its documentation, not run. A staging run of the import tool (`docs/LIBRARY.md`) and one sign-in covers it.
 
 ## How access is enforced
 
@@ -91,6 +110,7 @@ There is no Docker and no `psql` here, so the database behaviour is proven in-pr
 ```
 cd packages/data
 npx tsx --test src/schema.test.ts src/rls.test.ts     # database tests (about 10 s)
+npx tsx --test src/library*.test.ts                    # both Library stores against one contract, canAccess, the billing derivation
 npx tsx --test src/inMemoryProvider.test.ts            # unchanged in-memory provider tests
 npm test                                               # all of the above (tsx --test src/*.test.ts)
 ```
@@ -148,7 +168,7 @@ The project is created by the owner (region: a UK or EU region; check the proces
 
 - No live Supabase project exists, so nothing here ran on the real service. Everything depending on it is untested: PostgREST behaviour, Auth emails, Storage buckets, rate limits and the CLI.
 - `supabase/config.toml` is not committed: it is generated by `supabase init`, and a hand-written file with a key the installed CLI does not know makes the CLI fail. Use the settings above.
-- The Supabase repositories and auth provider are written by the code engineers against this schema.
+- The repositories and the Supabase Auth provider exist (above) but were never run against a real project; see "The repositories".
 
 ## Table map for what is still future
 

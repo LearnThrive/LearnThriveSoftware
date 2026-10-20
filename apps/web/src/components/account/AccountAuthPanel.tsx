@@ -31,7 +31,7 @@ const NOT_READY = "The check that you are a person has not finished yet. Please 
  * Supabase's own limits guard it). After a good sign-in the page is reloaded rather than client-routed, so the
  * server sees the new cookie on the first request.
  */
-export function AccountAuthPanel({ initialMode = "sign-in", next = "/account" }: { initialMode?: Exclude<AuthMode, "verify-sent">; next?: string }) {
+export function AccountAuthPanel({ initialMode = "sign-in", next = "/account", termsHref = "/terms" }: { initialMode?: Exclude<AuthMode, "verify-sent">; next?: string; termsHref?: string }) {
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [sentKind, setSentKind] = useState<"verify" | "reset">("verify");
   const [errors, setErrors] = useState<AuthErrors>({});
@@ -125,7 +125,7 @@ export function AccountAuthPanel({ initialMode = "sign-in", next = "/account" }:
           setNotice("");
           setMode(nextMode);
         }}
-        links={{ privacy: "/privacy", terms: "/terms", forgotPassword: "/account/forgot" }}
+        links={{ privacy: "/privacy", terms: termsHref, forgotPassword: "/account/forgot" }}
       />
       <p className={styles.notice} role="status" aria-live="polite">
         {notice}

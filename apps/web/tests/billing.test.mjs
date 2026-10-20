@@ -676,3 +676,42 @@ test("the billing and grant command lines explain themselves and refuse to run w
   assert.match(grant("--email", "a@b.co", "--reason", "x", "--ends", "tomorrow").stderr, /--ends must be a date/);
   assert.match(grant("--email", "a@b.co", "--reason", "x", "--ends", "2020-01-01").stderr, /must be in the future/);
 });
+
+// ---- what the pages may offer ----------------------------------------------------------------------------------
+
+const offerLib = loadTsFrom(import.meta.url, "../src/lib/billing/offer.ts");
+
+test("subscriptionOffer: open only when everything is in place; otherwise the pages behave as the enrolled phase", async (t) => {
+  const w = await shop(t);
+  const env = { ...ENV, LIBRARY_PRICE_MONTHLY: "9.99", LIBRARY_PRICE_ANNUAL: "99" };
+  const open = await offerLib.subscriptionOffer(w.store, env);
+  assert.equal(open.open, true);
+  assert.equal(open.vat, "not_registered");
+  assert.deepEqual(open.plans.map((p) => [p.plan, p.period, p.price]), [["monthly", "month", "£9.99"], ["annual", "year", "£99"]]);
+  assert.equal(offerLib.effectivePhase("live", open), "live");
+
+  const closed = async (changes, reason) => {
+    const offer = await offerLib.subscriptionOffer(w.store, { ...env, ...changes });
+    assert.deepEqual([offer.open, offer.reason], [false, reason], JSON.stringify(changes));
+    assert.equal(offerLib.effectivePhase("live", offer), "enrolled", "live without everything is not live");
+    return offer;
+  };
+  await closed({ LIBRARY_PHASE: "enrolled" }, "phase");
+  await closed({ LIBRARY_PHASE: "info" }, "phase");
+  await closed({ STRIPE_SECRET_KEY: undefined }, "stripe");
+  await closed({ STRIPE_PRICE_MONTHLY: undefined, STRIPE_PRICE_ANNUAL: undefined }, "price");
+  await closed({ LIBRARY_VAT_STATUS: undefined }, "vat");
+  await closed({ LIBRARY_MIN_PER_SUBJECT: undefined }, "gate");
+  await closed({ LIBRARY_TERMS_APPROVED: undefined }, "legal");
+  await closed({ LIBRARY_MIN_PER_SUBJECT: "50" }, "content");
+  await closed({ LIBRARY_PRICE_MONTHLY: undefined, LIBRARY_PRICE_ANNUAL: undefined }, "display_price");
+  assert.equal((await offerLib.subscriptionOffer(null, env)).open, false, "no backend: not open");
+  const onlyMonthly = await offerLib.subscriptionOffer(w.store, { ...env, STRIPE_PRICE_ANNUAL: undefined });
+  assert.deepEqual(onlyMonthly.plans.map((p) => p.plan), ["monthly"], "a plan with no Stripe price is not offered");
+  assert.equal(offerLib.effectivePhase("enrolled", open), "enrolled");
+  assert.equal(offerLib.effectivePhase("info", open), "info");
+  assert.equal(offerLib.libraryTermsHref({ NODE_ENV: "development" }), "/library/terms");
+  assert.equal(offerLib.libraryTermsHref({ NODE_ENV: "production" }), "/terms", "until approved, the website terms");
+  assert.equal(offerLib.libraryTermsHref({ NODE_ENV: "production", LIBRARY_TERMS_APPROVED: "true" }), "/library/terms");
+});
+

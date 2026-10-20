@@ -71,6 +71,15 @@ Set these in the host's dashboard for the production environment. **Never commit
 | `SUPABASE_ANON_KEY` | **Yes** for accounts | The project's anon (publishable) key. It grants only what Auth allows anyone. Server only. | (secret-ish) |
 | `DATABASE_URL` | **Yes** for accounts | Postgres connection string for the server's own queries (use Supabase's **pooler**, transaction mode, port 6543). Connect as a role that bypasses RLS only on the server; this key must never reach the browser or a log. | `postgres://...` (secret) |
 | `SUPABASE_SERVICE_ROLE_KEY` | **Yes** for downloads and the import tool | The service role key, for the private `library` storage bucket. It bypasses every policy: server and the import tool only, never a `NEXT_PUBLIC_` variable, never logged. Rotate it if it ever leaks. | (secret) |
+| `STRIPE_SECRET_KEY` | Only to take payment | `sk_test_...`, `sk_live_...` or a restricted `rk_...`. Server only; never logged. A test key puts the server in test mode and the webhook then refuses live events (and the reverse). `docs/BILLING.md` has every Stripe step. | (secret) |
+| `STRIPE_WEBHOOK_SECRET` | Only to take payment | `whsec_...` for `/api/billing/webhook`; two, comma separated, while rotating. | (secret) |
+| `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_ANNUAL` | Only to take payment | The `price_...` IDs of the recurring GBP prices. An amount is rejected: prices live in Stripe. | `price_1Abc...` |
+| `STRIPE_API_VERSION`, `STRIPE_AUTOMATIC_TAX` | No | The API version the server's calls use (default `2025-09-30.clover`); `true` asks Stripe Tax to calculate tax at checkout. | unset |
+| `LIBRARY_VAT_STATUS` | **Yes** to take payment | `registered` (prices include VAT) or `not_registered`. The accountant decides; unset means no checkout. | unset |
+| `LIBRARY_MIN_PER_SUBJECT`, `LIBRARY_REQUIRED_SUBJECTS` | **Yes** to take payment | The content gate: the least published resources each listed subject must have (for example `5` and `Maths,English,Science,11+`). | unset |
+| `LIBRARY_TERMS_APPROVED` | **Yes** to take payment, and for `/library/terms` in production | `true` once the owners and a solicitor have approved the terms, the content licence and the checkout wording. | unset |
+| `NEXT_PUBLIC_SITE_URL` | No (staging) | The site's own address, which Stripe sends people back to and `ALLOWED_ORIGINS` also accepts. Default the production address. | `https://staging.example.com` |
+| `STRIPE_FAKE` | **Never in production** | Development and tests only: swaps in a fake Stripe. Refused when `NODE_ENV=production`. | unset |
 | `CAPTCHA_SECRET` | **Yes** for applications, reconfirmations, subject requests and the Library waitlist — those routes fail closed (503) without it | Key that signs the human-check challenges (an HMAC). At least 32 characters; use 64 hex characters. Never sent to the browser. | `openssl rand -hex 32` (secret) |
 | `CLIENT_IP_HEADER` | No — see `docs/RENDER.md` | Name of the request header that carries the visitor's address, if the host sets a trusted one (for example `true-client-ip`). Used by the careers, subject-request and Library waitlist rate limits. | unset |
 | `TRUSTED_PROXY_HOPS` | No (default `1`) | How many proxies sit in front of the app, when the address is taken from `X-Forwarded-For` (counted from the right). | `1` |
@@ -107,6 +116,17 @@ SUPABASE_URL=
 SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 DATABASE_URL=
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+STRIPE_PRICE_MONTHLY=
+STRIPE_PRICE_ANNUAL=
+STRIPE_API_VERSION=
+STRIPE_AUTOMATIC_TAX=
+LIBRARY_VAT_STATUS=
+LIBRARY_MIN_PER_SUBJECT=
+LIBRARY_REQUIRED_SUBJECTS=
+LIBRARY_TERMS_APPROVED=
+NEXT_PUBLIC_SITE_URL=
 CAPTCHA_SECRET=
 ALLOWED_ORIGINS=
 CLIENT_IP_HEADER=

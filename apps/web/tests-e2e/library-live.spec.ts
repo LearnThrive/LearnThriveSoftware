@@ -234,3 +234,16 @@ test('the pricing and account pages have no horizontal scroll at 360px', async (
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), `${path} overflows`).toBe(true);
   }
 });
+
+test('the Library terms are linked from the pricing card and the sign-up card, and read as approved here', async ({ page }) => {
+  await page.goto('/pricing');
+  await page.getByRole('link', { name: /Library terms and content licence/ }).click();
+  await expect(page).toHaveURL(/\/library\/terms$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Library terms and content licence' })).toBeVisible();
+  await expect(page.locator('main')).not.toContainText('Draft for the owners and a legal reviewer');
+  for (const heading of ['Your licence', 'Price, payment and renewal', 'Cancelling', 'Refunds']) await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+  await expect(page.locator('main')).toContainText('renews automatically until you cancel');
+  await expectAxeClean(page, '/library/terms');
+  await page.goto('/account/sign-up');
+  await expect(page.locator('[data-auth-mode]').getByRole('link', { name: /terms/ }).first()).toHaveAttribute('href', '/library/terms');
+});

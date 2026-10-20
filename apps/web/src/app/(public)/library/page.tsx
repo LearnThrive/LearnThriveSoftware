@@ -42,7 +42,7 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
   const store = libraryShows().catalogue ? await catalogueStore() : null;
   const phase = effectivePhase(libraryPhase(), await subscriptionOffer(store));
   const prices = libraryPrices();
-  const { waitlist, catalogue } = libraryShows(phase);
+  const { waitlist } = libraryShows(phase);
   const priceText = priceSummary(prices);
   const copy = heroCopy(phase);
 
