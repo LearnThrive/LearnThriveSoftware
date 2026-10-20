@@ -52,7 +52,7 @@ export async function accountRuntime(env: Env = process.env): Promise<AccountRun
     };
   } else {
     const memory = new InMemoryLibraryStore();
-    const auth = new MemoryAccountAuth({ onUserCreated: (user) => memory.seedProfile({ id: user.id, displayName: user.displayName, adultConfirmed: true }) });
+    const auth = new MemoryAccountAuth({ onUserCreated: (user) => memory.seedProfile({ id: user.id, displayName: user.displayName, adultConfirmed: true, email: user.email }) });
     runtime = { backend, auth, store: memory, lockout: new SignInLockout(), outbox: auth.outbox, memory };
   }
   g.__learnthriveAccount = runtime;

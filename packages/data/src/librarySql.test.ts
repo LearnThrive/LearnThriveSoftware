@@ -14,7 +14,7 @@ libraryContract("sql on PGlite", async () => {
     close: () => db.close(),
     harness: {
       store,
-      profile: async (o) => db.createUser({ adult: o?.adult ?? true, role: o?.role }),
+      profile: async (o) => db.createUser({ adult: o?.adult ?? true, role: o?.role, email: o?.email }),
       student: async (profileId) => {
         const clientId = await clientOf(profileId);
         return (await owner<{ id: string }>("insert into public.students (client_id, display_name) values ($1, 'Student') returning id", [clientId]))[0]!.id;

@@ -77,8 +77,10 @@ export function deriveEntitlement(
       return null;
   }
   if (!endsAt) return null;
-  // The window starts when the mirror first saw the subscription, never later than it ends.
-  const startsAt = sub.createdAt.getTime() < endsAt.getTime() ? sub.createdAt : new Date(endsAt.getTime() - 1);
+  // The window starts when the mirror first saw the subscription, but never after this sync (the caller's clock) and
+  // never at or after its own end.
+  const from = sub.createdAt.getTime() < now.getTime() ? sub.createdAt : now;
+  const startsAt = from.getTime() < endsAt.getTime() ? from : new Date(endsAt.getTime() - 1);
   return { startsAt, endsAt };
 }
 

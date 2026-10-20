@@ -8,7 +8,7 @@ libraryContract("in-memory", async () => {
     close: async () => {},
     harness: {
       store,
-      profile: async (o) => store.seedProfile({ role: o?.role, adultConfirmed: o?.adult ?? true }),
+      profile: async (o) => store.seedProfile({ role: o?.role, adultConfirmed: o?.adult ?? true, email: o?.email }),
       student: async (profileId) => {
         const id = store.seedStudent(profileId);
         students.set(id, profileId);
