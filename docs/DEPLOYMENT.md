@@ -52,11 +52,15 @@ Set these in the host's dashboard for the production environment. **Never commit
 | `ENQUIRY_EMAIL` | **Yes** — fails closed without it | Where enquiry notifications are delivered. | `info@learnthrivetuition.co.uk` |
 | `CAREERS_EMAIL` | No — falls back to `ENQUIRY_EMAIL`, then the site address | Where tutor applications (with their attachments, which can include identity documents) and agreement reconfirmations are delivered. Use the company mailbox. | `info@learnthrivetuition.co.uk` |
 | `SUBJECT_REQUEST_EMAIL` | No — falls back to `ENQUIRY_EMAIL` | Where "Can't see your subject?" requests are delivered. | `info@learnthrivetuition.co.uk` |
-| `CAPTCHA_SECRET` | **Yes** for applications, reconfirmations and subject requests — those routes fail closed (503) without it | Key that signs the human-check challenges (an HMAC). At least 32 characters; use 64 hex characters. Never sent to the browser. | `openssl rand -hex 32` (secret) |
-| `CLIENT_IP_HEADER` | No — see `docs/RENDER.md` | Name of the request header that carries the visitor's address, if the host sets a trusted one (for example `true-client-ip`). Used by the careers and subject-request rate limits. | unset |
+| `LIBRARY_PHASE` | No — default `info` | What the public `/library` and `/pricing` pages show: `info`, `enrolled` or `live`. Only `info` is built so far, so any other value (or none) reads as `info`. **Build-time**: the pages are static, so a change needs a redeploy. | unset (`info`) |
+| `LIBRARY_PRICE_MONTHLY` | No — leave unset until the owner has set a price | Monthly price in pounds, **display only**: `9.99`, no `£`. The pricing page shows it only if it is a valid amount (up to four digits, optional two decimals, above zero); otherwise it says "Price announced at launch". Nothing is sold: no payment is taken whatever this says. **Build-time.** | unset |
+| `LIBRARY_PRICE_ANNUAL` | No — as above | Annual price in pounds, display only: `99` or `99.00`. **Build-time.** | unset |
+| `LIBRARY_WAITLIST_EMAIL` | No — falls back to `ENQUIRY_EMAIL`, then the site address | Where Library waitlist sign-ups are delivered. Use the company mailbox. | `info@learnthrivetuition.co.uk` |
+| `CAPTCHA_SECRET` | **Yes** for applications, reconfirmations, subject requests and the Library waitlist — those routes fail closed (503) without it | Key that signs the human-check challenges (an HMAC). At least 32 characters; use 64 hex characters. Never sent to the browser. | `openssl rand -hex 32` (secret) |
+| `CLIENT_IP_HEADER` | No — see `docs/RENDER.md` | Name of the request header that carries the visitor's address, if the host sets a trusted one (for example `true-client-ip`). Used by the careers, subject-request and Library waitlist rate limits. | unset |
 | `TRUSTED_PROXY_HOPS` | No (default `1`) | How many proxies sit in front of the app, when the address is taken from `X-Forwarded-For` (counted from the right). | `1` |
 | `CAREERS_OPEN_FOR_TESTING` | **Never in production** — a production build ignores it | Development and tests only: opens the application and reconfirmation forms while the safeguarding agreement is still a draft. The e2e config sets it to `1`. | unset |
-| `ALLOWED_ORIGINS` | No (the default is right) | Comma-separated origins allowed to POST to the enquiry, careers, reconfirmation and subject-request routes. The default is `https://www.learnthrivetuition.co.uk,https://learnthrivetuition.co.uk`. Set it only for a staging host. | `https://staging.example.com` |
+| `ALLOWED_ORIGINS` | No (the default is right) | Comma-separated origins allowed to POST to the enquiry, careers, reconfirmation, subject-request and Library waitlist routes. The default is `https://www.learnthrivetuition.co.uk,https://learnthrivetuition.co.uk`. Set it only for a staging host. | `https://staging.example.com` |
 | `NEXT_PUBLIC_APP_PORTAL_ENABLED` | No — leave unset | `true` opens the portal (see above). Unset = closed in production. Build-time. | unset |
 | `NEXT_PUBLIC_THEME_TOGGLE` | No | `0` removes the dark theme and the theme switch (kill switch). Build-time. | unset (on) |
 | `NEXT_PUBLIC_SMOOTH_SCROLL` | No | `0` removes smooth scrolling entirely (kill switch). Build-time. | unset (on) |
@@ -68,7 +72,7 @@ Set these in the host's dashboard for the production environment. **Never commit
 | `CHROME_PATH` | No — local scripts only | Browser path for `scripts/profile-motion.mjs`. | unset |
 | `CI` | set by CI | Playwright retries and `forbidOnly`. | set by CI |
 
-Per environment: **production** sets the three email variables and `CAPTCHA_SECRET`, plus `CAREERS_EMAIL` and `SUBJECT_REQUEST_EMAIL` if applications and subject requests should go to a different mailbox from enquiries. **Staging** sets the same with a staging Resend address (a mailbox you control as `ENQUIRY_EMAIL`) and `ALLOWED_ORIGINS` for its host. **Local development** needs none: with no `RESEND_API_KEY` the forms answer with the friendly 503.
+Per environment: **production** sets the three email variables and `CAPTCHA_SECRET`, plus `CAREERS_EMAIL`, `SUBJECT_REQUEST_EMAIL` and `LIBRARY_WAITLIST_EMAIL` if applications, subject requests and Library waitlist sign-ups should go to a different mailbox from enquiries. The Library variables are optional: leave `LIBRARY_PHASE` and both prices unset for the coming-soon pages with no price. **Staging** sets the same with a staging Resend address (a mailbox you control as `ENQUIRY_EMAIL`) and `ALLOWED_ORIGINS` for its host. **Local development** needs none: with no `RESEND_API_KEY` the forms answer with the friendly 503.
 
 To keep `apps/web/.env.example` complete, paste this block into it (names only, no values):
 
@@ -78,6 +82,10 @@ RESEND_FROM_EMAIL=
 ENQUIRY_EMAIL=
 CAREERS_EMAIL=
 SUBJECT_REQUEST_EMAIL=
+LIBRARY_WAITLIST_EMAIL=
+LIBRARY_PHASE=
+LIBRARY_PRICE_MONTHLY=
+LIBRARY_PRICE_ANNUAL=
 CAPTCHA_SECRET=
 ALLOWED_ORIGINS=
 CLIENT_IP_HEADER=
@@ -111,6 +119,16 @@ Three more write paths, all email-only (no database, no file storage): `POST /ap
 
 **Before opening applications on Render**, run the probes in `docs/RENDER.md`: the upload size the service really accepts (the limits are deliberately cautious), and which header carries the visitor's address (set `CLIENT_IP_HEADER` or `TRUSTED_PROXY_HOPS` to match). The rate limits are in memory, so they are correct for one instance and reset on a restart; `docs/RENDER.md` says what to add if the service ever runs on several.
 
+## Library information pages
+
+`/library` and `/pricing` are public, static, cookie-free pages in coming-soon mode (plan19 Phase B2; see [LIBRARY.md](LIBRARY.md)). They need no database, sign-in or Stripe. Nothing can be bought: there is no payment, pre-order or deposit.
+
+- **Flag.** `LIBRARY_PHASE` defaults to `info`. Only `info` is built, so setting `enrolled` or `live` changes nothing yet. Leave it unset.
+- **To show a price,** set `LIBRARY_PRICE_MONTHLY` and/or `LIBRARY_PRICE_ANNUAL` in pounds (`9.99`, `99`) and redeploy. A missing or invalid value shows "Price announced at launch". The prices are for display only; the owner and the accountant decide them (including the VAT treatment of a digital subscription) before anything is shown.
+- **Redeploy to change anything.** The phase and prices are read when the site is built, so changing either needs a new build and deploy, not just a restart.
+- **The waitlist** posts to `POST /api/library-waitlist`, which sends one email to `LIBRARY_WAITLIST_EMAIL` (then `ENQUIRY_EMAIL`, then the site address) and a short confirmation, with a removal line, to the person. It uses the same guards as the subject-request route and the same variables (`RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `CAPTCHA_SECRET`, `ALLOWED_ORIGINS`) and fails closed with a 503 "email us" without them. Nothing is stored. Without JavaScript, and when the route answers 503, the page offers an email link to the site address (`info@`), not to `LIBRARY_WAITLIST_EMAIL`, so those messages arrive in that mailbox. Sign-ups are kept in the mailbox until the launch email has gone out or 12 months, whichever is sooner ([RETENTION_AND_DELETION.md](RETENTION_AND_DELETION.md)).
+- **Before launch,** the owners approve the page copy and the privacy and cookie wording ([apps/web/LEGAL_REVIEW.md](../apps/web/LEGAL_REVIEW.md), "Library waitlist"). Add a host rate-limit rule on `POST /api/library-waitlist` as for the enquiry route.
+
 ## Email deliverability checklist (owner)
 
 1. Add and **verify** the sending domain in Resend (the domain of `RESEND_FROM_EMAIL`).
@@ -135,7 +153,7 @@ Three more write paths, all email-only (no database, no file storage): `POST /ap
 1. In the host's dashboard, redeploy or "promote" the previous successful deployment (the fastest rollback on any immutable-deploy host).
 2. If the host cannot, revert the merge on `main` (`git revert -m 1 <merge commit>`), let CI pass and deploy that.
 3. A bad environment variable is rolled back by restoring the previous value and redeploying (build-time `NEXT_PUBLIC_*` values need a rebuild).
-4. The enquiry, application, reconfirmation and subject-request forms are the only write paths. If they must be stopped at once, remove `RESEND_API_KEY`: every route then answers with its "email us directly" message and sends nothing. To close only applications, set `acceptingApplications` to `false` in `apps/web/src/lib/careers-config.ts` and redeploy.
+4. The enquiry, application, reconfirmation, subject-request and Library waitlist forms are the only write paths. If they must be stopped at once, remove `RESEND_API_KEY`: every route then answers with its "email us directly" message and sends nothing. To close only applications, set `acceptingApplications` to `false` in `apps/web/src/lib/careers-config.ts` and redeploy.
 
 ## Pre-launch smoke checklist
 
@@ -153,4 +171,5 @@ Run against the **staging** deployment, then again on production after the first
 - [ ] The host's firewall/rate-limit rule on `POST /api/enquiry` is active.
 - [ ] The owner has signed off the cookie notice change ([apps/web/LEGAL_REVIEW.md](../apps/web/LEGAL_REVIEW.md)).
 - [ ] Careers, while the agreement is a draft: `/careers/apply` and `/safeguarding/reconfirm` say they are not open yet and show no form; the application and reconfirmation routes answer 503 `closed`; the agreement page is a draft and out of the sitemap; no page carries job posting markup.
+- [ ] Library information pages: `/library` and `/pricing` return 200, say coming soon, show a price only if one is configured, and are in the sitemap; the waitlist form sends one email to the waitlist mailbox and a confirmation with a removal line to the sender (check spam); the owner has approved the copy ([apps/web/LEGAL_REVIEW.md](../apps/web/LEGAL_REVIEW.md)).
 - [ ] Before opening applications: the owner has approved the agreement and set `agreementApprovedByOwner`; the upload-size and client-address probes in [RENDER.md](RENDER.md) have been run on the deployed service; one real application with a CV and an identity document arrives in the `CAREERS_EMAIL` mailbox with its attachments, the applicant's confirmation arrives, and a subject request and a reconfirmation arrive too (check spam).
