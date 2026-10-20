@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { PORTAL_CLOSED_PATH, PORTAL_ENABLED } from "@/lib/portal";
+import { PORTAL_CLOSED_PATH, decide } from "@/lib/portal";
 
 /**
  * Production gate for everything that is not the public marketing site (plan15 Wave 12 section 16.1).
@@ -12,20 +12,27 @@ import { PORTAL_CLOSED_PATH, PORTAL_ENABLED } from "@/lib/portal";
  *  - /api/auth/** and /api/lessons/** (the app's own API: sign-in, calendar downloads) are a 404 while the
  *    portal is off: there is no auth provider to talk to yet.
  *
+ *  - LIBRARY_ENABLED=true (plan19 phase C) additionally opens only the account and Library routes, listed in
+ *    lib/portal.ts `decide`, which holds every rule above as a pure, tested function. The public /library and
+ *    /pricing pages are static and always open.
+ *
  * In development and in tests it does nothing (see lib/portal.ts), so no app behaviour changes there.
  * The matcher is a constant list because Next analyses it at build time.
  */
 export function proxy(request: NextRequest) {
-  if (process.env.NODE_ENV !== "production") return NextResponse.next();
-
   const { pathname } = request.nextUrl;
-  const isDevSurface = pathname === "/dev" || pathname.startsWith("/dev/") || pathname.startsWith("/api/dev/");
-  if (isDevSurface) return notFound(pathname);
-
-  if (PORTAL_ENABLED) return NextResponse.next();
-
-  if (pathname.startsWith("/api/")) return notFound(pathname);
-
+  // Literal env reads so NODE_ENV and the NEXT_PUBLIC_ flag are fixed per build as before; LIBRARY_ENABLED is read per request.
+  const { action, noindex } = decide(pathname, {
+    NODE_ENV: process.env.NODE_ENV,
+    NEXT_PUBLIC_APP_PORTAL_ENABLED: process.env.NEXT_PUBLIC_APP_PORTAL_ENABLED,
+    LIBRARY_ENABLED: process.env.LIBRARY_ENABLED,
+  });
+  if (action === "notFound") return notFound(pathname);
+  if (action === "next") {
+    const response = NextResponse.next();
+    if (noindex) response.headers.set("X-Robots-Tag", "noindex, nofollow");
+    return response;
+  }
   const response = NextResponse.redirect(new URL(PORTAL_CLOSED_PATH, request.url), 307);
   response.headers.set("X-Robots-Tag", "noindex");
   return response;
@@ -40,5 +47,9 @@ function notFound(pathname: string) {
 }
 
 export const config = {
-  matcher: ["/login", "/403", "/dashboard/:path*", "/api/auth/:path*", "/api/lessons/:path*", "/api/dev/:path*", "/dev/:path*"],
+  matcher: [
+    "/login", "/403", "/dashboard/:path*", "/api/auth/:path*", "/api/lessons/:path*", "/api/dev/:path*", "/dev/:path*",
+    // plan19 phase C. ":path+" on /library so the public /library page itself never reaches the proxy.
+    "/account/:path*", "/library/:path+", "/api/account/:path*", "/api/library/:path*", "/api/billing/:path*", "/api/assistant/:path*",
+  ],
 };

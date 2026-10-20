@@ -19,6 +19,14 @@ export type LibraryPhase = "info" | "enrolled" | "live";
 
 const PHASES: readonly LibraryPhase[] = ["info", "enrolled", "live"];
 
+/**
+ * LIBRARY_ENABLED=true opens the account and Library routes in production (see `decide` in lib/portal.ts). A server
+ * variable read per request, never NEXT_PUBLIC. Anything other than exactly `true` is closed.
+ */
+export function libraryEnabled(env: Env = process.env): boolean {
+  return env.LIBRARY_ENABLED?.trim() === "true";
+}
+
 /** LIBRARY_PHASE. Anything missing or unrecognised is `info`, the safe reading. */
 export function libraryPhase(env: Env = process.env): LibraryPhase {
   const value = env.LIBRARY_PHASE?.trim().toLowerCase();
