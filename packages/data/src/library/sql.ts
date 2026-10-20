@@ -109,6 +109,10 @@ export class SqlLibraryStore implements LibraryStore {
       const rows = await this.db.query<Row>(`select * from public.resources where slug = $2 and ${PUBLISHED}`, [now, slug]);
       return rows[0] ? toResource(rows[0]) : null;
     },
+    findBySlug: async (slug) => {
+      const rows = await this.db.query<Row>(`select * from public.resources where slug = $1`, [slug]);
+      return rows[0] ? toResource(rows[0]) : null;
+    },
     getById: async (id) => {
       const rows = await this.db.query<Row>(`select * from public.resources where id = $1`, [id]);
       return rows[0] ? toResource(rows[0]) : null;
