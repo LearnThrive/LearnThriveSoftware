@@ -2,8 +2,8 @@ import { Resend } from "resend";
 import { siteConfig } from "@/lib/site";
 
 /**
- * The shared email helper for the careers application, the safeguarding reconfirmation and the subject
- * request. Server only.
+ * The shared email helper for the careers application, the safeguarding reconfirmation, the subject
+ * request and the Library waitlist. Server only.
  *
  * THE CLIENT IS CREATED AT REQUEST TIME, never when the file loads: the key is read inside the handler, so
  * a missing key can never break the build or crash the module (the failure the standalone site's enquiry
@@ -42,10 +42,11 @@ export function createMailer(config: EmailConfig): Resend {
 /**
  * Where a kind of message goes. Careers applications and reconfirmations: CAREERS_EMAIL, then ENQUIRY_EMAIL,
  * then the site's own address. Subject requests: SUBJECT_REQUEST_EMAIL, then ENQUIRY_EMAIL, then the site's.
+ * Library waitlist sign-ups: LIBRARY_WAITLIST_EMAIL, then ENQUIRY_EMAIL, then the site's.
  */
-export function destinationFor(kind: "careers" | "subject", env: Env = process.env): string {
+export function destinationFor(kind: "careers" | "subject" | "library", env: Env = process.env): string {
   const pick = (value: string | undefined) => value?.trim() || undefined;
-  const specific = kind === "careers" ? pick(env.CAREERS_EMAIL) : pick(env.SUBJECT_REQUEST_EMAIL);
+  const specific = kind === "careers" ? pick(env.CAREERS_EMAIL) : kind === "library" ? pick(env.LIBRARY_WAITLIST_EMAIL) : pick(env.SUBJECT_REQUEST_EMAIL);
   return specific ?? pick(env.ENQUIRY_EMAIL) ?? siteConfig.email;
 }
 

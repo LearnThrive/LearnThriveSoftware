@@ -9,7 +9,7 @@ const check = loadTsFrom(import.meta.url, "../src/lib/human-check.ts");
 const core = loadTsFrom(import.meta.url, "../src/lib/human-check-core.ts");
 
 export const SECRET = "a-test-secret-that-is-at-least-thirty-two-characters-long";
-export const ENV_KEYS = ["NODE_ENV", "CAREERS_OPEN_FOR_TESTING", "CAPTCHA_SECRET", "RESEND_API_KEY", "RESEND_FROM_EMAIL", "CAREERS_EMAIL", "SUBJECT_REQUEST_EMAIL", "ENQUIRY_EMAIL", "ALLOWED_ORIGINS", "TRUSTED_PROXY_HOPS", "CLIENT_IP_HEADER"];
+export const ENV_KEYS = ["NODE_ENV", "CAREERS_OPEN_FOR_TESTING", "CAPTCHA_SECRET", "RESEND_API_KEY", "RESEND_FROM_EMAIL", "CAREERS_EMAIL", "SUBJECT_REQUEST_EMAIL", "LIBRARY_WAITLIST_EMAIL", "LIBRARY_PHASE", "ENQUIRY_EMAIL", "ALLOWED_ORIGINS", "TRUSTED_PROXY_HOPS", "CLIENT_IP_HEADER"];
 export const OPEN = { CAREERS_OPEN_FOR_TESTING: "1", CAPTCHA_SECRET: SECRET, RESEND_API_KEY: "re_test_key" };
 
 /** Sets the environment (and the agreement gate) for one test and puts both back afterwards. */
