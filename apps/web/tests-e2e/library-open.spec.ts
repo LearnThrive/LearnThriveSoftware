@@ -143,6 +143,32 @@ test('a free sample: any signed-in account downloads it, stamped with the holder
   await expect(page).toHaveURL(/\/library\/dev-seed-sequences$/);
 });
 
+test('the name on the account page is the name on the download, and the account page says what the account can open', async ({ page }) => {
+  const email = await becomeMember(page, null);
+  await page.goto('/account');
+  await hydrated(page);
+  await expect(page.getByText('Free samples only.')).toBeVisible();
+  await expectAxeClean(page, '/account in the open phase');
+  await page.getByLabel('Name on downloads').fill('Pat Example');
+  await page.getByRole('button', { name: 'Save name' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel('Name on downloads')).toHaveValue('Pat Example');
+  expect((await page.request.post('/api/dev/library-seed', { data: { action: 'enrol', email } })).ok()).toBe(true);
+  await page.reload();
+  await expect(page.getByText('Included: your family is enrolled with LearnThrive.')).toBeVisible();
+
+  const response = await page.request.post('/api/library/download/dev-seed-sequences');
+  expect(response.status()).toBe(200);
+  const doc = await PDFDocument.load(await response.body());
+  expect(doc.getSubject()).toContain('Licensed to Pat Example on ');
+  expect(doc.getSubject()).not.toContain(email);
+  // The icon menu lists only pages that exist.
+  const menu = page.getByRole('navigation', { name: 'Library' });
+  await expect(menu.getByRole('link')).toHaveCount(4);
+  await expect(menu.getByRole('link', { name: 'Study Buddy' })).toHaveCount(0);
+});
+
 test('members content: refused for a plain account, open to an enrolled family, and the page says why', async ({ page }) => {
   const email = await becomeMember(page, null);
   await page.goto('/library/dev-seed-quadratics');

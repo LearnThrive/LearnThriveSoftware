@@ -5,7 +5,7 @@ import { jsonResponse, logOutcome, originAllowed, readBodyLimited } from "@/lib/
 import { siteConfig } from "@/lib/site";
 import type { AccountRuntime } from "./runtime";
 import { ACCESS_COOKIE, REFRESH_COOKIE, clearSessionCookies, forgetAccessToken, renewSession, setSessionCookies, type CookieJar } from "./session";
-import { emailError, parseEmail, parseSignIn, parseSignUp, parseTokenHash, passwordError, validateSignUp } from "./validation";
+import { NAME_MAX, emailError, parseDisplayName, parseEmail, parseSignIn, parseSignUp, parseTokenHash, passwordError, validateSignUp } from "./validation";
 import type { EmailLinkKind } from "./types";
 
 /**
@@ -24,6 +24,7 @@ export const accountRateLimits = {
   emailLink: { perClient: { max: 6, windowMs: 60 * 60 * 1000 }, global: { max: 300, windowMs: 60 * 60 * 1000 } },
   verify: { perClient: { max: 30, windowMs: 15 * 60 * 1000 }, global: { max: 600, windowMs: 15 * 60 * 1000 } },
   password: { perClient: { max: 10, windowMs: 15 * 60 * 1000 }, global: { max: 300, windowMs: 15 * 60 * 1000 } },
+  profile: { perClient: { max: 20, windowMs: 15 * 60 * 1000 }, global: { max: 600, windowMs: 15 * 60 * 1000 } },
 } as const;
 
 const limiters = {
@@ -31,6 +32,7 @@ const limiters = {
   emailLink: new SlidingWindowLimiter(accountRateLimits.emailLink.perClient, accountRateLimits.emailLink.global),
   verify: new SlidingWindowLimiter(accountRateLimits.verify.perClient, accountRateLimits.verify.global),
   password: new SlidingWindowLimiter(accountRateLimits.password.perClient, accountRateLimits.password.global),
+  profile: new SlidingWindowLimiter(accountRateLimits.profile.perClient, accountRateLimits.profile.global),
 };
 
 /** For tests. */
@@ -219,6 +221,24 @@ export async function handleSetPassword(request: Request, deps: Deps): Promise<R
   }
   logOutcome("account-password", "ok");
   return jsonResponse(200, { success: true });
+}
+
+/** Changes the name printed on downloads. Needs a signed-in session. An empty name is allowed (the address is used instead). */
+export async function handleSetName(request: Request, deps: Deps): Promise<Response> {
+  const gate = await open(request, deps, "account-name", limiters.profile);
+  if (!gate.ok) return gate.response;
+  const session = await renewSession(deps.jar, gate.rt);
+  if (session.status !== "ok") return jsonResponse(401, { code: "signed_out", error: "Please sign in again." });
+  const displayName = parseDisplayName(gate.body.displayName);
+  if (displayName.length > NAME_MAX) return jsonResponse(422, { error: "Please check your answers and try again.", errors: { displayName: `Use at most ${NAME_MAX} characters.` } });
+  try {
+    await gate.rt.store.accounts.updateDisplayName(session.user.id, displayName);
+  } catch {
+    logOutcome("account-name", "failed");
+    return UNAVAILABLE();
+  }
+  logOutcome("account-name", "ok");
+  return jsonResponse(200, { success: true, displayName });
 }
 
 /** GET /api/account/me: who is signed in, for the client components that need to know. No cookie, no answer. */

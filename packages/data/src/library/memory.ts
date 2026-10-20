@@ -114,6 +114,11 @@ export class InMemoryLibraryStore implements LibraryStore {
       if (!this.profiles.has(profileId)) throw new Error("no such profile");
       return this.clientFor(profileId);
     },
+    updateDisplayName: async (profileId, displayName) => {
+      const profile = this.profiles.get(profileId);
+      if (!profile) throw new Error("no such profile");
+      profile.displayName = displayName;
+    },
   };
 
   resources: ResourceRepository = {

@@ -22,6 +22,8 @@ export interface AccountRepository {
   getAccount(profileId: string): Promise<Account | null>;
   /** The family account for a profile, created if it does not exist yet. Idempotent. */
   ensureClient(profileId: string): Promise<string>;
+  /** The name printed on downloads. The caller has already cleaned it (at most 80 characters). Throws if there is no such profile. */
+  updateDisplayName(profileId: string, displayName: string): Promise<void>;
 }
 
 export interface ResourceRepository {

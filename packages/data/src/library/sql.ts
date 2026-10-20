@@ -72,6 +72,10 @@ export class SqlLibraryStore implements LibraryStore {
       if (!rows[0]) throw new Error("no such profile");
       return rows[0].id;
     },
+    updateDisplayName: async (profileId, displayName) => {
+      const rows = await this.db.query<Row>(`update public.profiles set display_name = $2 where id = $1 returning id`, [profileId, displayName]);
+      if (!rows[0]) throw new Error("no such profile");
+    },
   };
 
   resources: ResourceRepository = {
