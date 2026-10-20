@@ -1,0 +1,36 @@
+.page {
+  max-inline-size: 72rem;
+  margin-inline: auto;
+  padding: 1.5rem 1rem 5rem;
+  color: var(--fg-body);
+}
+
+.page h1,
+.page h2 {
+  color: var(--fg-strong);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.target {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-inline-size: 28rem;
+  margin-block-start: 3rem;
+  scroll-margin-block-start: 1rem;
+}
+
+.target input {
+  min-block-size: 2.75rem;
+  padding-inline: 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-1);
+  color: var(--fg-strong);
+}

@@ -1,0 +1,28 @@
+.page {
+  max-width: 68.75rem;
+  margin-inline: auto;
+  padding: 1.5rem 1rem 5rem;
+}
+
+.stack {
+  display: grid;
+  min-width: 0;
+  gap: 0.5rem;
+  justify-items: start;
+}
+
+.stateTitle {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.log {
+  margin: 0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: 1.5rem;
+  align-items: start;
+}

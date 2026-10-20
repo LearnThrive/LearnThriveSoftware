@@ -1,0 +1,40 @@
+.page {
+  box-sizing: border-box;
+  max-inline-size: 60rem;
+  margin-inline: auto;
+  /* Room for the pinned menu: the bar under 64rem, the rail from 64rem. */
+  padding: 1.5rem 1rem 6rem;
+  color: var(--fg-body);
+}
+
+.page h1,
+.page h2 {
+  color: var(--fg-strong);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.cell {
+  min-inline-size: min(100%, 14rem);
+}
+
+.caption {
+  margin-block: 0 0.5rem;
+  color: var(--fg-muted);
+  font-size: 0.875rem;
+}
+
+.target {
+  margin-block: 0.5rem;
+  color: var(--fg-body);
+}
+
+@media (min-width: 64rem) {
+  .page {
+    padding-inline-start: 6rem;
+  }
+}

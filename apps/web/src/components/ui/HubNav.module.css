@@ -1,0 +1,246 @@
+/*
+ * HubNav: the signed-in Library area's icon menu.
+ *
+ * Every label is visible by default: each item stacks its icon over its label, so a touch visitor (who cannot
+ * hover and has no keyboard focus) can read all five. Under 64rem this is a bottom bar whose items share the
+ * width; from 64rem on a touch device it is a side rail of the same stacked items.
+ *
+ * Only from 64rem with a real pointer (hover: hover) does it become the Uiverse-style icon rail: icons only, the
+ * current, hovered or keyboard-focused item expands to show its label and overlays the page (the rail's own size
+ * never changes, so nothing shifts). There "open" is one number per item (--open: 0 or 1) and every size is
+ * calc()ed from it; the current item closes while another is hovered or focused, so one label is open at a time.
+ * The label is never display:none or visibility:hidden, so a collapsed link keeps its accessible name.
+ */
+
+.nav {
+  --hubnav-icon: 1.5rem; /* the source's 192px SVG, sized here */
+  --hubnav-hit: 2.75rem; /* 44px minimum touch target */
+  --hubnav-label-max: 7rem;
+  --hubnav-rail-open: 7.5rem;
+  --hubnav-rail-item: 4.25rem;
+
+  box-sizing: border-box;
+  color: var(--fg-muted);
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-3);
+}
+
+.menu {
+  display: flex;
+  justify-content: center;
+  gap: 0.125rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  --open: 0;
+
+  display: flex;
+  flex: 1 1 0;
+  min-inline-size: var(--hubnav-hit);
+  max-inline-size: 6.5rem; /* on a tablet the pills stay pill-sized instead of stretching across the bar */
+  min-block-size: var(--hubnav-hit);
+}
+
+.link {
+  box-sizing: border-box;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start; /* icons line up even when one label wraps to two lines */
+  gap: 0.125rem;
+  min-inline-size: 0;
+  min-block-size: var(--hubnav-hit);
+  padding: 0.375rem 0.125rem 0.25rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: inherit;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: center;
+  text-decoration: none;
+}
+
+.icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+}
+
+.icon svg {
+  display: block;
+  inline-size: var(--hubnav-icon);
+  block-size: var(--hubnav-icon);
+}
+
+/* A long translation or a 320px-wide bar wraps the label instead of overflowing. */
+.label {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+/* States ---------------------------------------------------------------------------------------------------- */
+
+.link:focus-visible {
+  outline: var(--focus-width) solid var(--focus-colour);
+  outline-offset: var(--focus-offset);
+  background: var(--surface-2);
+  color: var(--fg-strong);
+}
+
+/* Hover only where there is a hover (a tap on touch would leave the item stuck hovered). */
+@media (hover: hover) {
+  .link:hover {
+    background: var(--surface-2);
+    color: var(--fg-strong);
+  }
+}
+
+/* After hover and focus on purpose: the current page keeps its own look even while it is hovered. */
+.link[aria-current="page"] {
+  background: var(--surface-accent);
+  color: var(--fg-accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* Narrow: a bar ------------------------------------------------------------------------------------------------ */
+
+@media (max-width: 63.99rem) {
+  .nav[data-placement="inline"] {
+    padding: 0.375rem;
+    border-radius: var(--radius-lg);
+  }
+
+  .nav[data-placement="fixed"] {
+    position: fixed;
+    inset-block-end: 0;
+    inset-inline: 0;
+    z-index: 30;
+    padding-block: 0.375rem max(0.375rem, env(safe-area-inset-bottom));
+    padding-inline: max(0.5rem, env(safe-area-inset-left)) max(0.5rem, env(safe-area-inset-right));
+    border-inline: 0;
+    border-block-end: 0;
+  }
+}
+
+/* Wide: a rail ------------------------------------------------------------------------------------------------- */
+
+@media (min-width: 64rem) {
+  .nav {
+    inline-size: max-content;
+    padding: 0.375rem;
+    border-radius: var(--radius-lg);
+  }
+
+  .nav[data-placement="fixed"] {
+    position: fixed;
+    inset-block-start: 50%;
+    inset-inline-start: max(0.75rem, env(safe-area-inset-left));
+    z-index: 30;
+    transform: translateY(-50%);
+  }
+
+  .menu {
+    flex-direction: column;
+  }
+
+  .item {
+    flex: none;
+    inline-size: var(--hubnav-rail-item);
+    max-inline-size: none;
+  }
+}
+
+/* Wide with a pointer: the expanding icon rail. The slot never changes size; the link inside it grows over
+   whatever is beside it. ----------------------------------------------------------------------------------- */
+
+@media (min-width: 64rem) and (hover: hover) {
+  .item {
+    position: relative;
+    z-index: calc(var(--open) + 0);
+    inline-size: var(--hubnav-hit);
+    block-size: var(--hubnav-hit);
+  }
+
+  .item:has(.link[aria-current="page"]),
+  .item:has(.link:focus-visible),
+  .item:has(.link:hover) {
+    --open: 1;
+  }
+
+  .menu:has(.link:focus-visible) .item:has(.link[aria-current="page"]):not(:has(.link:focus-visible)),
+  .menu:has(.link:hover) .item:has(.link[aria-current="page"]):not(:has(.link:hover)):not(:has(.link:focus-visible)) {
+    --open: 0;
+  }
+
+  .link {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    overflow: hidden;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 0;
+    inline-size: calc(var(--hubnav-hit) + var(--open) * var(--hubnav-rail-open));
+    block-size: 100%;
+    padding: 0;
+    border-radius: 999px;
+    font-size: 0.8125rem;
+    line-height: 1.2;
+    text-align: start;
+  }
+
+  .icon {
+    inline-size: var(--hubnav-hit);
+    block-size: var(--hubnav-hit);
+  }
+
+  .label {
+    flex: none;
+    overflow: hidden;
+    max-inline-size: calc(var(--open) * var(--hubnav-label-max));
+    padding-inline-end: calc(var(--open) * 0.75rem);
+    opacity: var(--open);
+    overflow-wrap: normal;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+}
+
+/* Motion: transitions exist only when nothing asks for less. Reduced motion (the OS setting, the site's own tier
+   and the visitor's toggle) gets the final state with no transition at all. -------------------------------------- */
+
+@media (prefers-reduced-motion: no-preference) {
+  :global(html:not([data-motion="reduce"]):not([data-motion-tier="reduced"])) .link {
+    transition:
+      background-color var(--duration-fast) var(--ease-smooth),
+      color var(--duration-fast) var(--ease-smooth),
+      inline-size var(--duration-fast) var(--ease-smooth);
+  }
+
+  :global(html:not([data-motion="reduce"]):not([data-motion-tier="reduced"])) .label {
+    transition:
+      max-inline-size var(--duration-fast) var(--ease-smooth),
+      padding-inline-end var(--duration-fast) var(--ease-smooth),
+      opacity var(--duration-fast) var(--ease-smooth);
+  }
+}
+
+/* Forced colours drop backgrounds and shadows, so say "current" and "hovered" with system colours and borders. */
+@media (forced-colors: active) {
+  .link:hover,
+  .link:focus-visible {
+    border-color: Highlight;
+  }
+
+  .link[aria-current="page"] {
+    background: Highlight;
+    border-color: Highlight;
+    color: HighlightText;
+  }
+}
