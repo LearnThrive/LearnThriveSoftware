@@ -1,4 +1,5 @@
 import { InMemoryLibraryStore, SqlLibraryStore, type LibraryStore } from "@learnthrive/data/library";
+import { createExecutor } from "@/lib/db";
 import { MemoryAccountAuth } from "./memoryAuth";
 import { SupabaseAccountAuth } from "./supabaseAuth";
 import { SignInLockout } from "./lockout";
@@ -35,13 +36,6 @@ export interface AccountRuntime {
 // Same Fast Refresh reasoning as lib/auth/devProvider.ts: a plain module-level value would reset on every edit.
 const g = globalThis as unknown as { __learnthriveAccount?: AccountRuntime };
 
-/** The pooled Postgres connection. Created on first use, never at import, so a build needs no database. */
-async function sqlStore(env: Env): Promise<LibraryStore> {
-  const { default: postgres } = await import("postgres");
-  const sql = postgres(env.DATABASE_URL!, { max: 5, idle_timeout: 20, connect_timeout: 10, prepare: false, onnotice: () => {} });
-  return new SqlLibraryStore({ query: async <T,>(text: string, params?: unknown[]) => (await sql.unsafe(text, params as never[])) as unknown as T[] });
-}
-
 export async function accountRuntime(env: Env = process.env): Promise<AccountRuntime | null> {
   if (g.__learnthriveAccount) return g.__learnthriveAccount;
   const backend = accountBackend(env);
@@ -51,7 +45,7 @@ export async function accountRuntime(env: Env = process.env): Promise<AccountRun
     runtime = {
       backend,
       auth: new SupabaseAccountAuth({ url: env.SUPABASE_URL!, anonKey: env.SUPABASE_ANON_KEY! }),
-      store: await sqlStore(env),
+      store: new SqlLibraryStore((await createExecutor(env.DATABASE_URL!)).executor),
       lockout: new SignInLockout(),
       outbox: null,
       memory: null,

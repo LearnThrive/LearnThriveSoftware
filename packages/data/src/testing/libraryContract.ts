@@ -89,6 +89,8 @@ export function libraryContract(name: string, make: () => Promise<{ harness: Con
       assert.ok(!page.items.some((r) => r.slug === "draft-one" || r.slug === "later-one"));
       const draft = await store.resources.upsert(resource({ slug: "draft-one", title: "Draft only", publishedAt: null }));
       assert.equal((await store.resources.getById(draft.id))?.slug, "draft-one", "getById is for the server and does show drafts");
+      assert.equal((await store.resources.findBySlug("draft-one"))?.id, draft.id, "so does findBySlug, for the import tool");
+      assert.equal(await store.resources.findBySlug("no-such-slug"), null);
     });
 
     test("resources: filters, facets, paging and the clamp on limit", async () => {

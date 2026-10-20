@@ -158,6 +158,7 @@ export class InMemoryLibraryStore implements LibraryStore {
       return found && published(found, now) ? found : null;
     },
     getById: async (id) => this.resourceRows.get(id) ?? null,
+    findBySlug: async (slug) => [...this.resourceRows.values()].find((r) => r.slug === slug) ?? null,
     facets: async (now = new Date()): Promise<ResourceFacets> => {
       const live = [...this.resourceRows.values()].filter((r) => published(r, now));
       return {
