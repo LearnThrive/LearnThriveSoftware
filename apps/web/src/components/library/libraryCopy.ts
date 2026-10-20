@@ -1,5 +1,5 @@
 import type { FaqItem } from "@/lib/faqs";
-import { libraryConfig, PRICE_ANNOUNCED_AT_LAUNCH, type LibraryPrices } from "@/lib/library-config";
+import { libraryConfig, PRICE_ANNOUNCED_AT_LAUNCH, type LibraryPhase, type LibraryPrices } from "@/lib/library-config";
 import { subjects } from "@/lib/site";
 
 /**
@@ -31,8 +31,26 @@ export function priceSummary(prices: LibraryPrices): string {
   return parts.length > 0 ? parts.join(" or ") : PRICE_ANNOUNCED_AT_LAUNCH;
 }
 
-export function libraryFaqs(prices: LibraryPrices): FaqItem[] {
+/** The overview page's hero and at-a-glance words for a phase. `info` is the coming-soon copy from phase B2, unchanged. */
+export function heroCopy(phase: LibraryPhase) {
+  const open = phase !== "info";
+  return {
+    eyebrow: open ? "Library · Open to enrolled students" : "Library · Coming soon",
+    intro: open
+      ? "Worksheets, exam-style papers, mark schemes and notes, all made by LearnThrive. Open now to enrolled students. A subscription for everyone else is coming soon."
+      : "Worksheets, exam-style papers, mark schemes and notes, all made by LearnThrive. The Library is coming soon.",
+    status: open ? "Open to enrolled students" : "Coming soon",
+    everyoneElse: open ? "Subscription coming soon" : "By subscription",
+    howEyebrow: open ? "How it works" : "How it will work",
+    howNote: open
+      ? `Enrolled students sign in with the account their family holds with LearnThrive. Free samples are open to anyone with an account. A subscription for everyone else is coming soon. ${TERMS_NOTE}`
+      : `None of this is open yet. ${TERMS_NOTE}`,
+  };
+}
+
+export function libraryFaqs(prices: LibraryPrices, phase: LibraryPhase = "info"): FaqItem[] {
   const priced = Boolean(prices.monthly || prices.annual);
+  const open = phase !== "info";
   return [
     {
       id: "library-what-is-it",
@@ -52,7 +70,9 @@ export function libraryFaqs(prices: LibraryPrices): FaqItem[] {
     {
       id: "library-when",
       question: "When will it open?",
-      answer: "It is coming soon, and we do not have a date to give you yet. Join the waitlist and we will email you once, when it launches.",
+      answer: open
+        ? "It is open now to enrolled students. A subscription for everyone else is coming soon, and we do not have a date to give you yet. Join the waitlist and we will email you once, when subscriptions launch."
+        : "It is coming soon, and we do not have a date to give you yet. Join the waitlist and we will email you once, when it launches.",
     },
     {
       id: "library-cost",
@@ -63,7 +83,9 @@ export function libraryFaqs(prices: LibraryPrices): FaqItem[] {
     {
       id: "library-access",
       question: "How will I get access?",
-      answer: "You will sign in, browse the Library and download what you need. Enrolled students will have it included, and anyone else will be able to subscribe. None of this is open yet.",
+      answer: open
+        ? "Sign in, browse the Library and download what you need. It is included for enrolled students, and free samples are open to anyone with an account. Anyone else will be able to subscribe once subscriptions open."
+        : "You will sign in, browse the Library and download what you need. Enrolled students will have it included, and anyone else will be able to subscribe. None of this is open yet.",
     },
     {
       id: "library-waitlist-data",

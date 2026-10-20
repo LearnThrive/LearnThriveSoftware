@@ -3,6 +3,7 @@ import type {
   Account,
   DownloadEvent,
   Resource,
+  FacetScope,
   ResourceFacets,
   ResourceFile,
   ResourceFileInput,
@@ -32,7 +33,7 @@ export interface ResourceRepository {
   getById(id: string): Promise<Resource | null>;
   /** By slug, drafts and scheduled included. For the import tool, which must find what it has already imported. */
   findBySlug(slug: string): Promise<Resource | null>;
-  facets(now?: Date): Promise<ResourceFacets>;
+  facets(now?: Date, scope?: FacetScope): Promise<ResourceFacets>;
   /** Insert or update by slug. A changed file set bumps nothing here: the import tool sets `version`. */
   upsert(input: ResourceInput): Promise<Resource>;
   files(resourceId: string): Promise<ResourceFile[]>;

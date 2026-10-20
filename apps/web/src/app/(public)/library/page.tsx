@@ -5,42 +5,67 @@ import { Container } from "@/components/Container";
 import { FaqList } from "@/components/FaqList";
 import { PageHero } from "@/components/PageHero";
 import { Reveal } from "@/components/motion/primitives/Reveal";
-import { LEVELS, LIBRARY_ITEMS, libraryFaqs, priceSummary, SUBJECT_SENTENCE, SUBJECT_TITLES, TERMS_NOTE } from "@/components/library/libraryCopy";
+import { CatalogueView } from "@/components/library/CatalogueView";
+import { heroCopy, LEVELS, LIBRARY_ITEMS, libraryFaqs, priceSummary, SUBJECT_SENTENCE, SUBJECT_TITLES } from "@/components/library/libraryCopy";
 import { WaitlistSection } from "@/components/library/WaitlistSection";
-import { libraryPrices, libraryShows } from "@/lib/library-config";
+import { libraryPhase, libraryPrices, libraryShows } from "@/lib/library-config";
+import { parseCatalogueQuery, toResourceQuery } from "@/lib/library/catalogue";
+import { catalogueStore } from "@/lib/library/server";
 import { createMetadata } from "@/lib/metadata";
 import styles from "./library.module.css";
 
-export const metadata: Metadata = createMetadata({
-  title: "The LearnThrive Library: coming soon",
-  description:
-    "Worksheets, exam-style papers, mark schemes and notes made by LearnThrive. Coming soon: included for enrolled students, and available to everyone else by subscription.",
-  path: "/library",
-});
+// Rendered for each request: the phase (and so the catalogue) is read when the page is asked for, and the catalogue
+// follows the address bar (?q=&subject=&level=&type=&page=).
+export const dynamic = "force-dynamic";
+
+export function generateMetadata(): Metadata {
+  const open = libraryShows().catalogue;
+  return createMetadata({
+    title: open ? "The LearnThrive Library" : "The LearnThrive Library: coming soon",
+    description: open
+      ? "Worksheets, exam-style papers, mark schemes and notes made by LearnThrive. Open to enrolled students; a subscription for everyone else is coming soon."
+      : "Worksheets, exam-style papers, mark schemes and notes made by LearnThrive. Coming soon: included for enrolled students, and available to everyone else by subscription.",
+    path: "/library",
+  });
+}
 
 /**
  * The Library information page (plan19 phase B2). Until the later phases exist (sign-in, downloads, billing), every
  * LIBRARY_PHASE shows this coming-soon content (lib/library-config.ts: libraryShows). Static: the phase and any price
  * are read when the site is built. Draft copy for the owners to approve (components/library/libraryCopy.ts).
  */
-export default function LibraryPage() {
+export default async function LibraryPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const phase = libraryPhase();
   const prices = libraryPrices();
-  const { waitlist } = libraryShows();
+  const { waitlist, catalogue } = libraryShows(phase);
   const priceText = priceSummary(prices);
+  const copy = heroCopy(phase);
+
+  const store = catalogue ? await catalogueStore() : null;
+  const query = parseCatalogueQuery(await searchParams);
+  const view = store ? { facets: await store.resources.facets(), results: await store.resources.list(toResourceQuery(query)) } : null;
 
   return (
     <>
       <PageHero
-        eyebrow="Library · Coming soon"
+        eyebrow={copy.eyebrow}
         title="The LearnThrive Library"
-        intro="Worksheets, exam-style papers, mark schemes and notes, all made by LearnThrive. The Library is coming soon."
+        intro={copy.intro}
         breadcrumb={<Breadcrumbs trail={[{ name: "Library", path: "/library" }]} />}
         className="page-hero--legal"
         backdrop={<div className="legal-hero-atmosphere" aria-hidden="true" />}
         actions={
           <div className="button-group">
+            {view ? (
+              <a className="button button--light" href="#catalogue">
+                <span>Browse the Library</span>
+                <svg viewBox="0 0 20 20" aria-hidden="true">
+                  <path d="M4 10h11M11 6l4 4-4 4" />
+                </svg>
+              </a>
+            ) : null}
             {waitlist ? (
-              <a className="button button--light" href="#waitlist">
+              <a className={view ? "button button--text" : "button button--light"} href="#waitlist">
                 <span>Join the waitlist</span>
                 <svg viewBox="0 0 20 20" aria-hidden="true">
                   <path d="M4 10h11M11 6l4 4-4 4" />
@@ -61,7 +86,7 @@ export default function LibraryPage() {
             <dl className={styles.facts}>
               <div>
                 <dt>Status</dt>
-                <dd>Coming soon</dd>
+                <dd>{copy.status}</dd>
               </div>
               <div>
                 <dt>Enrolled students</dt>
@@ -69,7 +94,7 @@ export default function LibraryPage() {
               </div>
               <div>
                 <dt>Everyone else</dt>
-                <dd>By subscription</dd>
+                <dd>{copy.everyoneElse}</dd>
               </div>
               <div>
                 <dt>Price</dt>
@@ -147,11 +172,19 @@ export default function LibraryPage() {
         </Container>
       </section>
 
-      <section className="section section--tint" id="how-it-works" aria-labelledby="how-heading">
+      {view ? (
+        <section className="section section--tint">
+          <Container>
+            <CatalogueView path="/library" heading="Browse and search" query={query} facets={view.facets} results={view.results} />
+          </Container>
+        </section>
+      ) : null}
+
+      <section className={view ? "section" : "section section--tint"} id="how-it-works" aria-labelledby="how-heading">
         <Container>
           <Reveal variant="soft">
             <div className="section-heading section-heading--left section-heading--default">
-              <p className="eyebrow">How it will work</p>
+              <p className="eyebrow">{copy.howEyebrow}</p>
               <h2 id="how-heading">Sign in, browse, download</h2>
             </div>
           </Reveal>
@@ -170,7 +203,7 @@ export default function LibraryPage() {
                 <p>Download what you need.</p>
               </li>
             </ol>
-            <p className={styles.notYet}>None of this is open yet. {TERMS_NOTE}</p>
+            <p className={styles.notYet}>{copy.howNote}</p>
           </Reveal>
         </Container>
       </section>
@@ -183,7 +216,7 @@ export default function LibraryPage() {
               <h2 id="library-faq-heading">About the Library</h2>
             </div>
           </Reveal>
-          <FaqList items={libraryFaqs(prices)} />
+          <FaqList items={libraryFaqs(prices, phase)} />
         </Container>
       </section>
 

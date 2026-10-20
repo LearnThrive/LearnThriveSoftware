@@ -6,6 +6,7 @@ import type {
   AccountRole,
   DownloadEvent,
   Facet,
+  FacetScope,
   Resource,
   ResourceFacets,
   ResourceFile,
@@ -159,13 +160,14 @@ export class InMemoryLibraryStore implements LibraryStore {
     },
     getById: async (id) => this.resourceRows.get(id) ?? null,
     findBySlug: async (slug) => [...this.resourceRows.values()].find((r) => r.slug === slug) ?? null,
-    facets: async (now = new Date()): Promise<ResourceFacets> => {
-      const live = [...this.resourceRows.values()].filter((r) => published(r, now));
+    facets: async (now = new Date(), scope: FacetScope = {}): Promise<ResourceFacets> => {
+      const live = [...this.resourceRows.values()].filter((r) => published(r, now) && (!scope.subject || r.subject === scope.subject));
       return {
         subjects: facet(live.map((r) => r.subject)),
         levels: facet(live.map((r) => r.level)),
         resourceTypes: facet(live.map((r) => r.resourceType)),
         examBoards: facet(live.map((r) => r.examBoard)),
+        topics: facet(live.map((r) => r.topic)),
       };
     },
     upsert: async (input: ResourceInput) => {

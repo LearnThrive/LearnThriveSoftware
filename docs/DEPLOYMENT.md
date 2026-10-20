@@ -61,14 +61,16 @@ Set these in the host's dashboard for the production environment. **Never commit
 | `ENQUIRY_EMAIL` | **Yes** — fails closed without it | Where enquiry notifications are delivered. | `info@learnthrivetuition.co.uk` |
 | `CAREERS_EMAIL` | No — falls back to `ENQUIRY_EMAIL`, then the site address | Where tutor applications (with their attachments, which can include identity documents) and agreement reconfirmations are delivered. Use the company mailbox. | `info@learnthrivetuition.co.uk` |
 | `SUBJECT_REQUEST_EMAIL` | No — falls back to `ENQUIRY_EMAIL` | Where "Can't see your subject?" requests are delivered. | `info@learnthrivetuition.co.uk` |
-| `LIBRARY_PHASE` | No — default `info` | What the public `/library` and `/pricing` pages show: `info`, `enrolled` or `live`. Only `info` is built so far, so any other value (or none) reads as `info`. **Build-time**: the pages are static, so a change needs a redeploy. | unset (`info`) |
+| `LIBRARY_PHASE` | No — default `info` | `info` (coming soon), `enrolled` (the catalogue is open to enrolled families and free samples; needs the account backend) or `live` (reads as `enrolled` until subscriptions are built). Anything else reads as `info`. `/library` reads it on each request; `/pricing` is static and reads it at **build time**. | unset (`info`) |
 | `LIBRARY_PRICE_MONTHLY` | No — leave unset until the owner has set a price | Monthly price in pounds, **display only**: `9.99`, no `£`. The pricing page shows it only if it is a valid amount (up to four digits, optional two decimals, above zero); otherwise it says "Price announced at launch". Nothing is sold: no payment is taken whatever this says. **Build-time.** | unset |
 | `LIBRARY_PRICE_ANNUAL` | No — as above | Annual price in pounds, display only: `99` or `99.00`. **Build-time.** | unset |
 | `LIBRARY_WAITLIST_EMAIL` | No — falls back to `ENQUIRY_EMAIL`, then the site address | Where Library waitlist sign-ups are delivered. Use the company mailbox. | `info@learnthrivetuition.co.uk` |
+| `LIBRARY_DOWNLOADS_PER_HOUR` | No — default `60` | Downloads one family account may make in an hour (1 to 1000). | unset (60) |
 | `LIBRARY_ENABLED` | No — leave unset until the account backend is ready | `true` opens the account and Library routes in production (see "The Library carve-out" above). Server variable, read per request. | unset (closed) |
 | `SUPABASE_URL` | **Yes** for accounts | The project URL, for Supabase Auth. Server only: never a `NEXT_PUBLIC_` variable. With this, `SUPABASE_ANON_KEY` and `DATABASE_URL` not all set, production runs no account backend. | `https://abcdefgh.supabase.co` |
 | `SUPABASE_ANON_KEY` | **Yes** for accounts | The project's anon (publishable) key. It grants only what Auth allows anyone. Server only. | (secret-ish) |
 | `DATABASE_URL` | **Yes** for accounts | Postgres connection string for the server's own queries (use Supabase's **pooler**, transaction mode, port 6543). Connect as a role that bypasses RLS only on the server; this key must never reach the browser or a log. | `postgres://...` (secret) |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Yes** for downloads and the import tool | The service role key, for the private `library` storage bucket. It bypasses every policy: server and the import tool only, never a `NEXT_PUBLIC_` variable, never logged. Rotate it if it ever leaks. | (secret) |
 | `CAPTCHA_SECRET` | **Yes** for applications, reconfirmations, subject requests and the Library waitlist — those routes fail closed (503) without it | Key that signs the human-check challenges (an HMAC). At least 32 characters; use 64 hex characters. Never sent to the browser. | `openssl rand -hex 32` (secret) |
 | `CLIENT_IP_HEADER` | No — see `docs/RENDER.md` | Name of the request header that carries the visitor's address, if the host sets a trusted one (for example `true-client-ip`). Used by the careers, subject-request and Library waitlist rate limits. | unset |
 | `TRUSTED_PROXY_HOPS` | No (default `1`) | How many proxies sit in front of the app, when the address is taken from `X-Forwarded-For` (counted from the right). | `1` |
@@ -100,8 +102,10 @@ LIBRARY_PHASE=
 LIBRARY_PRICE_MONTHLY=
 LIBRARY_PRICE_ANNUAL=
 LIBRARY_ENABLED=
+LIBRARY_DOWNLOADS_PER_HOUR=
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
 DATABASE_URL=
 CAPTCHA_SECRET=
 ALLOWED_ORIGINS=

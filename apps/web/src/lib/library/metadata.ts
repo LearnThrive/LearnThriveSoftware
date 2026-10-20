@@ -18,6 +18,9 @@ export interface PlannedMetadata {
 
 export const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
+/** Addresses under /library that belong to pages, so no resource may take them. */
+export const RESERVED_SLUGS = ["search", "subject", "free-samples", "study-buddy"];
+
 /** Names that, as the author, mean the material is not ours. */
 const NOT_OURS = /\b(AQA|Edexcel|Pearson|OCR|WJEC|Eduqas|CCEA|SQA|Cambridge|DfE|Department for Education|STA|Oxford University Press|CGP|Collins|BBC)\b/i;
 
@@ -73,6 +76,7 @@ export function parseMetadata(raw: unknown): { entries: PlannedMetadata[]; probl
     if (title.length < 1 || title.length > 200) fail("title must be 1 to 200 characters.");
     const slug = text(e.slug) || slugify(title);
     if (!SLUG_PATTERN.test(slug) || slug.length > 120) fail(`slug "${slug}" must be lowercase letters, digits and single hyphens.`);
+    else if (RESERVED_SLUGS.includes(slug)) fail(`slug "${slug}" is the address of a Library page; choose another.`);
     else if (seen.has(slug)) fail(`slug "${slug}" is used twice in this file.`);
     seen.add(slug);
 

@@ -110,7 +110,8 @@ export function SmoothScroll() {
         if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
         const link = (event.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
         if (!link || !link.hash || link.target === "_blank" || link.hasAttribute("download")) return;
-        if (link.origin !== window.location.origin || link.pathname !== window.location.pathname) return;
+        // Same page means same path AND same query: a link to this path with different search (a catalogue's next page) is a navigation.
+        if (link.origin !== window.location.origin || link.pathname !== window.location.pathname || link.search !== window.location.search) return;
         let target: HTMLElement | null = null;
         try {
           target = document.getElementById(decodeURIComponent(link.hash.slice(1)));

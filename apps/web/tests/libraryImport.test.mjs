@@ -71,6 +71,7 @@ test("metadata: every problem is reported at once, with the entry named", () => 
   for (const wanted of ["title must be", "no path", "level must be one of KS2", "type must be one of worksheet", "subject must be", "topic must be", 'publishedAt must be a date', "accessTier must be", "tags must be a list", "version must be", 'slug "Bad Slug"', "description is over 2000", "at most 20 tags", 'needs "file"', 'slug "dup" is used twice', "Entry 5: not an object"]) {
     assert.ok(text.includes(wanted), `missing: ${wanted}\n${text}`);
   }
+  assert.match(meta.parseMetadata({ resources: [entry({ slug: "search" })] }).problems[0], /address of a Library page/);
   assert.deepEqual(meta.parseMetadata({}).problems, ['The metadata file must be {"resources": [ ... ]}.']);
   assert.match(meta.parseMetadata({ resources: [] }).problems[0], /lists no resources/);
 });

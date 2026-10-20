@@ -26,7 +26,9 @@ export default defineConfig({
     baseURL: 'http://localhost:3100',
     trace: 'retain-on-failure',
   },
-  webServer: {
+  // Two dev servers: the default one (the Library at its shipped `info` phase) and a second with the catalogue open
+  // (LIBRARY_PHASE=enrolled), on its own build folder because Next locks one dev server per folder.
+  webServer: [{
     // Must run in dev mode (NODE_ENV=development) — DevelopmentAuthProvider deliberately
     // refuses to run under NODE_ENV=production (see assertNotProductionWithoutRealProvider in
     // src/lib/auth/devProvider.ts), so `next start` would crash the whole auth flow by design.
@@ -40,7 +42,17 @@ export default defineConfig({
     timeout: 60_000,
     stdout: 'pipe',
   },
+  {
+    command: 'npm run dev -- -p 3101',
+    env: { NEXT_PUBLIC_THEME_TOGGLE: '1', CAREERS_OPEN_FOR_TESTING: '1', LIBRARY_PHASE: 'enrolled', NEXT_DIST_DIR: '.next-3101' },
+    url: 'http://localhost:3101',
+    reuseExistingServer: !process.env.CI,
+    timeout: 60_000,
+    stdout: 'pipe',
+  }],
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] }, testIgnore: /library-open\.spec\.ts/ },
+    // The Library with its catalogue open (phase D onwards): its own server and its own in-memory data.
+    { name: 'library-open', use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:3101' }, testMatch: /library-open\.spec\.ts/ },
   ],
 });
