@@ -11,5 +11,8 @@
     "./domain": "./src/domain.ts",
     "./repositories": "./src/repositories.ts",
     "./inMemoryProvider": "./src/inMemoryProvider.ts"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.10"
   }
 }
