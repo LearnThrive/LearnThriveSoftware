@@ -102,6 +102,7 @@ describe("migrations", () => {
       "0003_billing.sql",
       "0004_assistant.sql",
       "0005_rls.sql",
+      "0006_billing_refunds.sql",
     ]);
     assert.deepEqual(
       applied.map((f) => Number(f.slice(0, 4))),
@@ -113,7 +114,7 @@ describe("migrations", () => {
     const family = await createFamily(db, { name: "Idem", students: ["Kid"] });
     await createResource(db, { slug: "idempotent-check" });
     const before = await snapshot(db);
-    assert.equal((await db.migrate()).length, 5);
+    assert.equal((await db.migrate()).length, applied.length);
     assert.equal(await snapshot(db), before, "schema, policies, grants and functions are identical after re-applying");
     const rows = await db.asUser(family.userId, (q) => q.query("select display_name from public.students"));
     assert.deepEqual(rows, [{ display_name: "Kid" }]);

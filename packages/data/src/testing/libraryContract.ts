@@ -4,7 +4,7 @@
  */
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import type { AccountRole, LibraryStore, ResourceInput } from "../library";
+import type { AccountRole, LibraryStore, ResourceInput, SubscriptionInput } from "../library";
 
 export interface ContractHarness {
   store: LibraryStore;
@@ -208,6 +208,122 @@ export function libraryContract(name: string, make: () => Promise<{ harness: Con
       assert.equal(await store.downloads.countForResourceSince(a, res.id, new Date(now.getTime() - HOUR)), 1);
       assert.equal(await store.downloads.countForResourceSince(a, other.id, new Date(now.getTime() - HOUR)), 1);
       assert.equal(await store.downloads.countForResourceSince(b, other.id, new Date(now.getTime() - HOUR)), 0);
+    });
+
+    const sub = (id: string, over: Partial<SubscriptionInput> = {}): SubscriptionInput => ({
+      stripeSubscriptionId: `sub_${id}`,
+      stripePriceId: "price_monthly1",
+      status: "active",
+      planInterval: "month",
+      currentPeriodEnd: new Date(Date.now() + 20 * 24 * HOUR),
+      cancelAtPeriodEnd: false,
+      canceledAt: null,
+      endedAt: null,
+      ...over,
+    });
+
+    test("billing: a Stripe customer is linked to one account and one account only", async () => {
+      const a = await store.accounts.ensureClient(await h.profile());
+      const b = await store.accounts.ensureClient(await h.profile());
+      assert.equal(await store.billing.getStripeCustomerId(a), null);
+      await store.billing.linkCustomer(a, "cus_AAA111");
+      await store.billing.linkCustomer(a, "cus_AAA111");
+      assert.equal(await store.billing.getStripeCustomerId(a), "cus_AAA111");
+      assert.equal(await store.billing.getClientByStripeCustomer("cus_AAA111"), a);
+      assert.equal(await store.billing.getClientByStripeCustomer("cus_unknown"), null);
+      await assert.rejects(() => store.billing.linkCustomer(a, "cus_BBB222"), /different Stripe customer/);
+      await assert.rejects(() => store.billing.linkCustomer(b, "cus_AAA111"), /another account/);
+    });
+
+    test("billing: subscriptions mirror Stripe, update in place, and never move between accounts", async () => {
+      const a = await store.accounts.ensureClient(await h.profile());
+      const b = await store.accounts.ensureClient(await h.profile());
+      const first = await store.billing.upsertSubscription(a, sub("mirror1"));
+      assert.equal(first.clientId, a);
+      assert.equal(first.status, "active");
+      assert.equal(first.refundedAt, null);
+      assert.ok(first.createdAt instanceof Date);
+      const periodEnd = new Date(Date.now() + 30 * 24 * HOUR);
+      const second = await store.billing.upsertSubscription(a, sub("mirror1", { status: "past_due", cancelAtPeriodEnd: true, currentPeriodEnd: periodEnd, canceledAt: new Date(), planInterval: "year" }));
+      assert.equal(second.id, first.id);
+      assert.equal(second.status, "past_due");
+      assert.equal(second.cancelAtPeriodEnd, true);
+      assert.equal(second.planInterval, "year");
+      assert.equal(second.currentPeriodEnd?.getTime(), periodEnd.getTime());
+      assert.ok(second.canceledAt);
+      assert.deepEqual((await store.billing.getSubscriptionByStripeId("sub_mirror1"))?.id, first.id);
+      assert.equal(await store.billing.getSubscriptionByStripeId("sub_nope"), null);
+      await assert.rejects(() => store.billing.upsertSubscription(b, sub("mirror1")), /another account/);
+      await store.billing.upsertSubscription(a, sub("mirror2"));
+      assert.equal((await store.billing.listSubscriptions(a)).length, 2);
+      assert.equal((await store.billing.listSubscriptions(b)).length, 0);
+      assert.ok((await store.billing.listAllSubscriptions()).length >= 2);
+    });
+
+    test("billing: the entitlement follows the subscription, and goes when it should", async () => {
+      const now = new Date();
+      const p = await h.profile();
+      const client = await store.accounts.ensureClient(p);
+      const created = await store.billing.upsertSubscription(client, sub("derive1", { currentPeriodEnd: new Date(now.getTime() + 10 * 24 * HOUR) }));
+      assert.equal((await store.access.facts(client, now)).subscription, false, "nothing until it is synced");
+      assert.ok(await store.billing.syncEntitlement(created, new Date(now.getTime() + 1000)));
+      const later = new Date(now.getTime() + 2000);
+      assert.equal((await store.access.facts(client, later)).subscription, true);
+      await store.billing.syncEntitlement(created, later);
+      assert.equal((await store.access.facts(client, later)).subscription, true, "syncing twice leaves one open entitlement");
+
+      const failing = await store.billing.upsertSubscription(client, sub("derive1", { status: "unpaid" }));
+      assert.equal(await store.billing.syncEntitlement(failing, later), null);
+      assert.equal((await store.access.facts(client, later)).subscription, false, "unpaid removes it");
+
+      const back = await store.billing.upsertSubscription(client, sub("derive1", { status: "active" }));
+      await store.billing.syncEntitlement(back, later);
+      assert.equal((await store.access.facts(client, later)).subscription, true);
+      assert.equal(await store.billing.markRefunded("sub_derive1", later), true);
+      assert.equal(await store.billing.markRefunded("sub_nope", later), false);
+      await store.billing.syncEntitlement(back, later);
+      assert.equal((await store.access.facts(client, later)).subscription, false, "a refund removes it, whatever Stripe says");
+      const stillRefunded = await store.billing.upsertSubscription(client, sub("derive1", { status: "active" }));
+      assert.ok(stillRefunded.refundedAt, "a later Stripe update does not clear the refund");
+      assert.equal(await store.billing.syncEntitlement(stillRefunded, later), null);
+
+      const ended = await store.billing.upsertSubscription(client, sub("derive2", { status: "canceled", currentPeriodEnd: new Date(now.getTime() + 3 * HOUR), endedAt: new Date(now.getTime() + 3 * HOUR) }));
+      await store.billing.syncEntitlement(ended, later);
+      assert.equal((await store.access.facts(client, later)).subscription, true, "a cancelled subscription runs to the end of the paid period");
+      assert.equal((await store.access.facts(client, new Date(now.getTime() + 4 * HOUR))).subscription, false);
+    });
+
+    test("billing: a webhook event is processed once; one that did not finish is tried again", async () => {
+      const now = new Date();
+      assert.equal(await store.billing.claimEvent("evt_one1", "invoice.paid", false, now), "process");
+      assert.equal(await store.billing.claimEvent("evt_one1", "invoice.paid", false, now), "process", "claimed but not completed: a retry is allowed");
+      await store.billing.failEvent("evt_one1", "send_failed");
+      assert.equal(await store.billing.claimEvent("evt_one1", "invoice.paid", false, now), "process");
+      await store.billing.completeEvent("evt_one1", now);
+      assert.equal(await store.billing.claimEvent("evt_one1", "invoice.paid", false, now), "duplicate");
+      assert.equal(await store.billing.claimEvent("evt_two2", "invoice.paid", true, now), "process", "a different event is a different event");
+    });
+
+    test("billing: an administrator grant opens access, can be scheduled, ends, and is revoked at once", async () => {
+      const now = new Date();
+      const client = await store.accounts.ensureClient(await h.profile());
+      const open = await store.billing.createGrant({ clientId: client, reason: "family of an enrolled student", startsAt: new Date(now.getTime() - HOUR) });
+      assert.equal(open.revokedAt, null);
+      assert.equal((await store.access.facts(client, now)).adminGrant, true);
+      assert.equal(await store.billing.revokeGrant(open.id, now), true);
+      assert.equal((await store.access.facts(client, now)).adminGrant, false, "revoked");
+      assert.equal(await store.billing.revokeGrant(open.id, now), false, "once");
+      assert.equal(await store.billing.revokeGrant("00000000-0000-4000-8000-000000000000", now), false);
+      assert.equal((await store.access.facts(client, new Date(now.getTime() - 30 * 60_000))).adminGrant, true, "the grant held until it was revoked");
+
+      const scheduled = await store.billing.createGrant({ clientId: client, reason: "starts tomorrow", startsAt: new Date(now.getTime() + 24 * HOUR), endsAt: new Date(now.getTime() + 48 * HOUR) });
+      assert.equal((await store.access.facts(client, now)).adminGrant, false, "not yet");
+      assert.equal((await store.access.facts(client, new Date(now.getTime() + 30 * HOUR))).adminGrant, true);
+      assert.equal((await store.access.facts(client, new Date(now.getTime() + 50 * HOUR))).adminGrant, false, "ended");
+      assert.equal(await store.billing.revokeGrant(scheduled.id, now), true, "revoking before it starts removes it");
+      assert.equal((await store.access.facts(client, new Date(now.getTime() + 30 * HOUR))).adminGrant, false);
+
+      await assert.rejects(() => store.billing.createGrant({ clientId: client, reason: "backwards", startsAt: now, endsAt: new Date(now.getTime() - HOUR) }));
     });
 
     test("teardown", async () => {
