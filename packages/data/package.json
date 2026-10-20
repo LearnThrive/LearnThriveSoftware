@@ -10,7 +10,8 @@
   "exports": {
     "./domain": "./src/domain.ts",
     "./repositories": "./src/repositories.ts",
-    "./inMemoryProvider": "./src/inMemoryProvider.ts"
+    "./inMemoryProvider": "./src/inMemoryProvider.ts",
+    "./library": "./src/library/index.ts"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.10"
