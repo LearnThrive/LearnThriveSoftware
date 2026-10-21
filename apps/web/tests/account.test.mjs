@@ -133,9 +133,11 @@ function fakeFetch(handler) {
   return { fn, calls };
 }
 const SESSION = { access_token: "jwt-a", refresh_token: "ref-1", expires_in: 3600, user: { id: "11111111-1111-4111-8111-111111111111", email: "p@example.com", user_metadata: { display_name: "Pat" } } };
-const supabase = (handler) => {
+// A legacy-format key (a JWT: three dot-separated parts), which is sent as the apikey AND the bearer; see the sb_publishable_ test below.
+const LEGACY_ANON = "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiJ9.fake-signature-anon";
+const supabase = (handler, anonKey = LEGACY_ANON) => {
   const f = fakeFetch(handler);
-  return { auth: new SupabaseAccountAuth({ url: "https://proj.supabase.co/", anonKey: "anon-key", fetch: f.fn, timeoutMs: 500 }), calls: f.calls };
+  return { auth: new SupabaseAccountAuth({ url: "https://proj.supabase.co/", anonKey, fetch: f.fn, timeoutMs: 500 }), calls: f.calls };
 };
 
 test("supabase provider: request shapes and the key goes only where it should", async () => {
@@ -143,8 +145,8 @@ test("supabase provider: request shapes and the key goes only where it should", 
   await auth.signUp({ email: "p@example.com", password: GOOD, displayName: "Pat", adultConfirmed: true });
   assert.equal(calls[0].url, "https://proj.supabase.co/auth/v1/signup");
   assert.deepEqual(calls[0].body, { email: "p@example.com", password: GOOD, data: { display_name: "Pat", adult_confirmed: true } });
-  assert.equal(calls[0].headers.apikey, "anon-key");
-  assert.equal(calls[0].headers.Authorization, "Bearer anon-key");
+  assert.equal(calls[0].headers.apikey, LEGACY_ANON);
+  assert.equal(calls[0].headers.Authorization, `Bearer ${LEGACY_ANON}`);
 
   const signedIn = await auth.signIn("p@example.com", GOOD);
   assert.equal(calls[1].url, "https://proj.supabase.co/auth/v1/token?grant_type=password");
