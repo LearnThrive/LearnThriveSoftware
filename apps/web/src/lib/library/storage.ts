@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
 
 /**
@@ -11,6 +11,8 @@ import { dirname, resolve, sep } from "node:path";
  * tool's dry runs), and memory (tests).
  */
 export const LIBRARY_BUCKET = "library";
+/** Study Buddy uploads live in their own private bucket, with the same rules. */
+export const CHAT_UPLOADS_BUCKET = "chat-uploads";
 export const SIGNED_URL_SECONDS = 60;
 
 export interface LibraryStorage {
@@ -18,6 +20,8 @@ export interface LibraryStorage {
   put(path: string, bytes: Uint8Array, contentType: string): Promise<void>;
   /** The object's bytes, or null if there is none. Never throws for "not found". */
   read(path: string): Promise<Uint8Array | null>;
+  /** Deletes an object. Deleting what is not there is not an error. Throws only if the storage itself failed. */
+  remove(path: string): Promise<void>;
 }
 
 /** A path inside the bucket: no leading slash, no `..`, no backslash, no control characters. */
@@ -33,6 +37,9 @@ export class MemoryLibraryStorage implements LibraryStorage {
   }
   async read(path: string): Promise<Uint8Array | null> {
     return safeStoragePath(path) ? (this.objects.get(path) ?? null) : null;
+  }
+  async remove(path: string): Promise<void> {
+    this.objects.delete(path);
   }
 }
 
@@ -61,12 +68,19 @@ export class DiskLibraryStorage implements LibraryStorage {
       return null;
     }
   }
+  async remove(path: string): Promise<void> {
+    const full = this.locate(path);
+    if (!full) return;
+    await rm(full, { force: true });
+  }
 }
 
 export interface SupabaseStorageConfig {
   url: string;
   /** The service role key. Server and import tool only; it bypasses every policy. Never logged, never sent to a browser. */
   serviceRoleKey: string;
+  /** The private bucket. Default `library`. */
+  bucket?: string;
   fetch?: typeof fetch;
   timeoutMs?: number;
 }
@@ -79,7 +93,10 @@ export class SupabaseLibraryStorage implements LibraryStorage {
     this.base = `${config.url.replace(/\/+$/, "")}/storage/v1`;
     this.doFetch = config.fetch ?? fetch;
     this.timeoutMs = config.timeoutMs ?? 15_000;
+    this.bucket = config.bucket ?? LIBRARY_BUCKET;
   }
+
+  private readonly bucket: string;
 
   private headers(extra: Record<string, string> = {}): Record<string, string> {
     return { apikey: this.config.serviceRoleKey, Authorization: `Bearer ${this.config.serviceRoleKey}`, ...extra };
@@ -91,7 +108,7 @@ export class SupabaseLibraryStorage implements LibraryStorage {
 
   async put(path: string, bytes: Uint8Array, contentType: string): Promise<void> {
     if (!safeStoragePath(path)) throw new Error("unsafe storage path");
-    const response = await this.doFetch(`${this.base}/object/${LIBRARY_BUCKET}/${this.encoded(path)}`, {
+    const response = await this.doFetch(`${this.base}/object/${this.bucket}/${this.encoded(path)}`, {
       method: "POST",
       headers: this.headers({ "Content-Type": contentType, "x-upsert": "true", "Cache-Control": "private, max-age=0" }),
       body: bytes as unknown as BodyInit,
@@ -100,10 +117,17 @@ export class SupabaseLibraryStorage implements LibraryStorage {
     if (!response.ok) throw new Error(`storage upload failed (${response.status})`);
   }
 
+  async remove(path: string): Promise<void> {
+    if (!safeStoragePath(path)) return;
+    const response = await this.doFetch(`${this.base}/object/${this.bucket}/${this.encoded(path)}`, { method: "DELETE", headers: this.headers(), signal: AbortSignal.timeout(this.timeoutMs) });
+    // Not found is fine: the object is already gone.
+    if (!response.ok && response.status !== 404 && response.status !== 400) throw new Error(`storage delete failed (${response.status})`);
+  }
+
   async read(path: string): Promise<Uint8Array | null> {
     if (!safeStoragePath(path)) return null;
     try {
-      const signed = await this.doFetch(`${this.base}/object/sign/${LIBRARY_BUCKET}/${this.encoded(path)}`, {
+      const signed = await this.doFetch(`${this.base}/object/sign/${this.bucket}/${this.encoded(path)}`, {
         method: "POST",
         headers: this.headers({ "Content-Type": "application/json" }),
         body: JSON.stringify({ expiresIn: SIGNED_URL_SECONDS }),
@@ -112,7 +136,7 @@ export class SupabaseLibraryStorage implements LibraryStorage {
       if (!signed.ok) return null;
       const body = (await signed.json().catch(() => null)) as { signedURL?: unknown } | null;
       // The reply is a path relative to /storage/v1. Anything else is not trusted as a place to fetch from.
-      if (typeof body?.signedURL !== "string" || !body.signedURL.startsWith(`/object/sign/${LIBRARY_BUCKET}/`)) return null;
+      if (typeof body?.signedURL !== "string" || !body.signedURL.startsWith(`/object/sign/${this.bucket}/`)) return null;
       const object = await this.doFetch(`${this.base}${body.signedURL}`, { signal: AbortSignal.timeout(this.timeoutMs) });
       return object.ok ? new Uint8Array(await object.arrayBuffer()) : null;
     } catch {
@@ -124,7 +148,7 @@ export class SupabaseLibraryStorage implements LibraryStorage {
 type Env = Record<string, string | undefined>;
 
 // One per process, like the account runtime.
-const g = globalThis as unknown as { __learnthriveLibraryStorage?: LibraryStorage };
+const g = globalThis as unknown as { __learnthriveLibraryStorage?: LibraryStorage; __learnthriveChatStorage?: LibraryStorage };
 
 /** Production: Supabase Storage, if its settings are there. Development: a folder. Production without settings: none. */
 export function libraryStorage(env: Env = process.env): LibraryStorage | null {
@@ -135,5 +159,17 @@ export function libraryStorage(env: Env = process.env): LibraryStorage | null {
   if (url && key) storage = new SupabaseLibraryStorage({ url, serviceRoleKey: key });
   else if (env.NODE_ENV !== "production") storage = new DiskLibraryStorage(env.LIBRARY_DEV_STORAGE_DIR?.trim() || ".library-dev-storage");
   if (storage) g.__learnthriveLibraryStorage = storage;
+  return storage;
+}
+
+/** Study Buddy's private upload bucket (same backend as the Library's, a different bucket and, in development, folder). */
+export function chatUploadStorage(env: Env = process.env): LibraryStorage | null {
+  if (g.__learnthriveChatStorage) return g.__learnthriveChatStorage;
+  const url = env.SUPABASE_URL?.trim();
+  const key = env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  let storage: LibraryStorage | null = null;
+  if (url && key) storage = new SupabaseLibraryStorage({ url, serviceRoleKey: key, bucket: CHAT_UPLOADS_BUCKET });
+  else if (env.NODE_ENV !== "production") storage = new DiskLibraryStorage(`${env.LIBRARY_DEV_STORAGE_DIR?.trim() || ".library-dev-storage"}/${CHAT_UPLOADS_BUCKET}`);
+  if (storage) g.__learnthriveChatStorage = storage;
   return storage;
 }
