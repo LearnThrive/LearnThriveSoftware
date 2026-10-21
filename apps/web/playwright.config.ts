@@ -44,7 +44,7 @@ export default defineConfig({
   },
   {
     command: 'npm run dev -- -p 3101',
-    env: { NEXT_PUBLIC_THEME_TOGGLE: '1', CAREERS_OPEN_FOR_TESTING: '1', LIBRARY_PHASE: 'enrolled', NEXT_DIST_DIR: '.next-3101', ASSISTANT_PROVIDER: 'mock', ASSISTANT_DAILY_MESSAGES: '200', ASSISTANT_PER_MINUTE: '60' },
+    env: { NEXT_PUBLIC_THEME_TOGGLE: '1', CAREERS_OPEN_FOR_TESTING: '1', LIBRARY_PHASE: 'enrolled', NEXT_DIST_DIR: '.next-3101', ASSISTANT_PROVIDER: 'mock', VOICE_PROVIDER: 'mock', ASSISTANT_DAILY_MESSAGES: '200', ASSISTANT_PER_MINUTE: '60' },
     url: 'http://localhost:3101',
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
@@ -78,9 +78,9 @@ export default defineConfig({
     stdout: 'pipe',
   }],
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] }, testIgnore: /(library-open|library-live|study-buddy)\.spec\.ts/ },
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] }, testIgnore: /(library-open|library-live|study-buddy|study-buddy-voice)\.spec\.ts/ },
     // The Library with its catalogue open (phase D onwards): its own server and its own in-memory data.
-    { name: 'library-open', use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:3101' }, testMatch: /(library-open|study-buddy)\.spec\.ts/ },
+    { name: 'library-open', use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:3101' }, testMatch: /(library-open|study-buddy|study-buddy-voice)\.spec\.ts/ },
     // Subscriptions open (phase E), with the fake Stripe.
     { name: 'library-live', use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:3102' }, testMatch: /library-live\.spec\.ts/ },
   ],

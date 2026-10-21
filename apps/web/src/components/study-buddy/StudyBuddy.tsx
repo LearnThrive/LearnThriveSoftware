@@ -6,6 +6,7 @@ import { PencilLoader } from "@/components/ui/PencilLoader";
 import { ADULT_ACKNOWLEDGEMENT, AI_LABEL } from "@/lib/assistant/prompt";
 import { parseMarkdown, plainText } from "@/lib/assistant/markdown";
 import { RenderedAnswer } from "./RenderedAnswer";
+import { useVoice } from "./useVoice";
 import styles from "./study-buddy.module.css";
 
 interface Msg {
@@ -20,6 +21,8 @@ interface SessionItem {
 interface Status {
   open: boolean;
   reason?: string | null;
+  /** The speech service is there: the microphone button may appear. */
+  voice?: boolean;
   minorsApproved?: boolean;
   limits?: { dailyMessages: number; perMinute: number; maxInputChars: number; files: number };
 }
@@ -64,6 +67,7 @@ export function StudyBuddy() {
   const abort = useRef<AbortController | null>(null);
   const log = useRef<HTMLDivElement>(null);
   const spoken = useRef(0);
+  const voice = useVoice(setError);
 
   const refresh = useCallback(async () => {
     const response = await fetch("/api/assistant/sessions", { cache: "no-store" }).catch(() => null);
@@ -138,6 +142,8 @@ export function StudyBuddy() {
 
   async function send(text: string) {
     if (busy) return;
+    // A question that came from the microphone is answered in short, speakable wording and read aloud; a typed one is not.
+    const viaVoice = Boolean(status?.voice) && text.trim() !== "" && text.trim() === voice.transcript.trim();
     const needsAck = !sessionId && !status?.minorsApproved;
     if (needsAck && !adultAck) return setError("Please tick the box to confirm you are 18 or over before you start.");
     setError("");
@@ -148,6 +154,10 @@ export function StudyBuddy() {
     const reply: Msg = { id: nextId(), role: "assistant", content: "" };
     setMessages((m) => [...m, mine, reply]);
     setDraft("");
+    if (viaVoice) {
+      voice.setTranscript("");
+      voice.setThinking(true);
+    }
     setFiles([]);
     setFileIds(new Map());
     spoken.current = 0;
@@ -160,7 +170,7 @@ export function StudyBuddy() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
-        body: JSON.stringify({ text, sessionId, fileIds: attached, adultAck: needsAck ? true : undefined }),
+        body: JSON.stringify({ text, sessionId, fileIds: attached, adultAck: needsAck ? true : undefined, voice: viaVoice || undefined }),
       });
       if (!response.ok || !response.body) {
         const data = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -205,6 +215,10 @@ export function StudyBuddy() {
     if (failed) setError(failed);
     if (!text_) setMessages((m) => m.filter((x) => x.id !== reply.id));
     setAnnounce(text_ ? "The answer is ready." : "");
+    if (viaVoice) {
+      if (text_ && !failed) void voice.speak(text_);
+      else voice.setThinking(false);
+    }
     void refresh();
   }
 
@@ -331,6 +345,12 @@ export function StudyBuddy() {
             maxLength={status.limits?.maxInputChars}
             maxFiles={status.limits?.files ?? 3}
             error={error}
+            voiceState={voice.state}
+            onVoiceStart={status.voice ? () => void voice.start() : undefined}
+            onVoiceStop={voice.stop}
+            onVoiceCancel={voice.cancel}
+            transcript={voice.transcript}
+            onTranscriptEdit={voice.setTranscript}
             hint="Photos (JPEG or PNG) and PDFs, up to 3 files. Never share personal details."
           />
           {busy ? (
