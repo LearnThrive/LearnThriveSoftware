@@ -254,6 +254,21 @@ test("end of speech: a pause between words does not end the turn, a silence does
   assert.deepEqual(blocks(noisy, 0.03, 3000), [], "steady noise at 0.03 is not speech");
   assert.deepEqual(blocks(noisy, 0.2, 500), ["speech_started"]);
 
+  // The floor adapts in time, not per block, so the same sound gives the same result whatever the block size (a 2048-sample
+  // block is 43 ms at 48 kHz, 128 ms at 16 kHz): a held sound is speech for its first 2.5 s, and ends as "background" well before 30.
+  for (const size of [2.67, 43, 128]) {
+    const held = audio.createEndpointer();
+    const events = [];
+    let ended = null;
+    for (let t = 0; t < 10_000 && ended === null; t += size) {
+      const e = held.push(0.28, size);
+      if (e !== "none") events.push(e);
+      if (e === "utterance_end") ended = t;
+    }
+    assert.equal(events[0], "speech_started");
+    assert.ok(ended > 2500 && ended < 6000, `${size} ms blocks: a held sound became background after ${Math.round(ended)} ms`);
+  }
+
   const endless = audio.createEndpointer({ maxMs: 2000 });
   assert.deepEqual(blocks(endless, 0.2, 2100), ["speech_started", "too_long"]);
   assert.ok(Math.abs(audio.rms(Float32Array.from([0.5, -0.5, 0.5, -0.5])) - 0.5) < 1e-9);

@@ -120,8 +120,10 @@ export function createEndpointer(options: EndpointerOptions = {}) {
     push(level: number, blockMs: number): EndpointEvent {
       if (done) return "none";
       elapsed += blockMs;
-      // The floor falls quickly to quiet and rises slowly, so speech itself does not drag it up.
-      floor = level < floor ? floor * 0.7 + level * 0.3 : floor * 0.995 + level * 0.005;
+      // The floor falls quickly to quiet (about 0.1 s) and rises slowly (about 8 s), so speech itself does not drag it up. Both are
+      // set in time, not per block: a 2048-sample block is 43 ms at 48 kHz but 128 ms at 16 kHz.
+      const rate = 1 - Math.exp(-blockMs / (level < floor ? 120 : 8000));
+      floor += (level - floor) * rate;
       const threshold = Math.max(0.02, floor * 3);
       const speaking = level > threshold;
       if (speaking) {
