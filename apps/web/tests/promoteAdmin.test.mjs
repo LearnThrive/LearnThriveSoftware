@@ -73,3 +73,26 @@ test("the SCRAM verifier has Postgres's exact shape and is salted (the plaintext
   assert.ok(!statements.some((s) => /superuser|createrole|createdb|replication/i.test(s)), "attributes Postgres only lets a superuser name are not written");
   assert.ok(!statements.some((s) => /grant .* on (all )?(tables|sequences|functions) .* to (public|anon|authenticated)/i.test(s)));
 });
+
+// ---- supabase-smoke: every guard that must refuse before a connection is tried ----------------------------------------------------
+
+const smoke = (args, env = {}, input = "") =>
+  spawnSync(process.execPath, ["--import", "tsx", "scripts/supabase-smoke.mjs", ...args], { cwd: WEB, encoding: "utf8", input, env: { PATH: process.env.PATH, SYSTEMROOT: process.env.SYSTEMROOT, ...env }, timeout: 60_000 });
+const SMOKE_BASE = { SUPABASE_ANON_KEY: "sb_publishable_FakeKeyForTests_0123456789", SUPABASE_SERVICE_ROLE_KEY: "sb_secret_FakeKeyForTests_0123456789", SMOKE_EMAIL: "someone+smoke@example.com" };
+const API = "https://abcdefghijklmnopqrst.supabase.co";
+const POOLER = `postgresql://learnthrive_server.abcdefghijklmnopqrst:${PASSWORD}@aws-0-eu-west-2.pooler.supabase.com:6543/postgres`;
+
+test("supabase-smoke refuses a missing setting, mixed local and hosted settings, another project's database, and a missing --host", () => {
+  assert.equal(smoke([], {}).status, 2, "nothing set");
+  assert.equal(smoke([], { ...SMOKE_BASE, SUPABASE_URL: API, DATABASE_URL: LOCAL }).status, 3, "a hosted API with a local database");
+  const other = smoke(["--host", "abcdefghijklmnopqrst.supabase.co"], { ...SMOKE_BASE, SUPABASE_URL: API, DATABASE_URL: POOLER.replace(/abcdefghijklmnopqrst/g, "zzzzzzzzzzzzzzzzzzzz") });
+  assert.equal(other.status, 3);
+  assert.match(other.stderr, /not belong to the same project/);
+  const noHost = smoke([], { ...SMOKE_BASE, SUPABASE_URL: API, DATABASE_URL: POOLER });
+  assert.equal(noHost.status, 3);
+  assert.match(noHost.stderr, /Pass --host abcdefghijklmnopqrst\.supabase\.co/);
+  const piped = smoke(["--host", "abcdefghijklmnopqrst.supabase.co"], { ...SMOKE_BASE, SUPABASE_URL: API, DATABASE_URL: POOLER }, "abcdefghijklmnopqrst.supabase.co\n");
+  assert.equal(piped.status, 3, "a hosted project needs a real terminal to type the host");
+  assert.match(piped.stderr, /needs a person at the keyboard/);
+  for (const r of [noHost, piped, other]) for (const out of [r.stdout, r.stderr]) assert.ok(!out.includes(PASSWORD) && !out.includes("sb_secret_"), "no secret in any output");
+});
