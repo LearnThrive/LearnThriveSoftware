@@ -18,6 +18,10 @@ export interface Transcript {
   text: string;
   audioMs: number;
   processingMs: number;
+  /** 0 to 1: how sure the recogniser is (the average token probability). Low means "ask before sending". */
+  confidence: number;
+  /** 0 to 1: the chance the recording held no speech at all. */
+  noSpeech: number;
 }
 
 export interface SpeechToText {
@@ -130,7 +134,8 @@ export class SidecarSpeech implements SpeechToText, TextToSpeech {
     const response = await this.call("/stt", new Blob([wav as BlobPart]), "audio/wav", signal, 30_000);
     const data = (await response.json().catch(() => null)) as Partial<Transcript> | null;
     if (!data || typeof data.text !== "string") throw new VoiceError("unavailable");
-    return { text: data.text.trim(), audioMs: Number(data.audioMs) || 0, processingMs: Number(data.processingMs) || 0 };
+    const unit = (value: unknown, fallback: number) => (typeof value === "number" && value >= 0 && value <= 1 ? value : fallback);
+    return { text: data.text.trim(), audioMs: Number(data.audioMs) || 0, processingMs: Number(data.processingMs) || 0, confidence: unit(data.confidence, 1), noSpeech: unit(data.noSpeech, 0) };
   }
 
   async speak(text: string, signal?: AbortSignal): Promise<Uint8Array> {
@@ -153,7 +158,8 @@ export class MockSpeech implements SpeechToText, TextToSpeech {
   async transcribe(wav: Uint8Array): Promise<Transcript> {
     const info = inspectWav(wav);
     if (!info) throw new VoiceError("bad_audio");
-    return { text: "Factorise x squared plus five x plus six", audioMs: info.audioMs, processingMs: 5 };
+    // A very short recording comes back uncertain, so tests can reach the "did I hear that right?" path.
+    return { text: "Factorise x squared plus five x plus six", audioMs: info.audioMs, processingMs: 5, confidence: info.audioMs >= 1000 ? 0.92 : 0.3, noSpeech: 0.02 };
   }
 
   async speak(): Promise<Uint8Array> {

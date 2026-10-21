@@ -50,6 +50,10 @@ export interface AiInputProps {
   defaultVoiceOpen?: boolean;
   /** Fill the available width at all times (a page's main composer), instead of growing only when used. */
   fullWidth?: boolean;
+  /** The page runs its own voice panel: the microphone button calls this (and shows it pressed while `voiceActive`), and the
+   *  built-in voice overlay is not used. */
+  onVoiceButton?: () => void;
+  voiceActive?: boolean;
   id?: string;
 }
 
@@ -112,6 +116,8 @@ export function AiInput({
   onTranscriptEdit,
   defaultVoiceOpen = false,
   fullWidth = false,
+  onVoiceButton,
+  voiceActive = false,
   id,
 }: AiInputProps) {
   const generatedId = useId();
@@ -140,7 +146,7 @@ export function AiInput({
   // The Thinking dots loop forever, so (like the orb) only on the full tier and only while on screen.
   const dotsAnimated = busy && tier === "full";
   const busyInView = useInView(busyRef, dotsAnimated);
-  const voiceEnabled = Boolean(onVoiceStart);
+  const voiceEnabled = Boolean(onVoiceStart || onVoiceButton);
   const canSend = !disabled && !busy && (text.trim().length > 0 || attached.length > 0);
 
   // Back to the microphone button when the overlay closes (a removed <dialog> restores nothing itself).
@@ -254,7 +260,11 @@ export function AiInput({
         />
 
         <div className={styles.actions}>
-          {voiceEnabled && (
+          {onVoiceButton ? (
+            <button type="button" className={styles.iconButton} aria-label={voiceActive ? "Voice chat is on" : "Talk instead of typing"} aria-pressed={voiceActive} disabled={disabled} onClick={onVoiceButton}>
+              <AudioLines size={20} aria-hidden="true" />
+            </button>
+          ) : voiceEnabled && (
             <button
               ref={micRef}
               type="button"

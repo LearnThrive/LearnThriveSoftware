@@ -44,7 +44,7 @@ export async function handleTranscribe(request: Request, deps: VoiceDeps): Promi
   try {
     const result = await checked.voice.stt.transcribe(body.bytes, request.signal);
     logOutcome("assistant-transcribe", "ok", { audioMs: result.audioMs, processingMs: result.processingMs, empty: result.text === "" });
-    return jsonResponse(200, { text: result.text.slice(0, 4000) }, NO_STORE);
+    return jsonResponse(200, { text: result.text.slice(0, 4000), confidence: result.confidence, noSpeech: result.noSpeech }, NO_STORE);
   } catch (error) {
     const code = error instanceof VoiceError ? error.code : "unavailable";
     logOutcome("assistant-transcribe", "failed", { code });
