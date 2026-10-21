@@ -75,3 +75,6 @@ export async function seedCatalogue(store: InMemoryLibraryStore, storage: Librar
   }
   return SEED_RESOURCES.length;
 }
+
+/** The development test account made by `GET /api/dev/library-seed?action=tester`. In-memory only: it vanishes when the dev server restarts. */
+export const TEST_ACCOUNT = { email: "tester@example.com", password: "study-buddy-test-2026", name: "Test Tester" } as const;
