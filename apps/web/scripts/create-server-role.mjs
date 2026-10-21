@@ -20,7 +20,7 @@
 import { createHash, createHmac, pbkdf2Sync, randomBytes } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import postgres from "postgres";
-import { confirmHosted, describeTarget } from "./_target.mjs";
+import { confirmHosted } from "./_target.mjs";
 
 export const ROLE = "learnthrive_server";
 

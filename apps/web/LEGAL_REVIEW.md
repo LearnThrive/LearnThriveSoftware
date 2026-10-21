@@ -193,7 +193,42 @@ None added. Study Buddy uses the existing two session cookies; nothing is kept i
 9. **Copyright.** Study Buddy answers from the model's own knowledge; it is not given the Library's content (Phase H, grounding in the Library, was not built). It must not reproduce exam-board material; the benchmark did not test for that.
 10. **Coursework.** The assistant refuses to write coursework or assessed work; the wording and the line it draws are the owners' decision with the teachers.
 
-## Future-change gate
+## Supabase as a processor: region, agreement, backups and the sign-in email (plan20)
+
+Added on `feature/supabase-live`, 21 October 2026. **Everything in this section is a DRAFT for the owners and a legal reviewer, and nothing here is on the live site.** The hosted project exists but is **empty and unconnected**: no migration has been pushed to it, no account exists in it, and the production site has no Supabase variables, so the account, Library and Study Buddy routes stay closed (`LIBRARY_ENABLED` and the portal switch are unset). **The live privacy page does not name Supabase yet, and must before any real account exists.**
+
+### The facts, as far as the repository can show them
+
+| Point | Position |
+| --- | --- |
+| The project | `learnthrive-prod`, in the organisation "LearnThrive Tuition" (Pro plan), region **London** (`eu-west-2`), Postgres 17. Data at rest is stored in the UK. |
+| Supabase's role | A **processor**: it hosts the database (family accounts, student first names, consents, the Library's rows, chats), the files (private storage buckets) and authentication (email addresses, password hashes, sessions). LearnThrive decides the purposes. |
+| The agreement | Supabase publishes a data processing agreement. **[OWNER TO CONFIRM: it has been accepted for this organisation (dashboard: Organisation settings, Legal documents), the date, and who accepted it.]** Nothing in this repository can show that. |
+| Sub-processors and transfers | Supabase publishes a current sub-processor list and describes its transfer mechanism (a UK addendum or the IDTA, as applicable). **[CHECK Supabase's own pages on the day; this document does not copy them because they change.]** Support access from outside the UK is the usual point to look at. |
+| The site's own connection | The browser never talks to Supabase (the Content Security Policy keeps `connect-src 'self'`); the site's server does, with a narrow database role and keys that exist only in Render's environment. |
+| The sign-in email | Supabase Auth sends the confirmation and password-reset emails. They go through the owners' own sender (custom SMTP, Resend under its own agreement), so **Resend also receives each person's email address for these messages**. Each carries a one-time link to the site's own page (`/account/confirm`) and no tracking. |
+| Local development | A developer's laptop runs a local Supabase stack with synthetic data only. No personal data is put in it. |
+
+### Backups, and how the deletion deadlines apply to them
+
+The retention rules are 30 days for chat text and 7 days for uploads (`docs/RETENTION_AND_DELETION.md`), enforced by a daily job that deletes **storage objects first, then rows** (tested on the real stack, `docs/SUPABASE_REAL_STACK.md`).
+
+- **Backups keep what the job removed, until they age out.** On the Pro plan Supabase takes daily database backups kept for a limited number of days, and point-in-time recovery is a paid add-on with its own window. **[OWNER TO CONFIRM from the dashboard (Database, Backups): the plan's retention in days, and whether point-in-time recovery is on.]** A chat deleted on day 30 therefore remains in a backup for up to that many further days, and the privacy notice must say so rather than promise instant erasure.
+- **Uploaded files are not in database backups.** Supabase documents that database backups hold the storage tables (the records) but not the objects. **[CHECK on the day.]** If that holds, an upload removed from storage by the job is gone for good, and only its (already minimal) row can reappear from a backup.
+- **A restore must not undo a deletion.** Restoring a backup brings back rows the retention job and families had already deleted. The runbook (`docs/SUPABASE_RUNBOOK.md`) therefore requires, immediately after any restore, running the retention job and re-applying every deletion request recorded since the backup's date, before the site is reopened.
+- **Erasure on request.** Deleting an auth user cascades through every family table. Storage objects and Stripe records are not deleted by that, as before (item 11 above and item 8 of the Study Buddy list).
+
+### For the owners and a legal reviewer (Supabase)
+
+1. **Accept and file the DPA**, record the project region (London) and the sub-processor list as at the date, and decide who is told when Supabase changes a sub-processor.
+2. **Name Supabase on the privacy page before any account exists** (draft below), and list Resend for the sign-in emails.
+3. **Backups and point-in-time recovery**: choose, then state the real retention on the privacy page. Section 7 of `docs/SUPABASE_DASHBOARD_CHECKLIST.md` records the default used (daily backups on; point-in-time recovery recommended) and why.
+4. **Staff access.** Two or more named people can open the Supabase dashboard and so could read personal data. Use named accounts with multi-factor authentication, remove access when someone leaves, and keep the administrator list on the website short. **Multi-factor sign-in for the website's own administrators is not built**: until it is, the safeguard is few administrators, strong unique passwords, and the one controlled way to make one (`docs/AUTHENTICATION.md`, promote-admin).
+5. **The adult declaration and children's data** are as in the accounts section above: students under 18 never hold an account; the profile of a child is a first name or nickname and an optional year group.
+6. **A security incident** (a leaked key, a suspected breach): the runbook lists the steps; the owners decide whether the ICO and the families must be told within the statutory time (72 hours for the ICO where there is a risk to people).
+
+**Draft wording for `/privacy`** (a new section, "Where your information is kept"): *"Our website keeps the information you give us when you create a LearnThrive Library account on a database and file store provided by Supabase. We have chosen their London data centre, so your information is stored in the UK. Supabase acts for us under a data processing agreement: it can only handle your information on our instructions, for the services we use. Sign-in and password-reset emails are sent for us by Resend. Supabase and Resend may use other companies to run their services; [OWNER TO CONFIRM: a link to each provider's list, and the transfer arrangements]. We keep regular backups of the database so we can recover from a fault. When you ask us to delete something, or our deadline for it passes, it is removed from the live service straight away and from the backups as they expire, which takes up to [OWNER TO CONFIRM: the backup period, in days]. Your password is never kept in a readable form by us or by Supabase."*
+
 
 Before deploying a new provider or feature, record what data it receives, purpose, lawful basis, children's-data impact, processor/controller role, transfer mechanism, retention, security/access, and whether privacy information or storage/access choices must change. Repeat the production audit after deployment. This is particularly important for analytics, CRM, booking/payment, portals, lesson platforms, chat, and recording. Any new field, attachment type, provider or retention period in the careers, agreement or subject-request flows must also update `/careers/privacy`, the main privacy notice, `docs/RETENTION_AND_DELETION.md` and the table above. The same applies to the Library and its waitlist: any new field, a database or account, a payment or subscription (Stripe), a sign-in or session cookie, a different email provider, a launch-email tool, analytics, any stored sample or download, any use of an assistant or voice, or a change to the 12-month period must update `/privacy`, `/cookies`, `docs/RETENTION_AND_DELETION.md`, `docs/LIBRARY.md` and the Library waitlist section above before it is deployed, and the production audit must be repeated afterwards.
 

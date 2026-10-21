@@ -28,7 +28,13 @@
     "profile:motion": "node scripts/profile-motion.mjs",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
-    "test:realstack": "node scripts/realstack.mjs"
+    "test:realstack": "node scripts/realstack.mjs",
+    "check:env": "node scripts/check-env.mjs",
+    "env:docs": "node scripts/env-docs.mjs --write",
+    "check:bundle": "node scripts/check-bundle.mjs",
+    "supabase:verify": "node scripts/supabase-verify.mjs",
+    "db:create-server-role": "node scripts/create-server-role.mjs",
+    "db:promote-admin": "node scripts/promote-admin.mjs"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.1",

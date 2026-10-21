@@ -80,7 +80,10 @@ describe("the Library on the real local stack", { skip: ENABLED ? false : "set S
     dirs.push(dir);
     const resources = entries.map((e) => ({ file: e.file, title: e.title, description: "Real-stack import test.", subject: "Maths", level: "GCSE", topic: "Algebra", type: "worksheet", tags: ["rs"], accessTier: e.tier ?? "members", authorship: "LearnThrive Tuition", publishedAt: "2026-01-01", slug: e.slug }));
     writeFileSync(join(dir, "library.json"), JSON.stringify({ resources }));
-    for (const e of entries) e.bytes ? writeFileSync(join(dir, e.file), e.bytes) : copyFileSync(join(FIXTURES, e.source), join(dir, e.file));
+    for (const e of entries) {
+      if (e.bytes) writeFileSync(join(dir, e.file), e.bytes);
+      else copyFileSync(join(FIXTURES, e.source), join(dir, e.file));
+    }
     return dir;
   }
   const objectNames = async (prefix) => {
