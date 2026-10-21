@@ -27,7 +27,8 @@
     "voice:bench": "node --import tsx scripts/voice-bench.mjs",
     "profile:motion": "node scripts/profile-motion.mjs",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "test:realstack": "node scripts/realstack.mjs"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.1",
