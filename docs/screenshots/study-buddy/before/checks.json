@@ -1,0 +1,68 @@
+{
+  "label": "before",
+  "base": "http://localhost:3110",
+  "scheme": "light",
+  "date": "2026-10-21T08:37:03.727Z",
+  "results": [
+    {
+      "width": 1440,
+      "horizontalOverflow": false,
+      "scrollingAreas": 1,
+      "scrollers": [
+        "study-buddy-module__3B_O0G__log"
+      ],
+      "pageScrolls": false,
+      "composerOnScreen": true,
+      "headingPx": 75,
+      "lastMessageAboveComposer": true
+    },
+    {
+      "width": 1024,
+      "horizontalOverflow": false,
+      "scrollingAreas": 2,
+      "scrollers": [
+        "study-buddy-module__3B_O0G__log"
+      ],
+      "pageScrolls": true,
+      "composerOnScreen": true,
+      "headingPx": 53,
+      "lastMessageAboveComposer": true
+    },
+    {
+      "width": 768,
+      "horizontalOverflow": false,
+      "scrollingAreas": 2,
+      "scrollers": [
+        "study-buddy-module__3B_O0G__log"
+      ],
+      "pageScrolls": true,
+      "composerOnScreen": false,
+      "headingPx": 42,
+      "lastMessageAboveComposer": true
+    },
+    {
+      "width": 390,
+      "horizontalOverflow": false,
+      "scrollingAreas": 2,
+      "scrollers": [
+        "study-buddy-module__3B_O0G__log"
+      ],
+      "pageScrolls": true,
+      "composerOnScreen": false,
+      "headingPx": 47,
+      "lastMessageAboveComposer": true
+    },
+    {
+      "width": 320,
+      "horizontalOverflow": false,
+      "scrollingAreas": 2,
+      "scrollers": [
+        "study-buddy-module__3B_O0G__log"
+      ],
+      "pageScrolls": true,
+      "composerOnScreen": false,
+      "headingPx": 40,
+      "lastMessageAboveComposer": true
+    }
+  ]
+}
