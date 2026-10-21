@@ -112,6 +112,7 @@ test('when the words are uncertain it asks first: Edit, Try again and Send all w
   await panel(page).getByRole('button', { name: 'Stop and send' }).click();
   await expect(state(page)).toHaveText('Did I hear that right?');
   await expect(panel(page).getByText(`“${HEARD}”`)).toBeVisible();
+  await expectAxeClean(page, 'voice chat, asking to confirm');
   await page.waitForTimeout(500);
   expect(chats, 'nothing is sent while it asks').toHaveLength(0);
 
@@ -194,6 +195,7 @@ test('leaving the page while it listens switches the microphone off', async ({ p
   await page.getByRole('button', { name: 'Talk instead of typing' }).click();
   await expect(state(page)).toHaveText(/Listening/);
   expect(await liveTracks(page)).toBe(1);
+  expect(await micRequests(page)).toBe(1);
   await page.evaluate(() => {
     Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
     document.dispatchEvent(new Event('visibilitychange'));
