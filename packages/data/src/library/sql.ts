@@ -115,7 +115,8 @@ export class SqlLibraryStore implements LibraryStore {
       return rows[0].id;
     },
     getEmail: async (profileId) => {
-      const rows = await this.db.query<Row>(`select email from auth.users where id = $1`, [profileId]);
+      // Through a function: the site's database role has no access to the auth schema (migration 0009).
+      const rows = await this.db.query<Row>(`select public.auth_email($1) as email`, [profileId]);
       return rows[0]?.email ?? null;
     },
     getOwnerProfileId: async (clientId) => {

@@ -105,6 +105,7 @@ describe("migrations", () => {
       "0006_billing_refunds.sql",
       "0007_storage_buckets.sql",
       "0008_consent_withdrawal_time.sql",
+      "0009_server_lookups.sql",
     ]);
     assert.deepEqual(
       applied.map((f) => Number(f.slice(0, 4))),
@@ -699,6 +700,21 @@ describe("profiles and family structure", () => {
     assert.deepEqual(links.filter((l) => l.student_id === f.studentIds[0]), [{ client_id: f.clientId, student_id: f.studentIds[0] }]);
     const [s] = await db.asOwner((q) => q.query("select is_minor from public.students where id = $1", [f.studentIds[0]]));
     assert.equal(s!.is_minor, true, "a student is a minor unless the server says otherwise");
+  });
+
+  test("the two Auth lookups answer the server only, and only with what they are for (0009)", async () => {
+    const f = await createFamily(db, { name: "Lookup" });
+    const email = (await db.asOwner((q) => q.query<{ email: string }>("select email from auth.users where id = $1", [f.userId])))[0]!.email;
+    const asServer = <T,>(text: string, params: unknown[]) => db.asService((q) => q.query<T>(text, params));
+    assert.deepEqual(await asServer("select public.auth_email($1) as e", [f.userId]), [{ e: email }]);
+    assert.deepEqual(await asServer("select public.auth_email($1) as e", ["00000000-0000-4000-8000-000000000000"]), [{ e: null }]);
+    const found = await asServer<{ id: string; email_confirmed: boolean }>("select * from public.auth_user_by_email($1)", [email.toUpperCase()]);
+    assert.deepEqual(found, [{ id: f.userId, email_confirmed: true }], "case-insensitive, and only the id and a flag come back");
+    assert.deepEqual(await asServer("select * from public.auth_user_by_email($1)", ["nobody@example.test"]), []);
+    for (const run of [(fn: (q: any) => Promise<unknown>) => db.asUser(f.userId, fn), (fn: (q: any) => Promise<unknown>) => db.asAnon(fn)]) {
+      await assert.rejects(run((q) => q.query("select public.auth_email($1)", [f.userId])), /permission denied/i);
+      await assert.rejects(run((q) => q.query("select * from public.auth_user_by_email($1)", [email])), /permission denied/i);
+    }
   });
 
   test("a withdrawal is stamped with the database's clock, whatever the caller sent (0008)", async () => {
