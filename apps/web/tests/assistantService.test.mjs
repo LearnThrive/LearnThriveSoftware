@@ -295,8 +295,12 @@ test("a failing provider leaves the question in the chat, says so once, and a st
   const slow = await world(t);
   const controller = new AbortController();
   const events = [];
-  setTimeout(() => controller.abort(), 120);
-  for await (const e of svc.sendMessage(slow.deps, { clientId: slow.clientId, sessionId: null, text: "[slow] go on", signal: controller.signal })) events.push(e);
+  let deltas = 0;
+  // Stop after a few pieces have arrived (not after a fixed time, which is flaky on a loaded machine).
+  for await (const e of svc.sendMessage(slow.deps, { clientId: slow.clientId, sessionId: null, text: "[slow] go on", signal: controller.signal })) {
+    events.push(e);
+    if (e.type === "delta" && (deltas += 1) === 3) controller.abort();
+  }
   assert.equal(events.at(-1).type, "done", "stopping is not an error");
   const kept = (await slow.store.chat.listMessages(slow.clientId, events[0].sessionId)).at(-1);
   assert.equal(kept.role, "assistant");
