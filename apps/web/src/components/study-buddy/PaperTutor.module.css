@@ -1,0 +1,321 @@
+/* The Paper Tutor strip above the box: the same surface as voice chat, a capped height so the box always stays on screen. */
+
+.panel {
+  display: grid;
+  gap: var(--space-3);
+  max-height: min(60dvh, 34rem);
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-2);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.icon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.headText {
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.file,
+.note {
+  margin: 0;
+  overflow: hidden;
+  color: var(--fg-muted);
+  font-size: var(--text-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note {
+  white-space: normal;
+}
+
+.close {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.close:hover {
+  background: var(--surface-sunken);
+  color: var(--fg-strong);
+}
+
+.body:empty {
+  display: none;
+}
+
+.line,
+.error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--fg-body);
+  font-size: var(--text-small);
+}
+
+.error {
+  color: var(--fg-error);
+}
+
+.choose {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.questions,
+.modes {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.questions legend,
+.modes legend {
+  margin-bottom: var(--space-2);
+  color: var(--fg-strong);
+  font-size: var(--text-small);
+  font-weight: 700;
+}
+
+.questions ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.questions label {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-height: 2.25rem;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.questions label:hover {
+  background: var(--surface-sunken);
+}
+
+.questions input,
+.mode input {
+  flex: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  accent-color: var(--accent);
+  transform: translateY(2px);
+}
+
+.qNumber {
+  flex: none;
+  color: var(--fg-strong);
+  font-weight: 700;
+}
+
+.qText {
+  display: -webkit-box;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg-body);
+  font-size: var(--text-small);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+.tag {
+  flex: none;
+  padding: 0 var(--space-2);
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--fg-muted);
+  font-size: 0.75rem;
+}
+
+.modes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--space-2);
+}
+
+.modes legend {
+  grid-column: 1 / -1;
+}
+
+.mode {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.mode:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.mode span {
+  display: grid;
+  gap: 2px;
+  color: var(--fg-strong);
+  font-size: var(--text-small);
+}
+
+.mode small {
+  color: var(--fg-muted);
+  font-size: 0.75rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.primary,
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 2.5rem;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primary:hover {
+  background: var(--accent-strong);
+}
+
+.secondary {
+  min-height: 2.25rem;
+  border-color: var(--border-strong);
+  background: var(--surface-1);
+  color: var(--fg-strong);
+  font-weight: 600;
+}
+
+.primary:disabled,
+.secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.primary:focus-visible,
+.secondary:focus-visible,
+.close:focus-visible,
+.questions label:focus-within,
+.mode:focus-within {
+  outline: var(--focus-width) solid var(--focus-colour);
+  outline-offset: var(--focus-offset);
+}
+
+.progress {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-small);
+}
+
+.progress li {
+  display: flex;
+  gap: var(--space-2);
+  color: var(--fg-body);
+}
+
+.progress li[data-state="waiting"] {
+  color: var(--fg-muted);
+}
+
+.progress li[data-status="failed"],
+.progress li[data-status="unsolved"] {
+  color: var(--fg-error);
+}
+
+.result {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.preview {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.preview img {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: #fff;
+}
+
+.preview figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  color: var(--fg-body);
+  font-size: var(--text-small);
+}
+
+/* A short screen keeps room for the conversation and the box: the strip scrolls inside itself instead. */
+@media (max-height: 760px) {
+  .panel {
+    max-height: 38dvh;
+  }
+}

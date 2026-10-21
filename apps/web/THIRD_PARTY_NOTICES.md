@@ -35,6 +35,13 @@ Runtime dependencies of the site (installed from npm, listed in `package.json`; 
 | `pdf-lib` | 1.17.1 | MIT | Stamps the account holder's name and the time on a PDF download (and reads the pages of a PDF a student uploads). Writing a PDF writer is not a sensible use of time. |
 | `postgres` | 3.4.9 | Unlicense | The database driver for the Library, billing and chat tables (Supabase's pooled connection), used only on the server. |
 | `katex` and `@types/katex` | 0.19.0, 0.16.8 | MIT | Draws maths in Study Buddy answers. It is loaded only on the Study Buddy screen, only when an answer contains maths. |
+| `pdfjs-dist` | 5.4.394 | Apache-2.0 | Reads the text of an uploaded PDF in reading order, with page numbers, and draws its pages as pictures for scans and diagrams (server only). |
+| `@napi-rs/canvas` | 0.1.84 | MIT | The canvas pdf.js draws pages on, on the server, and the JPEG encoder for those pictures. Prebuilt native binary; no system libraries. |
+| `jpeg-js`, `pngjs` (`@types/pngjs` 6.0.5, MIT) | 0.4.4, 7.0.0 | BSD-3-Clause, MIT | Decode uploaded photos in plain JavaScript, so a damaged file is a clear error rather than a crash of the native decoder; then turned upright and shrunk, with all metadata dropped. |
+| `mathjax-full` | 3.2.2 | Apache-2.0 | The Paper Tutor: typesets the maths it writes on a paper as vector shapes (TeX to SVG paths, drawn by `pdf-lib`), so fractions and powers look right at any zoom. Server only. |
+| `@pdf-lib/fontkit` | 1.1.1 | MIT | Lets `pdf-lib` embed the handwriting font below. |
+
+Font: **Patrick Hand** (Copyright (c) 2010-2012 Patrick Wagesreiter), licensed under the SIL Open Font License 1.1, embedded in the Paper Tutor's annotated PDFs for the handwritten-style answers. The font file and its licence are in `apps/web/assets/fonts/` (`PatrickHand-Regular.ttf`, `PatrickHand-OFL.txt`). The OFL allows embedding in documents and bundling with software; the font is not sold on its own.
 
 Development and test only (never shipped): `@electric-sql/pglite` 0.5.10 (Apache-2.0), an in-process Postgres used to run the real migrations in tests.
 

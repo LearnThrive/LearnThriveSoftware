@@ -414,6 +414,9 @@ export function libraryContract(name: string, make: () => Promise<{ harness: Con
       assert.equal(f1.messageId, null);
       assert.equal((await store.chat.getUnattachedFiles(a.clientId, s.id, [f1.id, f2.id])).length, 2);
       assert.deepEqual(await store.chat.getUnattachedFiles(b.clientId, s.id, [f1.id]), []);
+      assert.equal((await store.chat.getFile(a.clientId, f1.id))?.id, f1.id, "the owner can fetch a file by its id");
+      assert.equal(await store.chat.getFile(b.clientId, f1.id), null, "another family cannot");
+      assert.equal(await store.chat.getFile(a.clientId, "00000000-0000-4000-8000-000000000000"), null);
       const msg = await store.chat.appendMessage(a.clientId, s.id, "user", "see my working", now);
       assert.equal(await store.chat.attachFiles(b.clientId, s.id, [f1.id], msg.id), 0, "not another family's");
       assert.equal(await store.chat.attachFiles(a.clientId, s.id, [f1.id], "00000000-0000-4000-8000-000000000000"), 0, "not a message that is not in this chat");

@@ -32,6 +32,10 @@ export interface StreamOptions {
   firstTokenTimeoutMs: number;
   /** The most the whole answer may take. */
   totalTimeoutMs: number;
+  /** Ask for a single JSON object (the Paper Tutor's structured solutions). Still validated by the caller: this only steers. */
+  json?: boolean;
+  /** Let a model that can reason ("think") do so before answering: slower, more careful. Off for chat, where the first word matters. */
+  reasoning?: boolean;
 }
 
 export interface StreamStats {

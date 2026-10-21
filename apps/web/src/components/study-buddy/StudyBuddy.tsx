@@ -10,6 +10,7 @@ import {
 import {
   ArrowDown,
   Check,
+  FileCheck2,
   FileText,
   MessagesSquare,
   Pencil,
@@ -30,6 +31,7 @@ import { parseMarkdown, plainText } from "@/lib/assistant/markdown";
 import { RenderedAnswer } from "./RenderedAnswer";
 import { useVoice, type Speaker } from "./useVoice";
 import { VoicePanel } from "./VoicePanel";
+import { PaperTutor } from "./PaperTutor";
 import styles from "./study-buddy.module.css";
 
 interface Msg {
@@ -46,6 +48,8 @@ interface Status {
   reason?: string | null;
   /** The speech service is there: the microphone button may appear. */
   voice?: boolean;
+  /** The Paper Tutor is switched on: an attached paper can be solved. */
+  paperTutor?: boolean;
   minorsApproved?: boolean;
   limits?: {
     dailyMessages: number;
@@ -109,6 +113,11 @@ export function StudyBuddy() {
   } | null>(null);
   const [offline, setOffline] = useState(false);
   const [atLatest, setAtLatest] = useState(true);
+  const [paper, setPaper] = useState<{
+    file: File;
+    fileId: string;
+    sessionId: string;
+  } | null>(null);
   const abort = useRef<AbortController | null>(null);
   // Kept in refs as well as state: a question sent while a file is still uploading waits for it, and must then use the chat and the
   // files as they are NOW, not as they were when the button was pressed.
@@ -213,6 +222,18 @@ export function StudyBuddy() {
     setError("");
     clearAttachments();
     stickToLatest.current = true;
+  }
+
+  // The Paper Tutor posted its summary into the chat, with the paper attached to it: show it, and take the paper out of the box.
+  async function paperFinished(file: File, sid: string) {
+    if (file && filesRef.current.includes(file)) removeFile(file);
+    if (sessionRef.current !== sid) return;
+    const response = await fetch(`/api/assistant/sessions/${sid}`, {
+      cache: "no-store",
+    }).catch(() => null);
+    if (response?.ok)
+      setMessages(((await response.json()) as { messages: Msg[] }).messages);
+    void refresh();
   }
 
   function newChat() {
@@ -504,6 +525,12 @@ export function StudyBuddy() {
   const currentTitle =
     sessions.find((s) => s.id === sessionId)?.title ||
     (sessionId ? "This chat" : "New chat");
+  // The paper to offer the Paper Tutor for: the first PDF or photo in the box (a file is only listed once it has uploaded).
+  const solvable = status.paperTutor
+    ? files.find(
+        (f) => f.type === "application/pdf" || f.type.startsWith("image/"),
+      )
+    : undefined;
   const shown = query.trim()
     ? sessions.filter((s) =>
         (s.title || "New chat")
@@ -801,6 +828,36 @@ export function StudyBuddy() {
                   <span className={styles.stopSquare} aria-hidden="true" />
                   Stop
                 </button>
+              </div>
+            ) : null}
+            {paper ? (
+              <PaperTutor
+                key={paper.fileId}
+                fileId={paper.fileId}
+                sessionId={paper.sessionId}
+                fileName={paper.file.name}
+                onFinished={() =>
+                  void paperFinished(paper.file, paper.sessionId)
+                }
+                onClose={() => setPaper(null)}
+              />
+            ) : solvable && sessionId ? (
+              <div className={styles.paperOffer}>
+                <button
+                  type="button"
+                  className={styles.paperButton}
+                  onClick={() =>
+                    setPaper({
+                      file: solvable,
+                      fileId: fileIdsRef.current.get(solvable)!,
+                      sessionId,
+                    })
+                  }
+                >
+                  <FileCheck2 size={16} aria-hidden="true" />
+                  Solve this paper
+                </button>
+                <span>Worked answers written onto {solvable.name}</span>
               </div>
             ) : null}
             {status.voice ? (

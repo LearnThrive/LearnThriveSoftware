@@ -91,7 +91,7 @@ export class OpenAiCompatibleProvider implements ChatProvider {
             method: "POST",
             headers: { Authorization: `Bearer ${this.config.apiKey}`, "Content-Type": "application/json", Accept: "text/event-stream" },
             signal: controller.signal,
-            body: JSON.stringify({ model, stream: true, stream_options: { include_usage: true }, max_tokens: options.maxTokens, temperature: options.temperature, messages: this.wireMessages(messages) }),
+            body: JSON.stringify({ model, stream: true, stream_options: { include_usage: true }, max_tokens: options.maxTokens, temperature: options.temperature, ...(options.json ? { response_format: { type: "json_object" } } : {}), messages: this.wireMessages(messages) }),
           });
         } catch {
           throw new ProviderError(timedOut ? "timeout" : caller?.aborted ? "aborted" : "unavailable", this.id);

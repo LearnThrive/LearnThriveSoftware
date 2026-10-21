@@ -107,3 +107,9 @@ export function assistantAvailability(config: AssistantConfig, env: Env = proces
   }
   return { open: true };
 }
+
+/** The Paper Tutor's own switch, inside the assistant's: development on unless PAPER_TUTOR_ENABLED=false, production only if exactly "true". */
+export function paperTutorEnabled(env: Env = process.env): boolean {
+  const flag = env.PAPER_TUTOR_ENABLED?.trim();
+  return env.NODE_ENV === "production" ? flag === "true" : flag !== "false";
+}
