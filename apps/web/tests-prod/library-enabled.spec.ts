@@ -46,6 +46,19 @@ test.describe('LIBRARY_ENABLED=true opens the account and Library routes and not
     expect(login.headers()['set-cookie']).toBeUndefined();
   });
 
+  test('Study Buddy and voice are closed in production: every route refuses, the page is a 404, and the status says why', async ({ request }) => {
+    for (const path of ['/api/assistant/chat', '/api/assistant/files', '/api/assistant/voice/transcribe', '/api/assistant/voice/speak']) {
+      const refused = await request.post(path, { data: { text: 'hello' } });
+      expect(refused.status(), path).toBe(503);
+      expect(refused.headers()['set-cookie'], path).toBeUndefined();
+      const cross = await request.post(path, { data: {}, headers: { origin: 'https://evil.example' } });
+      expect(cross.status(), `${path} cross-site`).toBe(403);
+    }
+    const status = await request.get('/api/assistant/status');
+    expect(await status.json()).toEqual({ open: false, reason: 'disabled' });
+    expect((await request.get('/library/study-buddy')).status()).toBe(404);
+  });
+
   test('the member account page does not exist without a backend, and a cross-site post is refused first', async ({ request }) => {
     expect((await request.get('/account')).status()).toBe(404);
     const cross = await request.post('/api/account/login', { data: {}, headers: { origin: 'https://evil.example' } });
