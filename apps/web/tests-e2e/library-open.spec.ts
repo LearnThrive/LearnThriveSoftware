@@ -112,7 +112,7 @@ test('a resource page lists the facts publicly; drafts, scheduled and unknown re
   await expect(page.getByRole('term').filter({ hasText: 'Made by' })).toBeVisible();
   await expect(page.locator('dl[aria-label="About this resource"]')).toContainText('LearnThrive Tuition (development seed)');
   await expect(facts.first()).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', /\/account\/sign-in\?next=%2Flibrary%2Fdev-seed-quadratics$/);
+  await expect(page.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', /\/login\?next=%2Flibrary%2Fdev-seed-quadratics$/);
   await expect(page.locator('a[href*="library/dev-seed-quadratics/"]')).toHaveCount(0);
   await expect(page.locator('a[href$=".pdf"], a[href*="storage"]')).toHaveCount(0);
   await expectAxeClean(page, 'resource page, signed out');

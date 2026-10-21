@@ -12,7 +12,7 @@ async function login(page: Page, email: string, password: string) {
   await page.goto('/login');
   await page.getByLabel('Email').fill(email);
   // Not getByLabel('Password') — it substring-matches the "Show password" toggle button too.
-  await page.locator('#login-password').fill(password);
+  await page.locator('input[name="password"]').fill(password);
   // The click handler does an async fetch() then a client-side router.push() — click() itself
   // only waits for the click event to dispatch, not for that async chain to finish. Without
   // waiting for the resulting navigation, a caller's next page.goto() races ahead of the actual
@@ -27,9 +27,9 @@ async function login(page: Page, email: string, password: string) {
 async function attemptLogin(page: Page, email: string, password: string) {
   await page.goto('/login');
   await page.getByLabel('Email').fill(email);
-  await page.locator('#login-password').fill(password);
+  await page.locator('input[name="password"]').fill(password);
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.locator('.alert--error')).toBeVisible();
+  await expect(page.locator('form [role="alert"]')).toBeVisible();
 }
 
 test('a valid login reaches the dashboard with role-appropriate content', async ({ page }) => {
@@ -46,22 +46,30 @@ test('a valid login reaches the dashboard with role-appropriate content', async 
 test('an incorrect password is rejected with a generic message and no session is created', async ({ page }) => {
   await attemptLogin(page, ACCOUNTS.tutor.email, 'wrong-password');
   await expect(page).toHaveURL(/\/login$/);
-  await expect(page.locator('.alert--error')).toContainText('Incorrect email or password');
+  await expect(page.locator('form [role="alert"]')).toContainText('Email or password is not right.');
 });
 
 test('an unknown account gets the same generic message as a wrong password (no account enumeration)', async ({ page }) => {
   await attemptLogin(page, 'nobody@learnthrive.dev', 'whatever');
-  await expect(page.locator('.alert--error')).toContainText('Incorrect email or password');
+  await expect(page.locator('form [role="alert"]')).toContainText('Email or password is not right.');
 });
 
 test('a disabled account gets a distinct message, not the generic invalid-credentials one', async ({ page }) => {
   await attemptLogin(page, ACCOUNTS.disabled.email, ACCOUNTS.disabled.password);
-  await expect(page.locator('.alert--error')).toContainText('disabled');
+  await expect(page.locator('form [role="alert"]')).toContainText('disabled');
 });
 
-test('an unauthenticated visitor is redirected from /dashboard to /login', async ({ page }) => {
+test('an unauthenticated visitor is redirected from /dashboard to /login, which remembers the page asked for', async ({ page }) => {
   await page.goto('/dashboard');
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/login\?next=%2Fdashboard$/);
+});
+
+test('signing in after being turned away from a deep link returns to that page', async ({ page }) => {
+  await page.goto('/dashboard/calendar');
+  await expect(page).toHaveURL(/\/login\?next=%2Fdashboard%2Fcalendar$/);
+  await page.getByLabel('Email').fill(ACCOUNTS.tutor.email);
+  await page.locator('input[name="password"]').fill(ACCOUNTS.tutor.password);
+  await Promise.all([page.waitForURL(/\/dashboard\/calendar$/), page.getByRole('button', { name: 'Sign in' }).click()]);
 });
 
 test('the session persists across a reload, and logout ends it', async ({ page }) => {
@@ -78,7 +86,7 @@ test('the session persists across a reload, and logout ends it', async ({ page }
   await expect(page).toHaveURL(/\/$/);
 
   await page.goto('/dashboard');
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/login\?next=%2Fdashboard$/);
 });
 
 // /dashboard/admin itself is a blind redirect straight to /dashboard for everyone now (plan6
@@ -115,19 +123,24 @@ test('an already-authenticated visitor to /login is redirected straight to /dash
 
 test('the password field is masked by default and the show/hide toggle works', async ({ page }) => {
   await page.goto('/login');
-  const passwordInput = page.locator('#login-password');
+  const passwordInput = page.locator('input[name="password"]');
   await expect(passwordInput).toHaveAttribute('type', 'password');
   await passwordInput.fill('something');
-  await page.getByRole('button', { name: 'Show password' }).click();
+  // One toggle whose state is aria-pressed (its name stays "Show password").
+  const toggle = page.getByRole('button', { name: 'Show password' });
+  await toggle.click();
   await expect(passwordInput).toHaveAttribute('type', 'text');
-  await page.getByRole('button', { name: 'Hide password' }).click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await toggle.click();
   await expect(passwordInput).toHaveAttribute('type', 'password');
 });
 
 test('empty submission shows a validation message without hitting the server', async ({ page }) => {
   await page.goto('/login');
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.locator('.alert--error')).toContainText('Enter your email and password');
+  const summary = page.locator('form [role="alert"]');
+  await expect(summary).toContainText('Enter your email address.');
+  await expect(summary).toContainText('Enter your password.');
 });
 
 // plan13.md task 11.6: /api/auth/login had no rate limiting at all — scrypt's own cost slows one

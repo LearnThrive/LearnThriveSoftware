@@ -117,7 +117,7 @@ test('signed out, ticking and continuing goes to sign-in and back to the pricing
   const card = page.locator('#plan-monthly');
   await card.getByRole('checkbox').check();
   await card.getByRole('button', { name: 'Continue to checkout' }).click();
-  await expect(page).toHaveURL(/\/account\/sign-in\?next=%2Fpricing$/);
+  await expect(page).toHaveURL(/\/login\?next=%2Fpricing$/);
 });
 
 test('signed in: continuing hands off to Stripe\'s hosted checkout, and a cancelled checkout charges nothing', async ({ page }) => {

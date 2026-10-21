@@ -14,9 +14,9 @@ test.skip(!base, 'LIBRARY_ENABLED_BASE_URL is not set');
 test.use({ baseURL: base ?? 'http://localhost:3201' });
 
 test.describe('LIBRARY_ENABLED=true opens the account and Library routes and nothing else', () => {
-  test('/login goes to the account sign-in, which says accounts are not open without a backend', async ({ page }) => {
-    await page.goto('/login');
-    await expect(page).toHaveURL(/\/account\/sign-in$/);
+  test('/login is the one sign-in, which says accounts are not open without a backend (and the old /account/sign-in leads to it)', async ({ page }) => {
+    await page.goto('/account/sign-in');
+    await expect(page).toHaveURL(/\/login$/);
     await expect(page.getByText('Accounts are not open yet.')).toBeVisible();
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
     expect(await page.context().cookies(), 'no cookie just for looking').toEqual([]);

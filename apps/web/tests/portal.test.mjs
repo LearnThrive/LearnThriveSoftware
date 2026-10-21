@@ -173,3 +173,23 @@ test("proxy: /dev stays a 404 with the flag", () => {
   assert.equal(run("/dev/motion", { ...production, LIBRARY_ENABLED: "true" }).status, 404);
   assert.equal(run("/api/dev/reset", { ...production, LIBRARY_ENABLED: "true" }).status, 404);
 });
+
+test("proxy: every request it lets through is stamped with the path and query asked for, overwriting anything the client sent", () => {
+  // A Server Component cannot read its own URL; the sign-in redirect and the token renewal use this to come back to the page.
+  const stamp = (pathname, vars, headers) => {
+    const saved = { ...process.env };
+    try {
+      for (const key of ["NEXT_PUBLIC_APP_PORTAL_ENABLED", "LIBRARY_ENABLED"]) delete process.env[key];
+      Object.assign(process.env, vars);
+      const response = proxyModule.proxy(new NextRequest(`https://www.learnthrivetuition.co.uk${pathname}`, { headers }));
+      return response.headers.get("x-middleware-request-x-learnthrive-path");
+    } finally {
+      for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+      Object.assign(process.env, saved);
+    }
+  };
+  assert.equal(stamp("/dashboard/lessons?week=3", { NODE_ENV: "development" }), "/dashboard/lessons?week=3");
+  assert.equal(stamp("/library/study-buddy", { ...production, LIBRARY_ENABLED: "true" }), "/library/study-buddy");
+  assert.equal(stamp("/dashboard", { NODE_ENV: "development" }, { "x-learnthrive-path": "//evil.example/x" }), "/dashboard", "a client-supplied copy never survives");
+  assert.equal(stamp("/dashboard", production), null, "a gated path that redirects carries nothing");
+});

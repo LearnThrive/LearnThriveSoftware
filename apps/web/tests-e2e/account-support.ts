@@ -68,7 +68,7 @@ export async function confirm(page: Page, email: string) {
 }
 
 export async function signIn(page: Page, email: string, password = PASSWORD) {
-  await page.goto('/account/sign-in');
+  await page.goto('/login');
   await hydrated(page);
   const card = page.locator('[data-auth-mode]');
   await card.getByLabel('Email', { exact: true }).fill(email);
