@@ -20,7 +20,7 @@ export interface AuthTokens {
 }
 
 export type SignUpFailure = "weak_password" | "invalid_email" | "unavailable";
-export type SignInFailure = "invalid_credentials" | "email_not_confirmed" | "unavailable";
+export type SignInFailure = "invalid_credentials" | "email_not_confirmed" | "account_disabled" | "unavailable";
 export type TokenFailure = "invalid_token" | "unavailable";
 
 export interface SignUpInput {

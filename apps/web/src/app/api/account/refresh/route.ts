@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   const next = safeNextPath(new URL(request.url).searchParams.get("next"));
   const { rt, jar } = await nextDeps();
   const state = rt ? await renewSession(jar, rt) : ({ status: "none" } as const);
-  const target = state.status === "ok" ? next : `/account/sign-in?next=${encodeURIComponent(next)}`;
+  const target = state.status === "ok" ? next : `/login?next=${encodeURIComponent(next)}`;
   // A relative Location: behind the host's proxy the request URL may name an internal address.
   return new Response(null, { status: 303, headers: { Location: target, "Cache-Control": "no-store" } });
 }

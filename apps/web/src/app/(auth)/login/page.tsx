@@ -1,57 +1,44 @@
 import type { Metadata } from "next";
-import { BrandMark } from "@/components/brand/BrandMark";
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
-import { LoginForm } from "@/components/LoginForm";
+import { AccountAuthPanel } from "@/components/account/AccountAuthPanel";
+import { AccountShell } from "@/components/account/AccountShell";
+import { destinationFor } from "@learnthrive/data/library";
+import { currentAccess } from "@/lib/access/current";
+import { currentSession } from "@/lib/account/pages";
+import { safeNextPath } from "@/lib/account/session";
+import { assistantClosed } from "@/lib/assistant/runtime";
+import { libraryTermsHref } from "@/lib/billing/offer";
 import { createMetadata } from "@/lib/metadata";
-import { libraryEnabled } from "@/lib/library-config";
-import { getSession } from "@/lib/auth/session";
+import { PORTAL_ENABLED } from "@/lib/portal";
 
-export const metadata: Metadata = createMetadata({
-  title: "Log in",
-  description: "Log in to the LearnThrive platform.",
-  path: "/login",
-});
+export const metadata: Metadata = {
+  ...createMetadata({ title: "Sign in", description: "Sign in to LearnThrive.", path: "/login" }),
+  robots: { index: false, follow: false },
+};
 
 /**
- * Plan6 sections 79-81: a two-panel sign-in of its own — brand and reassurance on one side, the
- * form on the other, collapsing to one column on mobile. Deliberately no role picker: the role
- * comes from the account, never from the person signing in.
+ * The one front door (plan: Study Buddy inside the platform). Everybody signs in here with the same account (the Library's real
+ * sign-in: verified email, lockout, Supabase in production): tutors, administrators, enrolled families and Library members alike. What a
+ * person finds after signing in is decided by `destinationFor` from their role and their Library standing, not by which page they used:
+ * staff and enrolled families open the dashboard, a subscriber opens Study Buddy, and the page they originally asked for is kept when
+ * their access includes it. Someone already signed in who arrives here is sent on at once.
  */
-export default async function LoginPage() {
-  // With the Library open in production the staff sign-in does not exist (its provider refuses to run); the only
-  // sign-in is the account one.
-  if (libraryEnabled()) redirect("/account/sign-in");
-  const session = await getSession();
-  if (session) redirect("/dashboard");
+export default async function LoginPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined | string[]>> }) {
+  const raw = (await searchParams).next;
+  const requested = safeNextPath(typeof raw === "string" ? raw : undefined, "");
+  const { rt, state } = await currentSession();
+
+  // A lapsed access token (they last signed in more than an hour ago): renew it and come straight back, instead of showing a form.
+  if (state.status === "refresh_needed") redirect(`/api/account/refresh?next=${encodeURIComponent("/login" + (requested ? `?next=${encodeURIComponent(requested)}` : ""))}`);
+
+  if (state.status === "ok") {
+    const who = await currentAccess();
+    if (who) redirect(destinationFor(who.access, requested, { studyBuddyOpen: assistantClosed(process.env, true) === null, dashboardOpen: PORTAL_ENABLED }));
+  }
 
   return (
-    <div className="auth-layout">
-      <aside className="auth-brand">
-        <Link href="/" className="auth-brand__back">
-          <ArrowLeft size={16} aria-hidden="true" />Back to learnthrivetuition.co.uk
-        </Link>
-        <div className="auth-brand__body">
-          <BrandMark className="auth-brand__mark auth-enter" />
-          <p className="auth-brand__tagline auth-enter" style={{ animationDelay: "60ms" }}>Learn. Grow. Thrive.</p>
-          <h1 className="auth-brand__headline auth-enter" style={{ animationDelay: "100ms" }}>Everything for your tuition, in one place.</h1>
-          <ul className="auth-brand__points">
-            <li className="auth-enter" style={{ animationDelay: "170ms" }}>Your lessons and schedule, always up to date</li>
-            <li className="auth-enter" style={{ animationDelay: "210ms" }}>Join the online classroom in one click</li>
-            <li className="auth-enter" style={{ animationDelay: "250ms" }}>Reports and progress, shared when they&apos;re ready</li>
-          </ul>
-        </div>
-        <p className="auth-brand__foot">Tutors, parents, students and administrators all sign in here.</p>
-      </aside>
-
-      <main id="main-content" className="auth-panel">
-        <div className="auth-panel__inner auth-enter" style={{ animationDelay: "120ms" }}>
-          <h2 className="auth-panel__title">Sign in</h2>
-          <p className="auth-panel__subtitle">Use the email address LearnThrive set your account up with.</p>
-          <LoginForm />
-        </div>
-      </main>
-    </div>
+    <AccountShell>
+      {rt ? <AccountAuthPanel initialMode="sign-in" next={requested} termsHref={libraryTermsHref()} /> : <p>Accounts are not open yet. Please check back soon.</p>}
+    </AccountShell>
   );
 }

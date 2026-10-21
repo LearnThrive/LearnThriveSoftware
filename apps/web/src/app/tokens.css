@@ -183,7 +183,7 @@
   --fg-on-inverse: var(--app-on-dark);
   --fg-on-inverse-soft: var(--app-on-dark);
   --fg-on-inverse-muted: var(--app-on-dark-muted);
-  --fg-accent: var(--app-accent-strong);
+  --fg-accent: var(--app-accent-strong-text); /* text: the dark theme retunes it to mint; --app-accent-strong stays the fill */
   --border-subtle: var(--app-border);
   --border-strong: var(--app-border-strong);
   --accent: var(--app-accent);

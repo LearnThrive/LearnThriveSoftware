@@ -9,7 +9,7 @@ import styles from "./account.module.css";
 
 interface Reply {
   status: number;
-  data: { success?: boolean; code?: string; error?: string; errors?: AuthErrors } | null;
+  data: { success?: boolean; code?: string; error?: string; errors?: AuthErrors; next?: string } | null;
 }
 
 async function post(path: string, body: Record<string, unknown>): Promise<Reply | null> {
@@ -31,7 +31,11 @@ const NOT_READY = "The check that you are a person has not finished yet. Please 
  * Supabase's own limits guard it). After a good sign-in the page is reloaded rather than client-routed, so the
  * server sees the new cookie on the first request.
  */
-export function AccountAuthPanel({ initialMode = "sign-in", next = "/account", termsHref = "/terms" }: { initialMode?: Exclude<AuthMode, "verify-sent">; next?: string; termsHref?: string }) {
+/**
+ * `next` is the page the person asked for before signing in ("" if none). The server decides where they land (`next` in its reply:
+ * their dashboard, Study Buddy or account page, or the page asked for when their access includes it); this only passes the request on.
+ */
+export function AccountAuthPanel({ initialMode = "sign-in", next = "", termsHref = "/terms" }: { initialMode?: Exclude<AuthMode, "verify-sent">; next?: string; termsHref?: string }) {
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [sentKind, setSentKind] = useState<"verify" | "reset">("verify");
   const [errors, setErrors] = useState<AuthErrors>({});
@@ -64,10 +68,10 @@ export function AccountAuthPanel({ initialMode = "sign-in", next = "/account", t
     email.current = values.email;
     try {
       if (submittedIn === "sign-in") {
-        const reply = await post("/api/account/login", { email: values.email, password: values.password });
+        const reply = await post("/api/account/login", { email: values.email, password: values.password, next });
         if (!reply) return setErrors({ form: NETWORK });
         if (reply.status === 200) {
-          window.location.assign(next);
+          window.location.assign(reply.data?.next || next || "/account");
           return;
         }
         if (reply.data?.code === "email_not_confirmed") {

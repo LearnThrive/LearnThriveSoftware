@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { renewSession, type CookieJar } from "@/lib/account/session";
 import type { AccountRuntime } from "@/lib/account/runtime";
-import type { Account } from "@learnthrive/data/library";
+import { platformAccess, type Account } from "@learnthrive/data/library";
 import { jsonResponse, logOutcome, originAllowed, parseMultipart, readBodyLimited } from "@/lib/request-guards";
 import { siteConfig } from "@/lib/site";
 import { assistantAvailability, assistantConfig, paperTutorEnabled } from "./config";
@@ -81,7 +81,8 @@ export async function gate(request: Request, deps: AssistantDeps, event: string,
   if (!account.adultConfirmed) return { ok: false, response: refuse("adult_required") };
   const clientId = account.clientId ?? (await deps.rt.store.accounts.ensureClient(account.profileId));
   const facts = await deps.rt.store.access.facts(clientId, (deps.now ?? (() => new Date()))());
-  if (account.role !== "ADMIN" && !facts.enrolled && !facts.subscription && !facts.adminGrant) {
+  // The same rule as the sign-in routing and the navigation (platformAccess), so what the menu offers and what the route allows cannot drift.
+  if (!platformAccess(account.role, facts).studyBuddy) {
     logOutcome(event, "no_access");
     return { ok: false, response: refuse("no_access") };
   }

@@ -1,6 +1,6 @@
-import { destroySession } from "@/lib/auth/session";
+import { signOutEverywhere } from "@/lib/access/signout";
 
 export async function POST() {
-  await destroySession();
+  await signOutEverywhere();
   return Response.json({ ok: true });
 }

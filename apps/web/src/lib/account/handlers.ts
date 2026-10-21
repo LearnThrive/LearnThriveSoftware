@@ -1,10 +1,11 @@
+import { destinationFor, platformAccess, type AccessFacts } from "@learnthrive/data/library";
 import { asString } from "@/lib/forms-common";
 import { humanCheckAvailable, verifyHumanCheck } from "@/lib/human-check";
 import { SlidingWindowLimiter, clientAddress } from "@/lib/rate-limit";
 import { jsonResponse, logOutcome, originAllowed, readBodyLimited } from "@/lib/request-guards";
 import { siteConfig } from "@/lib/site";
 import type { AccountRuntime } from "./runtime";
-import { ACCESS_COOKIE, REFRESH_COOKIE, clearSessionCookies, forgetAccessToken, renewSession, setSessionCookies, type CookieJar } from "./session";
+import { ACCESS_COOKIE, REFRESH_COOKIE, clearSessionCookies, forgetAccessToken, renewSession, safeNextPath, setSessionCookies, type CookieJar } from "./session";
 import { NAME_MAX, emailError, parseDisplayName, parseEmail, parseSignIn, parseSignUp, parseTokenHash, passwordError, validateSignUp } from "./validation";
 import type { EmailLinkKind } from "./types";
 
@@ -45,6 +46,10 @@ export interface Deps {
   rt: AccountRuntime | null;
   jar: CookieJar;
   env?: Record<string, string | undefined>;
+  /** Whether Study Buddy is open (the assistant is configured and approved): where a Library subscriber lands. Default closed. */
+  studyBuddyOpen?: boolean;
+  /** Whether the signed-in app (dashboard) is open: false in production until the portal opens. Default open. */
+  dashboardOpen?: boolean;
 }
 
 type Gate = { ok: true; rt: AccountRuntime; body: Record<string, unknown>; address: string } | { ok: false; response: Response };
@@ -140,6 +145,23 @@ async function shownName(rt: AccountRuntime, user: { id: string; displayName: st
   }
 }
 
+/**
+ * Where a person goes after signing in: the page they asked for (`next`, reduced to a path on this site) if their access includes it,
+ * otherwise their home: the dashboard for staff and enrolled families, Study Buddy (or the Library) for a subscriber, the account page
+ * for someone with nothing yet. The one rule, `destinationFor`, is the same one the navigation and the assistant's routes use.
+ * If their access cannot be read, the page asked for or the account page: signing in never fails over this.
+ */
+async function destinationAfterSignIn(rt: AccountRuntime, profileId: string, requested: string, deps: Deps): Promise<string> {
+  try {
+    const account = await rt.store.accounts.getAccount(profileId);
+    if (!account) return requested || "/account";
+    const facts: AccessFacts = account.clientId ? await rt.store.access.facts(account.clientId) : { enrolled: false, subscription: false, adminGrant: false };
+    return destinationFor(platformAccess(account.role, facts), requested, { studyBuddyOpen: deps.studyBuddyOpen ?? false, dashboardOpen: deps.dashboardOpen ?? true });
+  } catch {
+    return requested || "/account";
+  }
+}
+
 export async function handleSignIn(request: Request, deps: Deps): Promise<Response> {
   const gate = await open(request, deps, "account-signin");
   if (!gate.ok) return gate.response;
@@ -158,12 +180,14 @@ export async function handleSignIn(request: Request, deps: Deps): Promise<Respon
     if (result.reason === "email_not_confirmed") {
       return jsonResponse(403, { code: "email_not_confirmed", error: "Please confirm your email address first. We sent you a link when you created the account." });
     }
+    if (result.reason === "account_disabled") return jsonResponse(403, { code: "account_disabled", error: `This account has been disabled. ${FALLBACK}` });
     return jsonResponse(401, { error: "Email or password is not right." });
   }
   lockout.recordSuccess(email);
   setSessionCookies(deps.jar, result.tokens, deps.env ?? process.env);
   logOutcome("account-signin", "ok");
-  return jsonResponse(200, { success: true, user: { displayName: await shownName(gate.rt, result.user) } });
+  const next = await destinationAfterSignIn(gate.rt, result.user.id, safeNextPath(asString(gate.body.next), ""), deps);
+  return jsonResponse(200, { success: true, user: { displayName: await shownName(gate.rt, result.user) }, next });
 }
 
 export async function handleSignOut(request: Request, deps: Deps): Promise<Response> {

@@ -16,6 +16,9 @@ import { navigation } from "@/lib/site";
 interface SiteHeaderSession {
   name: string;
   role: string;
+  /** Where "their place" is: the dashboard for staff and enrolled families, Study Buddy or the Library for a subscriber, the account page otherwise. */
+  home: string;
+  homeLabel: string;
 }
 
 export function SiteHeader() {
@@ -50,9 +53,9 @@ export function SiteHeader() {
     let cancelled = false;
     fetch("/api/auth/session")
       .then((response) => (response.ok ? response.json() : null))
-      .then((data: { signedIn?: boolean; name?: string; role?: string } | null) => {
+      .then((data: { signedIn?: boolean; name?: string; role?: string; home?: string; homeLabel?: string } | null) => {
         if (cancelled || !data?.signedIn || !data.name || !data.role) return;
-        setSession({ name: data.name, role: data.role });
+        setSession({ name: data.name, role: data.role, home: data.home ?? "/dashboard", homeLabel: data.homeLabel ?? "Dashboard" });
       })
       .catch(() => { /* signed-out is the safe assumption, and the default already shown */ });
     return () => { cancelled = true; };
@@ -185,14 +188,14 @@ export function SiteHeader() {
             })}
           </nav>
           {/* Someone already signed in has no use for a "Login" link — send them to their
-              dashboard instead (plan6 sections 14 and 78). */}
+              place instead (plan6 sections 14 and 78): the dashboard, or Study Buddy for a Library member. */}
           {session ? (
             <Link
-              href="/dashboard"
+              href={session.home}
               className="header-login"
               onClick={() => setOpen(false)}
             >
-              Dashboard
+              {session.homeLabel}
               <span className="header-login__who">{session.name.split(" ")[0]}</span>
             </Link>
           ) : PORTAL_ENABLED ? (

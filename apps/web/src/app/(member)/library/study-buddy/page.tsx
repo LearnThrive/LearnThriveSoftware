@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { platformAccess } from "@learnthrive/data/library";
 import { StudyBuddyLoader } from "@/components/study-buddy/StudyBuddyLoader";
 import { requireAccountPage } from "@/lib/account/pages";
 import { assistantClosed } from "@/lib/assistant/runtime";
@@ -20,8 +21,7 @@ export default async function StudyBuddyPage() {
     notFound();
   }
   const facts = account.clientId ? await rt.store.access.facts(account.clientId) : { enrolled: false, subscription: false, adminGrant: false };
-  const allowed = account.role === "ADMIN" || facts.enrolled || facts.subscription || facts.adminGrant;
-  if (!allowed) {
+  if (!platformAccess(account.role, facts).studyBuddy) {
     return (
       <main id="main-content" className={styles.center}>
         <div>

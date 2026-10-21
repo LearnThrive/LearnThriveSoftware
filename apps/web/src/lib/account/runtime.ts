@@ -1,5 +1,7 @@
 import { InMemoryLibraryStore, SqlLibraryStore, type LibraryStore } from "@learnthrive/data/library";
 import { createExecutor } from "@/lib/db";
+import { isDevelopmentBuild } from "@/lib/dev/accounts";
+import { seedDevAccounts } from "@/lib/dev/seedAccounts";
 import { MemoryAccountAuth } from "./memoryAuth";
 import { SupabaseAccountAuth } from "./supabaseAuth";
 import { SignInLockout } from "./lockout";
@@ -34,15 +36,14 @@ export interface AccountRuntime {
 }
 
 // Same Fast Refresh reasoning as lib/auth/devProvider.ts: a plain module-level value would reset on every edit.
-const g = globalThis as unknown as { __learnthriveAccount?: AccountRuntime };
+// `init` holds the in-flight creation, so two requests arriving together (a layout and its page both asking) share ONE runtime: building
+// it awaits (the database connection, the development accounts' password hashes), and a second runtime would orphan every session the
+// first one issued.
+const g = globalThis as unknown as { __learnthriveAccount?: AccountRuntime; __learnthriveAccountInit?: Promise<AccountRuntime> };
 
-export async function accountRuntime(env: Env = process.env): Promise<AccountRuntime | null> {
-  if (g.__learnthriveAccount) return g.__learnthriveAccount;
-  const backend = accountBackend(env);
-  if (backend === "off") return null;
-  let runtime: AccountRuntime;
+async function create(backend: Exclude<AccountBackend, "off">, env: Env): Promise<AccountRuntime> {
   if (backend === "supabase") {
-    runtime = {
+    return {
       backend,
       auth: new SupabaseAccountAuth({ url: env.SUPABASE_URL!, anonKey: env.SUPABASE_ANON_KEY! }),
       store: new SqlLibraryStore((await createExecutor(env.DATABASE_URL!)).executor),
@@ -50,16 +51,31 @@ export async function accountRuntime(env: Env = process.env): Promise<AccountRun
       outbox: null,
       memory: null,
     };
-  } else {
-    const memory = new InMemoryLibraryStore();
-    const auth = new MemoryAccountAuth({ onUserCreated: (user) => memory.seedProfile({ id: user.id, displayName: user.displayName, adultConfirmed: true, email: user.email }) });
-    runtime = { backend, auth, store: memory, lockout: new SignInLockout(), outbox: auth.outbox, memory };
   }
-  g.__learnthriveAccount = runtime;
-  return runtime;
+  const memory = new InMemoryLibraryStore();
+  const auth = new MemoryAccountAuth({ onUserCreated: (user) => memory.seedProfile({ id: user.id, displayName: user.displayName, adultConfirmed: true, email: user.email }) });
+  // A local dev server also has the development accounts (lib/dev/accounts.ts) behind this same sign-in, so one login page serves
+  // every kind of person. Tests that build their own runtime (NODE_ENV unset) get none: they start empty.
+  if (isDevelopmentBuild(env)) await seedDevAccounts(auth, memory);
+  return { backend, auth, store: memory, lockout: new SignInLockout(), outbox: auth.outbox, memory };
+}
+
+export async function accountRuntime(env: Env = process.env): Promise<AccountRuntime | null> {
+  if (g.__learnthriveAccount) return g.__learnthriveAccount;
+  const backend = accountBackend(env);
+  if (backend === "off") return null;
+  g.__learnthriveAccountInit ??= create(backend, env).then(
+    (runtime) => (g.__learnthriveAccount = runtime),
+    (error) => {
+      delete g.__learnthriveAccountInit; // a failed start (database down) is retried by the next request, not remembered
+      throw error;
+    },
+  );
+  return g.__learnthriveAccountInit;
 }
 
 /** For tests: forget the singleton. */
 export function resetAccountRuntime(): void {
   delete g.__learnthriveAccount;
+  delete g.__learnthriveAccountInit;
 }
