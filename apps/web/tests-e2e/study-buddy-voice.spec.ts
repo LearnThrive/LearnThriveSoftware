@@ -1,4 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { hydrated } from './careers-support';
 import { address, confirm, distinctVisitor, expectAxeClean, signUp } from './account-support';
 
@@ -8,9 +11,33 @@ import { address, confirm, distinctVisitor, expectAxeClean, signUp } from './acc
 
 distinctVisitor();
 
+// Chromium's default fake microphone only beeps now and then, which can fall outside a short recording on a busy machine. A steady tone
+// in a WAV file is looped instead, so every recording has sound in it.
+function toneFile(): string {
+  const rate = 16000;
+  const samples = rate * 2;
+  const wav = Buffer.alloc(44 + samples * 2);
+  wav.write('RIFF', 0);
+  wav.writeUInt32LE(36 + samples * 2, 4);
+  wav.write('WAVEfmt ', 8);
+  wav.writeUInt32LE(16, 16);
+  wav.writeUInt16LE(1, 20);
+  wav.writeUInt16LE(1, 22);
+  wav.writeUInt32LE(rate, 24);
+  wav.writeUInt32LE(rate * 2, 28);
+  wav.writeUInt16LE(2, 32);
+  wav.writeUInt16LE(16, 34);
+  wav.write('data', 36);
+  wav.writeUInt32LE(samples * 2, 40);
+  for (let i = 0; i < samples; i += 1) wav.writeInt16LE(Math.round(0.4 * 32767 * Math.sin((2 * Math.PI * 440 * i) / rate)), 44 + i * 2);
+  const file = join(mkdtempSync(join(tmpdir(), 'lt-mic-')), 'tone.wav');
+  writeFileSync(file, wav);
+  return file;
+}
+
 test.use({
   permissions: ['microphone'],
-  launchOptions: { args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] },
+  launchOptions: { args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-audio-capture=${toneFile()}`] },
 });
 
 async function ready(page: Page) {

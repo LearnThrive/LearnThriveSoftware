@@ -1,4 +1,5 @@
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
 
 /**
@@ -57,7 +58,15 @@ export class DiskLibraryStorage implements LibraryStorage {
     const full = this.locate(path);
     if (!full) throw new Error("unsafe storage path");
     await mkdir(dirname(full), { recursive: true });
-    await writeFile(full, bytes);
+    // Written beside and renamed over, so a reader (another request, another test worker) never sees a half-written file.
+    const temp = `${full}.${randomUUID()}.tmp`;
+    await writeFile(temp, bytes);
+    try {
+      await rename(temp, full);
+    } catch {
+      await rm(temp, { force: true });
+      await writeFile(full, bytes);
+    }
   }
   async read(path: string): Promise<Uint8Array | null> {
     const full = this.locate(path);
