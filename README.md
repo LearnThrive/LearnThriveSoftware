@@ -32,6 +32,26 @@ Open **`http://localhost:3000`** — that one origin serves the public site, the
 
 Under the hood, `npm run dev` runs `apps/web`'s own `dev` script, `tsx server.ts` — a custom Node HTTP server that hosts Next.js's request handler and an attached Socket.IO server side by side (see `docs/ARCHITECTURE.md`). There is no second process, no second port, and nothing else to start manually: the classroom's real-time signalling logic (`apps/realtime/server/signalling.ts`, unchanged) is imported as a library and wired to that same server, and its React UI (`apps/web/src/features/classroom/`, ported from the original `apps/classroom`) is lazy-loaded only when a Lesson's classroom route is actually opened.
 
+### Study Buddy's model and voice (Docker)
+
+`npm run dev` also starts, before the site, the two services Study Buddy needs, in Docker ([config/compose.yaml](config/compose.yaml), started by [scripts/dev-services.mjs](scripts/dev-services.mjs)):
+
+| Service | Address | What it is |
+| --- | --- | --- |
+| `ollama` | `http://127.0.0.1:11434` | the local language model (`ollama/ollama:0.35.0`, on the GPU). It uses the models already downloaded on this machine (`OLLAMA_MODELS`, here `D:\OllamaModels`); the default model is fetched once if missing |
+| `voice` | `http://127.0.0.1:8765` | the speech sidecar (`services/voice/Dockerfile`: Whisper `small.en` on the GPU, Piper voices from `services/voice/models`) |
+
+It needs Docker Desktop running with GPU support (WSL 2 and an NVIDIA driver), and the Piper voices downloaded once ([docs/VOICE.md](docs/VOICE.md)). Without Docker, or if a service fails, the site still starts and Study Buddy says it is unavailable. A service already running outside Docker (the Ollama app, `npm run voice:dev`) is used instead of starting a second one. The services keep running when the site stops:
+
+```bash
+npm run services:up        # start or check them without the site
+npm run services:logs      # follow their logs
+npm run services:down      # stop them
+npm run services:rebuild   # after changing services/voice
+```
+
+Loading the model through the Windows folder mount takes about 85 s the first time; it then stays loaded for 30 minutes. `LEARNTHRIVE_DOCKER=0` skips all of this (the Playwright servers set it), and so do `ASSISTANT_PROVIDER=mock` with `VOICE_PROVIDER=mock`.
+
 Joining a classroom happens from a Lesson — `/dashboard/lessons/:id` → **Join Classroom** → `/dashboard/lessons/:id/classroom` — never a separate site. A `/dev/classroom` route (hidden from all navigation, 404s outside development) retains the original manual name/room-code entry form for local debugging and is what `apps/classroom`'s own Playwright suite still drives.
 
 ## The retired standalone classroom

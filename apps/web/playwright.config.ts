@@ -36,7 +36,7 @@ export default defineConfig({
     // plan15 Wave 3: the theme toggle and dark theme are behind this flag (src/lib/theme.ts).
     // CAREERS_OPEN_FOR_TESTING opens the application and reconfirmation forms while the safeguarding agreement is
     // still a draft (lib/careers-config.ts). It is ignored by a production build, so `next start` never honours it.
-    env: { NEXT_PUBLIC_THEME_TOGGLE: '1', CAREERS_OPEN_FOR_TESTING: '1' },
+    env: { NEXT_PUBLIC_THEME_TOGGLE: '1', CAREERS_OPEN_FOR_TESTING: '1', LEARNTHRIVE_DOCKER: '0' },
     url: 'http://localhost:3100',
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
@@ -44,7 +44,7 @@ export default defineConfig({
   },
   {
     command: 'npm run dev -- -p 3101',
-    env: { NEXT_PUBLIC_THEME_TOGGLE: '1', CAREERS_OPEN_FOR_TESTING: '1', LIBRARY_PHASE: 'enrolled', NEXT_DIST_DIR: '.next-3101', ASSISTANT_PROVIDER: 'mock', VOICE_PROVIDER: 'mock', ASSISTANT_DAILY_MESSAGES: '200', ASSISTANT_PER_MINUTE: '60' },
+    env: { NEXT_PUBLIC_THEME_TOGGLE: '1', CAREERS_OPEN_FOR_TESTING: '1', LEARNTHRIVE_DOCKER: '0', LIBRARY_PHASE: 'enrolled', NEXT_DIST_DIR: '.next-3101', ASSISTANT_PROVIDER: 'mock', VOICE_PROVIDER: 'mock', ASSISTANT_DAILY_MESSAGES: '200', ASSISTANT_PER_MINUTE: '60' },
     url: 'http://localhost:3101',
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
@@ -55,6 +55,8 @@ export default defineConfig({
     // checkout needs. The keys and secrets here are made-up test values, not credentials.
     command: 'npm run dev -- -p 3102',
     env: {
+      // No e2e server needs the real model or voice (Study Buddy's specs use the mock): Docker's services are not started for them.
+      LEARNTHRIVE_DOCKER: '0',
       NEXT_PUBLIC_THEME_TOGGLE: '1',
       CAREERS_OPEN_FOR_TESTING: '1',
       NEXT_DIST_DIR: '.next-3102',

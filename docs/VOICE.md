@@ -56,11 +56,13 @@ uv sync
 uv run python -m piper.download_voices --download-dir models en_GB-alba-medium
 ```
 
-Then, in two terminals:
+Then `npm run dev` starts the sidecar in Docker (the `voice` service in `config/compose.yaml`, built from `services/voice/Dockerfile`, with the voices mounted from `services/voice/models`) beside the model, and then the site; see the README. The only one-time step is downloading the voices above (with `uv`; Docker itself does not need `uv sync`). Measured through Docker on the same laptop: every one of five questions heard correctly, end of speech to first spoken answer 2.6 to 3.0 s with the model loaded (2.55 s median without Docker), the GPU holding the model and the recogniser together (7.5 of 8 GB).
+
+Without Docker, in two terminals:
 
 ```bash
 cd apps/web && npm run voice:dev     # the sidecar on http://127.0.0.1:8765 (loads in a few seconds; its first line says which recogniser it chose)
-cd apps/web && npm run dev           # the site; ASSISTANT_PROVIDER=ollama as for Study Buddy
+cd apps/web && npm run dev           # the site; it uses the sidecar already running instead of starting the Docker one
 ```
 
 | Variable | Meaning | Default |

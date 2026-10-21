@@ -20,7 +20,7 @@ The system prompt is hints-first: it guides, asks the pupil to try the next step
 
 ## Running it on your machine (development)
 
-Needs [Ollama](https://ollama.com) with the models in the benchmark, the Supabase-or-in-memory store the rest of the Library uses, and a Library account with access (`npm run library:grant`, or the dev seed at `/api/dev/library-seed`).
+Needs the model on Ollama, the Supabase-or-in-memory store the rest of the Library uses, and a Library account with access (`npm run library:grant`, or the dev seed at `/api/dev/library-seed`). With Docker Desktop running, `npm run dev` starts Ollama in Docker (and the voice sidecar), fetches `qwen3.5:9b` (about 6.6 GB) if it is missing, then starts the site; see the README. Without Docker, run the [Ollama](https://ollama.com) app yourself:
 
 ```bash
 ollama pull qwen3.5:9b        # the default text model, about 6.6 GB
