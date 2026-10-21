@@ -63,6 +63,10 @@ For `cuda` on Windows: `uv pip install nvidia-cublas-cu12 nvidia-cudnn-cu12` in 
 - Echo: a speaker next to the microphone. The browser's echo cancellation is requested but not measured; pressing Talk interrupts the voice, which is the safeguard.
 - A hosted speech provider for production: none chosen.
 
+## Licences to review before any production use
+
+The sidecar's speech output uses `piper-tts`, which is **GPL-3.0-or-later**, and the benchmark's Kokoro option pulls in GPL parts (`phonemizer`, espeak-ng). Running them as a separate local development program is not the same as shipping or hosting them in a product. The owner needs advice before any of it is used outside a developer's machine, and each Piper voice has its own licence (see its model card). The full list is in `apps/web/THIRD_PARTY_NOTICES.md`. Whisper (MIT) and faster-whisper (MIT) have no such issue.
+
 ## Deviations from the plan
 
 - One WAV per utterance instead of a stream of chunks: push-to-talk utterances are a few seconds, and recognition is quick enough (see the benchmark) that streaming chunks would add complexity without a measured gain.
