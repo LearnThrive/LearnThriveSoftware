@@ -13,6 +13,7 @@ const map = loadTsFrom(import.meta.url, "../src/lib/billing/mapper.ts");
 const mail = loadTsFrom(import.meta.url, "../src/lib/billing/emails.ts");
 const events = loadTsFrom(import.meta.url, "../src/lib/billing/events.ts");
 const consumer = loadTsFrom(import.meta.url, "../src/lib/billing/consumer.ts");
+const { consentHash } = loadTsFrom(import.meta.url, "../src/lib/billing/consent.ts");
 const h = loadTsFrom(import.meta.url, "../src/lib/billing/handlers.ts");
 const session = loadTsFrom(import.meta.url, "../src/lib/account/session.ts");
 const { MemoryAccountAuth } = loadTsFrom(import.meta.url, "../src/lib/account/memoryAuth.ts");
@@ -486,8 +487,8 @@ test("checkout: a signed-in adult who ticked the box is sent to Stripe's own pag
   assert.equal(asked.consentVersion, consumer.CONSENT_VERSION);
   const consents = w.store.consents();
   assert.equal(consents.length, 1);
-  assert.deepEqual({ ...consents[0], at: undefined, profileId: undefined }, { kind: "digital_content_waiver", version: consumer.CONSENT_VERSION, textSha256: consumer.consentHash(), at: undefined, profileId: undefined });
-  assert.equal(consumer.consentHash().length, 64);
+  assert.deepEqual({ ...consents[0], at: undefined, profileId: undefined }, { kind: "digital_content_waiver", version: consumer.CONSENT_VERSION, textSha256: consentHash(), at: undefined, profileId: undefined });
+  assert.equal(consentHash().length, 64);
 
   await w.store.billing.linkCustomer(fam.clientId, "cus_KNOWN1");
   const annual = await (await checkout(w, fam.jar, plan({ plan: "annual" }))).json();
