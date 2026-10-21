@@ -1,0 +1,134 @@
+# The LOCAL Supabase stack (`supabase start`), for development and the real-stack tests. It contains no keys and no secrets.
+# The hosted project's settings are applied by the owner in the dashboard: docs/SUPABASE_DASHBOARD_CHECKLIST.md.
+# Only what this project uses is switched on; everything else is off so the local stack stays small.
+
+project_id = "learnthrive"
+
+[api]
+enabled = true
+port = 54321
+# public only: the private schema is never exposed, and GraphQL (graphql_public) is off.
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+health_timeout = "2m"
+# Matches the hosted project (Postgres 17).
+major_version = 17
+
+# The transaction pooler, so the site's `prepare: false` connection is tried the way production uses it (Supavisor, 6543 there).
+[db.pooler]
+enabled = true
+port = 54329
+pool_mode = "transaction"
+default_pool_size = 20
+max_client_conn = 100
+
+[db.migrations]
+enabled = true
+schema_paths = []
+
+[db.seed]
+enabled = false
+
+[realtime]
+enabled = false
+
+[studio]
+enabled = true
+port = 54323
+api_url = "http://127.0.0.1"
+
+# Local mail catcher: sign-up and reset messages land here (http://127.0.0.1:54324), never in a real inbox.
+[local_smtp]
+enabled = true
+port = 54324
+
+# Buckets are created by migration 0007 (so the hosted project gets them from the same file), not here.
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[storage.s3_protocol]
+enabled = false
+
+[storage.analytics]
+enabled = false
+
+[storage.vector]
+enabled = false
+
+[edge_runtime]
+enabled = false
+
+[analytics]
+enabled = false
+
+[auth]
+enabled = true
+# The site's own origin (it must be localhost, not 127.0.0.1: see apps/web/playwright.config.ts).
+site_url = "http://localhost:3000"
+# Exactly the pages an emailed link opens (no wildcards).
+additional_redirect_urls = ["http://localhost:3000/account/confirm", "http://localhost:3000/account/reset"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+# Open sign-ups: families create their own accounts (the owner's choice is recorded in the dashboard checklist).
+enable_signup = true
+enable_anonymous_sign_ins = false
+enable_manual_linking = false
+minimum_password_length = 12
+password_requirements = "lower_upper_letters_digits"
+
+[auth.rate_limit]
+# Local only, so the real-stack tests can create several users; the hosted limits are in the dashboard checklist.
+email_sent = 200
+sign_in_sign_ups = 200
+token_verifications = 200
+token_refresh = 300
+anonymous_users = 0
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+# A person cannot sign in until the address is confirmed.
+enable_confirmations = true
+secure_password_change = true
+max_frequency = "1s"
+otp_length = 6
+otp_expiry = 3600
+
+# The links open the site's own confirm page with the one-time token, which the page spends with a button press (a POST),
+# so a mail scanner opening the link cannot use it up (docs/AUTHENTICATION.md).
+[auth.email.template.confirmation]
+subject = "Confirm your LearnThrive email address"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Reset your LearnThrive password"
+content_path = "./supabase/templates/recovery.html"
+
+# No phone sign-in, no multi-factor for families, no social login, no third-party identity providers.
+[auth.sms]
+enable_signup = false
+enable_confirmations = false
+
+[auth.mfa.totp]
+enroll_enabled = false
+verify_enabled = false
+
+[auth.mfa.phone]
+enroll_enabled = false
+verify_enabled = false
+
+[auth.external.apple]
+enabled = false
+
+[auth.web3.solana]
+enabled = false
+
+[auth.oauth_server]
+enabled = false

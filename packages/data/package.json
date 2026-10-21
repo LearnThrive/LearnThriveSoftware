@@ -14,6 +14,7 @@
     "./library": "./src/library/index.ts"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "0.5.10"
+    "@electric-sql/pglite": "0.5.10",
+    "postgres": "3.4.9"
   }
 }
