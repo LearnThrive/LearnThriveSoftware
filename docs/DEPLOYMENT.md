@@ -44,7 +44,7 @@ The flag is a build-time value (`NEXT_PUBLIC_*`), so changing it means rebuildin
 
 `LIBRARY_ENABLED=true` (a server variable, read on each request; anything but exactly `true` is closed) opens **only** the account and Library routes in production while everything above stays closed. `decide()` in `src/lib/portal.ts` is the one place that says which, and `tests/portal.test.mjs` pins it:
 
-- Opened: `/login` (it redirects to `/account/sign-in`), `/account/**`, `/library/**`, and `/api/account/**`, `/api/library/**`, `/api/billing/**` (the Stripe webhook needs no cookie) and `/api/assistant/**`. All of them are `noindex`.
+- Opened: `/login` (the one sign-in; `/account/sign-in` redirects to it), `/account/**`, `/library/**`, and `/api/account/**`, `/api/library/**`, `/api/billing/**` (the Stripe webhook needs no cookie) and `/api/assistant/**`. All of them are `noindex`.
 - Still closed: `/dashboard/**`, `/403`, `/api/auth/**`, `/api/lessons/**`, the classroom, `/dev/**` and `/api/dev/**`.
 - It fails closed twice over. With the flag on but **no Supabase settings**, the account routes answer 503 ("Accounts are not open yet"), `/account` is a 404, and nothing is signed in. The in-memory account backend that development uses refuses to run when `NODE_ENV=production`.
 - Before setting it: Supabase is created and the migrations applied (`docs/SUPABASE_MIGRATION.md`), the Supabase Auth settings in `docs/AUTHENTICATION.md` are made, and the gates in `plan19.md` section 6 are done. `tests-prod/library-enabled.spec.ts` checks the closed-backend state on a production build.
