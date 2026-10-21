@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { VoiceState } from "@/components/ui/VoiceOrb";
 import { TARGET_RATE, encodeWav16k, peak, resampleTo16k } from "@/lib/assistant/audio";
-import { speechChunks, toSpeech } from "@/lib/assistant/speech";
+import { settledPrefix, speechChunks, speechChunksPartial, toSpeech } from "@/lib/assistant/speech";
 
 /**
  * Voice mode in the browser (plan19 phase G): push-to-talk capture with an AudioWorklet, the recording sent to /api/assistant/voice/transcribe
- * as a 16 kHz mono WAV, and the answer spoken a sentence or two at a time (first audio as soon as the first chunk is ready).
+ * as a 16 kHz mono WAV, and the answer spoken a sentence or two at a time AS IT STREAMS IN (first audio as soon as the first sentence has settled).
  *
  * Privacy and behaviour, each deliberate:
  * - the microphone is asked for only when the student presses Talk, and every track is stopped the moment they finish or cancel;
@@ -22,6 +22,12 @@ const MIN_RECORDING_MS = 400;
 
 type Say = (message: string) => void;
 
+export interface Speaker {
+  push: (markdownSoFar: string) => void;
+  end: (markdown: string) => void;
+  cancel: () => void;
+}
+
 export interface VoiceControls {
   state: VoiceState;
   /** What was heard (or typed over it), shown in the voice panel. */
@@ -33,10 +39,8 @@ export interface VoiceControls {
   stop: () => void;
   /** Abandons whatever voice mode is doing (listening, transcribing or speaking). */
   cancel: () => void;
-  /** Reads an answer aloud. Resolves when it has finished or was interrupted. */
-  speak: (markdown: string) => Promise<void>;
-  /** The state while the model is working out an answer to a spoken question. */
-  setThinking: (thinking: boolean) => void;
+  /** Starts reading an answer aloud as it arrives: push the text so far, then end it with the whole answer (or cancel). */
+  beginSpeaking: () => Speaker;
 }
 
 export function useVoice(onProblem: Say): VoiceControls {
@@ -136,49 +140,88 @@ export function useVoice(onProblem: Say): VoiceControls {
     }
   }, [finish, release, stopSpeaking]);
 
-  const speak = useCallback(
-    async (markdown: string) => {
-      const chunks = speechChunks(toSpeech(markdown));
-      if (chunks.length === 0) return;
-      stopSpeaking();
-      const mine = playback.current.generation;
-      const live = () => playback.current.generation === mine;
-      setState("speaking");
-      const context = (playback.current.context ??= new AudioContext());
-      await context.resume().catch(() => undefined);
-      const fetchClip = async (text: string): Promise<AudioBuffer | null> => {
-        try {
-          const response = await fetch("/api/assistant/voice/speak", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
-          if (!response.ok) return null;
-          return await context.decodeAudioData(await response.arrayBuffer());
-        } catch {
-          return null;
-        }
-      };
-      // The next clip is fetched while the current one plays.
-      let next: Promise<AudioBuffer | null> = fetchClip(chunks[0]!);
-      for (let i = 0; i < chunks.length && live(); i += 1) {
-        const clip = await next;
-        if (i + 1 < chunks.length) next = fetchClip(chunks[i + 1]!);
-        if (!live()) break;
-        if (!clip) {
-          // The speech service is not there: the device's own voice reads the rest.
-          await speakOnDevice(chunks.slice(i), live);
+  const beginSpeaking = useCallback((): Speaker => {
+    stopSpeaking();
+    const mine = playback.current.generation;
+    const live = () => playback.current.generation === mine;
+    const controller = new AbortController();
+    const texts: string[] = [];
+    const clips: Array<Promise<AudioBuffer | null>> = [];
+    let finished = false;
+    let wake: (() => void) | null = null;
+    const context = (playback.current.context ??= new AudioContext());
+    void context.resume().catch(() => undefined);
+    setState("thinking");
+
+    const fetchClip = async (text: string): Promise<AudioBuffer | null> => {
+      try {
+        const response = await fetch("/api/assistant/voice/speak", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }), signal: controller.signal });
+        if (!response.ok) return null;
+        return await context.decodeAudioData(await response.arrayBuffer());
+      } catch {
+        return null;
+      }
+    };
+    const enqueue = (chunk: string) => {
+      texts.push(chunk);
+      clips.push(fetchClip(chunk)); // fetched at once, so the next clip is ready while this one plays
+      wake?.();
+    };
+
+    void (async () => {
+      let at = 0;
+      for (;;) {
+        if (!live()) return controller.abort();
+        if (at < clips.length) {
+          const clip = await clips[at]!;
+          if (!live()) return controller.abort();
+          if (!clip) {
+            // The speech service is not there: the device's own voice reads the rest.
+            setState("speaking");
+            await speakOnDevice(texts.slice(at), live);
+            break;
+          }
+          setState("speaking");
+          await new Promise<void>((resolve) => {
+            const source = context.createBufferSource();
+            source.buffer = clip;
+            source.connect(context.destination);
+            source.onended = () => resolve();
+            playback.current.source = source;
+            source.start();
+          });
+          at += 1;
+        } else if (finished) {
           break;
+        } else {
+          await new Promise<void>((resolve) => (wake = resolve));
+          wake = null;
         }
-        await new Promise<void>((resolve) => {
-          const source = context.createBufferSource();
-          source.buffer = clip;
-          source.connect(context.destination);
-          source.onended = () => resolve();
-          playback.current.source = source;
-          source.start();
-        });
       }
       if (live()) setState("idle");
-    },
-    [stopSpeaking],
-  );
+    })();
+
+    return {
+      // The answer so far: whole sentences are spoken as they settle, the rest waits.
+      push: (markdownSoFar) => {
+        if (!live() || finished) return;
+        const { ready } = speechChunksPartial(toSpeech(settledPrefix(markdownSoFar)));
+        for (const chunk of ready.slice(texts.length)) enqueue(chunk);
+      },
+      // The finished answer: whatever has not been spoken yet.
+      end: (markdown) => {
+        if (!live() || finished) return;
+        for (const chunk of speechChunks(toSpeech(markdown)).slice(texts.length)) enqueue(chunk);
+        finished = true;
+        wake?.();
+      },
+      cancel: () => {
+        if (live()) stopSpeaking();
+        controller.abort();
+        setState("idle");
+      },
+    };
+  }, [stopSpeaking]);
 
   return {
     state,
@@ -187,8 +230,7 @@ export function useVoice(onProblem: Say): VoiceControls {
     start,
     stop: () => void finish(),
     cancel,
-    speak,
-    setThinking: (thinking) => setState((s) => (thinking ? "thinking" : s === "thinking" ? "idle" : s)),
+    beginSpeaking,
   };
 }
 

@@ -96,23 +96,44 @@ export function toSpeech(markdown: string): string {
 
 /**
  * Splits speech into sentences, then joins very short ones so the voice is not asked for a clip of two words. The first chunk is
- * allowed to be short (the sooner the first audio, the better); later ones are padded towards `target` characters.
+ * allowed to be short (the sooner the first audio, the better); later ones are padded towards `target` characters. `ready` are chunks
+ * that will not change however much text follows; `rest` is a remainder that later sentences may still join.
  */
-export function speechChunks(speech: string, { first = 24, target = 90, max = 300 }: { first?: number; target?: number; max?: number } = {}): string[] {
+export function speechChunksPartial(speech: string, { first = 24, target = 90, max = 300 }: { first?: number; target?: number; max?: number } = {}): { ready: string[]; rest: string } {
   const sentences = speech.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
-  const out: string[] = [];
+  const ready: string[] = [];
   let current = "";
   for (const raw of sentences) {
     const sentence = raw.length > max ? raw.slice(0, max).replace(/\s+\S*$/, "") : raw;
-    const want = out.length === 0 ? first : target;
+    const want = ready.length === 0 ? first : target;
     current = current ? `${current} ${sentence}` : sentence;
     if (current.length >= want) {
-      out.push(current);
+      ready.push(current);
       current = "";
     }
   }
-  if (current) out.push(current);
-  return out;
+  return { ready, rest: current };
+}
+
+export function speechChunks(speech: string, options?: { first?: number; target?: number; max?: number }): string[] {
+  const { ready, rest } = speechChunksPartial(speech, options);
+  return rest ? [...ready, rest] : ready;
+}
+
+/**
+ * The part of an answer that is safe to speak while it is still arriving: everything up to the last sentence end that is followed by
+ * more text and is not inside an unfinished `$...$` or code fence. Anything after it may still change, so it waits.
+ */
+export function settledPrefix(markdownSoFar: string): string {
+  let cut = -1;
+  const re = /[.!?](?=\s)/g;
+  for (let m = re.exec(markdownSoFar); m; m = re.exec(markdownSoFar)) {
+    const before = markdownSoFar.slice(0, m.index + 1);
+    const dollars = (before.match(/\$/g) ?? []).length;
+    const fences = (before.match(/```/g) ?? []).length;
+    if (dollars % 2 === 0 && fences % 2 === 0) cut = m.index + 1;
+  }
+  return cut < 0 ? "" : markdownSoFar.slice(0, cut);
 }
 
 /**

@@ -139,3 +139,30 @@ test('a recording that is too short is not sent', async ({ page }) => {
   await expect(page.getByText('That was too short')).toBeVisible();
   expect(sentAudio).toEqual([]);
 });
+
+test('a long answer is read aloud sentence by sentence while it is still arriving, and closing the panel is silence', async ({ page }) => {
+  await ready(page);
+  await page.getByRole('checkbox', { name: /18 or over/ }).check();
+  await page.getByRole('button', { name: 'Talk instead' }).click();
+  const panel = page.getByRole('dialog', { name: 'Voice mode' });
+  await panel.getByRole('button', { name: 'Talk' }).click();
+  await expect(panel.getByRole('status').filter({ hasText: 'Listening' })).toBeVisible();
+  await page.waitForTimeout(1500);
+  await panel.getByRole('button', { name: 'Talk' }).click();
+  const box = panel.getByLabel(/What I heard/);
+  await expect(box).toHaveValue(/Factorise/);
+  await box.fill('[slow] go on');
+  const firstSpeech = page.waitForRequest((r) => r.url().endsWith('/api/assistant/voice/speak'));
+  await panel.getByRole('button', { name: 'Send' }).click();
+  await firstSpeech;
+  // The answer has not finished: the first sentence is already being spoken while the rest is still arriving.
+  await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
+  const spoken: string[] = [];
+  page.on('request', (r) => r.url().endsWith('/voice/speak') && spoken.push(r.postData() ?? ''));
+  // Closing the voice panel is silence, and the answer stops arriving.
+  await panel.getByRole('button', { name: 'Close' }).click();
+  await expect(page.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
+  const after = spoken.length;
+  await page.waitForTimeout(1500);
+  expect(spoken.length, 'nothing more is spoken once the panel is closed').toBe(after);
+});

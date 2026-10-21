@@ -50,3 +50,20 @@ test("the voice addendum asks for short, spoken wording", () => {
   assert.match(sp.VOICE_PROMPT_ADDENDUM, /listening/);
   assert.match(sp.VOICE_PROMPT_ADDENDUM, /four sentences/);
 });
+
+test("while an answer streams, only settled sentences are spoken, outside maths and code", () => {
+  assert.equal(sp.settledPrefix("Good question. Let us"), "Good question.");
+  assert.equal(sp.settledPrefix("No sentence end yet"), "");
+  assert.equal(sp.settledPrefix("The end is here."), "", "a final full stop with nothing after it is not settled yet");
+  assert.equal(sp.settledPrefix("Try $x = 2.5. And then"), "", "an unfinished maths span is never cut");
+  assert.equal(sp.settledPrefix("Try $x = 2.5$. And then"), "Try $x = 2.5$.");
+  assert.equal(sp.settledPrefix("```py\nprint(1). \n"), "", "an open code fence is never cut");
+
+  const text = "Okay. Let us look at this together because it is a good one. First, what do you notice? Now try";
+  const first = sp.speechChunksPartial(sp.toSpeech(sp.settledPrefix(text)));
+  assert.deepEqual(first.ready, ["Okay. Let us look at this together because it is a good one."]);
+  // More text arriving never changes a chunk that was ready.
+  const more = sp.speechChunksPartial(sp.toSpeech(sp.settledPrefix(`${text} on your own. Then tell me what you get. And`)));
+  assert.equal(more.ready[0], first.ready[0]);
+  assert.ok(more.ready.length >= first.ready.length);
+});
