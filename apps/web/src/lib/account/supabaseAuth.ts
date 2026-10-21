@@ -1,3 +1,4 @@
+import { supabaseKeyHeaders } from "../supabaseKeys";
 import type { AccountAuth, AuthTokens, AuthUser, EmailLinkKind, SignUpInput } from "./types";
 
 /**
@@ -13,7 +14,7 @@ import type { AccountAuth, AuthTokens, AuthUser, EmailLinkKind, SignUpInput } fr
 export interface SupabaseAuthConfig {
   /** For example https://abcdefgh.supabase.co */
   url: string;
-  /** The anon (publishable) key. It identifies the project; it grants nothing beyond what Auth allows anyone. */
+  /** The publishable key (sb_publishable_...) or the legacy anon JWT. It identifies the project; it grants nothing beyond what Auth allows anyone. */
   anonKey: string;
   fetch?: typeof fetch;
   timeoutMs?: number;
@@ -42,8 +43,7 @@ export class SupabaseAccountAuth implements AccountAuth {
       const response = await this.doFetch(`${this.base}${path}`, {
         method,
         headers: {
-          apikey: this.config.anonKey,
-          Authorization: `Bearer ${bearer ?? this.config.anonKey}`,
+          ...supabaseKeyHeaders(this.config.anonKey, bearer),
           ...(body ? { "Content-Type": "application/json" } : {}),
         },
         ...(body ? { body: JSON.stringify(body) } : {}),

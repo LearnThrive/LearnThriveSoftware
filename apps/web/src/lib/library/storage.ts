@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
+import { supabaseKeyHeaders } from "../supabaseKeys";
 
 /**
  * Private file storage for the Library (plan19 phase D). The bucket `library` is private: nothing in it is ever
@@ -86,7 +87,7 @@ export class DiskLibraryStorage implements LibraryStorage {
 
 export interface SupabaseStorageConfig {
   url: string;
-  /** The service role key. Server and import tool only; it bypasses every policy. Never logged, never sent to a browser. */
+  /** The secret key (sb_secret_...) or the legacy service_role JWT. Server and import tool only; it bypasses every policy. Never logged, never sent to a browser. */
   serviceRoleKey: string;
   /** The private bucket. Default `library`. */
   bucket?: string;
@@ -108,7 +109,7 @@ export class SupabaseLibraryStorage implements LibraryStorage {
   private readonly bucket: string;
 
   private headers(extra: Record<string, string> = {}): Record<string, string> {
-    return { apikey: this.config.serviceRoleKey, Authorization: `Bearer ${this.config.serviceRoleKey}`, ...extra };
+    return { ...supabaseKeyHeaders(this.config.serviceRoleKey), ...extra };
   }
 
   private encoded(path: string): string {

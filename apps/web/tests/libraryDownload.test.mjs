@@ -13,6 +13,8 @@ import { environment, quiet } from "./_routeHelpers.mjs";
 const files = loadTsFrom(import.meta.url, "../src/lib/library/files.ts");
 const mark = loadTsFrom(import.meta.url, "../src/lib/library/watermark.ts");
 const storage = loadTsFrom(import.meta.url, "../src/lib/library/storage.ts");
+// A legacy-format key (a JWT), sent as the apikey and the bearer. The new sb_secret_ format is tested below.
+const LEGACY_SVC = "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.fake-signature-svc";
 const dl = loadTsFrom(import.meta.url, "../src/lib/library/download.ts");
 const cfg = loadTsFrom(import.meta.url, "../src/lib/library-config.ts");
 const { MemoryAccountAuth } = loadTsFrom(import.meta.url, "../src/lib/account/memoryAuth.ts");
@@ -105,11 +107,11 @@ test("storage: path safety, disk containment, and the Supabase signed-URL dance"
     const out = handler(String(url));
     return out instanceof Response ? out : new Response(JSON.stringify(out.body ?? {}), { status: out.status ?? 200 });
   };
-  const sb = new storage.SupabaseLibraryStorage({ url: "https://p.supabase.co/", serviceRoleKey: "svc-key", fetch: fake((url) => (url.includes("/object/sign/") && !url.includes("token=") ? { body: { signedURL: "/object/sign/library/a/v1/q%20x.pdf?token=t" } } : new Response(new Uint8Array([7, 7])))) });
+  const sb = new storage.SupabaseLibraryStorage({ url: "https://p.supabase.co/", serviceRoleKey: LEGACY_SVC, fetch: fake((url) => (url.includes("/object/sign/") && !url.includes("token=") ? { body: { signedURL: "/object/sign/library/a/v1/q%20x.pdf?token=t" } } : new Response(new Uint8Array([7, 7])))) });
   assert.deepEqual([...(await sb.read("a/v1/q x.pdf"))], [7, 7]);
   assert.equal(calls[0].url, "https://p.supabase.co/storage/v1/object/sign/library/a/v1/q%20x.pdf");
   assert.equal(JSON.parse(calls[0].body).expiresIn, 60, "a 60 second signed URL");
-  assert.equal(calls[0].headers.Authorization, "Bearer svc-key");
+  assert.equal(calls[0].headers.Authorization, `Bearer ${LEGACY_SVC}`);
   assert.equal(calls[1].url, "https://p.supabase.co/storage/v1/object/sign/library/a/v1/q%20x.pdf?token=t");
   assert.ok(!calls[1].headers, "no key is sent with the signed URL itself");
   await sb.put("a/v1/q x.pdf", new Uint8Array([1]), "application/pdf");
