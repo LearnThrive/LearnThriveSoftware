@@ -5,6 +5,7 @@ import type { Account } from "@learnthrive/data/library";
 import { jsonResponse, logOutcome, originAllowed, parseMultipart, readBodyLimited } from "@/lib/request-guards";
 import { siteConfig } from "@/lib/site";
 import { assistantAvailability, assistantConfig } from "./config";
+import { moderateInput } from "./moderation";
 import { ADULT_ACKNOWLEDGEMENT, ADULT_ACK_VERSION } from "./prompt";
 import type { AssistantRuntime } from "./runtime";
 import { sendMessage, type ChatEvent } from "./service";
@@ -20,6 +21,7 @@ import { voiceClosed, type VoiceRuntime } from "./voice";
  *   POST   /api/assistant/files             one photo or PDF for the next question
  *   GET    /api/assistant/sessions          the family's chats
  *   GET    /api/assistant/sessions/<id>     one chat's messages
+ *   PATCH  /api/assistant/sessions/<id>     rename it: { "title": "..." } (1 to 120 characters, no personal details)
  *   DELETE /api/assistant/sessions/<id>     hide it now; the retention job removes it and its files
  *   DELETE /api/assistant/sessions          the same for every chat
  *   GET    /api/assistant/export            everything held, as JSON
@@ -186,6 +188,24 @@ export async function handleSession(request: Request, deps: AssistantDeps, sessi
   const g = await gate(request, deps, "assistant-session", { mutating: method !== "GET" });
   if (!g.ok) return g.response;
   if (!UUID.test(sessionId)) return refuse("not_found");
+  if (method === "PATCH") {
+    const body = await readBodyLimited(request, 2048);
+    let title = "";
+    if (body.ok) {
+      try {
+        const parsed = JSON.parse(new TextDecoder().decode(body.bytes)) as { title?: unknown };
+        title = typeof parsed.title === "string" ? parsed.title.replace(/\s+/g, " ").trim() : "";
+      } catch {
+        title = "";
+      }
+    }
+    if (!title || title.length > 120) return refuse("bad_request");
+    // A title is shown in the list and kept with the chat, so the same rules apply as to a message: no personal details.
+    if (moderateInput(title).action !== "allow") return jsonResponse(422, { code: "title_refused", error: "Please choose a title without personal details." }, { "Cache-Control": "no-store" });
+    const ok = await g.rt.store.chat.renameSession(g.account.clientId, sessionId, title);
+    logOutcome("assistant-session", ok ? "renamed" : "not_found");
+    return ok ? jsonResponse(200, { success: true, title }, { "Cache-Control": "no-store" }) : refuse("not_found");
+  }
   if (method === "DELETE") {
     const ok = await g.rt.store.chat.requestDeletion(g.account.clientId, sessionId, (deps.now ?? (() => new Date()))());
     logOutcome("assistant-session", ok ? "deleted" : "not_found");

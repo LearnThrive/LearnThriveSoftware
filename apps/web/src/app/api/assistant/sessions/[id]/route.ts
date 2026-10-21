@@ -15,3 +15,8 @@ export async function DELETE(request: Request, { params }: Context) {
   const { rt, jar } = await nextDeps();
   return handleSession(request, { rt, jar, assistant: assistantRuntime() }, (await params).id);
 }
+
+export async function PATCH(request: Request, { params }: Context) {
+  const { rt, jar } = await nextDeps();
+  return handleSession(request, { rt, jar, assistant: assistantRuntime() }, (await params).id);
+}

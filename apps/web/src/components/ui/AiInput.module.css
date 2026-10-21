@@ -43,6 +43,14 @@
   box-shadow: var(--shadow-2);
 }
 
+.root[data-full-width="true"] {
+  max-inline-size: none;
+}
+
+.root[data-full-width="true"] .pill {
+  inline-size: 100%;
+}
+
 .pill:has(.text:focus-visible) {
   outline: var(--focus-width) solid var(--focus-colour);
   outline-offset: var(--focus-offset);

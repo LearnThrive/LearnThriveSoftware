@@ -103,6 +103,8 @@ export interface BillingRepository {
  */
 export interface ChatRepository {
   createSession(clientId: string, options: { studentId?: string | null; title?: string }, now: Date): Promise<ChatSessionRecord>;
+  /** Renames a family's own chat (at most 120 characters). False if it is not theirs or is being deleted. */
+  renameSession(clientId: string, sessionId: string, title: string): Promise<boolean>;
   /** Newest activity first. Chats the family has deleted are already gone from this list. */
   listSessions(clientId: string): Promise<ChatSessionRecord[]>;
   /** null for another family's chat, one that does not exist, or one the family deleted. */

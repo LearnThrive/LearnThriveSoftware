@@ -55,13 +55,14 @@ function block(b: Block, i: number): ReactNode {
       return <blockquote key={i}>{inline(b.children)}</blockquote>;
     case "code":
       return (
-        <pre key={i}>
+        // Focusable, so a long line can be scrolled with the keyboard as well as by touch.
+        <pre key={i} tabIndex={0} role="group" aria-label="Code example">
           <code>{b.text}</code>
         </pre>
       );
     case "math":
       return (
-        <div key={i} className={styles.display}>
+        <div key={i} className={styles.display} tabIndex={0} role="group" aria-label="Worked maths">
           <KatexMath tex={b.tex} display />
         </div>
       );

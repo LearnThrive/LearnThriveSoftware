@@ -48,6 +48,8 @@ export interface AiInputProps {
   onTranscriptEdit?: (text: string) => void;
   /** Open the voice overlay on first render (stories and tests). */
   defaultVoiceOpen?: boolean;
+  /** Fill the available width at all times (a page's main composer), instead of growing only when used. */
+  fullWidth?: boolean;
   id?: string;
 }
 
@@ -109,6 +111,7 @@ export function AiInput({
   transcript = "",
   onTranscriptEdit,
   defaultVoiceOpen = false,
+  fullWidth = false,
   id,
 }: AiInputProps) {
   const generatedId = useId();
@@ -219,7 +222,7 @@ export function AiInput({
   const expanded = text.length > 0 || attached.length > 0 || busy || voiceOpen;
 
   return (
-    <div className={styles.root} data-ai-input="" data-busy={busy} data-disabled={disabled}>
+    <div className={styles.root} data-ai-input="" data-busy={busy} data-disabled={disabled} data-full-width={fullWidth || undefined}>
       {hint && <p id={hintId} className={styles.hint}>{hint}</p>}
 
       <form className={styles.pill} data-expanded={expanded} onSubmit={onFormSubmit} onMouseDown={keepFocus} aria-busy={busy}>

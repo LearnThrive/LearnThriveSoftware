@@ -65,7 +65,9 @@ test('an enrolled adult asks a question: an adult confirmation first, a streamed
   await expect(answer).toContainText('Good question');
   await expect(answer.locator('.katex')).toBeVisible();
   await expect(answer.locator('li')).toHaveCount(2);
-  await expect(answer.getByText('AI-generated, may be wrong')).toBeVisible();
+  // Every answer says it is the AI's; the fuller "AI-generated, may be wrong" notice is said once, beside the box, not on each answer.
+  await expect(answer.getByRole('heading', { name: 'Study Buddy AI' })).toBeVisible();
+  await expect(page.getByText(/Answers are AI-generated and may be wrong/)).toHaveCount(1);
   await expect(answer.getByRole('button', { name: 'Copy' })).toBeVisible();
   await expect(page.locator('article[aria-label="You"]').first()).toContainText('Factorise x^2 + 3x');
   await expect(page.getByRole('status').filter({ hasText: 'The answer is ready.' })).toHaveCount(1);
@@ -170,4 +172,106 @@ test('the screen has no horizontal scroll at 360px and talks only to this site',
   await expect(page.locator('article[aria-label="Study Buddy"]').first()).toContainText('Good question');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   expect([...hosts]).toEqual(['localhost:3101']);
+});
+
+test('chats in the sidebar: search narrows the list, rename keeps the new title, and the active chat is marked', async ({ page }) => {
+  await enrolled(page);
+  await open(page);
+  await ask(page, 'Fractions question', { first: true });
+  await expect(page.getByRole('button', { name: 'Copy' })).toBeVisible();
+  await page.locator('aside').getByRole('button', { name: 'New chat', exact: true }).first().click();
+  await ask(page, 'Photosynthesis question', { first: true });
+  await expect(page.getByRole('button', { name: 'Copy' })).toBeVisible();
+
+  const chats = page.getByRole('region', { name: 'Your chats' });
+  await chats.getByRole('searchbox', { name: 'Search your chats' }).fill('photo');
+  await expect(chats.getByRole('button', { name: 'Photosynthesis question', exact: true })).toBeVisible();
+  await expect(chats.getByRole('button', { name: 'Fractions question', exact: true })).toHaveCount(0);
+  await chats.getByRole('searchbox', { name: 'Search your chats' }).fill('');
+
+  await chats.getByRole('button', { name: 'Rename chat: Fractions question' }).click();
+  const field = chats.getByLabel('New title for Fractions question');
+  await field.fill('Adding fractions');
+  await field.press('Enter');
+  await expect(chats.getByRole('button', { name: 'Adding fractions', exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('region', { name: 'Your chats' }).getByRole('button', { name: 'Adding fractions', exact: true })).toBeVisible();
+  await page.getByRole('region', { name: 'Your chats' }).getByRole('button', { name: 'Adding fractions', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Your chats' }).getByRole('button', { name: 'Adding fractions', exact: true })).toHaveAttribute('aria-current', 'true');
+  await expect(page.locator('article[aria-label="You"]').first()).toContainText('Fractions question');
+});
+
+test('on a phone the navigation is a drawer: it opens, keeps its links and the chats, closes with Escape, and the page has one scroll', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await enrolled(page);
+  await open(page);
+  await ask(page, 'First phone question', { first: true });
+  await expect(page.getByRole('button', { name: 'Copy' })).toBeVisible();
+  const menu = page.getByRole('button', { name: 'Open menu' });
+  await menu.click();
+  const nav = page.getByRole('navigation', { name: 'Library' });
+  await expect(nav.getByRole('link', { name: 'Study Buddy' })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('region', { name: 'Your chats' }).getByRole('button', { name: 'First phone question', exact: true })).toBeVisible();
+  await expectAxeClean(page, 'study buddy, phone drawer');
+  await page.keyboard.press('Escape');
+  await expect(nav).toBeHidden();
+  await expect(menu).toBeFocused();
+  expect(await page.evaluate(() => document.documentElement.scrollHeight <= document.documentElement.clientHeight)).toBe(true);
+  const box = await page.getByLabel('Your message').boundingBox();
+  expect(box && box.y + box.height <= 844).toBe(true);
+});
+
+test('two files picked together for a new chat both reach the question (they used to land in two different chats)', async ({ page }) => {
+  await enrolled(page);
+  await open(page);
+  await page.getByRole('checkbox', { name: /18 or over/ }).check();
+  const sent = page.waitForRequest((r) => r.url().endsWith('/api/assistant/chat'));
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: /add file|file/i }).first().click();
+  await (await chooser).setFiles([
+    { name: 'one.jpg', mimeType: 'image/jpeg', buffer: JPEG },
+    { name: 'two.jpg', mimeType: 'image/jpeg', buffer: JPEG },
+  ]);
+  // Sent at once, while the second file may still be uploading: the question waits for it.
+  await page.getByLabel('Your message').fill('Are these right?');
+  await page.getByRole('button', { name: /send/i }).click();
+  const body = JSON.parse((await sent).postData()!) as { fileIds: string[]; sessionId: string | null };
+  expect(body.fileIds).toHaveLength(2);
+  expect(body.sessionId).toBeTruthy();
+  await expect(page.locator('article[aria-label="Study Buddy"]').first()).toContainText('I can see your photo.');
+  const sessions = (await (await page.request.get('/api/assistant/sessions')).json()).sessions as unknown[];
+  expect(sessions).toHaveLength(1);
+});
+
+test('reading an older message is not interrupted by a streaming answer, and "Latest" jumps back', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 600 });
+  await enrolled(page);
+  await open(page);
+  await ask(page, 'A first question', { first: true });
+  await expect(page.getByRole('button', { name: 'Copy' })).toBeVisible();
+  await ask(page, '[slow] go on');
+  const log = page.getByRole('log', { name: 'Conversation' });
+  await expect(page.locator('article[aria-label="Study Buddy"]').nth(1)).toContainText('Step 3');
+  await log.evaluate((el) => el.scrollTo({ top: 0 }));
+  await page.waitForTimeout(600);
+  expect(await log.evaluate((el) => el.scrollTop)).toBeLessThan(50);
+  await page.getByRole('button', { name: 'Latest' }).click();
+  await expect.poll(() => log.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight)).toBeLessThan(120);
+  await page.getByRole('button', { name: 'Stop' }).click();
+});
+
+test('long equations and code scroll inside the answer at 320px; the page never scrolls sideways', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await enrolled(page);
+  await open(page);
+  await ask(page, '[long] show me', { first: true });
+  const answer = page.locator('article[aria-label="Study Buddy"]').first();
+  await expect(answer.locator('.katex-display')).toBeVisible();
+  await expect(answer.locator('ol li')).toHaveCount(3);
+  await expect(answer.locator('pre')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  // The equation is wider than the screen, so its own line scrolls.
+  const display = answer.locator('.katex-display').first();
+  expect(await display.evaluate((el) => { const box = el.closest('div'); return box ? box.scrollWidth > box.clientWidth : false; })).toBe(true);
+  await expectAxeClean(page, 'study buddy, long answer at 320px');
 });

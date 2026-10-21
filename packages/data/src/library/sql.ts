@@ -368,6 +368,13 @@ export class SqlLibraryStore implements LibraryStore {
       if (!rows[0]) throw new Error("that student is not in this family");
       return toSession(rows[0]);
     },
+    renameSession: async (clientId, sessionId, title) => {
+      const rows = await this.db.query<Row>(
+        `update public.chat_sessions set title = $3 where id = $2 and client_id = $1 and deletion_requested_at is null returning id`,
+        [clientId, sessionId, title.slice(0, 120)],
+      );
+      return rows.length === 1;
+    },
     listSessions: async (clientId) => {
       const rows = await this.db.query<Row>(`select * from public.chat_sessions s where ${OWN} order by s.last_activity_at desc`, [clientId]);
       return rows.map(toSession);

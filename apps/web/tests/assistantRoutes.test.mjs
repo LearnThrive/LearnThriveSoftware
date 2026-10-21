@@ -185,6 +185,28 @@ test("uploads are rate limited per family per hour", async (t) => {
   assert.equal(limited.headers.get("retry-after"), "600");
 });
 
+test("rename: the owner renames a chat; other families, personal details, empty and long titles and cross-site requests are refused", async (t) => {
+  const w = await world(t);
+  const p = await w.person();
+  const id = (await w.chat(p, { text: "first question", adultAck: true })).events[0].sessionId;
+  const patch = (title, init = {}) => new Request(`http://localhost:3100/api/assistant/sessions/${id}`, { method: "PATCH", headers: { "content-type": "application/json", ...(init.headers ?? {}) }, body: typeof title === "string" ? JSON.stringify({ title }) : JSON.stringify(title) });
+  const ok = await h.handleSession(patch("  Fractions   homework "), w.deps(p.jar), id);
+  assert.equal(ok.status, 200);
+  assert.deepEqual(await ok.json(), { success: true, title: "Fractions homework" });
+  const list = await (await h.handleSessions(new Request("http://localhost:3100/api/assistant/sessions"), w.deps(p.jar))).json();
+  assert.equal(list.sessions[0].title, "Fractions homework");
+
+  const other = await w.person();
+  assert.equal((await h.handleSession(patch("Mine now"), w.deps(other.jar), id)).status, 404, "another family cannot rename it");
+  const personal = await h.handleSession(patch("Call me on 07700 900123"), w.deps(p.jar), id);
+  assert.equal(personal.status, 422);
+  assert.equal((await personal.json()).code, "title_refused");
+  for (const bad of ["", "   ", "x".repeat(121), { nope: 1 }]) assert.equal((await h.handleSession(patch(bad), w.deps(p.jar), id)).status, 400, JSON.stringify(bad).slice(0, 20));
+  assert.equal((await h.handleSession(patch("Nice", { headers: { origin: "https://evil.example" } }), w.deps(p.jar), id)).status, 403);
+  const after = await (await h.handleSessions(new Request("http://localhost:3100/api/assistant/sessions"), w.deps(p.jar))).json();
+  assert.equal(after.sessions[0].title, "Fractions homework", "nothing refused changed it");
+});
+
 test("sessions: listed, read, deleted at once (one or all), never across families, and exported without storage paths", async (t) => {
   const w = await world(t);
   const p = await w.person();
