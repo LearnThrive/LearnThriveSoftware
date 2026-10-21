@@ -103,6 +103,8 @@ describe("migrations", () => {
       "0004_assistant.sql",
       "0005_rls.sql",
       "0006_billing_refunds.sql",
+      "0007_storage_buckets.sql",
+      "0008_consent_withdrawal_time.sql",
     ]);
     assert.deepEqual(
       applied.map((f) => Number(f.slice(0, 4))),
@@ -137,6 +139,24 @@ describe("migrations", () => {
       q.query("select 1 from pg_class where relname in ('resource_chunks','resource_embeddings')"),
     );
     assert.equal(tables.length, 0);
+  });
+
+  test("the two storage buckets are private, limited, and no API role can touch their objects (0007)", async () => {
+    const buckets = await db.asOwner((q) => q.query(`select id, public, file_size_limit::int as limit, allowed_mime_types as mime from storage.buckets order by id`));
+    assert.deepEqual(buckets, [
+      { id: "chat-uploads", public: false, limit: 15 * 1024 * 1024, mime: ["image/jpeg", "image/png", "application/pdf"] },
+      { id: "library", public: false, limit: 25 * 1024 * 1024, mime: ["application/pdf"] },
+    ]);
+    // Re-applying restores the settings if someone changed them by hand (a bucket made public in the dashboard, say).
+    await db.asOwner((q) => q.exec(`update storage.buckets set public = true, file_size_limit = null`));
+    await db.migrate();
+    const after = await db.asOwner((q) => q.query(`select id, public from storage.buckets order by id`));
+    assert.deepEqual(after, [{ id: "chat-uploads", public: false }, { id: "library", public: false }]);
+    // Row level security stays on for the objects, and no policy exists for any role: only the service role reaches them.
+    const rls = await db.asOwner((q) => q.query(`select relrowsecurity from pg_class where oid = 'storage.objects'::regclass`));
+    assert.equal(rls[0]!.relrowsecurity, true);
+    const policies = await db.asOwner((q) => q.query(`select policyname from pg_policies where schemaname = 'storage'`));
+    assert.deepEqual(policies, []);
   });
 
   test("every table has Row Level Security enabled", async () => {
@@ -679,6 +699,17 @@ describe("profiles and family structure", () => {
     assert.deepEqual(links.filter((l) => l.student_id === f.studentIds[0]), [{ client_id: f.clientId, student_id: f.studentIds[0] }]);
     const [s] = await db.asOwner((q) => q.query("select is_minor from public.students where id = $1", [f.studentIds[0]]));
     assert.equal(s!.is_minor, true, "a student is a minor unless the server says otherwise");
+  });
+
+  test("a withdrawal is stamped with the database's clock, whatever the caller sent (0008)", async () => {
+    const f = await createFamily(db, { name: "Clock" });
+    const make = async () =>
+      (await db.asUser(f.userId, (q) => q.query<{ id: string }>("insert into public.consents (profile_id, kind, version, text_sha256) values ($1,'marketing','1',$2) returning id", [f.userId, "d".repeat(64)])))[0]!.id;
+    for (const sent of ["now() + interval '10 years'", "now() - interval '1 second'", "now()"]) {
+      const id = await make();
+      const [row] = await db.asUser(f.userId, (q) => q.query<{ ok: boolean }>(`update public.consents set withdrawn_at = ${sent} where id = $1 returning withdrawn_at between now() - interval '5 seconds' and now() + interval '5 seconds' as ok`, [id]));
+      assert.equal(row?.ok, true, `${sent}: recorded as the server's now()`);
+    }
   });
 
   test("a consent withdrawal is recorded once and cannot be edited or undone; hashes are validated", async () => {
