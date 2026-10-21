@@ -9,6 +9,7 @@ import { ADULT_ACKNOWLEDGEMENT, ADULT_ACK_VERSION } from "./prompt";
 import type { AssistantRuntime } from "./runtime";
 import { sendMessage, type ChatEvent } from "./service";
 import { UPLOAD_LIMITS, inspectChatUpload } from "./uploads";
+import { voiceClosed, type VoiceRuntime } from "./voice";
 
 /**
  * The Study Buddy routes' logic (plan19 phase F). Every one starts the same way: Origin check, the assistant open at all (the kill
@@ -31,16 +32,20 @@ export interface AssistantDeps {
   rt: AccountRuntime | null;
   jar: CookieJar;
   assistant: AssistantRuntime | null;
+  /** Only the status route needs it, to say whether the microphone button should appear. */
+  voice?: VoiceRuntime | null;
   env?: Record<string, string | undefined>;
   now?: () => Date;
 }
 
-type Reason = "unavailable" | "signed_out" | "adult_required" | "no_access" | "adult_confirmation" | "bad_request" | "too_large" | "not_found" | "too_many_files" | "rate_limited";
+export type Reason = "unavailable" | "voice_unavailable" | "bad_audio" | "signed_out" | "adult_required" | "no_access" | "adult_confirmation" | "bad_request" | "too_large" | "not_found" | "too_many_files" | "rate_limited";
 
-const STATUS: Record<Reason, number> = { unavailable: 503, signed_out: 401, adult_required: 403, no_access: 403, adult_confirmation: 422, bad_request: 400, too_large: 413, not_found: 404, too_many_files: 422, rate_limited: 429 };
+const STATUS: Record<Reason, number> = { unavailable: 503, voice_unavailable: 503, bad_audio: 422, signed_out: 401, adult_required: 403, no_access: 403, adult_confirmation: 422, bad_request: 400, too_large: 413, not_found: 404, too_many_files: 422, rate_limited: 429 };
 
 const MESSAGE: Record<Reason, string> = {
   unavailable: `Study Buddy is not available right now. Please email ${siteConfig.email} if you need help.`,
+  voice_unavailable: "Voice is not available right now. You can still type your question.",
+  bad_audio: "We could not use that recording. Please try again, or type your question.",
   signed_out: "Please sign in to use Study Buddy.",
   adult_required: "Study Buddy is for adult account holders.",
   no_access: "Study Buddy is included for enrolled students and Library subscribers.",
@@ -49,14 +54,14 @@ const MESSAGE: Record<Reason, string> = {
   too_large: "That is too large.",
   not_found: "We could not find that.",
   too_many_files: `You can attach at most ${UPLOAD_LIMITS.filesPerMessage} files to a question.`,
-  rate_limited: "Too many uploads. Please wait a little.",
+  rate_limited: "Too many requests. Please wait a little.",
 };
 
-const refuse = (reason: Reason, extra: Record<string, string> = {}) => jsonResponse(STATUS[reason], { code: reason, error: MESSAGE[reason] }, { "Cache-Control": "no-store", ...extra });
+export const refuse = (reason: Reason, extra: Record<string, string> = {}) => jsonResponse(STATUS[reason], { code: reason, error: MESSAGE[reason] }, { "Cache-Control": "no-store", ...extra });
 
-type Gate = { ok: true; rt: AccountRuntime; assistant: AssistantRuntime; account: Account & { clientId: string }; email: string } | { ok: false; response: Response };
+export type Gate = { ok: true; rt: AccountRuntime; assistant: AssistantRuntime; account: Account & { clientId: string }; email: string } | { ok: false; response: Response };
 
-async function gate(request: Request, deps: AssistantDeps, event: string, { mutating = true }: { mutating?: boolean } = {}): Promise<Gate> {
+export async function gate(request: Request, deps: AssistantDeps, event: string, { mutating = true }: { mutating?: boolean } = {}): Promise<Gate> {
   const env = deps.env ?? process.env;
   if (mutating && !originAllowed(request, env)) {
     logOutcome(event, "forbidden_origin");
@@ -113,7 +118,7 @@ ${ADULT_ACKNOWLEDGEMENT}`).digest("hex"), at: (deps.now ?? (() => new Date()))()
 
   const events = sendMessage(
     { store: g.rt.store, provider: g.assistant.provider, queue: g.assistant.queue, uploads: g.assistant.uploads, config: g.assistant.config, flag: g.assistant.flag, hosted: g.assistant.hosted, now: deps.now, log: (outcome, details) => logOutcome("assistant-chat", outcome, details) },
-    { clientId: g.account.clientId, sessionId, text, fileIds, signal: request.signal, studentId },
+    { clientId: g.account.clientId, sessionId, text, fileIds, signal: request.signal, studentId, voice: raw.voice === true },
   );
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
@@ -217,5 +222,6 @@ export async function handleStatus(request: Request, deps: AssistantDeps): Promi
   const g = await gate(request, deps, "assistant-status", { mutating: false });
   if (!g.ok) return g.response;
   const health = await g.assistant.provider.health(AbortSignal.timeout(4000)).catch(() => ({ ok: false, detail: "unreachable" }));
-  return jsonResponse(200, { open: health.ok, reason: health.ok ? null : health.detail, minorsApproved: config.minorsApproved, limits: { dailyMessages: config.dailyMessages, perMinute: config.perMinute, maxInputChars: config.maxInputChars, files: UPLOAD_LIMITS.filesPerMessage } }, { "Cache-Control": "no-store" });
+  const voice = deps.voice && !voiceClosed(env, true) ? await deps.voice.health().catch(() => false) : false;
+  return jsonResponse(200, { open: health.ok, reason: health.ok ? null : health.detail, voice, minorsApproved: config.minorsApproved, limits: { dailyMessages: config.dailyMessages, perMinute: config.perMinute, maxInputChars: config.maxInputChars, files: UPLOAD_LIMITS.filesPerMessage } }, { "Cache-Control": "no-store" });
 }

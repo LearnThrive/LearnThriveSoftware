@@ -2,6 +2,7 @@ import type { LibraryStore } from "@learnthrive/data/library";
 import type { LibraryStorage } from "@/lib/library/storage";
 import type { AssistantConfig } from "./config";
 import { OutputGuard, accountReference, moderateInput, safeguardingExcerpt, type SafeguardingKind } from "./moderation";
+import { VOICE_PROMPT_ADDENDUM } from "./speech";
 import { BLOCKED_REPLIES, OUTPUT_BLOCKED_REPLY, SAFEGUARDING_REPLY, SYSTEM_PROMPT } from "./prompt";
 import { GenerationQueue, QueueAborted, QueueFull } from "./queue";
 import { ProviderError, type ChatProvider, type ProviderMessage } from "./types";
@@ -59,6 +60,8 @@ export interface ChatInput {
   signal?: AbortSignal;
   /** The student profile this chat is for. Only an approved deployment passes one (ASSISTANT_MINORS_APPROVED). */
   studentId?: string | null;
+  /** The answer will be spoken: this turn's system prompt asks for short wording that reads well aloud (the stored answer is unchanged). */
+  voice?: boolean;
 }
 
 const MINUTE_MS = 60_000;
@@ -166,7 +169,8 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
   // The history that fits in the context window, newest kept first.
   const history = await store.chat.listMessages(input.clientId, sessionId);
   const userContent = (text || "Please look at the attached file.") + uploadedText;
-  const budgetChars = Math.max(2000, (config.contextSize - config.maxOutputTokens - approxTokens(SYSTEM_PROMPT) - approxTokens(userContent)) * 3.5);
+  const systemPrompt = input.voice ? `${SYSTEM_PROMPT}\n\n${VOICE_PROMPT_ADDENDUM}` : SYSTEM_PROMPT;
+  const budgetChars = Math.max(2000, (config.contextSize - config.maxOutputTokens - approxTokens(systemPrompt) - approxTokens(userContent)) * 3.5);
   const kept: ProviderMessage[] = [];
   let used = 0;
   for (let i = history.length - 1; i >= 0; i -= 1) {
@@ -175,7 +179,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
     if (used > budgetChars) break;
     kept.unshift({ role: m.role, content: m.content });
   }
-  const messages: ProviderMessage[] = [{ role: "system", content: SYSTEM_PROMPT }, ...kept, { role: "user", content: userContent, ...(images.length ? { images } : {}) }];
+  const messages: ProviderMessage[] = [{ role: "system", content: systemPrompt }, ...kept, { role: "user", content: userContent, ...(images.length ? { images } : {}) }];
 
   // Stored before the model runs, so a stopped or failed answer still leaves the question in the chat.
   const userMessage = await store.chat.appendMessage(input.clientId, sessionId, "user", text || "(attached a file)", now);
