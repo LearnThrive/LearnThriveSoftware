@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import type { LibraryPrices } from "@/lib/library-config";
 
 /**
@@ -20,8 +19,6 @@ export const ACKNOWLEDGEMENT = "I ask for access to start now, and I understand 
 /** Shown above the box. */
 export const COOLING_OFF_DRAFT =
   "You normally have 14 days to change your mind. The Library is digital content that starts straight away, so once you are given access you lose your right to cancel within those 14 days.";
-
-export const consentHash = (): string => createHash("sha256").update(`${CONSENT_VERSION}\n${COOLING_OFF_DRAFT}\n${ACKNOWLEDGEMENT}`).digest("hex");
 
 export type VatStatus = "registered" | "not_registered";
 
