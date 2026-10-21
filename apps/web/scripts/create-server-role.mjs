@@ -18,6 +18,7 @@
  * A database that is not on this machine needs --host <its host> AND the host typed again at a prompt (scripts/_target.mjs).
  */
 import { createHash, createHmac, pbkdf2Sync, randomBytes } from "node:crypto";
+import { pathToFileURL } from "node:url";
 import postgres from "postgres";
 import { confirmHosted, describeTarget } from "./_target.mjs";
 
@@ -59,7 +60,8 @@ export function grantStatements(verifier) {
   ];
 }
 
-if (process.argv[1] && import.meta.url === new URL(`file:///${process.argv[1].replace(/\\/g, "/")}`).href) {
+// Runs only when started directly (not when a test imports the helpers above). pathToFileURL is right on Windows and Linux alike.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const args = process.argv.slice(2);
   const url = process.env.DATABASE_ADMIN_URL?.trim();
   const password = process.env.LEARNTHRIVE_SERVER_PASSWORD ?? "";
