@@ -2,6 +2,7 @@ import http from 'node:http';
 import { parse } from 'node:url';
 import next from 'next';
 import { createSignallingServer } from '@learnthrive/realtime/signalling';
+import { applyLocalSupabaseEnv } from './src/lib/dev/localSupabase';
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = 'localhost';
@@ -13,6 +14,12 @@ if (pIndex !== -1 && process.argv[pIndex + 1]) {
   port = parseInt(process.argv[pIndex + 1], 10);
 } else if (process.env.PORT) {
   port = parseInt(process.env.PORT, 10);
+}
+
+// Development only, and only when asked for (npm run dev:supabase): point the site at the local Supabase stack, before Next starts.
+if (dev) {
+  const local = applyLocalSupabaseEnv();
+  if (local.message) console.log(local.message);
 }
 
 const app = next({ dev, hostname, port });
