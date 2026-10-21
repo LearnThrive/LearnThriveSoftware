@@ -22,7 +22,7 @@ const scheme = arg("--scheme", "light");
 const out = join(here, "..", "..", "..", "docs", "screenshots", "study-buddy", label);
 mkdirSync(out, { recursive: true });
 
-const browser = await chromium.launch();
+const browser = await chromium.launch({ args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] });
 const context = await browser.newContext({ colorScheme: scheme, permissions: ["microphone"] });
 const page = await context.newPage();
 await page.goto(`${base}/api/dev/library-seed?action=tester`);
@@ -100,8 +100,10 @@ for (const [width, height] of [[1440, 900], [390, 844]]) {
   await page.waitForLoadState("networkidle");
   const talk = page.getByRole("button", { name: /Talk instead|Voice/i }).first();
   if (await talk.isVisible().catch(() => false)) {
+    const ack = page.getByRole("checkbox", { name: /18 or over/ });
+    if (await ack.isVisible().catch(() => false)) await ack.check();
     await talk.click();
-    await page.waitForTimeout(600);
+    await page.getByRole("region", { name: "Voice chat" }).getByRole("status").filter({ hasText: /Listening/ }).waitFor({ timeout: 10_000 }).catch(() => {});
     await page.screenshot({ path: join(out, `voice-${width}.png`) });
   }
 }

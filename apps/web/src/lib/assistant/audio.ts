@@ -74,3 +74,80 @@ export function encodeWav16k(samples: Float32Array): Uint8Array {
   }
   return out;
 }
+
+/** The loudness of a block of samples (root mean square, 0 to 1). */
+export function rms(samples: Float32Array): number {
+  let sum = 0;
+  for (let i = 0; i < samples.length; i += 1) sum += samples[i]! * samples[i]!;
+  return samples.length ? Math.sqrt(sum / samples.length) : 0;
+}
+
+export interface EndpointerOptions {
+  /** Silence after speech that ends an utterance. */
+  endSilenceMs?: number;
+  /** Speech needed before an utterance counts (a cough or a click is not a question). */
+  minSpeechMs?: number;
+  /** No speech at all for this long: give up listening. */
+  noSpeechMs?: number;
+  /** The longest utterance. */
+  maxMs?: number;
+}
+
+export type EndpointEvent = "none" | "speech_started" | "utterance_end" | "no_speech" | "too_long";
+
+/**
+ * End-of-turn detection from loudness alone (a voice-activity detector): no model, no network, runs on each ~43 ms block the
+ * microphone gives. The noise floor adapts to the room (it follows the quietest recent blocks), and speech is loudness well above
+ * it, with a fixed minimum so near-silence never counts. An utterance ends after `endSilenceMs` of quiet following at least
+ * `minSpeechMs` of speech; a short pause between words (under the silence window) does not end it.
+ *
+ * ponytail: energy VAD, misled by steady loud noise (a fan next to the microphone) or very quiet speakers; tap-to-stop still sends.
+ * A model VAD (Silero, WebRTC VAD) is the upgrade if real rooms show either problem.
+ */
+export function createEndpointer(options: EndpointerOptions = {}) {
+  const endSilenceMs = options.endSilenceMs ?? 900;
+  const minSpeechMs = options.minSpeechMs ?? 300;
+  const noSpeechMs = options.noSpeechMs ?? 8000;
+  const maxMs = options.maxMs ?? 30_000;
+  let floor = 0.01;
+  let elapsed = 0;
+  let speechMs = 0;
+  let quietMs = 0;
+  let started = false;
+  let done = false;
+  return {
+    /** Feeds one block (its loudness and length); returns what, if anything, just happened. */
+    push(level: number, blockMs: number): EndpointEvent {
+      if (done) return "none";
+      elapsed += blockMs;
+      // The floor falls quickly to quiet and rises slowly, so speech itself does not drag it up.
+      floor = level < floor ? floor * 0.7 + level * 0.3 : floor * 0.995 + level * 0.005;
+      const threshold = Math.max(0.02, floor * 3);
+      const speaking = level > threshold;
+      if (speaking) {
+        speechMs += blockMs;
+        quietMs = 0;
+      } else quietMs += blockMs;
+      if (!started && speechMs >= minSpeechMs) {
+        started = true;
+        return "speech_started";
+      }
+      if (started && quietMs >= endSilenceMs) {
+        done = true;
+        return "utterance_end";
+      }
+      if (!started && elapsed >= noSpeechMs) {
+        done = true;
+        return "no_speech";
+      }
+      if (elapsed >= maxMs) {
+        done = true;
+        return "too_long";
+      }
+      return "none";
+    },
+    get heardSpeech() {
+      return started;
+    },
+  };
+}

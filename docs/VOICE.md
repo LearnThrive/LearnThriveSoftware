@@ -4,14 +4,37 @@ Voice mode lets a student talk to Study Buddy and hear the answer. It is **devel
 
 ## How it works
 
-1. The student opens the voice panel (the "Talk instead" button) and presses **Talk**. Only now does the browser ask for the microphone. A visible "Listening" state shows, and Talk again (or letting go of a held press) stops it. Recording stops by itself at 59 seconds.
-2. The browser captures with an AudioWorklet (`public/audio/capture-worklet.js`), resamples to 16 kHz mono 16-bit and builds a WAV file in memory (`src/lib/assistant/audio.ts`). Every microphone track is stopped as soon as recording ends.
-3. The WAV goes to `POST /api/assistant/voice/transcribe`. The route has the same gates as the chat (Origin check, assistant open, signed-in adult, Library access) plus an hourly cap per family, checks the audio shape before forwarding anything, and passes it to the speech sidecar. The words come back and are **shown in the panel to be checked and corrected**; nothing is sent to the model until the student presses Send.
-4. The question goes through the normal chat route with `voice: true`, which adds a short instruction to that turn's system prompt: at most four sentences, maths in words, no lists. All the usual safety applies (input rules, fixed safeguarding reply, output guard, caps, retention); voice adds no way around them.
-5. As the answer streams in, each settled sentence is converted to speakable words (`src/lib/assistant/speech.ts`: "x squared plus five x", never LaTeX) and sent to `POST /api/assistant/voice/speak`, which returns a WAV the browser plays with Web Audio. The first clip starts after the first sentence, not after the whole answer. The screen still shows the notation.
-6. Pressing Talk while the voice is speaking, or closing the panel, stops the speech immediately **and** stops the answer arriving.
+Talking is meant to be quicker than typing: the student speaks, and the question is sent when they stop. There is no second Send press.
+
+1. The student presses the microphone button in the box ("Talk instead of typing"). That press opens a compact voice panel above the box (not a modal: the conversation stays in view and typing stays one tap away) and asks for the microphone, then and only then.
+2. The browser captures with an AudioWorklet (`public/audio/capture-worklet.js`). The audio graph is built during the press, in parallel with the permission request, and kept while the panel is open, so the first words after the press are not lost (an earlier version lost about a second of speech while the worklet loaded; the live check below caught it). Each turn has its own microphone stream, stopped when the turn ends.
+3. **End of turn.** An end-of-speech detector (`createEndpointer` in `src/lib/assistant/audio.ts`) follows the loudness of each ~43 ms block against an adaptive noise floor. A pause between words (under 0.9 s) does not end the turn; 0.9 s of quiet after at least 0.3 s of speech does. Eight seconds without speech stops listening; a turn longer than 30 s is ended. **Fallback:** pressing the button while listening ends the turn and sends straight away, so a noisy room or a quiet speaker never needs a Send press either.
+4. The recording (16 kHz mono 16-bit WAV, built in memory) goes to `POST /api/assistant/voice/transcribe`, behind the same gates as the chat (Origin, assistant open, signed-in adult, Library access) plus an hourly cap. The sidecar returns the words, a **confidence** (the recogniser's average token probability) and the chance there was **no speech**.
+5. Then, exactly once per turn (each turn has a number; a late result from a cancelled turn is ignored):
+   - no words, or mostly silence: "I did not catch any words", and it listens again (twice at most, then waits for a press);
+   - confidence under 0.55: **"Did I hear that right?"** with the words and **Send**, **Try again** and **Edit** (Edit puts them in the text box);
+   - otherwise the words are **sent automatically** as an ordinary Study Buddy message, shown in the conversation like a typed one.
+6. The question goes through the normal chat route with `voice: true`, which adds a short instruction to that turn's system prompt (at most four sentences, maths in words, no lists). All the usual safety applies; voice adds no way around it.
+7. The answer is read aloud a sentence at a time as it streams (`src/lib/assistant/speech.ts` turns maths into words; `POST /api/assistant/voice/speak` returns each clip). **Read aloud** can be switched off, **Stop speaking** silences it, and pressing the button while it speaks **talks over it**: the speech stops, the answer stops arriving, and a new turn starts.
+8. With **Keep listening** on (the default while the panel is open), the next turn starts by itself when the answer has been spoken; off, the panel waits for a press. Closing the panel switches everything off.
+
+The states, always written out in the panel and announced politely: Tap to talk, Allow the microphone, Listening, Getting your words, Did I hear that right?, Study Buddy is answering, Speaking, Microphone blocked, Voice stopped. The microphone stops when a turn ends, the panel closes, the page is hidden (no recording in a background tab) or the page goes away.
 
 If the speech service is unreachable the browser's own `speechSynthesis` reads the rest (the text never leaves the device that way). If the service is not configured at all, `/api/assistant/status` says `voice: false` and the microphone button is not shown: the screen is the full text experience.
+
+### Measured end to end (real pieces)
+
+`node scripts/voice-live-check.mjs --say "..."` plays synthesised speech through Chromium's fake microphone into the real page, the real detector, the sidecar's Whisper (`small.en` on the GPU) and the local model on Ollama, and times it. Five questions on 21 October 2026, on the development laptop:
+
+| Said | Heard | End of speech to first spoken answer |
+| --- | --- | --- |
+| What is three quarters of twenty four? | What is three quarters of twenty-four? | 2.41 s |
+| How do I factorise x squared plus five x plus six? | How to factorise x squared plus 5x plus 6. | 2.82 s |
+| What is the denominator of a fraction? | What is the denominator of a fraction? | 2.55 s |
+| Explain photosynthesis in simple words. | Explain photosynthesis in simple words. | 2.43 s |
+| Solve two x plus seven equals nineteen. | Solve 2x plus 7 equals 19. | 2.73 s |
+
+Median **2.55 s** against a target of 2.5 s: just over. 0.9 s of it is the silence the detector waits for to be sure the student has finished; the rest (recognition about 0.4 s, the model's first sentence, the first clip) matches the pipeline benchmark in VOICE_BENCHMARK.md. Shortening the wait to 0.7 s would meet the target, at the price of cutting off a student who pauses mid-sentence; it is one constant (`endSilenceMs`) to change after watching real students. Synthetic speech: no child, no room noise.
 
 ## What is stored
 
@@ -57,8 +80,8 @@ For `cuda` on Windows: `uv pip install nvidia-cublas-cu12 nvidia-cudnn-cu12` in 
 
 ## What was not tested here
 
-- A real microphone, real devices, Safari and Firefox (AudioWorklet and `getUserMedia` behave differently, and Firefox cannot open a 16 kHz capture context, which is why the page captures at the device's rate and resamples itself). The browser tests use Chromium's fake microphone and the mock speech provider.
-- Screen readers and switch access with the voice panel. The panel was built for them (live state text, a transcript box, a Close that stops everything) but not driven with real assistive technology.
+- A real microphone in a real room, real devices, Safari and Firefox (AudioWorklet and `getUserMedia` behave differently, and Firefox cannot open a 16 kHz capture context, which is why the page captures at the device's rate and resamples itself). The browser tests use Chromium's fake microphone (tone-and-silence files, so the detector, tap-to-stop, the confirm step, talk-over, a blocked microphone and a hidden page are all exercised) with the mock speech provider; the live check above uses synthesised speech with the real speech service and model. The end-of-speech detector's thresholds are therefore tuned on synthetic audio only.
+- Screen readers and switch access with the voice panel. The panel was built for them (a labelled region, a polite live status line, real buttons and a checkbox, a Close that stops everything) and passes axe, but was not driven with real assistive technology.
 - A child's voice, a noisy classroom and accents: the recognition benchmark is synthetic and optimistic (see the benchmark's warning).
 - Echo: a speaker next to the microphone. The browser's echo cancellation is requested but not measured; pressing Talk interrupts the voice, which is the safeguard.
 - A hosted speech provider for production: none chosen.
@@ -69,6 +92,7 @@ The sidecar's speech output uses `piper-tts`, which is **GPL-3.0-or-later**, and
 
 ## Deviations from the plan
 
-- One WAV per utterance instead of a stream of chunks: push-to-talk utterances are a few seconds, and recognition is quick enough (see the benchmark) that streaming chunks would add complexity without a measured gain.
-- Hands-free voice-activity detection was not built. It was marked optional "if it benchmarks well", and it needs false-trigger rates measured in a real room first.
+- One WAV per utterance instead of a stream of chunks: utterances are a few seconds, and recognition is quick enough (about 0.4 s) that streaming would add complexity without a measured gain. The cost is no live transcript while speaking: the panel shows a level ring instead, and the words as soon as they are known.
+- End of speech is an energy detector, not a model: misled by steady loud noise next to the microphone or very quiet speakers (tap to stop still sends). A model detector (Silero or WebRTC VAD) is the upgrade if real rooms show either problem.
+- Full-duplex conversation (talking and listening at once, barge-in by voice alone) is not built: turn-taking is speak, answer, listen. Interrupting is a press (or Stop speaking).
 - The route names are `/api/assistant/voice/transcribe` and `/api/assistant/voice/speak` rather than a single `/api/assistant/voice`.

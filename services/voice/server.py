@@ -97,12 +97,16 @@ def read_wav(data: bytes) -> np.ndarray:
     return np.frombuffer(frames, dtype=np.int16).astype(np.float32) / 32768.0
 
 
-def transcribe(samples: np.ndarray) -> tuple[str, int]:
+def transcribe(samples: np.ndarray) -> tuple[str, int, float, float]:
+    """The words, the time taken, a confidence (0 to 1: the average token probability) and the chance there was no speech at all."""
     started = time.perf_counter()
     with _lock:
         segments, _info = _stt.transcribe(samples, language="en", beam_size=1, vad_filter=True, initial_prompt=VOCAB_PROMPT, condition_on_previous_text=False)
-        text = " ".join(s.text.strip() for s in segments).strip()
-    return text, int((time.perf_counter() - started) * 1000)
+        segments = list(segments)
+    text = " ".join(s.text.strip() for s in segments).strip()
+    confidence = float(np.exp(np.mean([s.avg_logprob for s in segments]))) if segments else 0.0
+    no_speech = float(max((s.no_speech_prob for s in segments), default=1.0))
+    return text, int((time.perf_counter() - started) * 1000), round(confidence, 3), round(no_speech, 3)
 
 
 def synthesise(text: str) -> bytes:
@@ -160,9 +164,9 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if self.path == "/stt":
                 samples = read_wav(body)
-                text, ms = transcribe(samples)
+                text, ms, confidence, no_speech = transcribe(samples)
                 counters["stt"] += 1
-                return self._json(200, {"text": text, "audioMs": int(len(samples) / 16), "processingMs": ms})
+                return self._json(200, {"text": text, "audioMs": int(len(samples) / 16), "processingMs": ms, "confidence": confidence, "noSpeech": no_speech})
             if self.path == "/tts":
                 text = str(json.loads(body).get("text", "")).strip()[:MAX_TTS_CHARS]
                 if not text:

@@ -81,7 +81,9 @@ test("transcribe: a transcript comes back, bad audio is 422, and nothing is logg
   const p = await w.person();
   const ok = await vh.handleTranscribe(w.audio(wav({ seconds: 2 })), w.deps(p.jar));
   assert.equal(ok.status, 200);
-  assert.deepEqual(await ok.json(), { text: "Factorise x squared plus five x plus six" });
+  assert.deepEqual(await ok.json(), { text: "Factorise x squared plus five x plus six", confidence: 0.92, noSpeech: 0.02 });
+  const short = await vh.handleTranscribe(w.audio(wav({ seconds: 0.5 })), w.deps(p.jar));
+  assert.equal((await short.json()).confidence, 0.3, "the mock is unsure of a very short recording, so the confirm path can be tested");
   assert.equal(ok.headers.get("cache-control"), "no-store");
   const bad = await vh.handleTranscribe(w.audio(wav({ rate: 8000 })), w.deps(p.jar));
   assert.equal(bad.status, 422);
@@ -153,14 +155,16 @@ test("the speech-service client sends the token, maps its errors and never throw
     return new Response(body, { status, headers });
   };
   const ok = new voice.SidecarSpeech("http://voice.local:8765/", "secret", reply(200, JSON.stringify({ text: " two plus two ", audioMs: 1200, processingMs: 300 })));
-  assert.deepEqual(await ok.transcribe(wav()), { text: "two plus two", audioMs: 1200, processingMs: 300 });
+  assert.deepEqual(await ok.transcribe(wav()), { text: "two plus two", audioMs: 1200, processingMs: 300, confidence: 1, noSpeech: 0 }, "an older service without scores is trusted");
+  const scored = new voice.SidecarSpeech("http://voice.local:8765", null, reply(200, JSON.stringify({ text: "hm", audioMs: 400, processingMs: 90, confidence: 0.41, noSpeech: 0.7 })));
+  assert.deepEqual(await scored.transcribe(wav()), { text: "hm", audioMs: 400, processingMs: 90, confidence: 0.41, noSpeech: 0.7 });
   assert.equal(calls[0].url, "http://voice.local:8765/stt");
   assert.equal(calls[0].init.headers["x-voice-token"], "secret");
   assert.equal(calls[0].init.headers["Content-Type"], "audio/wav");
 
   const spoken = new voice.SidecarSpeech("http://voice.local:8765", null, reply(200, new Uint8Array([1, 2, 3])));
   assert.deepEqual([...(await spoken.speak("Hello."))], [1, 2, 3]);
-  assert.equal(calls[1].init.headers["x-voice-token"], undefined);
+  assert.equal(calls.at(-1).init.headers["x-voice-token"], undefined);
 
   const code = async (fetchImpl, run) => {
     try {
@@ -226,4 +230,31 @@ test("browser audio: blocks are resampled to 16 kHz without losing the tone, and
   const view = new DataView(clipped.buffer);
   assert.equal(view.getInt16(44, true), 32767);
   assert.equal(view.getInt16(46, true), -32768);
+});
+
+test("end of speech: a pause between words does not end the turn, a silence does; noise alone and an endless recording stop", () => {
+  const blocks = (ep, level, ms) => { const events = []; for (let t = 0; t < ms; t += 43) { const e = ep.push(level, 43); if (e !== "none") events.push(e); } return events; };
+  // Quiet room, then a sentence with a short pause in it, then silence.
+  const ep = audio.createEndpointer();
+  assert.deepEqual(blocks(ep, 0.004, 600), []);
+  assert.deepEqual(blocks(ep, 0.12, 700), ["speech_started"]);
+  assert.deepEqual(blocks(ep, 0.004, 400), [], "a 400 ms pause between words is not the end");
+  assert.deepEqual(blocks(ep, 0.1, 500), []);
+  assert.deepEqual(blocks(ep, 0.004, 1000), ["utterance_end"]);
+  assert.deepEqual(blocks(ep, 0.2, 500), [], "after the end it reports nothing more (no second send)");
+
+  // A click is not speech: nothing starts, and after the wait it gives up.
+  const click = audio.createEndpointer({ noSpeechMs: 2000 });
+  assert.deepEqual(blocks(click, 0.3, 86), []);
+  assert.deepEqual(blocks(click, 0.003, 2100), ["no_speech"]);
+  assert.equal(click.heardSpeech, false);
+
+  // A noisy room raises the floor: steady noise is not speech, speech well above it is.
+  const noisy = audio.createEndpointer({ noSpeechMs: 60_000 });
+  assert.deepEqual(blocks(noisy, 0.03, 3000), [], "steady noise at 0.03 is not speech");
+  assert.deepEqual(blocks(noisy, 0.2, 500), ["speech_started"]);
+
+  const endless = audio.createEndpointer({ maxMs: 2000 });
+  assert.deepEqual(blocks(endless, 0.2, 2100), ["speech_started", "too_long"]);
+  assert.ok(Math.abs(audio.rms(Float32Array.from([0.5, -0.5, 0.5, -0.5])) - 0.5) < 1e-9);
 });

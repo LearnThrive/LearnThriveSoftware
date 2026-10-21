@@ -29,6 +29,7 @@ import { ADULT_ACKNOWLEDGEMENT } from "@/lib/assistant/prompt";
 import { parseMarkdown, plainText } from "@/lib/assistant/markdown";
 import { RenderedAnswer } from "./RenderedAnswer";
 import { useVoice, type Speaker } from "./useVoice";
+import { VoicePanel } from "./VoicePanel";
 import styles from "./study-buddy.module.css";
 
 interface Msg {
@@ -118,7 +119,13 @@ export function StudyBuddy() {
   const log = useRef<HTMLDivElement>(null);
   const stickToLatest = useRef(true);
   const spoken = useRef(0);
-  const voice = useVoice(setError);
+  // A spoken question is sent the moment it is finished (useVoice decides when); sendRef reaches the send() defined below.
+  const sendRef = useRef<
+    (text: string, options?: { voice?: boolean }) => Promise<void>
+  >(async () => {});
+  const voice = useVoice({
+    onUtterance: (text) => void sendRef.current(text, { voice: true }),
+  });
   const sidebar = useMemberSidebar();
 
   const setSessionId = useCallback((id: string | null) => {
@@ -315,24 +322,26 @@ export function StudyBuddy() {
     fileIdsRef.current = next;
   }
 
-  async function send(text: string) {
-    if (busy) return;
+  async function send(text: string, options: { voice?: boolean } = {}) {
+    // A question that came from the microphone is answered in short, speakable wording and read aloud; a typed one is not.
+    const viaVoice = Boolean(options.voice && status?.voice);
+    if (busy) {
+      if (viaVoice) voice.answerFinished(false);
+      return;
+    }
     if (uploading.current) {
       setWaiting("Waiting for your file to finish uploading…");
       await uploading.current;
       setWaiting("");
     }
-    // A question that came from the microphone is answered in short, speakable wording and read aloud; a typed one is not.
-    const viaVoice =
-      Boolean(status?.voice) &&
-      text.trim() !== "" &&
-      text.trim() === voice.transcript.trim();
     const sid = sessionRef.current;
     const needsAck = !sid && !status?.minorsApproved;
-    if (needsAck && !adultAck)
+    if (needsAck && !adultAck) {
+      if (viaVoice) voice.answerFinished(false);
       return setError(
         "Please tick the box to confirm you are 18 or over before you start.",
       );
+    }
     const attached = filesRef.current
       .map((f) => fileIdsRef.current.get(f))
       .filter((id): id is string => Boolean(id));
@@ -354,10 +363,7 @@ export function StudyBuddy() {
     setDraft("");
     stickToLatest.current = true;
     const speech: { speaker: Speaker | null } = { speaker: null };
-    if (viaVoice) {
-      voice.setTranscript("");
-      speech.speaker = voice.beginSpeaking();
-    }
+    if (viaVoice) speech.speaker = voice.beginSpeaking();
     clearAttachments();
     spoken.current = 0;
     const controller = new AbortController();
@@ -452,8 +458,15 @@ export function StudyBuddy() {
         speech.speaker.end(answer);
       else speech.speaker.cancel();
     }
+    if (viaVoice)
+      voice.answerFinished(
+        Boolean(answer) && !failed && !controller.signal.aborted,
+      );
     void refresh();
   }
+  useEffect(() => {
+    sendRef.current = send;
+  });
 
   async function copy(m: Msg) {
     try {
@@ -790,6 +803,17 @@ export function StudyBuddy() {
                 </button>
               </div>
             ) : null}
+            {status.voice ? (
+              <VoicePanel
+                voice={voice}
+                onEdit={(text) => setDraft(text)}
+                // Talking over the answer stops it arriving, silences it, and starts a new turn.
+                onTalkOver={() => {
+                  abort.current?.abort();
+                  voice.listen();
+                }}
+              />
+            ) : null}
             <AiInput
               value={draft}
               onValueChange={(text) => {
@@ -806,23 +830,12 @@ export function StudyBuddy() {
               maxLength={status.limits?.maxInputChars}
               maxFiles={status.limits?.files ?? 3}
               error={error}
-              voiceState={voice.state}
-              // Talking over the answer, or closing the voice panel, ends it: the voice goes quiet and the answer stops arriving.
-              onVoiceStart={
+              onVoiceButton={
                 status.voice
-                  ? () => {
-                      abort.current?.abort();
-                      void voice.start();
-                    }
+                  ? () => (voice.phase === "off" ? voice.open() : voice.close())
                   : undefined
               }
-              onVoiceStop={voice.stop}
-              onVoiceCancel={() => {
-                abort.current?.abort();
-                voice.cancel();
-              }}
-              transcript={voice.transcript}
-              onTranscriptEdit={voice.setTranscript}
+              voiceActive={voice.phase !== "off"}
               placeholder="Ask about your work"
               fullWidth
             />

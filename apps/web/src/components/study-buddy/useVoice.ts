@@ -1,26 +1,32 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { VoiceState } from "@/components/ui/VoiceOrb";
-import { TARGET_RATE, encodeWav16k, peak, resampleTo16k } from "@/lib/assistant/audio";
+import { createEndpointer, encodeWav16k, peak, resampleTo16k, rms } from "@/lib/assistant/audio";
 import { settledPrefix, speechChunks, speechChunksPartial, toSpeech } from "@/lib/assistant/speech";
 
 /**
- * Voice mode in the browser (plan19 phase G): push-to-talk capture with an AudioWorklet, the recording sent to /api/assistant/voice/transcribe
- * as a 16 kHz mono WAV, and the answer spoken a sentence or two at a time AS IT STREAMS IN (first audio as soon as the first sentence has settled).
+ * Voice chat in the browser: talk, and the question is sent when you stop. One turn is a small state machine:
  *
- * Privacy and behaviour, each deliberate:
- * - the microphone is asked for only when the student presses Talk, and every track is stopped the moment they finish or cancel;
- * - the audio exists only in memory: it is never put in storage, a Blob URL, a file or a log;
- * - starting to talk stops any speech at once (nobody should have to wait for the voice to finish);
- * - the words that were heard go back to the page to be corrected before they are sent, never straight to the model;
- * - if the speech service is not there the browser's own speechSynthesis reads the answer (the text never leaves the device that way);
- * - nothing here animates, so reduced motion is respected; the orb and the "Listening" text come from AiInput.
+ *   off --open--> requesting (the microphone permission) --> listening --(speech)--> hearing --(a silence)--> finalising
+ *     --(sure of the words)--> sending --> answering --> speaking --> listening again (hands-free) or ready
+ *     --(unsure)--> confirm (Send / Try again / Edit)                       any state --close--> off
+ *   plus denied (the microphone is blocked), error (the speech service failed) and ready (open, waiting for Talk).
+ *
+ * How the end of a turn is found: loudness, block by block (createEndpointer in lib/assistant/audio.ts): a pause between words
+ * does not end it, a silence after speech does. Pressing the button while listening ends it too and sends straight away: the
+ * fallback where silence detection is unreliable. The recogniser is a batch one (whole utterance), so there is no live transcript;
+ * the panel shows a level meter while listening and the words as soon as they are known.
+ *
+ * Deliberate safeguards:
+ * - the microphone is asked for only by a press, and every track is stopped when a turn ends, the panel closes, the page is hidden
+ *   (no recording in a background tab) or the component goes away;
+ * - each turn has a number: its words are sent at most once, and a late result from a cancelled turn is ignored;
+ * - nothing empty, nothing that was mostly silence, and nothing the recogniser was unsure of is sent without asking;
+ * - audio lives only in memory: never stored, never put in a Blob URL, file or log;
+ * - talking over the answer, or pressing Stop speaking, silences it at once; reading aloud can be switched off;
+ * - if the speech service is missing the browser's own speechSynthesis reads the answer (the text stays on the device that way).
  */
-const MAX_RECORDING_MS = 59_000;
-const MIN_RECORDING_MS = 400;
-
-type Say = (message: string) => void;
+export type VoicePhase = "off" | "ready" | "requesting" | "listening" | "hearing" | "finalising" | "confirm" | "sending" | "answering" | "speaking" | "denied" | "error";
 
 export interface Speaker {
   push: (markdownSoFar: string) => void;
@@ -28,41 +34,113 @@ export interface Speaker {
   cancel: () => void;
 }
 
+/** The recogniser's confidence below which the student is asked before anything is sent. */
+export const CONFIRM_BELOW = 0.55;
+const NO_SPEECH_ABOVE = 0.6;
+const MIN_RECORDING_MS = 400;
+
 export interface VoiceControls {
-  state: VoiceState;
-  /** What was heard (or typed over it), shown in the voice panel. */
-  transcript: string;
-  setTranscript: (text: string) => void;
-  /** Starts listening. Asks for the microphone now, not before. */
-  start: () => Promise<void>;
-  /** Stops listening and turns the recording into words. */
-  stop: () => void;
-  /** Abandons whatever voice mode is doing (listening, transcribing or speaking). */
+  phase: VoicePhase;
+  /** The last thing heard (and sent, unless it is waiting for confirmation). */
+  heard: string;
+  /** A short status or problem line for the panel. */
+  message: string;
+  handsFree: boolean;
+  setHandsFree: (on: boolean) => void;
+  readAloud: boolean;
+  setReadAloud: (on: boolean) => void;
+  /** Attach to the level meter element: its --level custom property follows the microphone without re-rendering React. */
+  attachMeter: (element: HTMLElement | null) => void;
+  /** Opens voice chat and starts listening (the press that opens it is the gesture the browser needs for the microphone). */
+  open: () => void;
+  /** Starts listening again (from ready, confirm or after an answer). */
+  listen: () => void;
+  /** While listening: stop now and send what was said. */
+  stopAndSend: () => void;
+  /** Discards the turn in progress (and any speech); stays open and ready. */
   cancel: () => void;
-  /** Starts reading an answer aloud as it arrives: push the text so far, then end it with the whole answer (or cancel). */
-  beginSpeaking: () => Speaker;
+  /** Closes voice chat: microphone off, speech off. */
+  close: () => void;
+  /** confirm: send the words as heard. */
+  confirm: () => void;
+  /** confirm: give the words to the page to edit in the text box, and close the turn. */
+  takeForEditing: () => string;
+  /** Silences the answer being read out. */
+  stopSpeaking: () => void;
+  /** Starts reading an answer aloud as it arrives (only when read-aloud is on). */
+  beginSpeaking: () => Speaker | null;
+  /** The page says the answer to a spoken question has finished (or failed): the turn moves on. */
+  answerFinished: (ok: boolean) => void;
 }
 
-export function useVoice(onProblem: Say): VoiceControls {
-  const [state, setState] = useState<VoiceState>("idle");
-  const [transcript, setTranscript] = useState("");
-  const capture = useRef<{ context: AudioContext; stream: MediaStream; node: AudioWorkletNode; blocks: Float32Array[]; startedAt: number; timer: ReturnType<typeof setTimeout> } | null>(null);
+export interface VoiceOptions {
+  /** Sends the words as a normal Study Buddy message. Called once per turn. */
+  onUtterance: (text: string) => void;
+}
+
+export function useVoice({ onUtterance }: VoiceOptions): VoiceControls {
+  const [phase, setPhaseState] = useState<VoicePhase>("off");
+  const [heard, setHeard] = useState("");
+  const [message, setMessage] = useState("");
+  const [handsFree, setHandsFreeState] = useState(true);
+  const [readAloud, setReadAloudState] = useState(true);
+  const phaseRef = useRef<VoicePhase>("off");
+  const handsFreeRef = useRef(true);
+  const readAloudRef = useRef(true);
+  const turn = useRef(0);
+  // The audio graph (a context and the capture worklet) is built once when voice chat opens and kept until it closes, so a turn
+  // starts capturing the moment the microphone is granted: nothing said straight after the press is lost to loading the worklet.
+  // Each turn has its own microphone stream, stopped when the turn ends.
+  const graph = useRef<{ context: AudioContext; node: Promise<AudioWorkletNode> } | null>(null);
+  const onBlock = useRef<((data: Float32Array) => void) | null>(null);
+  const capture = useRef<{ stream: MediaStream; source: MediaStreamAudioSourceNode; blocks: Float32Array[]; rate: number; startedAt: number; turn: number } | null>(null);
   const request = useRef<AbortController | null>(null);
   const playback = useRef<{ context: AudioContext | null; source: AudioBufferSourceNode | null; generation: number }>({ context: null, source: null, generation: 0 });
-  const problem = useRef(onProblem);
+  const meter = useRef<HTMLElement | null>(null);
+  const pending = useRef("");
+  const misses = useRef(0);
+  // Set below once begin() exists: lets the end of one turn start the next without a dependency cycle between the callbacks.
+  const beginRef = useRef<() => Promise<void>>(async () => {});
+  const send = useRef(onUtterance);
   useEffect(() => {
-    problem.current = onProblem;
+    send.current = onUtterance;
   });
 
+  const setPhase = useCallback((next: VoicePhase) => {
+    phaseRef.current = next;
+    setPhaseState(next);
+  }, []);
+
+  const showLevel = (level: number) => meter.current?.style.setProperty("--level", Math.min(1, level * 6).toFixed(3));
+
+  const ensureGraph = useCallback(() => {
+    if (!graph.current) {
+      const context = new AudioContext();
+      const node = context.audioWorklet.addModule("/audio/capture-worklet.js").then(() => {
+        const worklet = new AudioWorkletNode(context, "learnthrive-capture", { numberOfInputs: 1, numberOfOutputs: 0 });
+        worklet.port.onmessage = (event: MessageEvent<Float32Array>) => onBlock.current?.(event.data);
+        return worklet;
+      });
+      graph.current = { context, node };
+    }
+    return graph.current;
+  }, []);
+
+  /** Ends this turn's recording: the stream's tracks are stopped (the microphone light goes off). */
   const release = useCallback(() => {
     const c = capture.current;
+    onBlock.current = null;
     if (!c) return;
-    clearTimeout(c.timer);
-    c.node.port.onmessage = null;
-    c.node.disconnect();
+    c.source.disconnect();
     for (const track of c.stream.getTracks()) track.stop();
-    void c.context.close().catch(() => undefined);
     capture.current = null;
+    showLevel(0);
+  }, []);
+
+  const closeGraph = useCallback(() => {
+    const g = graph.current;
+    graph.current = null;
+    if (g) void g.context.close().catch(() => undefined);
   }, []);
 
   const stopSpeaking = useCallback(() => {
@@ -76,71 +154,148 @@ export function useVoice(onProblem: Say): VoiceControls {
     if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
   }, []);
 
-  const cancel = useCallback(() => {
-    request.current?.abort();
-    request.current = null;
-    release();
-    stopSpeaking();
-    setState("idle");
-  }, [release, stopSpeaking]);
+  /** Moves on after a turn: listen again (hands-free) or wait for a press. */
+  const nextTurn = useCallback(() => {
+    if (phaseRef.current === "off") return;
+    if (handsFreeRef.current && typeof document !== "undefined" && !document.hidden) void beginRef.current();
+    else setPhase("ready");
+  }, [setPhase]);
 
-  useEffect(() => cancel, [cancel]);
-
-  const finish = useCallback(async () => {
+  /** The recording of this turn is complete: turn it into words, then send, ask, or listen again. */
+  const finish = useCallback(async (which: number, reason: "silence" | "button" | "too_long") => {
     const c = capture.current;
-    if (!c) return;
+    if (!c || c.turn !== which || turn.current !== which) return;
     const elapsed = Date.now() - c.startedAt;
-    const samples = resampleTo16k(c.blocks, c.context.sampleRate);
+    const samples = resampleTo16k(c.blocks, c.rate);
     release();
-    if (elapsed < MIN_RECORDING_MS || samples.length < (TARGET_RATE * MIN_RECORDING_MS) / 1000) {
-      setState("idle");
-      return problem.current("That was too short. Hold the Talk button while you speak.");
+    if (elapsed < MIN_RECORDING_MS || peak(samples) < 0.01) {
+      setMessage(reason === "button" ? "I did not hear anything. Hold the phone a little closer, or check the microphone is not muted." : "");
+      if (reason === "button") return setPhase("ready");
+      return nextTurn();
     }
-    if (peak(samples) < 0.01) {
-      setState("idle");
-      return problem.current("I could not hear anything. Check that your microphone is on and not muted.");
-    }
-    setState("thinking");
+    setPhase("finalising");
+    setMessage("");
     const controller = new AbortController();
     request.current = controller;
     try {
       const response = await fetch("/api/assistant/voice/transcribe", { method: "POST", headers: { "Content-Type": "audio/wav" }, body: encodeWav16k(samples) as BodyInit, signal: controller.signal });
-      const data = (await response.json().catch(() => null)) as { text?: string; error?: string } | null;
-      if (!response.ok) problem.current(data?.error ?? "Voice is not available right now. You can still type your question.");
-      else if (!data?.text?.trim()) problem.current("I did not catch any words. Please try again, a little closer to the microphone.");
-      else setTranscript(data.text.trim());
+      const data = (await response.json().catch(() => null)) as { text?: string; confidence?: number; noSpeech?: number; error?: string } | null;
+      if (turn.current !== which || phaseRef.current !== "finalising") return; // cancelled or closed meanwhile
+      if (!response.ok) {
+        setMessage(data?.error ?? "Voice is not available right now. You can still type your question.");
+        return setPhase("error");
+      }
+      const text = data?.text?.trim() ?? "";
+      if (!text || (data?.noSpeech ?? 0) > NO_SPEECH_ABOVE) {
+        misses.current += 1;
+        setMessage("I did not catch any words. Try again, a little closer to the microphone.");
+        // Two misses in a row in hands-free mode: stop listening rather than keep the microphone on in an empty room.
+        if (misses.current >= 2) {
+          misses.current = 0;
+          return setPhase("ready");
+        }
+        return nextTurn();
+      }
+      misses.current = 0;
+      setHeard(text);
+      if ((data?.confidence ?? 1) < CONFIRM_BELOW) {
+        pending.current = text;
+        setMessage("");
+        return setPhase("confirm");
+      }
+      setPhase("sending");
+      send.current(text);
     } catch (error) {
-      if ((error as Error).name !== "AbortError") problem.current("We lost the connection. Please try again, or type your question.");
+      if ((error as Error).name === "AbortError") return;
+      setMessage("We lost the connection. Please try again, or type your question.");
+      setPhase("error");
     } finally {
-      request.current = null;
-      setState((s) => (s === "thinking" ? "idle" : s));
+      if (request.current === controller) request.current = null;
     }
-  }, [release]);
+  }, [nextTurn, release, setPhase]);
 
-  const start = useCallback(async () => {
+  /** Starts a turn: the microphone, the worklet, the end-of-speech detector. */
+  const begin = useCallback(async () => {
     if (capture.current) return;
     stopSpeaking();
+    const which = (turn.current += 1);
+    setPhase("requesting");
+    setMessage("");
     try {
-      // Asked now, at the press, never earlier.
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-      const context = new AudioContext();
-      await context.audioWorklet.addModule("/audio/capture-worklet.js");
-      const node = new AudioWorkletNode(context, "learnthrive-capture", { numberOfInputs: 1, numberOfOutputs: 0 });
+      // The graph is started inside the press (browsers only allow audio to start from a gesture), alongside the permission request.
+      const g = ensureGraph();
+      const [stream, node] = await Promise.all([navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } }), g.node]);
+      if (turn.current !== which || phaseRef.current === "off") {
+        for (const track of stream.getTracks()) track.stop();
+        return;
+      }
+      await g.context.resume();
+      const source = g.context.createMediaStreamSource(stream);
       const blocks: Float32Array[] = [];
-      node.port.onmessage = (event: MessageEvent<Float32Array>) => blocks.push(event.data);
-      context.createMediaStreamSource(stream).connect(node);
-      await context.resume();
-      capture.current = { context, stream, node, blocks, startedAt: Date.now(), timer: setTimeout(() => void finish(), MAX_RECORDING_MS) };
-      setState("listening");
+      const endpoint = createEndpointer();
+      const rate = g.context.sampleRate;
+      capture.current = { stream, source, blocks, rate, startedAt: Date.now(), turn: which };
+      onBlock.current = (data) => {
+        if (capture.current?.turn !== which) return;
+        blocks.push(data);
+        const level = rms(data);
+        showLevel(level);
+        const happened = endpoint.push(level, (data.length / rate) * 1000);
+        if (happened === "speech_started") setPhase("hearing");
+        else if (happened === "utterance_end") void finish(which, "silence");
+        else if (happened === "too_long") void finish(which, "too_long");
+        else if (happened === "no_speech") {
+          release();
+          setMessage("I stopped listening because I did not hear anything.");
+          setPhase("ready");
+        }
+      };
+      source.connect(node);
+      setPhase("listening");
     } catch (error) {
       release();
-      setState("idle");
       const denied = error instanceof DOMException && (error.name === "NotAllowedError" || error.name === "SecurityError");
-      problem.current(denied ? "The microphone is blocked. Allow it for this site in your browser, or type your question." : "I could not use the microphone. You can type your question instead.");
+      setMessage(denied ? "The microphone is blocked. Allow it for this site in your browser's settings, or type your question instead." : "I could not use the microphone. You can type your question instead.");
+      setPhase(denied ? "denied" : "error");
     }
-  }, [finish, release, stopSpeaking]);
+  }, [ensureGraph, finish, release, setPhase, stopSpeaking]);
 
-  const beginSpeaking = useCallback((): Speaker => {
+  useEffect(() => {
+    beginRef.current = begin;
+  }, [begin]);
+
+  const cancelTurn = useCallback(() => {
+    turn.current += 1;
+    request.current?.abort();
+    request.current = null;
+    release();
+    stopSpeaking();
+    pending.current = "";
+  }, [release, stopSpeaking]);
+
+  const close = useCallback(() => {
+    cancelTurn();
+    closeGraph();
+    setMessage("");
+    setPhase("off");
+  }, [cancelTurn, closeGraph, setPhase]);
+
+  // Never record in a hidden tab, and never leave the microphone on after the page goes away.
+  useEffect(() => {
+    const onHidden = () => {
+      if (document.hidden && capture.current) {
+        cancelTurn();
+        setMessage("I stopped listening because you left the page.");
+        setPhase("ready");
+      }
+    };
+    document.addEventListener("visibilitychange", onHidden);
+    return () => document.removeEventListener("visibilitychange", onHidden);
+  }, [cancelTurn, setPhase]);
+  useEffect(() => close, [close]);
+
+  const beginSpeaking = useCallback((): Speaker | null => {
+    if (!readAloudRef.current || phaseRef.current === "off") return null;
     stopSpeaking();
     const mine = playback.current.generation;
     const live = () => playback.current.generation === mine;
@@ -151,7 +306,7 @@ export function useVoice(onProblem: Say): VoiceControls {
     let wake: (() => void) | null = null;
     const context = (playback.current.context ??= new AudioContext());
     void context.resume().catch(() => undefined);
-    setState("thinking");
+    setPhase("answering");
 
     const fetchClip = async (text: string): Promise<AudioBuffer | null> => {
       try {
@@ -175,13 +330,12 @@ export function useVoice(onProblem: Say): VoiceControls {
         if (at < clips.length) {
           const clip = await clips[at]!;
           if (!live()) return controller.abort();
+          if (phaseRef.current !== "off") setPhase("speaking");
           if (!clip) {
             // The speech service is not there: the device's own voice reads the rest.
-            setState("speaking");
             await speakOnDevice(texts.slice(at), live);
             break;
           }
-          setState("speaking");
           await new Promise<void>((resolve) => {
             const source = context.createBufferSource();
             source.buffer = clip;
@@ -198,17 +352,15 @@ export function useVoice(onProblem: Say): VoiceControls {
           wake = null;
         }
       }
-      if (live()) setState("idle");
+      if (live()) nextTurn();
     })();
 
     return {
-      // The answer so far: whole sentences are spoken as they settle, the rest waits.
       push: (markdownSoFar) => {
         if (!live() || finished) return;
         const { ready } = speechChunksPartial(toSpeech(settledPrefix(markdownSoFar)));
         for (const chunk of ready.slice(texts.length)) enqueue(chunk);
       },
-      // The finished answer: whatever has not been spoken yet.
       end: (markdown) => {
         if (!live() || finished) return;
         for (const chunk of speechChunks(toSpeech(markdown)).slice(texts.length)) enqueue(chunk);
@@ -218,19 +370,74 @@ export function useVoice(onProblem: Say): VoiceControls {
       cancel: () => {
         if (live()) stopSpeaking();
         controller.abort();
-        setState("idle");
       },
     };
-  }, [stopSpeaking]);
+  }, [nextTurn, setPhase, stopSpeaking]);
 
   return {
-    state,
-    transcript,
-    setTranscript,
-    start,
-    stop: () => void finish(),
-    cancel,
+    phase,
+    heard,
+    message,
+    handsFree,
+    setHandsFree: (on) => {
+      handsFreeRef.current = on;
+      setHandsFreeState(on);
+    },
+    readAloud,
+    setReadAloud: (on) => {
+      readAloudRef.current = on;
+      setReadAloudState(on);
+      if (!on) stopSpeaking();
+    },
+    attachMeter: (element) => {
+      meter.current = element;
+    },
+    open: () => {
+      if (phaseRef.current !== "off" && phaseRef.current !== "ready" && phaseRef.current !== "denied" && phaseRef.current !== "error") return;
+      void begin();
+    },
+    listen: () => {
+      cancelTurn();
+      void begin();
+    },
+    stopAndSend: () => {
+      if (capture.current) void finish(capture.current.turn, "button");
+    },
+    cancel: () => {
+      cancelTurn();
+      setMessage("");
+      setPhase("ready");
+    },
+    close,
+    confirm: () => {
+      if (phaseRef.current !== "confirm" || !pending.current) return;
+      const text = pending.current;
+      pending.current = "";
+      setPhase("sending");
+      send.current(text);
+    },
+    takeForEditing: () => {
+      const text = pending.current || heard;
+      pending.current = "";
+      setPhase("ready");
+      return text;
+    },
+    stopSpeaking: () => {
+      stopSpeaking();
+      if (phaseRef.current === "speaking" || phaseRef.current === "answering") nextTurn();
+    },
     beginSpeaking,
+    answerFinished: (ok) => {
+      // Only the turn that sent the question moves on: if the student has already started talking again, leave that turn alone.
+      if (phaseRef.current !== "sending" && phaseRef.current !== "answering" && phaseRef.current !== "speaking") return;
+      if (!ok) {
+        stopSpeaking();
+        setPhase("ready");
+        return;
+      }
+      // When the answer is read aloud, the speaker moves the turn on as it finishes; otherwise the turn moves on now.
+      if (!readAloudRef.current) nextTurn();
+    },
   };
 }
 
