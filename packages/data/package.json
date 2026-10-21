@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "test": "tsx --test src/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:realstack": "node scripts/realstack.mjs"
   },
   "exports": {
     "./domain": "./src/domain.ts",

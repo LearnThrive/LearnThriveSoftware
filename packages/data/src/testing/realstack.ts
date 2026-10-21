@@ -58,7 +58,24 @@ export function stack(): Stack {
   return (cached = s);
 }
 
+/**
+ * The local transaction pooler (Supavisor, the same kind of connection the hosted project offers on port 6543). The local tenant is
+ * `pooler-dev`; the user and password are the CLI's local defaults, not secrets of any real project.
+ */
+export function poolerUrl(s: Stack): string {
+  const url = new URL(s.dbUrl);
+  url.username = `${url.username}.pooler-dev`;
+  url.port = "54329";
+  return url.toString();
+}
+
 export type Sql = ReturnType<typeof openDb>;
+
+/** Empties every table in public (and only on this machine) so a test that needs a fresh database has one. Never takes a URL. */
+export async function resetPublicData(sql: Sql): Promise<void> {
+  const tables = (await sql`select relname from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r'`).map((r) => `public.${r.relname}`);
+  await sql.unsafe(`truncate ${tables.join(", ")} restart identity cascade`);
+}
 
 /** Direct SQL as the stack's postgres role (it owns the tables: fixtures, grants and catalogue checks only). */
 export function openDb(s: Stack) {
@@ -137,9 +154,9 @@ export const runId = `${Date.now().toString(36)}${Math.random().toString(36).sli
 export const PASSWORD = "Correct-Horse-Battery-9";
 
 /** A confirmed user made through Auth's admin API (the secret key), with the same metadata the sign-up form sends. */
-export async function newUser(s: Stack, options: { name: string; adult?: boolean; metadata?: Record<string, unknown> }): Promise<NewUser> {
+export async function newUser(s: Stack, options: { name: string; adult?: boolean; metadata?: Record<string, unknown>; email?: string }): Promise<NewUser> {
   counter += 1;
-  const email = `rs-${runId}-${counter}-${options.name.toLowerCase().replace(/\W/g, "")}@example.com`;
+  const email = options.email ?? `rs-${runId}-${counter}-${options.name.toLowerCase().replace(/\W/g, "")}@example.com`;
   const reply = await auth(s, "POST", "/admin/users", {
     key: s.secret,
     body: { email, password: PASSWORD, email_confirm: true, user_metadata: { display_name: options.name, ...(options.adult === false ? {} : { adult_confirmed: true }), ...options.metadata } },

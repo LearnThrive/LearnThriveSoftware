@@ -594,4 +594,113 @@ describe("the real local Supabase stack", { skip: ENABLED ? false : "set SUPABAS
       assert.notEqual(r.status, 200, `GraphQL answered ${r.status}`);
     });
   });
+  // --------------------------------------------------------------------------------------------------------------- Storage
+
+  describe("Storage: private buckets, only the server reads and writes, only a signed URL downloads", () => {
+    const PDF = new TextEncoder().encode("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n");
+    const key = (k: string, token?: string | null) => ({ apikey: k, ...(token ? { Authorization: `Bearer ${token}` } : /^eyJ/.test(k) ? { Authorization: `Bearer ${k}` } : {}) });
+    const call = async (method: string, path: string, init: { key?: string; token?: string | null; type?: string; body?: RequestInit["body"]; json?: unknown } = {}) => {
+      const response = await fetch(`${s.api}/storage/v1${path}`, {
+        method,
+        headers: { ...key(init.key ?? s.publishable, init.token), ...(init.json !== undefined ? { "Content-Type": "application/json" } : init.type ? { "Content-Type": init.type } : {}) },
+        body: init.json !== undefined ? JSON.stringify(init.json) : (init.body ?? undefined),
+      });
+      const text = await response.text();
+      let body: any = text;
+      try {
+        body = JSON.parse(text);
+      } catch {
+        /* binary or empty */
+      }
+      return { status: response.status, body, bytes: text.length };
+    };
+    const put = (bucket: string, name: string, bytes: Uint8Array, type: string, k = s.secret) => call("POST", `/object/${bucket}/${name}`, { key: k, type, body: bytes as unknown as NonNullable<RequestInit["body"]> });
+    const sign = (bucket: string, name: string, expiresIn = 60, k = s.secret) => call("POST", `/object/sign/${bucket}/${name}`, { key: k, json: { expiresIn } });
+    const folder = `rs-${runId}`;
+
+    after(async () => {
+      for (const [bucket, name] of [["library", "a.pdf"], ["library", "b.pdf"], ["chat-uploads", "a.png"]]) await call("DELETE", `/object/${bucket}/${folder}/${name}`, { key: s.secret });
+    });
+
+    test("both buckets exist, are private, carry their limits, and storage.objects has row level security with NO policy for anyone", async () => {
+      const buckets = await own("select id, public, file_size_limit::int as lim, allowed_mime_types as mime from storage.buckets where id in ('library','chat-uploads') order by id");
+      assert.deepEqual(buckets, [
+        { id: "chat-uploads", public: false, lim: 15 * 1024 * 1024, mime: ["image/jpeg", "image/png", "application/pdf"] },
+        { id: "library", public: false, lim: 25 * 1024 * 1024, mime: ["application/pdf"] },
+      ]);
+      assert.equal((await own("select relrowsecurity from pg_class where oid = 'storage.objects'::regclass"))[0]!.relrowsecurity, true);
+      assert.deepEqual(await own("select policyname, roles::text from pg_policies where schemaname = 'storage'"), [], "no storage policy exists for any role: add one and this fails");
+    });
+
+    test("the server uploads with either key format; the bucket enforces its MIME types", async () => {
+      assert.equal((await put("library", `${folder}/a.pdf`, PDF, "application/pdf", s.secret)).status, 200, "sb_secret_ as the apikey alone");
+      assert.equal((await put("library", `${folder}/b.pdf`, PDF, "application/pdf", s.serviceJwt)).status, 200, "the legacy service_role JWT (apikey + bearer)");
+      const text = await put("library", `${folder}/x.txt`, new TextEncoder().encode("hello"), "text/plain");
+      assert.equal(text.body.statusCode, "415", "library is PDF only");
+      const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+      assert.equal((await put("chat-uploads", `${folder}/a.png`, png, "image/png")).status, 200);
+      assert.equal((await put("chat-uploads", `${folder}/a.gif`, new Uint8Array([71, 73, 70, 56]), "image/gif")).body.statusCode, "415", "chat-uploads takes JPEG, PNG and PDF only");
+    });
+
+    test("the bucket enforces its size limit: just over 25 MB is refused for the library", async () => {
+      const big = new Uint8Array(25 * 1024 * 1024 + 1024);
+      big.set(PDF);
+      const r = await put("library", `${folder}/big.pdf`, big, "application/pdf");
+      assert.equal(r.body.statusCode, "413", JSON.stringify(r.body).slice(0, 160));
+    });
+
+    test("anonymous callers and signed-in people can neither list, read, write, delete, move nor sign: the bucket looks empty and closed", async () => {
+      for (const [who, token] of [["anon", null], ["alice", as("alice")], ["admin", as("admin")]] as const) {
+        for (const bucket of ["library", "chat-uploads"]) {
+          const list = await call("POST", `/object/list/${bucket}`, { token, json: { prefix: folder, limit: 100 } });
+          assert.ok(list.status === 200 && Array.isArray(list.body) && list.body.length === 0, `${who} listing ${bucket}: ${list.status} ${JSON.stringify(list.body).slice(0, 100)}`);
+        }
+        const read = await call("GET", `/object/library/${folder}/a.pdf`, { token });
+        assert.ok(read.status >= 400, `${who} reading: ${read.status}`);
+        const authed = await call("GET", `/object/authenticated/library/${folder}/a.pdf`, { token });
+        assert.ok(authed.status >= 400, `${who} reading as authenticated: ${authed.status}`);
+        const write = await call("POST", `/object/library/${folder}/evil.pdf`, { token, type: "application/pdf", body: PDF as unknown as NonNullable<RequestInit["body"]> });
+        assert.equal(write.body.statusCode, "403", `${who} writing: ${JSON.stringify(write.body).slice(0, 120)}`);
+        assert.match(String(write.body.message), /row-level security/i);
+        const del = await call("DELETE", `/object/library/${folder}/a.pdf`, { token });
+        assert.ok(del.status >= 400 || (Array.isArray(del.body) && del.body.length === 0), `${who} deleting: ${del.status}`);
+        const signed = await call("POST", `/object/sign/library/${folder}/a.pdf`, { token, json: { expiresIn: 60 } });
+        assert.ok(signed.status >= 400, `${who} signing: ${signed.status}`);
+        const move = await call("POST", "/object/move", { token, json: { bucketId: "library", sourceKey: `${folder}/a.pdf`, destinationKey: `${folder}/stolen.pdf` } });
+        assert.ok(move.status >= 400, `${who} moving: ${move.status}`);
+      }
+      assert.equal((await call("GET", `/object/public/library/${folder}/a.pdf`)).status, 400, "no public URL for a private bucket");
+      assert.equal((await call("GET", `/object/public/chat-uploads/${folder}/a.png`)).status, 400);
+      // The objects are all still there, untouched, for the server.
+      const listed = await call("POST", "/object/list/library", { key: s.secret, json: { prefix: folder, limit: 100 } });
+      assert.equal(listed.body.filter((o: any) => o.name?.endsWith(".pdf")).length, 2);
+    });
+
+    test("only the server's signed URL downloads: it works, a changed or missing token fails, an expired one fails, and the user's token cannot make one", async () => {
+      const made = await sign("library", `${folder}/a.pdf`, 60);
+      assert.equal(made.status, 200);
+      const path: string = made.body.signedURL;
+      assert.match(path, new RegExp(`^/object/sign/library/${folder}/a\\.pdf\\?token=`));
+      const good = await fetch(`${s.api}/storage/v1${path}`);
+      assert.equal(good.status, 200);
+      assert.equal(new TextDecoder().decode(new Uint8Array(await good.arrayBuffer())).slice(0, 5), "%PDF-");
+      assert.equal((await fetch(`${s.api}/storage/v1${path}x`)).status, 400, "a changed token");
+      assert.equal((await fetch(`${s.api}/storage/v1${path.split("?")[0]}`)).status, 400, "no token");
+      const other = await sign("library", `${folder}/b.pdf`, 60);
+      const swapped = `${path.split("?")[0]}?${other.body.signedURL.split("?")[1]}`;
+      assert.equal((await fetch(`${s.api}/storage/v1${swapped}`)).status, 400, "a token made for a different object");
+      const short = await sign("library", `${folder}/a.pdf`, 1);
+      await new Promise((r) => setTimeout(r, 2500));
+      assert.equal((await fetch(`${s.api}/storage/v1${short.body.signedURL}`)).status, 400, "an expired URL");
+      for (const [who, token] of [["anon", null], ["alice", as("alice")]] as const) assert.ok((await call("POST", `/object/sign/library/${folder}/a.pdf`, { token, json: { expiresIn: 60 } })).status >= 400, `${who} cannot make a signed URL`);
+    });
+
+    test("a family sees its own file paths through its chats (RLS), but even with the exact path no object can be read with a user's token", async () => {
+      const path = (await own("select storage_path from public.chat_files where session_id = $1", [seeded.A.session]))[0]!.storage_path as string;
+      const asAlice = rows(await get("alice", `/chat_files?select=storage_path&session_id=eq.${seeded.A.session}`));
+      assert.equal(asAlice[0]!.storage_path, path, "Alice may see her own file's path");
+      assert.ok((await call("GET", `/object/chat-uploads/${path}`, { token: as("alice") })).status >= 400, "but cannot read the object with it");
+      assert.deepEqual(rows(await get("bob", `/chat_files?select=storage_path&session_id=eq.${seeded.A.session}`)), [], "and Bob cannot even learn the path");
+    });
+  });
 });
