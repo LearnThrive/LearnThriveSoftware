@@ -6,6 +6,7 @@
     "node": "^20.19.0 || ^22.13.0 || >=24"
   },
   "scripts": {
+    "predev": "node ../../scripts/dev-services.mjs",
     "dev": "tsx server.ts",
     "dev:next": "next dev",
     "build": "next build",
