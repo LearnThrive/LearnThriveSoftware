@@ -24,7 +24,7 @@ export function buildProvider(config: AssistantConfig, env: Env = process.env, f
       case "nim": {
         const key = env.NVIDIA_API_KEY?.trim();
         // NIM has its own model names, so a chain with Ollama in it names them separately.
-        return key ? new OpenAiCompatibleProvider({ id: "nim", baseUrl: NIM_BASE_URL, apiKey: key, model: env.ASSISTANT_NIM_MODEL?.trim() || "meta/llama-3.1-8b-instruct", visionModel: env.ASSISTANT_NIM_VISION_MODEL?.trim() || undefined, fetch: fetchImpl }) : null;
+        return key ? new OpenAiCompatibleProvider({ id: "nim", baseUrl: NIM_BASE_URL, apiKey: key, model: env.ASSISTANT_NIM_MODEL?.trim() || "meta/llama-3.2-11b-vision-instruct", visionModel: env.ASSISTANT_NIM_VISION_MODEL?.trim() || undefined, fetch: fetchImpl }) : null;
       }
       case "custom": {
         const key = env.ASSISTANT_API_KEY?.trim();

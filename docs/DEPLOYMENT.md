@@ -78,6 +78,13 @@ Set these in the host's dashboard for the production environment. **Never commit
 | `LIBRARY_VAT_STATUS` | **Yes** to take payment | `registered` (prices include VAT) or `not_registered`. The accountant decides; unset means no checkout. | unset |
 | `LIBRARY_MIN_PER_SUBJECT`, `LIBRARY_REQUIRED_SUBJECTS` | **Yes** to take payment | The content gate: the least published resources each listed subject must have (for example `5` and `Maths,English,Science,11+`). | unset |
 | `LIBRARY_TERMS_APPROVED` | **Yes** to take payment, and for `/library/terms` in production | `true` once the owners and a solicitor have approved the terms, the content licence and the checkout wording. | unset |
+| `ASSISTANT_ENABLED` | **Yes** to turn Study Buddy on | The kill switch. In production the assistant is on only if this is exactly `true`; anything else (or unset) closes it and `/api/assistant/*` answers 503. `docs/ASSISTANT.md`. | unset (off) |
+| `ASSISTANT_PRODUCTION_APPROVED` | **Yes** to turn Study Buddy on | `true` only after plan19 section 6 (provider contract, safeguarding, privacy, terms) is complete and recorded. | unset |
+| `ASSISTANT_PROVIDER`, `ASSISTANT_BASE_URL`, `ASSISTANT_API_KEY` | **Yes** to turn Study Buddy on | In production only `custom` qualifies: an OpenAI-compatible endpoint chosen under section 6. Ollama and NVIDIA NIM are development only and are refused. The key is server only and never logged. | `custom`, `https://...`, (secret) |
+| `ASSISTANT_MODEL`, `ASSISTANT_VISION_MODEL` | With `custom` | The production provider's model names. | provider's names |
+| `ASSISTANT_MINORS_APPROVED` | No | `true` only after the safeguarding lead approves in writing. Until then Study Buddy is for adult account holders, with a recorded confirmation. | unset |
+| `ASSISTANT_SAFEGUARDING_EMAIL` | **Yes** before Study Buddy opens | The safeguarding lead's mailbox for flags (an opaque reference and a category, not the pupil's name). Unset: the fixed reply is still given but nobody is told. | `safeguarding@...` |
+| `ASSISTANT_CONTEXT`, `ASSISTANT_MAX_OUTPUT_TOKENS`, `ASSISTANT_DAILY_MESSAGES`, `ASSISTANT_PER_MINUTE`, `ASSISTANT_DAILY_TOKEN_BUDGET`, `ASSISTANT_CONCURRENCY` | No | Limits and the hosted cost cap. Defaults and meanings in `docs/ASSISTANT.md`. | `8192`, `700`, `40`, `6`, `40000`, `1` |
 | `NEXT_PUBLIC_SITE_URL` | No (staging) | The site's own address, which Stripe sends people back to and `ALLOWED_ORIGINS` also accepts. Default the production address. | `https://staging.example.com` |
 | `STRIPE_FAKE` | **Never in production** | Development and tests only: swaps in a fake Stripe. Refused when `NODE_ENV=production`. | unset |
 | `CAPTCHA_SECRET` | **Yes** for applications, reconfirmations, subject requests and the Library waitlist — those routes fail closed (503) without it | Key that signs the human-check challenges (an HMAC). At least 32 characters; use 64 hex characters. Never sent to the browser. | `openssl rand -hex 32` (secret) |
@@ -123,6 +130,15 @@ STRIPE_PRICE_ANNUAL=
 STRIPE_API_VERSION=
 STRIPE_AUTOMATIC_TAX=
 LIBRARY_VAT_STATUS=
+ASSISTANT_ENABLED=
+ASSISTANT_PRODUCTION_APPROVED=
+ASSISTANT_PROVIDER=
+ASSISTANT_BASE_URL=
+ASSISTANT_API_KEY=
+ASSISTANT_MODEL=
+ASSISTANT_VISION_MODEL=
+ASSISTANT_MINORS_APPROVED=
+ASSISTANT_SAFEGUARDING_EMAIL=
 LIBRARY_MIN_PER_SUBJECT=
 LIBRARY_REQUIRED_SUBJECTS=
 LIBRARY_TERMS_APPROVED=
