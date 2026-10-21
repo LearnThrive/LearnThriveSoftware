@@ -1,0 +1,248 @@
+/* Study Buddy. Tokens only; no animation of its own (the pencil and the orb carry their own motion rules). */
+
+.layout {
+  display: grid;
+  grid-template-columns: 17rem minmax(0, 1fr);
+  gap: var(--space-5);
+  max-width: 78rem;
+  margin-inline: auto;
+  padding: var(--space-5);
+}
+
+@media (max-width: 52rem) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.sidebar,
+.main {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  min-width: 0;
+}
+
+.sessions {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 22rem;
+  overflow: auto;
+}
+
+.sessions li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  border-radius: var(--radius-md);
+}
+
+.current {
+  background: var(--surface-2);
+}
+
+.sessionButton,
+.iconButton,
+.linkButton {
+  min-height: 2.75rem;
+  border: 0;
+  background: none;
+  color: var(--fg-accent);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.sessionButton {
+  flex: 1;
+  min-width: 0;
+  padding: 0 var(--space-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-strong);
+}
+
+.iconButton,
+.linkButton {
+  padding: 0 var(--space-2);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.sessionButton:focus-visible,
+.iconButton:focus-visible,
+.linkButton:focus-visible {
+  outline: var(--focus-width) solid var(--focus-colour);
+  outline-offset: var(--focus-offset);
+}
+
+.privacy {
+  display: grid;
+  gap: var(--space-1);
+  color: var(--fg-muted);
+  font-size: var(--text-small);
+}
+
+.privacy p {
+  margin: 0;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.header h1 {
+  margin: 0;
+}
+
+.badge {
+  margin: 0;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--fg-muted);
+  font-size: var(--text-small);
+}
+
+.notice,
+.muted {
+  margin: 0;
+  color: var(--fg-muted);
+}
+
+.log {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  min-height: 16rem;
+  max-height: 60vh;
+  padding: var(--space-3);
+  overflow: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+}
+
+.log:focus-visible {
+  outline: var(--focus-width) solid var(--focus-colour);
+  outline-offset: var(--focus-offset);
+}
+
+.mine,
+.theirs {
+  display: grid;
+  gap: var(--space-1);
+  max-width: 46rem;
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+}
+
+.mine {
+  justify-self: end;
+  background: var(--surface-2);
+}
+
+.theirs {
+  justify-self: start;
+  border: 1px solid var(--border-subtle);
+}
+
+.who {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-small);
+  font-weight: 700;
+}
+
+.plain {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.answer {
+  display: grid;
+  gap: var(--space-2);
+  overflow-wrap: anywhere;
+}
+
+.answer p,
+.answer ul,
+.answer ol,
+.answer blockquote,
+.answer pre {
+  margin: 0;
+}
+
+.answer ul,
+.answer ol {
+  padding-inline-start: 1.25rem;
+}
+
+.answer pre {
+  overflow: auto;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.answer blockquote {
+  padding-inline-start: var(--space-3);
+  border-inline-start: 3px solid var(--border-strong);
+  color: var(--fg-muted);
+}
+
+.display {
+  overflow-x: auto;
+  padding-block: var(--space-1);
+}
+
+.mathPending {
+  color: var(--fg-muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.thinking {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--fg-muted);
+}
+
+.ack {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.ack input {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-top: 0.15rem;
+}
+
+.composer {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.center {
+  display: grid;
+  place-items: center;
+  min-height: 12rem;
+  padding: var(--space-6);
+  text-align: center;
+}

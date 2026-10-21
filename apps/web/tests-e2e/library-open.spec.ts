@@ -163,10 +163,10 @@ test('the name on the account page is the name on the download, and the account 
   const doc = await PDFDocument.load(await response.body());
   expect(doc.getSubject()).toContain('Licensed to Pat Example on ');
   expect(doc.getSubject()).not.toContain(email);
-  // The icon menu lists only pages that exist.
+  // The icon menu lists only pages that exist (Study Buddy appears because the assistant is open on this server).
   const menu = page.getByRole('navigation', { name: 'Library' });
-  await expect(menu.getByRole('link')).toHaveCount(4);
-  await expect(menu.getByRole('link', { name: 'Study Buddy' })).toHaveCount(0);
+  await expect(menu.getByRole('link')).toHaveCount(5);
+  await expect(menu.getByRole('link', { name: 'Study Buddy' })).toHaveAttribute('href', '/library/study-buddy');
 });
 
 test('members content: refused for a plain account, open to an enrolled family, and the page says why', async ({ page }) => {
