@@ -6,7 +6,7 @@ import { VOICE_PROMPT_ADDENDUM } from "./speech";
 import { BLOCKED_REPLIES, OUTPUT_BLOCKED_REPLY, SAFEGUARDING_REPLY, SYSTEM_PROMPT } from "./prompt";
 import { GenerationQueue, QueueAborted, QueueFull } from "./queue";
 import { ProviderError, type ChatProvider, type ProviderMessage } from "./types";
-import { readPdf } from "./uploads";
+import { DOCUMENT_LIMITS, defuse, describeDocument, readPdfDocument } from "./documents";
 
 /**
  * One question to Study Buddy, from the signed-in family's request to the stored answer (plan19 phase F). The route is a thin
@@ -78,8 +78,6 @@ function titleFrom(text: string): string {
   return flat.length > 60 ? `${flat.slice(0, 57)}...` : flat || "New chat";
 }
 
-/** Defuses the markers the system prompt uses around uploads, so an uploaded file cannot close its own wrapper. */
-const defuse = (text: string) => text.replace(/<\s*\/?\s*uploaded-file/gi, "[marker removed]");
 
 function approxTokens(text: string): number {
   return Math.ceil(text.length / 3.5);
@@ -143,26 +141,47 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
     return;
   }
 
-  // Uploads attached to this question.
+  // Uploads: the files attached to this question or, for a follow-up with none, the ones attached most recently in this chat, so
+  // "and question 3?" still sees the paper. Each document is read page by page; pages are pictured within one shared budget.
   const images: string[] = [];
   let uploadedText = "";
-  const attachable = fileIds.length ? await store.chat.getUnattachedFiles(input.clientId, sessionId, fileIds) : [];
-  for (const file of attachable) {
-    const bytes = await deps.uploads.read(file.storagePath);
-    if (!bytes) continue;
-    if (file.contentType === "application/pdf") {
-      const read = await readPdf(bytes);
-      if (!read.ok) continue;
-      if (read.kind === "pdf_text") uploadedText += `\n\n<uploaded-file type="pdf">\n${defuse(read.text)}\n</uploaded-file>`;
-      else images.push(...read.images.map((b) => Buffer.from(b).toString("base64")));
-    } else images.push(Buffer.from(bytes).toString("base64"));
+  let attachable = fileIds.length ? await store.chat.getUnattachedFiles(input.clientId, sessionId, fileIds) : [];
+  const fresh = attachable.length > 0;
+  if (!fresh) {
+    const earlier = (await store.chat.listFiles(input.clientId, sessionId)).filter((f) => f.messageId !== null);
+    const last = earlier.at(-1)?.messageId;
+    attachable = last ? earlier.filter((f) => f.messageId === last) : [];
   }
-  if (images.length > 0) {
-    const caps = await deps.provider.capabilities(config.visionModel ?? undefined);
-    if (!caps.vision) {
+  const vision = attachable.length > 0 ? (await deps.provider.capabilities(config.visionModel ?? undefined)).vision : false;
+  const maxImages = vision ? DOCUMENT_LIMITS.imagesPerMessage : 0;
+  let index = 0;
+  for (const file of attachable) {
+    index += 1;
+    const label = `${fresh ? "" : "earlier "}upload ${index}`;
+    const bytes = await deps.uploads.read(file.storagePath);
+    if (!bytes) {
+      uploadedText += `\n\n<uploaded-file name="${label}" missing="true">This file is no longer stored (uploads are deleted after 7 days or with the chat). Tell the student you cannot see it and ask them to upload it again.</uploaded-file>`;
+      continue;
+    }
+    if (file.contentType === "application/pdf") {
+      const read = await readPdfDocument(bytes, { question: text, maxImages: maxImages - images.length });
+      if (!read.ok) {
+        log("document_unreadable", { code: read.problem.code });
+        uploadedText += `\n\n<uploaded-file name="${label}" unreadable="true">${defuse(read.problem.message)} Tell the student this plainly; do not guess what the file says.</uploaded-file>`;
+        continue;
+      }
+      uploadedText += `\n\n${describeDocument(label, read, images.length)}`;
+      for (const page of read.pages) if (page.image) images.push(Buffer.from(page.image).toString("base64"));
+      log("document_read", { pages: read.pageCount, pictured: read.shownAsImages.length });
+    } else if (vision && images.length < maxImages) {
+      images.push(Buffer.from(bytes).toString("base64"));
+      uploadedText += `\n\n<uploaded-file name="${label}" type="photo" picture="${images.length}"></uploaded-file>`;
+    } else if (!vision) {
       log("vision_unavailable");
       yield { type: "error", code: "vision_unavailable" };
       return;
+    } else {
+      uploadedText += `\n\n<uploaded-file name="${label}" type="photo" note="not shown: too many pictures in one message"></uploaded-file>`;
     }
   }
 
@@ -183,7 +202,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
 
   // Stored before the model runs, so a stopped or failed answer still leaves the question in the chat.
   const userMessage = await store.chat.appendMessage(input.clientId, sessionId, "user", text || "(attached a file)", now);
-  if (attachable.length) await store.chat.attachFiles(input.clientId, sessionId, attachable.map((f) => f.id), userMessage.id);
+  if (fresh) await store.chat.attachFiles(input.clientId, sessionId, attachable.map((f) => f.id), userMessage.id);
 
   if (deps.hosted && (await store.chat.usageCount(input.clientId, USAGE_TOKENS_DAY, day)) >= config.dailyTokenBudget) {
     log("budget");

@@ -7,6 +7,9 @@ const nextConfig: NextConfig = {
   // the first. Unset, nothing changes.
   distDir: process.env.NEXT_DIST_DIR || ".next",
   poweredByHeader: false,
+  // Study Buddy's document reader: a native module (@napi-rs/canvas loads a platform binary) and pdf.js, which loads its own worker
+  // and font data at run time. Bundling breaks both, so the server requires them from node_modules as they are.
+  serverExternalPackages: ["@napi-rs/canvas", "pdfjs-dist", "jpeg-js", "pngjs"],
   images: {
     formats: ["image/avif", "image/webp"],
   },
