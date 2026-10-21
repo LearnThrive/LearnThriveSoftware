@@ -81,8 +81,9 @@ function chatRequests(page: Page): Request[] {
   return seen;
 }
 
-// A steady tone: the detector never hears a silence, so only the button ends a turn.
-test.use(microphone(micFile([10])));
+// Speech-like bursts with short gaps (well under the 0.9 s that ends a turn), so only the button ends one. Not one steady tone:
+// the browser's noise suppression fades a steady sound out as background noise, and the turn then ended by itself, at random.
+test.use(microphone(micFile(Array.from({ length: 20 }, (_, i) => (i % 2 === 0 ? 0.35 : 0.15)))));
 
 test('tap to stop sends straight away, with no Send press', async ({ page }) => {
   await ready(page);
