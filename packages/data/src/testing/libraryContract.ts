@@ -373,6 +373,13 @@ export function libraryContract(name: string, make: () => Promise<{ harness: Con
       assert.deepEqual(await store.chat.listFiles(b.clientId, session.id), []);
       assert.equal((await store.chat.listMessages(a.clientId, session.id)).length, 1, "the intruder wrote nothing");
 
+      assert.equal(await store.chat.renameSession(a.clientId, session.id, "Fractions homework"), true);
+      assert.equal((await store.chat.getSession(a.clientId, session.id))?.title, "Fractions homework");
+      assert.equal(await store.chat.renameSession(b.clientId, session.id, "stolen"), false, "only the family that owns a chat can rename it");
+      assert.equal((await store.chat.getSession(a.clientId, session.id))?.title, "Fractions homework");
+      assert.equal(await store.chat.renameSession(a.clientId, session.id, "x".repeat(200)), true);
+      assert.equal((await store.chat.getSession(a.clientId, session.id))?.title.length, 120);
+
       const forStudent = await store.chat.createSession(a.clientId, { studentId: student }, now);
       assert.equal(forStudent.studentId, student);
       await assert.rejects(() => store.chat.createSession(b.clientId, { studentId: student }, now), /not in this family/);

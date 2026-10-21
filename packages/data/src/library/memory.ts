@@ -305,6 +305,12 @@ export class InMemoryLibraryStore implements LibraryStore {
       this.chatSessions.set(record.id, record);
       return { ...record };
     },
+    renameSession: async (clientId, sessionId, title) => {
+      const s = this.chatSessions.get(sessionId);
+      if (!s || s.clientId !== clientId || s.deletionRequestedAt) return false;
+      s.title = title.slice(0, 120);
+      return true;
+    },
     listSessions: async (clientId) =>
       [...this.chatSessions.values()].filter((s) => s.clientId === clientId && !s.deletionRequestedAt).sort((a, b) => b.lastActivityAt.getTime() - a.lastActivityAt.getTime()).map((s) => ({ ...s })),
     getSession: async (clientId, sessionId) => {

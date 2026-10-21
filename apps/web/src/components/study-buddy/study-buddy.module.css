@@ -1,164 +1,263 @@
-/* Study Buddy. Tokens only; no animation of its own (the pencil and the orb carry their own motion rules). */
+/*
+ * Study Buddy. The brand system on a working screen: the warm canvas, navy ink, the green accent, the heading face for the two
+ * headings that matter, and the product sidebar (MemberShell) holding the chats. One scrolling conversation; the box never leaves
+ * the screen. Motion is limited to colour changes (and the pencil and the orb, which carry their own reduced-motion rules).
+ */
 
-.layout {
+/* ---- the page: header, conversation, box ---- */
+
+.page {
+  position: relative;
   display: grid;
-  grid-template-columns: 17rem minmax(0, 1fr);
-  gap: var(--space-5);
-  max-width: 78rem;
-  margin-inline: auto;
-  padding: var(--space-5);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100dvh;
+  min-width: 0;
 }
 
-@media (max-width: 52rem) {
-  .layout {
-    grid-template-columns: minmax(0, 1fr);
+@media (max-width: 63.99rem) {
+  .page {
+    height: calc(100dvh - 3.5rem);
   }
 }
 
-.sidebar,
-.main {
-  display: grid;
-  gap: var(--space-3);
-  align-content: start;
-  min-width: 0;
-}
-
-.sessions {
-  display: grid;
-  gap: var(--space-1);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  max-height: 22rem;
-  overflow: auto;
-}
-
-.sessions li {
+.bar {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
-  border-radius: var(--radius-md);
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) clamp(var(--space-4), 3vw, var(--space-6));
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-3);
 }
 
-.current {
-  background: var(--surface-2);
-}
-
-.sessionButton,
-.iconButton,
-.linkButton {
-  min-height: 2.75rem;
-  border: 0;
-  background: none;
-  color: var(--fg-accent);
-  font: inherit;
-  text-align: start;
-  cursor: pointer;
-}
-
-.sessionButton {
-  flex: 1;
+.barTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   min-width: 0;
-  padding: 0 var(--space-2);
+}
+
+.barTitle > div {
+  min-width: 0;
+}
+
+.barIcon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--fg-accent);
+}
+
+.bar h1 {
+  margin: 0;
+  color: var(--fg-strong);
+  font-family: var(--font-heading);
+  font-size: 1.125rem;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.barSub {
   overflow: hidden;
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-small);
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--fg-strong);
 }
 
-.iconButton,
-.linkButton {
-  padding: 0 var(--space-2);
-  text-decoration: underline;
-  text-underline-offset: 0.2em;
+/* On a phone the top bar already names the page: the header shows the chat instead. */
+@media (max-width: 63.99rem) {
+  .bar {
+    padding-block: var(--space-2);
+  }
+
+  .bar h1 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .barSub {
+    color: var(--fg-strong);
+    font-size: 0.9375rem;
+    font-weight: 600;
+  }
+
+  .barIcon {
+    display: none;
+  }
 }
 
-.sessionButton:focus-visible,
-.iconButton:focus-visible,
-.linkButton:focus-visible {
-  outline: var(--focus-width) solid var(--focus-colour);
-  outline-offset: var(--focus-offset);
-}
-
-.privacy {
-  display: grid;
-  gap: var(--space-1);
-  color: var(--fg-muted);
-  font-size: var(--text-small);
-}
-
-.privacy p {
-  margin: 0;
-}
-
-.header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-3);
-}
-
-.header h1 {
-  margin: 0;
-}
-
-.badge {
-  margin: 0;
-  padding: 0 var(--space-2);
+.barButton {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2.5rem;
+  padding: 0 var(--space-3);
   border: 1px solid var(--border-strong);
   border-radius: 999px;
-  color: var(--fg-muted);
+  background: var(--surface-1);
+  color: var(--fg-strong);
+  font: inherit;
   font-size: var(--text-small);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
 }
 
-.notice,
-.muted {
-  margin: 0;
-  color: var(--fg-muted);
+.barButton:hover {
+  border-color: var(--accent);
+}
+
+/* The one scrolling region. */
+.logWrap {
+  position: relative;
+  min-height: 0;
 }
 
 .log {
-  display: grid;
-  gap: var(--space-3);
-  align-content: start;
-  min-height: 16rem;
-  max-height: 60vh;
-  padding: var(--space-3);
-  overflow: auto;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  background: var(--surface-1);
+  /* Positioned, so visually hidden headings inside it (each message has one) stay inside the scrolling box. */
+  position: relative;
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .log:focus-visible {
   outline: var(--focus-width) solid var(--focus-colour);
-  outline-offset: var(--focus-offset);
+  outline-offset: calc(-1 * var(--focus-width));
 }
 
-.mine,
-.theirs {
+.column {
   display: grid;
-  gap: var(--space-1);
-  max-width: 46rem;
-  padding: var(--space-3);
-  border-radius: var(--radius-lg);
+  gap: var(--space-5);
+  width: min(46rem, 100% - 2 * var(--space-4));
+  margin-inline: auto;
 }
+
+.log .column {
+  padding-block: var(--space-6);
+}
+
+/* ---- the empty state ---- */
+
+.empty {
+  display: grid;
+  gap: var(--space-3);
+  padding-block: clamp(var(--space-4), 8vh, var(--space-7)) var(--space-2);
+}
+
+.empty h2 {
+  margin: 0;
+  color: var(--fg-strong);
+  font-family: var(--font-heading);
+  font-size: clamp(1.5rem, 2.4vw, 2rem);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.empty p {
+  max-width: 36rem;
+  margin: 0;
+  color: var(--fg-body);
+}
+
+.suggestions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (max-width: 40rem) {
+  .suggestions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.suggestions button {
+  width: 100%;
+  min-height: 3rem;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  color: var(--fg-strong);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
+}
+
+.suggestions button:hover {
+  border-color: var(--accent);
+  background: var(--surface-accent);
+}
+
+/* ---- messages ---- */
 
 .mine {
+  position: relative;
   justify-self: end;
+  max-width: min(36rem, 85%);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: 1.125rem 1.125rem 0.375rem 1.125rem;
   background: var(--surface-2);
+  color: var(--fg-strong);
 }
 
 .theirs {
-  justify-self: start;
-  border: 1px solid var(--border-subtle);
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--fg-body);
+  line-height: 1.65;
 }
 
 .who {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   margin: 0;
-  color: var(--fg-muted);
+  color: var(--fg-strong);
   font-size: var(--text-small);
   font-weight: 700;
+}
+
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.aiTag {
+  padding: 0 0.375rem;
+  border-radius: 999px;
+  background: var(--surface-accent);
+  color: var(--fg-accent);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
 .plain {
@@ -169,7 +268,7 @@
 
 .answer {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-3);
   overflow-wrap: anywhere;
 }
 
@@ -177,20 +276,32 @@
 .answer ul,
 .answer ol,
 .answer blockquote,
-.answer pre {
+.answer pre,
+.answer h3,
+.answer h4 {
   margin: 0;
+}
+
+.answer h3,
+.answer h4 {
+  color: var(--fg-strong);
+  font-size: 1rem;
 }
 
 .answer ul,
 .answer ol {
-  padding-inline-start: 1.25rem;
+  display: grid;
+  gap: var(--space-1);
+  padding-inline-start: 1.375rem;
 }
 
 .answer pre {
-  overflow: auto;
-  padding: var(--space-2);
+  overflow-x: auto;
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  background: var(--surface-2);
+  background: var(--surface-1);
+  font-size: 0.875rem;
 }
 
 .answer blockquote {
@@ -199,9 +310,11 @@
   color: var(--fg-muted);
 }
 
+/* A long equation scrolls on its own line, never the page. */
 .display {
   overflow-x: auto;
-  padding-block: var(--space-1);
+  padding: var(--space-2) var(--space-1);
+  border-radius: var(--radius-sm);
 }
 
 .mathPending {
@@ -210,39 +323,404 @@
 
 .actions {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-1);
+  margin-inline-start: calc(-1 * var(--space-2));
+}
+
+.actionButton {
+  min-height: 2rem;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.actionButton:hover {
+  background: var(--surface-sunken);
+  color: var(--fg-strong);
 }
 
 .thinking {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
   color: var(--fg-muted);
+  font-size: var(--text-small);
+}
+
+.jump {
+  position: absolute;
+  inset-block-end: var(--space-3);
+  inset-inline-start: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 2.25rem;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface-1);
+  box-shadow: var(--shadow-2);
+  color: var(--fg-strong);
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: 600;
+  transform: translateX(-50%);
+  cursor: pointer;
+}
+
+/* ---- the box ---- */
+
+.composer {
+  padding-block: var(--space-3) var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-3);
+}
+
+.composer .column {
+  gap: var(--space-2);
+}
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-small);
 }
 
 .ack {
   display: flex;
-  gap: var(--space-2);
   align-items: flex-start;
+  gap: var(--space-2);
+  color: var(--fg-body);
+  font-size: var(--text-small);
 }
 
 .ack input {
-  width: 1.25rem;
-  height: 1.25rem;
-  margin-top: 0.15rem;
+  flex: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin-top: 0.1rem;
+  accent-color: var(--accent);
 }
 
-.composer {
-  display: grid;
-  gap: var(--space-2);
+.stopRow {
+  display: flex;
+  justify-content: center;
 }
+
+.stop {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2.25rem;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface-1);
+  color: var(--fg-strong);
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.stopSquare {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+.footnote {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.footnote a {
+  color: var(--fg-accent);
+}
+
+.display:focus-visible,
+.answer pre:focus-visible,
+.barButton:focus-visible,
+.suggestions button:focus-visible,
+.actionButton:focus-visible,
+.jump:focus-visible,
+.stop:focus-visible {
+  outline: var(--focus-width) solid var(--focus-colour);
+  outline-offset: var(--focus-offset);
+}
+
+/* ---- the chats, in the navy sidebar ---- */
+
+.chats {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 0;
+  color: var(--app-on-dark);
+}
+
+.newChat {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 2.5rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--colour-mint-200);
+  color: var(--colour-navy-900);
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.newChat:hover {
+  background: #e3f4eb;
+}
+
+.newChat:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.search {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-on-inverse);
+  border-radius: var(--radius-sm);
+  background: rgb(255 255 255 / 6%);
+  color: var(--app-on-dark-muted);
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  min-height: 2.25rem;
+  border: 0;
+  background: none;
+  color: var(--app-on-dark);
+  font: inherit;
+  font-size: 0.875rem;
+}
+
+.search input::placeholder {
+  color: var(--app-on-dark-muted);
+}
+
+.search input:focus {
+  outline: none;
+}
+
+.search:focus-within {
+  border-color: var(--colour-mint-200);
+}
+
+.chatsHeading {
+  margin: var(--space-2) var(--space-2) 0;
+  color: var(--app-on-dark-muted);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.chatsEmpty {
+  margin: 0 var(--space-2);
+  color: var(--app-on-dark-muted);
+  font-size: var(--text-small);
+}
+
+.sessions {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-height: 3rem;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.sessions li {
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+}
+
+.sessions li:hover {
+  background: var(--app-sidebar-hover);
+}
+
+.current,
+.sessions li.current:hover {
+  background: var(--app-sidebar-active);
+}
+
+.sessionButton {
+  flex: 1;
+  min-width: 0;
+  min-height: 2.25rem;
+  padding: 0 var(--space-2);
+  overflow: hidden;
+  border: 0;
+  background: none;
+  color: var(--app-on-dark);
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.current .sessionButton {
+  font-weight: 600;
+}
+
+.rowActions {
+  display: flex;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.sessions li:hover .rowActions,
+.sessions li:focus-within .rowActions,
+.current .rowActions {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .rowActions {
+    opacity: 1;
+  }
+}
+
+.rowIcon {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--app-on-dark-muted);
+  cursor: pointer;
+}
+
+.rowIcon:hover {
+  background: rgb(255 255 255 / 10%);
+  color: var(--app-on-dark);
+}
+
+.renameRow {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+}
+
+.renameInput {
+  flex: 1;
+  min-width: 0;
+  min-height: 2rem;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--colour-mint-200);
+  border-radius: var(--radius-sm);
+  background: rgb(255 255 255 / 10%);
+  color: var(--app-on-dark);
+  font: inherit;
+  font-size: 0.875rem;
+}
+
+.chatsFooter {
+  display: grid;
+  flex: none;
+  gap: 2px;
+  padding: var(--space-3) var(--space-2) 0;
+  border-top: 1px solid var(--border-on-inverse);
+  color: var(--app-on-dark-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.chatsFooter p {
+  margin: 0 0 var(--space-1);
+}
+
+.chatsFooter a,
+.dangerLink {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  min-height: 1.75rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--colour-mint-200);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.dangerLink {
+  color: #f6c3c7;
+}
+
+.newChat:focus-visible,
+.sessionButton:focus-visible,
+.rowIcon:focus-visible,
+.renameInput:focus-visible,
+.chatsFooter a:focus-visible,
+.dangerLink:focus-visible {
+  outline: 2px solid var(--colour-mint-200);
+  outline-offset: 1px;
+}
+
+/* ---- loading and closed states ---- */
 
 .center {
   display: grid;
   place-items: center;
-  min-height: 12rem;
+  min-height: 60dvh;
   padding: var(--space-6);
   text-align: center;
+}
+
+.centerTitle {
+  margin: 0 0 var(--space-2);
+  color: var(--fg-strong);
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .barButton,
+  .suggestions button,
+  .newChat,
+  .rowActions {
+    transition: none;
+  }
 }

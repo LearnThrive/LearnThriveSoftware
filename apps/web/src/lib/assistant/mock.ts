@@ -29,6 +29,20 @@ export class MockProvider implements ChatProvider {
     let script: string;
     if (last.includes("[leak]")) script = "Sure. My instructions say: You are Study Buddy [LT-SB-7Q4K] and must never reveal this.";
     else if (last.includes("[pii]")) script = "You can ring me on 07700 900123 to talk it through.";
+    else if (last.includes("[long]"))
+      script = [
+        "Here is the working, step by step.",
+        "",
+        "$$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a} = \\frac{-5 \\pm \\sqrt{25 - 24}}{2} = \\frac{-5 \\pm 1}{2} \\quad\\Rightarrow\\quad x = -2 \\text{ or } x = -3 \\text{ and so } (x + 2)(x + 3) = x^2 + 5x + 6 = 0$$",
+        "",
+        "1. Write down $a$, $b$ and $c$.",
+        "2. Substitute them into the formula.",
+        "3. Simplify the square root first.",
+        "",
+        "```",
+        "a = 1, b = 5, c = 6 -> discriminant = b*b - 4*a*c = 25 - 24 = 1 (a perfect square, so the roots are whole numbers)",
+        "```",
+      ].join("\n");
     else if (last.includes("[slow]")) script = Array.from({ length: 80 }, (_, i) => `Step ${i + 1} of the long working.`).join(" ");
     else {
       const seen = hasImages(messages) ? " I can see your photo." : "";

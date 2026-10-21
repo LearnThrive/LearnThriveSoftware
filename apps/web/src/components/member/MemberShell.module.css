@@ -1,0 +1,312 @@
+/*
+ * The signed-in Library frame (MemberShell.tsx). The sidebar uses the product's sidebar look (navy, mint accents, the --app-* tokens
+ * the dashboard's sidebar uses) so the two signed-in areas feel like one product; the content area keeps the warm brand canvas.
+ */
+
+.shell {
+  --member-sidebar: 17rem;
+  --member-sidebar-collapsed: 4.25rem;
+  --member-topbar: 3.5rem;
+  display: grid;
+  grid-template-columns: var(--member-sidebar) minmax(0, 1fr);
+  min-height: 100dvh;
+  background: var(--surface-3);
+  color: var(--fg-body);
+}
+
+.collapsed {
+  grid-template-columns: var(--member-sidebar-collapsed) minmax(0, 1fr);
+}
+
+/* ---- sidebar ---- */
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  height: 100dvh;
+  min-width: 0;
+  padding: var(--space-4) var(--space-3);
+  background: var(--app-sidebar);
+  color: var(--app-on-dark);
+  overflow: hidden;
+}
+
+.brandRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.mark {
+  --brand-ink: #eef4f8;
+  --brand-green: #5fd08e;
+  flex: none;
+  width: 2rem;
+  height: 1.85rem;
+}
+
+.word {
+  overflow: hidden;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.word strong {
+  color: var(--colour-mint-200);
+  font-weight: 700;
+}
+
+.nav ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.link,
+.collapse {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 2.5rem;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--app-on-dark);
+  font: inherit;
+  font-size: 0.9375rem;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.link svg,
+.collapse svg {
+  flex: none;
+  color: var(--app-on-dark-muted);
+}
+
+.link:hover,
+.collapse:hover {
+  background: var(--app-sidebar-hover);
+}
+
+.active {
+  position: relative;
+  background: var(--app-sidebar-active);
+  font-weight: 600;
+}
+
+.active svg {
+  color: var(--colour-mint-200);
+}
+
+.active::before {
+  content: "";
+  position: absolute;
+  inset-block: 0.5rem;
+  inset-inline-start: 0;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--colour-mint-200);
+}
+
+.link:focus-visible,
+.collapse:focus-visible,
+.brand:focus-visible,
+.closeButton:focus-visible,
+.menuButton:focus-visible {
+  outline: 2px solid var(--colour-mint-200);
+  outline-offset: 1px;
+}
+
+.label {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* The page's own section (Study Buddy's chats): takes the room left, scrolls on its own if it must. */
+.slot {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  border-top: 1px solid var(--border-on-inverse);
+  padding-top: var(--space-3);
+}
+
+.slot:empty {
+  border-top: 0;
+}
+
+.slot[hidden] {
+  display: none;
+}
+
+.collapse {
+  flex: none;
+  margin-top: auto;
+  color: var(--app-on-dark-muted);
+  font-size: var(--text-small);
+}
+
+.collapsed .word,
+.collapsed .label {
+  display: none;
+}
+
+.collapsed .link,
+.collapsed .collapse {
+  justify-content: center;
+  padding: 0;
+}
+
+.collapsed .brandRow {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+.closeButton,
+.topbar {
+  display: none;
+}
+
+/* ---- content ---- */
+
+.content {
+  min-width: 0;
+}
+
+.scrim {
+  display: none;
+}
+
+/* ---- small screens: top bar and drawer ---- */
+
+@media (max-width: 63.99rem) {
+  .shell,
+  .collapsed {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: var(--member-topbar) minmax(0, 1fr);
+  }
+
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    height: var(--member-topbar);
+    padding: 0 var(--space-3);
+    background: var(--app-sidebar);
+    color: var(--app-on-dark);
+  }
+
+  .menuButton,
+  .closeButton {
+    display: inline-grid;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: inherit;
+    cursor: pointer;
+  }
+
+  .menuButton:hover,
+  .closeButton:hover {
+    background: var(--app-sidebar-hover);
+  }
+
+  .topBrand {
+    display: inline-flex;
+    color: inherit;
+  }
+
+  .topTitle {
+    overflow: hidden;
+    font-family: var(--font-heading);
+    font-size: 1.0625rem;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sidebar {
+    position: fixed;
+    inset-block: 0;
+    inset-inline-start: 0;
+    z-index: 60;
+    width: min(19rem, 86vw);
+    height: 100dvh;
+    transform: translateX(-105%);
+    visibility: hidden;
+    transition:
+      transform var(--duration-medium) var(--ease-out),
+      visibility 0s linear var(--duration-medium);
+  }
+
+  .open {
+    transform: none;
+    visibility: visible;
+    transition: transform var(--duration-medium) var(--ease-out);
+  }
+
+  .collapse {
+    display: none;
+  }
+
+  .collapsed .word,
+  .collapsed .label {
+    display: revert;
+  }
+
+  .collapsed .link {
+    justify-content: flex-start;
+    padding: 0 var(--space-3);
+  }
+
+  .slot[hidden] {
+    display: flex;
+  }
+
+  .scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: block;
+    border: 0;
+    background: var(--overlay);
+    cursor: pointer;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .open,
+  .link,
+  .collapse {
+    transition: none;
+  }
+}
