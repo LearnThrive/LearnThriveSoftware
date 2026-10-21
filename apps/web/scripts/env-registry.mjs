@@ -53,6 +53,7 @@ export const REGISTRY = [
   e("SUPABASE_DB_PASSWORD", "supabase", "The database password the Supabase CLI asks for on supabase link / db push. One shell session only.", { secret: true, production: "unset", source: "the owner (Supabase dashboard > Database settings)", check: "min:12" }),
   e("SUPABASE_LOCAL", "supabase", "1 enables the tests that need the local Supabase stack (npm run test:realstack sets it).", { production: "unset", check: "flag:1" }),
   e("SUPABASE_LOCAL_SERIAL", "supabase", "1, set only by npm run test:realstack: lets the real-stack store test empty the local tables.", { production: "unset", check: "flag:1" }),
+  e("SMOKE_EMAIL", "supabase", "An address you control with NO account yet, for scripts/supabase-smoke.mjs (it signs it up, tests, and deletes it). An existing account is never touched.", { production: "unset", source: "you: for example a plus-address on your own domain", check: "email" }),
   e("CHECK_ENV_ALLOW_HOSTED", "supabase", "1 lets scripts/check-env.mjs accept hosted Supabase values in a LOCAL environment (it refuses by default so production keys cannot slip into development).", { production: "unset", check: "flag:1" }),
 
   // ---- Library ------------------------------------------------------------------------------------------------------
