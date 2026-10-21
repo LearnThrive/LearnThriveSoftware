@@ -23,6 +23,9 @@ test("validation: emails, passwords, link tokens and the next path", () => {
   assert.equal(v.passwordError("x".repeat(v.PASSWORD_MIN)), undefined);
   assert.ok(v.passwordError("x".repeat(v.PASSWORD_MIN - 1)));
   assert.ok(v.passwordError("x".repeat(v.PASSWORD_MAX + 1)));
+  assert.equal(v.passwordError("x".repeat(v.PASSWORD_MAX)), undefined, "72 bytes is allowed");
+  assert.ok(v.passwordError("é".repeat(37)), "37 two-byte letters are 74 bytes: refused although only 37 characters");
+  assert.equal(v.passwordError("é".repeat(36)), undefined, "36 two-byte letters are exactly 72 bytes");
   assert.equal(v.passwordError("  spaces are allowed  "), undefined);
   assert.equal(v.parseTokenHash("abcDEF123_-xyz"), "abcDEF123_-xyz");
   for (const bad of ["", "short", "has space in it here", "x".repeat(201), "../../etc/passwd", 5, null]) assert.equal(v.parseTokenHash(bad), null);
@@ -176,6 +179,12 @@ test("supabase provider: error codes map to the same reasons as the memory provi
   const replies = (status, error_code) => supabase(() => ({ status, body: { error_code, msg: "x" } })).auth;
   assert.deepEqual(await replies(422, "weak_password").signUp({ email: "a@b.co", password: "p", displayName: "", adultConfirmed: true }), { ok: false, reason: "weak_password" });
   assert.deepEqual(await replies(400, "email_address_invalid").signUp({ email: "a@b.co", password: "p", displayName: "", adultConfirmed: true }), { ok: false, reason: "invalid_email" });
+  // What the real service answers for a password it cannot hash (over 72 bytes): a password problem, never "invalid email".
+  const tooLong = supabase(() => ({ status: 400, body: { error_code: "validation_failed", msg: "Password cannot be longer than 72 characters" } })).auth;
+  assert.deepEqual(await tooLong.signUp({ email: "a@b.co", password: "p", displayName: "", adultConfirmed: true }), { ok: false, reason: "weak_password" });
+  assert.deepEqual(await tooLong.updatePassword("t", "p"), { ok: false, reason: "weak_password" });
+  const otherInvalid = supabase(() => ({ status: 400, body: { error_code: "validation_failed", msg: "Signup requires a valid email" } })).auth;
+  assert.deepEqual(await otherInvalid.signUp({ email: "a@b.co", password: "p", displayName: "", adultConfirmed: true }), { ok: false, reason: "invalid_email" });
   assert.deepEqual(await replies(422, "user_already_exists").signUp({ email: "a@b.co", password: "p", displayName: "", adultConfirmed: true }), { ok: true }, "an existing address is not reported");
   assert.deepEqual(await replies(429, "over_email_send_rate_limit").signUp({ email: "a@b.co", password: "p", displayName: "", adultConfirmed: true }), { ok: false, reason: "unavailable" });
   assert.deepEqual(await replies(400, "invalid_credentials").signIn("a@b.co", "p"), { ok: false, reason: "invalid_credentials" });
@@ -238,6 +247,20 @@ async function verified(rt, c, email = FORM.email) {
   const link = rt.outbox.findLast((m) => m.to === email && m.kind === "signup");
   return h.handleVerify(post("verify", { tokenHash: link.tokenHash, type: "signup" }), { rt, jar: c });
 }
+
+test("the name shown follows a rename: the profile is the source of truth, not the name given at sign-up (found on the real stack)", async (t) => {
+  environment(t, {});
+  h.resetAccountLimiters();
+  quiet(t);
+  const rt = runtime();
+  const c = jar();
+  await verified(rt, c);
+  assert.deepEqual(await (await h.handleMe({ rt, jar: c })).json(), { user: { displayName: "Pat" } });
+  assert.equal((await h.handleSetName(post("profile", { displayName: "Pat Q" }), { rt, jar: c })).status, 200);
+  assert.deepEqual(await (await h.handleMe({ rt, jar: c })).json(), { user: { displayName: "Pat Q" } });
+  const again = await h.handleSignIn(post("signin", { email: FORM.email, password: GOOD }), { rt, jar: jar() });
+  assert.deepEqual((await again.json()).user, { displayName: "Pat Q" });
+});
 
 test("sign-up route: success, an identical answer for a known address, and the log holds nothing personal", async (t) => {
   environment(t, {});

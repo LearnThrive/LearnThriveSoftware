@@ -5,7 +5,8 @@ import { asBoolean, asString, cleanLine, isPlainEmail } from "@/lib/forms-common
  * every check. The password is never trimmed or normalised (spaces are allowed), only length-bounded.
  */
 export const PASSWORD_MIN = 12;
-export const PASSWORD_MAX = 128;
+/** Supabase Auth hashes passwords with bcrypt, which uses at most 72 BYTES: a longer one is refused (measured on the real stack). */
+export const PASSWORD_MAX = 72;
 export const EMAIL_MAX = 160;
 export const NAME_MAX = 80;
 
@@ -33,7 +34,8 @@ export function emailError(email: string): string | undefined {
 
 export function passwordError(password: string): string | undefined {
   if (password.length < PASSWORD_MIN) return `Choose a password of at least ${PASSWORD_MIN} characters.`;
-  if (password.length > PASSWORD_MAX) return `Use a password of at most ${PASSWORD_MAX} characters.`;
+  // Bytes, not characters: an accented letter is two bytes and an emoji four.
+  if (new TextEncoder().encode(password).length > PASSWORD_MAX) return `That password is too long. Use ${PASSWORD_MAX} characters or fewer (accented letters and emoji count as more than one).`;
   return undefined;
 }
 

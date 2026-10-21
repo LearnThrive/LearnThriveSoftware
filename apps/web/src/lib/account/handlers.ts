@@ -126,6 +126,20 @@ export async function handleSignUp(request: Request, deps: Deps): Promise<Respon
   return jsonResponse(200, { success: true });
 }
 
+/**
+ * The name to show for a person. public.profiles is the source of truth (it is what the account page edits and what is printed on
+ * downloads); Auth keeps only the name given at sign-up, which goes stale after a rename (found on the real stack). Falls back to
+ * that name if the profile cannot be read.
+ */
+async function shownName(rt: AccountRuntime, user: { id: string; displayName: string }): Promise<string> {
+  try {
+    const account = await rt.store.accounts.getAccount(user.id);
+    return account ? account.displayName : user.displayName;
+  } catch {
+    return user.displayName;
+  }
+}
+
 export async function handleSignIn(request: Request, deps: Deps): Promise<Response> {
   const gate = await open(request, deps, "account-signin");
   if (!gate.ok) return gate.response;
@@ -149,7 +163,7 @@ export async function handleSignIn(request: Request, deps: Deps): Promise<Respon
   lockout.recordSuccess(email);
   setSessionCookies(deps.jar, result.tokens, deps.env ?? process.env);
   logOutcome("account-signin", "ok");
-  return jsonResponse(200, { success: true, user: { displayName: result.user.displayName } });
+  return jsonResponse(200, { success: true, user: { displayName: await shownName(gate.rt, result.user) } });
 }
 
 export async function handleSignOut(request: Request, deps: Deps): Promise<Response> {
@@ -246,7 +260,7 @@ export async function handleMe(deps: Deps): Promise<Response> {
   if (!deps.rt) return jsonResponse(503, { code: "unavailable" });
   const session = await renewSession(deps.jar, deps.rt);
   if (session.status !== "ok") return jsonResponse(401, { code: "signed_out" }, { "Cache-Control": "no-store" });
-  return jsonResponse(200, { user: { displayName: session.user.displayName } }, { "Cache-Control": "no-store" });
+  return jsonResponse(200, { user: { displayName: await shownName(deps.rt, session.user) } }, { "Cache-Control": "no-store" });
 }
 
 export { ACCESS_COOKIE, REFRESH_COOKIE };

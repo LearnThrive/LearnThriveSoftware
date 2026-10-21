@@ -80,8 +80,11 @@ refresh_token_reuse_interval = 10
 enable_signup = true
 enable_anonymous_sign_ins = false
 enable_manual_linking = false
+# 12 characters minimum and NO composition rules, the site's own rule (validation.ts) and plan20's default: long, unique passwords,
+# checked against known breaches where the plan offers it (hosted Pro plan only; it cannot be tested locally). Auth also refuses
+# more than 72 bytes (bcrypt), which the site refuses first, with a clear message.
 minimum_password_length = 12
-password_requirements = "lower_upper_letters_digits"
+password_requirements = ""
 
 [auth.rate_limit]
 # Local only, so the real-stack tests can create several users; the hosted limits are in the dashboard checklist.

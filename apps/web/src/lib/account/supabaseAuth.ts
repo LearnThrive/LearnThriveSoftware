@@ -92,6 +92,8 @@ export class SupabaseAccountAuth implements AccountAuth {
     if (reply.status >= 200 && reply.status < 300) return { ok: true as const };
     const code = SupabaseAccountAuth.code(reply);
     if (code === "weak_password") return { ok: false as const, reason: "weak_password" as const };
+    // validation_failed is also what Auth answers for a password it cannot hash (over 72 bytes): say that, not "invalid email".
+    if (code === "validation_failed" && /password/i.test(String(reply.body?.msg ?? ""))) return { ok: false as const, reason: "weak_password" as const };
     if (code === "email_address_invalid" || code === "validation_failed") return { ok: false as const, reason: "invalid_email" as const };
     // "user_already_exists" is not reported to the caller: sign-up looks the same either way.
     if (code === "user_already_exists" || code === "email_exists") return { ok: true as const };
@@ -131,7 +133,8 @@ export class SupabaseAccountAuth implements AccountAuth {
     const reply = await this.call("PUT", "/user", { password: newPassword }, accessToken);
     if (!reply || reply.status >= 500 || reply.status === 429) return { ok: false as const, reason: "unavailable" as const };
     if (reply.status === 200) return { ok: true as const };
-    if (SupabaseAccountAuth.code(reply) === "weak_password") return { ok: false as const, reason: "weak_password" as const };
+    const code = SupabaseAccountAuth.code(reply);
+    if (code === "weak_password" || (code === "validation_failed" && /password/i.test(String(reply.body?.msg ?? "")))) return { ok: false as const, reason: "weak_password" as const };
     return { ok: false as const, reason: "invalid_token" as const };
   }
 

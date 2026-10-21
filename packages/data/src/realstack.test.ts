@@ -208,11 +208,24 @@ describe("the real local Supabase stack", { skip: ENABLED ? false : "set SUPABAS
       assert.deepEqual(rows(profile), [{ display_name: "Journey", role: "CLIENT" }]);
     });
 
-    test("password rules: at least 12 characters with lower case, upper case and a digit; the code the site maps is weak_password", async () => {
-      for (const password of ["Short-1a", "alllowercase12345", "ALLUPPERCASE12345", "NoDigitsHereAtAll"]) {
-        const r = await auth(s, "POST", "/signup", { body: { email: `rs-${runId}-weak${Math.random().toString(36).slice(2, 7)}@example.com`, password, data: { display_name: "W" } } });
-        assert.equal(r.status, 422, `${password}: ${JSON.stringify(r.body)}`);
-        assert.equal(r.body.error_code, "weak_password", password);
+    test("password rules: 12 characters minimum and nothing else on composition; at most 72 BYTES (bcrypt), counted in bytes not characters", async () => {
+      const signUp = (password: string) => auth(s, "POST", "/signup", { body: { email: `rs-${runId}-pw${Math.random().toString(36).slice(2, 9)}@example.com`, password, data: { display_name: "W", adult_confirmed: true } } });
+      for (const password of ["Short-1a", "elevenchars", "Aa1-Aa1-Aa1"]) {
+        const r = await signUp(password);
+        assert.equal(r.status, 422, `${password.length} characters: ${JSON.stringify(r.body)}`);
+        assert.equal(r.body.error_code, "weak_password", "the code the site maps to its 'choose a different password' message");
+      }
+      // The site's own rule is length only, so lower case alone must be accepted (a long passphrase is not a weak password).
+      for (const password of ["correct horse battery staple", "a".repeat(12), "é".repeat(36) /* exactly 72 bytes */, "x".repeat(72)]) {
+        const r = await signUp(password);
+        assert.equal(r.status, 200, `${password.length} characters, ${new TextEncoder().encode(password).length} bytes: ${JSON.stringify(r.body)}`);
+        created.push(r.body.id);
+      }
+      for (const password of ["x".repeat(73), "é".repeat(37) /* 37 characters, 74 bytes */, "correct horse battery staple ".repeat(4)]) {
+        const r = await signUp(password);
+        assert.equal(r.status, 400, `${new TextEncoder().encode(password).length} bytes: ${JSON.stringify(r.body)}`);
+        assert.equal(r.body.error_code, "validation_failed");
+        assert.match(r.body.msg, /Password cannot be longer than 72/, "what supabaseAuth.ts maps to a password problem, not 'invalid email'");
       }
     });
 
@@ -259,16 +272,18 @@ describe("the real local Supabase stack", { skip: ENABLED ? false : "set SUPABAS
       assert.ok(second.body.expires_in <= 3600);
       const third = await refresh(second.body.refresh_token);
       assert.equal(third.status, 200);
-      // Rotation: GoTrue allows a spent token to be presented again for the 10 s reuse interval (a retry after a dropped
-      // response), and keeps the immediate predecessor of the live token usable; anything older than that is refused once the
-      // interval has passed.
-      await new Promise((r) => setTimeout(r, 10_500));
+      const fourth = await refresh(third.body.refresh_token);
+      assert.equal(fourth.status, 200);
+      // Rotation: GoTrue tolerates a spent token being presented again for a short while (the 10 s reuse interval, and the
+      // newest predecessors, so a retry after a dropped response still works). A token several generations old, after that
+      // interval, is refused. (Measured: with the chain at only two or three deep the oldest token was still accepted.)
+      await new Promise((r) => setTimeout(r, 12_000));
       const stale = await refresh(first.body.refresh_token);
-      assert.equal(stale.status, 400, "a refresh token two generations old is refused");
+      assert.equal(stale.status, 400, "a refresh token three generations old is refused");
       assert.equal(stale.body.error_code, "refresh_token_already_used");
-      const out = await auth(s, "POST", "/logout", { token: third.body.access_token, body: {} });
+      const out = await auth(s, "POST", "/logout", { token: fourth.body.access_token, body: {} });
       assert.ok(out.status === 204 || out.status === 200);
-      assert.equal((await refresh(third.body.refresh_token)).status, 400, "after sign-out the session's refresh token is gone");
+      assert.equal((await refresh(fourth.body.refresh_token)).status, 400, "after sign-out the session's refresh token is gone");
     });
 
     test("anonymous sign-ins are off, and no external provider is enabled", async () => {
