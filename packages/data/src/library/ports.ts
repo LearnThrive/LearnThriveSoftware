@@ -118,6 +118,8 @@ export interface ChatRepository {
   listFiles(clientId: string, sessionId: string): Promise<ChatFileRecord[]>;
   /** Files uploaded to this chat and not yet used in a message, by id (the caller picked these ids). */
   getUnattachedFiles(clientId: string, sessionId: string, fileIds: string[]): Promise<ChatFileRecord[]>;
+  /** One file, only for the family that owns its chat (and not once the chat is being deleted). */
+  getFile(clientId: string, fileId: string): Promise<ChatFileRecord | null>;
   /** Hides the chat at once; the retention job removes it and its files. false if it is not this family's, or already requested. */
   requestDeletion(clientId: string, sessionId: string, now: Date): Promise<boolean>;
   requestDeletionAll(clientId: string, now: Date): Promise<number>;

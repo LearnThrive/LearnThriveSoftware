@@ -430,6 +430,10 @@ export class SqlLibraryStore implements LibraryStore {
       const rows = await this.db.query<Row>(`select f.* from public.chat_files f join public.chat_sessions s on s.id = f.session_id where ${OWN} and s.id = $2 order by f.created_at`, [clientId, sessionId]);
       return rows.map(toChatFile);
     },
+    getFile: async (clientId, fileId) => {
+      const rows = await this.db.query<Row>(`select f.* from public.chat_files f join public.chat_sessions s on s.id = f.session_id where ${OWN} and f.id = $2`, [clientId, fileId]);
+      return rows[0] ? toChatFile(rows[0]) : null;
+    },
     getUnattachedFiles: async (clientId, sessionId, fileIds) => {
       if (fileIds.length === 0) return [];
       const rows = await this.db.query<Row>(

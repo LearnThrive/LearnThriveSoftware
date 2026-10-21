@@ -102,7 +102,8 @@ export class OllamaProvider implements ChatProvider {
         body: JSON.stringify({
           model,
           stream: true,
-          ...(thinking ? { think: false } : {}),
+          ...(thinking ? { think: Boolean(options.reasoning) } : {}),
+          ...(options.json ? { format: "json" } : {}),
           messages: messages.map((m) => ({ role: m.role, content: m.content, ...(m.images?.length ? { images: m.images } : {}) })),
           options: { num_ctx: options.contextSize ?? this.config.contextSize ?? 4096, num_predict: options.maxTokens, temperature: options.temperature },
         }),

@@ -12,7 +12,7 @@ The assistant is an AI, says so, and is a second line, never the only one. In or
 2. **Input rules** (`src/lib/assistant/moderation.ts`), before any model sees the text:
    - a **safeguarding disclosure** (self-harm, abuse, an unsafe situation) gets a **fixed reply** with Childline (0800 1111), NSPCC (0808 800 5000) and 999, **with no model call**, and a flag email to the safeguarding lead with an opaque reference (`SG-…`, never the name or the message);
    - personal details (phone, address, email), prompt injection, adult content and "write my coursework" are turned away with a fixed reply.
-3. Uploads: JPEG and PNG have all metadata stripped (only the orientation is kept), PDFs are read for text (best effort) or, if scanned, for their embedded pictures. At most 3 files, 8 MB each, 15 MB and 20 pages for a PDF. HEIC is refused with a message, not converted.
+3. Uploads (`uploads.ts`, `documents.ts`): photos are decoded in plain JavaScript, turned upright from their EXIF orientation, shrunk and re-encoded with **no metadata at all**. PDFs are read with pdf.js: the text of each page in reading order, labelled with its page number, with powers and subscripts kept (`x^5`); a page with no usable text, a picture or stacked maths (fractions) is also drawn as a picture for the model, up to 3 pictures a message, the pages the question names first. A password-locked, damaged, blank or too-slow PDF gets its own message, and the model is told what it could not see so it never invents it. A PDF that is only restricted (copy or print, an empty open password, as many exam-board PDFs are) is read normally; scripts and embedded files are refused. At most 3 files, 8 MB each, 15 MB and 20 pages for a PDF. HEIC is refused with a message, not converted. A follow-up question in the same chat still has the last files. `npm run documents:check` runs every fixture in `apps/web/tests/fixtures/documents` through the real model.
 4. A FIFO queue in front of the model (`ASSISTANT_CONCURRENCY`, default 1: one GPU), then the provider's stream passes through the **output guard** sentence by sentence (a leaked system prompt, a phone number, adult words are stopped mid-answer and replaced by a fixed line).
 5. The answer is stored with the chat. Nothing is kept in the browser (no cookies besides the account session, no `localStorage`).
 
@@ -52,8 +52,23 @@ NVIDIA's hosted catalogue (`ASSISTANT_PROVIDER=nim`, key in `NVIDIA_API_KEY`) is
 | `ASSISTANT_MINORS_APPROVED` | `true` only after the safeguarding lead approves in writing | unset |
 | `ASSISTANT_SAFEGUARDING_EMAIL` | Where a safeguarding flag goes. Unset: the fixed reply is still given | unset |
 | `ASSISTANT_NIM_MODEL`, `ASSISTANT_NIM_VISION_MODEL` | Models used when the provider is `nim` | `meta/llama-3.2-11b-vision-instruct` |
+| `PAPER_TUTOR_ENABLED` | The Paper Tutor, inside Study Buddy's own switches. Development: on unless `false`. **Production: on only if exactly `true`.** | on (dev) / off (prod) |
 
 Values live in the host's dashboard, never in the repository (see [DEPLOYMENT.md](DEPLOYMENT.md)).
+
+## The Paper Tutor (worked solutions written onto a paper)
+
+With a PDF or photo of a maths paper in the box, **Solve this paper** reads it, lists the questions it found (tick the ones wanted), and writes worked solutions onto a copy in blue handwriting-style ink. Three ways to write them: **answers and working** (the default: the answer and as much working as fits in each answer space, the full method on pages added at the end), **answers on the paper**, or **worked solutions** (the paper untouched, then the pages). It runs as a background job, so the chat stays usable; the panel shows each question as it goes, then a download (`GET /api/assistant/files/<id>?download=1`, only for the family that owns it) and a preview of each page. A summary is posted into the chat with the paper attached, so "explain question 3" works afterwards without solving again.
+
+How it decides what to write (`src/lib/paper/`):
+
+- `questions.ts` finds the numbered questions from the text layer and measures the empty space below each from a drawing of the page: ink rows are obstacles, a solid rule (an answer box's edge) splits the space, a dotted answer line is somewhere to write. Pages with no text layer are read by the vision model instead, and marked "read from a picture".
+- `solve.ts` asks the model for a structured solution (JSON, validated, one retry). **The model never certifies its own answer.** `maths.ts`, a small safe parser (no `eval`), checks it: against the equation, expression or calculation printed in the question first, and only then against a check the model proposes. A failed check triggers one second attempt with the model reasoning first and told exactly what did not hold; only an answer that a calculation confirms replaces the first.
+- Every question ends with one status, shown in the panel, on the paper and in the summary: **checked by calculation**, **checked against the AI's reading** (the check passed, but on the AI's transcription rather than the printed text), **not checked** (nothing to calculate, for example a word problem), or **not confidently solved** (the check disagreed, or the model could not answer).
+- `annotate.ts` writes only into measured empty space, never over printed text and never below 11 pt (what does not fit goes to the worked pages, with a page reference on the paper). Maths is typeset by MathJax as vector shapes; the handwriting font is Patrick Hand (OFL). Every page carries "AI-generated worked solutions - may contain mistakes". The output is read back before it is stored, to prove it opens.
+- `jobs.ts` holds jobs in the server's memory (one at a time per family, 10 papers a day, cancellable, every model call through the same queue as the chat). The annotated PDF is a chat file, so it follows the uploads' retention (below); an unfinished job does not survive a restart and the panel says so.
+
+Measured with `qwen3.5:9b` on Ollama (`node --import tsx apps/web/scripts/paper-check.mjs`, and through the routes on a running server): the 5-question, 3-page GCSE fixture was read in about 3 s and solved in about 43 s with the model already loaded (about 3 minutes on a cold first run) on the 8 GB GPU. Across four runs through the routes every final answer was right; the statuses vary a little with the model's wording (the percentage question is sometimes "checked against the reading", sometimes "not checked"). Simultaneous equations sometimes need the reasoning retry (about 36 s against 6 s). Two checker faults found this way were fixed: "0.000 52" (a UK digit-group space) was read as 0 × 52, which marked a right answer "not confidently solved"; and sentences written in the maths field were typeset as maths. Output: `docs/screenshots/paper-tutor/`. **Marking a student's own answers is not built**: it needs its own reliability evaluation on real marked scripts before it is offered.
 
 ## Switching it off
 
@@ -70,7 +85,8 @@ Values live in the host's dashboard, never in the repository (see [DEPLOYMENT.md
 | Data | Kept | Removed |
 | --- | --- | --- |
 | Chat text (questions and answers) | 30 days after the chat's last message | by the retention job; or at once when the family deletes the chat (hidden immediately, removed by the next run) |
-| Uploaded pictures and PDFs | 7 days, or when the chat is deleted | by the retention job (storage objects first, rows only if every object went) |
+| Uploaded pictures and PDFs, and the Paper Tutor's annotated PDFs | 7 days, or when the chat is deleted | by the retention job (storage objects first, rows only if every object went) |
+| Paper Tutor jobs (the questions found, progress) | in the server's memory, 2 hours after last use | on restart, or when they expire |
 | Usage counters | counts only, no text | rolling |
 | Safeguarding flag | an opaque reference, a category, a short excerpt in the email to the lead | the lead's own record; nothing named is stored in the app |
 | Audio (voice) | never stored | n/a |
@@ -81,7 +97,7 @@ Run the retention job daily: `npm run assistant:retention` (a cron on Render; it
 
 - A real production provider: none has been chosen (plan19 section 6 decides it: data processing agreement, no training on inputs, a suitable processing location, EU or UK if possible).
 - A real child, a real safeguarding lead, a real teacher marking panel: the evaluation is synthetic and rule-based, so it ranks models; it is not evidence of pedagogical quality.
-- Handwriting: the vision set is typed text only.
+- Handwriting: the vision set is typed text only. The Paper Tutor was measured on generated papers (typed, one scanned page), not on real exam-board papers or phone photos of them.
 - The email path to a real mailbox (the dev outbox is used in tests).
 
 ## Decision record: which model

@@ -4,7 +4,7 @@ import type { AccountRuntime } from "@/lib/account/runtime";
 import type { Account } from "@learnthrive/data/library";
 import { jsonResponse, logOutcome, originAllowed, parseMultipart, readBodyLimited } from "@/lib/request-guards";
 import { siteConfig } from "@/lib/site";
-import { assistantAvailability, assistantConfig } from "./config";
+import { assistantAvailability, assistantConfig, paperTutorEnabled } from "./config";
 import { moderateInput } from "./moderation";
 import { ADULT_ACKNOWLEDGEMENT, ADULT_ACK_VERSION } from "./prompt";
 import type { AssistantRuntime } from "./runtime";
@@ -243,5 +243,5 @@ export async function handleStatus(request: Request, deps: AssistantDeps): Promi
   if (!g.ok) return g.response;
   const health = await g.assistant.provider.health(AbortSignal.timeout(4000)).catch(() => ({ ok: false, detail: "unreachable" }));
   const voice = deps.voice && !voiceClosed(env, true) ? await deps.voice.health().catch(() => false) : false;
-  return jsonResponse(200, { open: health.ok, reason: health.ok ? null : health.detail, voice, minorsApproved: config.minorsApproved, limits: { dailyMessages: config.dailyMessages, perMinute: config.perMinute, maxInputChars: config.maxInputChars, files: UPLOAD_LIMITS.filesPerMessage } }, { "Cache-Control": "no-store" });
+  return jsonResponse(200, { open: health.ok, reason: health.ok ? null : health.detail, voice, paperTutor: paperTutorEnabled(env), minorsApproved: config.minorsApproved, limits: { dailyMessages: config.dailyMessages, perMinute: config.perMinute, maxInputChars: config.maxInputChars, files: UPLOAD_LIMITS.filesPerMessage } }, { "Cache-Control": "no-store" });
 }

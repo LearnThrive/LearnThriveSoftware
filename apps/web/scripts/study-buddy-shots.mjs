@@ -107,6 +107,39 @@ for (const [width, height] of [[1440, 900], [390, 844]]) {
     await page.screenshot({ path: join(out, `voice-${width}.png`) });
   }
 }
+// The Paper Tutor: the offer, the checklist, and the finished paper with its preview (the mock model, so the answers are canned).
+const worksheet = join(here, "..", "tests", "fixtures", "documents", "text-native.pdf");
+for (const [width, height] of [[1440, 900], [390, 844], [320, 640]]) {
+  await page.setViewportSize({ width, height });
+  await page.goto(`${base}/library/study-buddy`);
+  await page.waitForLoadState("networkidle");
+  const ack = page.getByRole("checkbox", { name: /18 or over/ });
+  if (await ack.isVisible().catch(() => false)) await ack.check();
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "Add a file", exact: true }).click();
+  await (await chooser).setFiles(worksheet);
+  const offer = page.getByRole("button", { name: "Solve this paper" });
+  if (!(await offer.waitFor({ timeout: 15_000 }).then(() => true, () => false))) break;
+  await page.screenshot({ path: join(out, `paper-offer-${width}.png`) });
+  await offer.click();
+  const panel = page.getByRole("region", { name: "Solve this paper" });
+  await panel.getByRole("group", { name: /Questions found/ }).waitFor({ timeout: 30_000 });
+  await page.evaluate(() => document.getAnimations().forEach((a) => a.finish()));
+  await page.screenshot({ path: join(out, `paper-choose-${width}.png`) });
+  await panel.getByRole("button", { name: /^Solve / }).click();
+  await panel.getByRole("link", { name: "Download the worked paper" }).waitFor({ timeout: 120_000 });
+  await panel.getByRole("button", { name: "Preview" }).click();
+  await panel.getByRole("img").waitFor();
+  await page.waitForTimeout(800);
+  const checks = await page.evaluate(() => {
+    const doc = document.documentElement;
+    const rect = document.querySelector("[data-ai-input]")?.getBoundingClientRect();
+    return { horizontalOverflow: doc.scrollWidth > doc.clientWidth, pageScrolls: doc.scrollHeight > doc.clientHeight + 2, composerOnScreen: Boolean(rect && rect.top >= 0 && rect.bottom <= window.innerHeight) };
+  });
+  results.push({ width, paperTutor: true, ...checks });
+  console.log(width, "paper", JSON.stringify(checks));
+  await page.screenshot({ path: join(out, `paper-done-${width}.png`) });
+}
 writeFileSync(join(out, "checks.json"), JSON.stringify({ label, base, scheme, date: new Date().toISOString(), results }, null, 2));
 await browser.close();
 console.log("written to", out);

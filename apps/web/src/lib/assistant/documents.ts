@@ -50,6 +50,14 @@ export interface PageReading {
   stackedMaths: boolean;
   /** A rendered picture of the page (JPEG), when one was made. */
   image: Uint8Array | null;
+  /** The text lines with their boxes, and the page's size and rotation (PDF units): for placing answers on the original. */
+  lines: LineBox[];
+  width: number;
+  height: number;
+  rotation: number;
+  /** Where the visible page starts in PDF coordinates (the crop box's lower-left corner; usually 0, 0). */
+  originX: number;
+  originY: number;
 }
 
 export type PdfReading =
@@ -101,7 +109,16 @@ interface Item {
  * Rebuilds lines from positioned text items: top to bottom, left to right, a space where there is a visible gap. Also reports
  * whether short items sit stacked over each other in the same column, which is how a fraction or an index is drawn.
  */
-export function layoutText(items: Item[]): { text: string; stackedMaths: boolean } {
+/** A line of text with its box, in PDF units (origin bottom-left, as the page's own coordinates). */
+export interface LineBox {
+  text: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export function layoutText(items: Item[]): { text: string; stackedMaths: boolean; lines: LineBox[] } {
   const usable = items.filter((i) => i.str.trim() !== "");
   const rows: Item[][] = [];
   for (const item of [...usable].sort((a, b) => b.y - a.y || a.x - b.x)) {
@@ -109,8 +126,13 @@ export function layoutText(items: Item[]): { text: string; stackedMaths: boolean
     if (row) row.push(item);
     else rows.push([item]);
   }
+  const boxes: LineBox[] = [];
   const lines = rows.map((row) => {
     row.sort((a, b) => a.x - b.x);
+    const left = Math.min(...row.map((i) => i.x));
+    const right = Math.max(...row.map((i) => i.x + i.w));
+    const bottom = Math.min(...row.map((i) => i.y));
+    const top = Math.max(...row.map((i) => i.y + i.h));
     // The row's own size and baseline come from its largest text; smaller text raised above it is an index (x^5), below it a subscript.
     const size = Math.max(...row.map((i) => i.h));
     const base = row.filter((i) => i.h >= size * 0.9).reduce((sum, i, _, all) => sum + i.y / all.length, 0);
@@ -126,7 +148,9 @@ export function layoutText(items: Item[]): { text: string; stackedMaths: boolean
       line += raised ? `^${str.length > 1 ? `(${str})` : str}` : lowered ? `_${str.length > 1 ? `(${str})` : str}` : item.str;
       end = item.x + item.w;
     }
-    return line.replace(/\s+/g, " ").trim();
+    const text = line.replace(/\s+/g, " ").trim();
+    if (text) boxes.push({ text, x: left, y: bottom, w: right - left, h: top - bottom });
+    return text;
   });
 
   const short = usable.filter((i) => /^\s*[\p{L}\p{N}.()+\-−]{1,4}\s*$/u.test(i.str));
@@ -144,7 +168,7 @@ export function layoutText(items: Item[]): { text: string; stackedMaths: boolean
       }
     }
   }
-  return { text: lines.filter(Boolean).join("\n"), stackedMaths };
+  return { text: lines.filter(Boolean).join("\n"), stackedMaths, lines: boxes };
 }
 
 // ---- pictures ------------------------------------------------------------------------------------------------------
@@ -308,13 +332,14 @@ export async function readPdfDocument(bytes: Uint8Array, options: ReadOptions = 
         const [a, b, c, d, e, f] = raw.transform as number[];
         items.push({ str: raw.str, x: e!, y: f!, w: raw.width, h: Math.hypot(c!, d!) || Math.hypot(a!, b!) || raw.height });
       }
-      const { text: laidOut, stackedMaths } = layoutText(items);
+      const { text: laidOut, stackedMaths, lines } = layoutText(items);
+      const view = page.view as number[];
       let text = laidOut.slice(0, DOCUMENT_LIMITS.pageTextChars);
       if (totalText + text.length > DOCUMENT_LIMITS.totalTextChars) text = text.slice(0, Math.max(0, DOCUMENT_LIMITS.totalTextChars - totalText));
       totalText += text.length;
       const ops = await page.getOperatorList();
       const hasPictures = ops.fnArray.some((fn) => imageOps.has(fn));
-      pages.push({ number: n, text, textQuality: textQuality(laidOut), hasPictures, stackedMaths, image: null });
+      pages.push({ number: n, text, textQuality: textQuality(laidOut), hasPictures, stackedMaths, image: null, lines, width: view[2]! - view[0]!, height: view[3]! - view[1]!, rotation: page.rotate, originX: view[0]!, originY: view[1]! });
       page.cleanup();
     }
 
@@ -361,6 +386,42 @@ export async function readPdfDocument(bytes: Uint8Array, options: ReadOptions = 
 
 /** Defuses the markers used around uploads and pages, so a document cannot close its own wrapper or fake a page. */
 export const defuse = (text: string) => text.replace(/<\s*\/?\s*(uploaded-file|page)\b/gi, "[marker removed]");
+
+export interface RenderedPage {
+  number: number;
+  /** Pixels per PDF unit. */
+  scale: number;
+  width: number;
+  height: number;
+  /** RGBA, row by row from the top. */
+  data: Uint8ClampedArray;
+  /** The same page as a JPEG, for showing. */
+  jpeg: () => Uint8Array;
+}
+
+/** Renders pages of a (trusted, already checked) PDF to pixels: for finding empty space and for previews. */
+export async function renderPdfPages(bytes: Uint8Array, { scale = 1, pages: wanted }: { scale?: number; pages?: number[] } = {}): Promise<RenderedPage[]> {
+  const lib = await pdfjs();
+  const doc = await lib.getDocument({ data: new Uint8Array(bytes), isEvalSupported: false, disableFontFace: true, useSystemFonts: false, verbosity: 0 }).promise;
+  try {
+    const out: RenderedPage[] = [];
+    for (let n = 1; n <= doc.numPages; n += 1) {
+      if (wanted && !wanted.includes(n)) continue;
+      const page = await doc.getPage(n);
+      const viewport = page.getViewport({ scale });
+      const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({ canvas: canvas as unknown as HTMLCanvasElement, canvasContext: ctx as unknown as CanvasRenderingContext2D, viewport }).promise;
+      page.cleanup();
+      out.push({ number: n, scale, width: canvas.width, height: canvas.height, data: ctx.getImageData(0, 0, canvas.width, canvas.height).data, jpeg: () => new Uint8Array(canvas.toBuffer("image/jpeg", 85)) });
+    }
+    return out;
+  } finally {
+    void doc.destroy();
+  }
+}
 
 /** Page numbers the student's question points at: "page 3", "p. 4", "question 5" (looked up in the text). */
 export function pagesAskedAbout(question: string, pages: Array<Pick<PageReading, "number" | "text">>): number[] {
