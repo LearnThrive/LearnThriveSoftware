@@ -64,3 +64,8 @@ plan18.md
 plan19.md
 CAREERS_PLAN.md
 CAREERS_PROMPT.md
+
+# Study Buddy voice sidecar: its Python environment and the downloaded speech models (hundreds of MB; fetched by docs/VOICE.md steps)
+services/voice/.venv/
+services/voice/models/
+services/voice/__pycache__/

@@ -13,6 +13,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import sys
 import threading
 import time
 import wave
@@ -24,9 +25,11 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 HOST = os.environ.get("VOICE_HOST", "127.0.0.1")
 PORT = int(os.environ.get("VOICE_PORT", "8765"))
-STT_MODEL = os.environ.get("VOICE_STT_MODEL", "base.en")
-STT_DEVICE = os.environ.get("VOICE_STT_DEVICE", "cpu")
-STT_COMPUTE = os.environ.get("VOICE_STT_COMPUTE", "int8")
+# "auto" (the default): small.en on the GPU if CUDA works here (measured: 1.8% word error, ~120 ms a clip, ~0.6 GB of VRAM), otherwise base.en on the
+# CPU (4.6% word error, ~550 ms a clip). docs/VOICE_BENCHMARK.md has the numbers. Any of the three can be set explicitly.
+STT_DEVICE = os.environ.get("VOICE_STT_DEVICE", "auto")
+STT_MODEL = os.environ.get("VOICE_STT_MODEL", "")
+STT_COMPUTE = os.environ.get("VOICE_STT_COMPUTE", "")
 TTS_VOICE = os.environ.get("VOICE_TTS_VOICE", "en_GB-alba-medium")
 TOKEN = os.environ.get("VOICE_TOKEN", "")
 MAX_BODY = 4 * 1024 * 1024
@@ -42,11 +45,37 @@ _lock = threading.Lock()
 counters = {"stt": 0, "tts": 0, "errors": 0}
 
 
+def add_cuda_dll_dirs() -> None:
+    """On Windows the CUDA runtime libraries installed with `uv pip install nvidia-cublas-cu12 nvidia-cudnn-cu12` are not on the search path."""
+    base = Path(sys.prefix) / "Lib" / "site-packages" / "nvidia"
+    for sub in ("cublas", "cudnn", "cuda_nvrtc"):
+        folder = base / sub / "bin"
+        if folder.is_dir():
+            os.add_dll_directory(str(folder))
+            os.environ["PATH"] = str(folder) + os.pathsep + os.environ.get("PATH", "")
+
+
 def load_stt():
-    global _stt
+    global _stt, STT_MODEL, STT_DEVICE, STT_COMPUTE
     from faster_whisper import WhisperModel
 
-    _stt = WhisperModel(STT_MODEL, device=STT_DEVICE, compute_type=STT_COMPUTE)
+    def attempt(model: str, device: str, compute: str):
+        if device == "cuda":
+            add_cuda_dll_dirs()
+        loaded = WhisperModel(model, device=device, compute_type=compute)
+        loaded.transcribe(np.zeros(16000, dtype=np.float32), language="en")  # a missing CUDA library shows up here, not on the first real request
+        return loaded
+
+    if STT_DEVICE == "auto":
+        try:
+            _stt = attempt(STT_MODEL or "small.en", "cuda", STT_COMPUTE or "float16")
+            STT_DEVICE, STT_MODEL, STT_COMPUTE = "cuda", STT_MODEL or "small.en", STT_COMPUTE or "float16"
+            return
+        except Exception:  # noqa: BLE001 - no GPU, or its libraries are not installed: the CPU does it
+            STT_DEVICE = "cpu"
+    STT_MODEL = STT_MODEL or "base.en"
+    STT_COMPUTE = STT_COMPUTE or ("float16" if STT_DEVICE == "cuda" else "int8")
+    _stt = attempt(STT_MODEL, STT_DEVICE, STT_COMPUTE)
 
 
 def load_tts():

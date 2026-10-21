@@ -1,0 +1,207 @@
+{
+  "model": "qwen3.5:9b",
+  "runs": 8,
+  "results": [
+    {
+      "config": "base.en/cpu",
+      "rows": [
+        {
+          "phrase": "p04",
+          "audioMs": 3193,
+          "stt": 684.2600000000002,
+          "firstToken": 378.69490000000224,
+          "firstChunkReady": 721.9458000000013,
+          "tts": 204.2768999999971,
+          "total": 1610.4826999999987,
+          "ok": true,
+          "chunkChars": 79
+        },
+        {
+          "phrase": "p07",
+          "audioMs": 2357,
+          "stt": 571.1782000000021,
+          "firstToken": 380.52240000000165,
+          "firstChunkReady": 652.6994000000013,
+          "tts": 181.04260000000068,
+          "total": 1404.9202000000041,
+          "ok": true,
+          "chunkChars": 69
+        },
+        {
+          "phrase": "p10",
+          "audioMs": 2264,
+          "stt": 569.8905999999988,
+          "firstToken": 377.70370000000185,
+          "firstChunkReady": 665.7569000000003,
+          "tts": 174.62099999999919,
+          "total": 1410.2684999999983,
+          "ok": true,
+          "chunkChars": 70
+        },
+        {
+          "phrase": "p13",
+          "audioMs": 2833,
+          "stt": 595.4014999999999,
+          "firstToken": 364.40740000000005,
+          "firstChunkReady": 838.1594999999979,
+          "tts": 262.0074999999997,
+          "total": 1695.5684999999976,
+          "ok": true,
+          "chunkChars": 109
+        },
+        {
+          "phrase": "p16",
+          "audioMs": 3390,
+          "stt": 588.1173000000017,
+          "firstToken": 357.045100000003,
+          "firstChunkReady": 786.1747000000032,
+          "tts": 255.1239999999998,
+          "total": 1629.4160000000047,
+          "ok": true,
+          "chunkChars": 110
+        },
+        {
+          "phrase": "p19",
+          "audioMs": 2937,
+          "stt": 556.8811000000023,
+          "firstToken": 360.0803999999989,
+          "firstChunkReady": 871.8837999999996,
+          "tts": 286.8738999999987,
+          "total": 1715.6388000000006,
+          "ok": true,
+          "chunkChars": 126
+        },
+        {
+          "phrase": "p22",
+          "audioMs": 2241,
+          "stt": 672.1405000000013,
+          "firstToken": 374.83520000000135,
+          "firstChunkReady": 791.3027000000002,
+          "tts": 234.60540000000037,
+          "total": 1698.048600000002,
+          "ok": true,
+          "chunkChars": 106
+        },
+        {
+          "phrase": "p25",
+          "audioMs": 2241,
+          "stt": 606.0203999999976,
+          "firstToken": 370.32320000000254,
+          "firstChunkReady": 569.6140000000014,
+          "tts": 123.25890000000072,
+          "total": 1298.8932999999997,
+          "ok": true,
+          "chunkChars": 42
+        }
+      ],
+      "vramUsedMb": 6601,
+      "sttMedian": 588.1173000000017,
+      "firstTokenMedian": 370.32320000000254,
+      "firstChunkMedian": 721.9458000000013,
+      "ttsMedian": 204.2768999999971,
+      "totalMedian": 1610.4826999999987,
+      "totalP95": 1715.6388000000006
+    },
+    {
+      "config": "small.en/cuda",
+      "rows": [
+        {
+          "phrase": "p04",
+          "audioMs": 3100,
+          "stt": 152.16410000000178,
+          "firstToken": 351.29060000000027,
+          "firstChunkReady": 590.5272000000041,
+          "tts": 158.53110000000015,
+          "total": 901.222400000006,
+          "ok": true,
+          "chunkChars": 64
+        },
+        {
+          "phrase": "p07",
+          "audioMs": 2276,
+          "stt": 150.53579999999783,
+          "firstToken": 353.5830999999962,
+          "firstChunkReady": 594.8882999999987,
+          "tts": 162.42429999999877,
+          "total": 907.8483999999953,
+          "ok": true,
+          "chunkChars": 63
+        },
+        {
+          "phrase": "p10",
+          "audioMs": 2322,
+          "stt": 134.28280000000086,
+          "firstToken": 364.2523999999976,
+          "firstChunkReady": 586.4386999999988,
+          "tts": 142.9166999999943,
+          "total": 863.638199999994,
+          "ok": true,
+          "chunkChars": 54
+        },
+        {
+          "phrase": "p13",
+          "audioMs": 3019,
+          "stt": 156.95119999999588,
+          "firstToken": 360.98219999999856,
+          "firstChunkReady": 788.575499999999,
+          "tts": 245.14370000000054,
+          "total": 1190.6703999999954,
+          "ok": true,
+          "chunkChars": 105
+        },
+        {
+          "phrase": "p16",
+          "audioMs": 3506,
+          "stt": 154.07979999999952,
+          "firstToken": 354.63210000000254,
+          "firstChunkReady": 725.7312999999995,
+          "tts": 223.33950000000186,
+          "total": 1103.1506000000008,
+          "ok": true,
+          "chunkChars": 101
+        },
+        {
+          "phrase": "p19",
+          "audioMs": 3239,
+          "stt": 141.6044000000038,
+          "firstToken": 356.04899999999907,
+          "firstChunkReady": 743.8640000000014,
+          "tts": 217.82019999999466,
+          "total": 1103.2885999999999,
+          "ok": true,
+          "chunkChars": 99
+        },
+        {
+          "phrase": "p22",
+          "audioMs": 2276,
+          "stt": 119.16560000000027,
+          "firstToken": 352.0216999999975,
+          "firstChunkReady": 739.6094999999987,
+          "tts": 241.1492999999973,
+          "total": 1099.9243999999962,
+          "ok": true,
+          "chunkChars": 106
+        },
+        {
+          "phrase": "p25",
+          "audioMs": 2206,
+          "stt": 161.32660000000033,
+          "firstToken": 344.5429000000004,
+          "firstChunkReady": 540.7000000000044,
+          "tts": 110.90409999999974,
+          "total": 812.9307000000044,
+          "ok": true,
+          "chunkChars": 42
+        }
+      ],
+      "vramUsedMb": 7317,
+      "sttMedian": 150.53579999999783,
+      "firstTokenMedian": 353.5830999999962,
+      "firstChunkMedian": 594.8882999999987,
+      "ttsMedian": 162.42429999999877,
+      "totalMedian": 907.8483999999953,
+      "totalP95": 1190.6703999999954
+    }
+  ],
+  "date": "2026-10-21"
+}

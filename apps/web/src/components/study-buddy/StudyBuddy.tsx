@@ -6,7 +6,7 @@ import { PencilLoader } from "@/components/ui/PencilLoader";
 import { ADULT_ACKNOWLEDGEMENT, AI_LABEL } from "@/lib/assistant/prompt";
 import { parseMarkdown, plainText } from "@/lib/assistant/markdown";
 import { RenderedAnswer } from "./RenderedAnswer";
-import { useVoice } from "./useVoice";
+import { useVoice, type Speaker } from "./useVoice";
 import styles from "./study-buddy.module.css";
 
 interface Msg {
@@ -154,9 +154,10 @@ export function StudyBuddy() {
     const reply: Msg = { id: nextId(), role: "assistant", content: "" };
     setMessages((m) => [...m, mine, reply]);
     setDraft("");
+    const reading: { speaker: Speaker | null } = { speaker: null };
     if (viaVoice) {
       voice.setTranscript("");
-      voice.setThinking(true);
+      reading.speaker = voice.beginSpeaking();
     }
     setFiles([]);
     setFileIds(new Map());
@@ -195,6 +196,7 @@ export function StudyBuddy() {
               text_ += event.text;
               const now = text_;
               setMessages((m) => m.map((x) => (x.id === reply.id ? { ...x, content: now } : x)));
+              reading.speaker?.push(now);
               // A polite announcement a sentence at a time, not every word.
               const end = Math.max(now.lastIndexOf(". "), now.lastIndexOf("? "), now.lastIndexOf("! "), now.lastIndexOf("\n"));
               if (end > spoken.current) {
@@ -215,9 +217,10 @@ export function StudyBuddy() {
     if (failed) setError(failed);
     if (!text_) setMessages((m) => m.filter((x) => x.id !== reply.id));
     setAnnounce(text_ ? "The answer is ready." : "");
-    if (viaVoice) {
-      if (text_ && !failed) void voice.speak(text_);
-      else voice.setThinking(false);
+    // Stop is silence; a failure speaks nothing more; a finished answer has its last sentences read.
+    if (reading.speaker) {
+      if (text_ && !failed && !controller.signal.aborted) reading.speaker.end(text_);
+      else reading.speaker.cancel();
     }
     void refresh();
   }
@@ -346,9 +349,20 @@ export function StudyBuddy() {
             maxFiles={status.limits?.files ?? 3}
             error={error}
             voiceState={voice.state}
-            onVoiceStart={status.voice ? () => void voice.start() : undefined}
+            // Talking over the answer, or closing the voice panel, ends it: the voice goes quiet and the answer stops arriving.
+            onVoiceStart={
+              status.voice
+                ? () => {
+                    abort.current?.abort();
+                    void voice.start();
+                  }
+                : undefined
+            }
             onVoiceStop={voice.stop}
-            onVoiceCancel={voice.cancel}
+            onVoiceCancel={() => {
+              abort.current?.abort();
+              voice.cancel();
+            }}
             transcript={voice.transcript}
             onTranscriptEdit={voice.setTranscript}
             hint="Photos (JPEG or PNG) and PDFs, up to 3 files. Never share personal details."

@@ -140,9 +140,15 @@ try {
 
 {
   const rows = { allow: { ok: 0, total: 0 }, safeguard: { ok: 0, total: 0 }, block: { ok: 0, total: 0 } };
-  for (const text of moderationSet.allow) (rows.allow.total += 1, moderateInput(text).action === "allow" && (rows.allow.ok += 1));
-  for (const list_ of Object.values(moderationSet.safeguard)) for (const text of list_) (rows.safeguard.total += 1, moderateInput(text).action === "safeguard" && (rows.safeguard.ok += 1));
-  for (const list_ of Object.values(moderationSet.block)) for (const text of list_) (rows.block.total += 1, moderateInput(text).action === "block" && (rows.block.ok += 1));
+  const count = (row, texts, action) => {
+    for (const text of texts) {
+      row.total += 1;
+      if (moderateInput(text).action === action) row.ok += 1;
+    }
+  };
+  count(rows.allow, moderationSet.allow, "allow");
+  count(rows.safeguard, Object.values(moderationSet.safeguard).flat(), "safeguard");
+  count(rows.block, Object.values(moderationSet.block).flat(), "block");
   results.moderation = rows;
 }
 
@@ -221,8 +227,11 @@ if (guard) {
   for (const c of cases) {
     const r = await classify(c.text);
     times.push(r.ms);
-    if (c.label === "unsafe") r.unsafe ? (tp += 1) : (fn += 1);
-    else r.unsafe ? (fp += 1) : (tn += 1);
+    if (c.label === "unsafe") {
+      if (r.unsafe) tp += 1;
+      else fn += 1;
+    } else if (r.unsafe) fp += 1;
+    else tn += 1;
   }
   results.guard = { model: guard, tp, fn, fp, tn, recall: tp / Math.max(1, tp + fn), falsePositiveRate: fp / Math.max(1, fp + tn), medianMs: quantile(times, 0.5) };
 }

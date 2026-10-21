@@ -1,0 +1,350 @@
+{
+  "note": "SYNTHETIC speech from text-to-speech voices: cleaner than a child's voice, so recognition scores are optimistic.",
+  "phrases": 30,
+  "voices": [
+    "kokoro-bf_emma",
+    "kokoro-bm_george",
+    "piper-en_GB-alba-medium",
+    "piper-en_GB-jenny_dioco-medium",
+    "piper-en_GB-northern_english_male-medium",
+    "sapi-hazel",
+    "sapi-zira"
+  ],
+  "stt": [
+    {
+      "model": "base.en",
+      "device": "cpu",
+      "compute": "int8",
+      "voices": "all",
+      "loadSeconds": 1.24,
+      "rssMb": 106,
+      "vramMb": 0,
+      "wer": {
+        "clean": 4.6,
+        "noisy": 6.7
+      },
+      "werByVoice": {
+        "piper-en_GB-alba-medium": 6.0,
+        "piper-en_GB-jenny_dioco-medium": 8.0,
+        "piper-en_GB-northern_english_male-medium": 8.6,
+        "kokoro-bf_emma": 3.5,
+        "kokoro-bm_george": 2.9,
+        "sapi-hazel": 6.6,
+        "sapi-zira": 4.1
+      },
+      "termsFoundPercent": 94.8,
+      "rtfMedian": 0.199,
+      "msMedian": 546,
+      "msP95": 612,
+      "clips": 420,
+      "errorExamples": [
+        {
+          "voice": "piper-en_GB-alba-medium",
+          "said": "how do i factorise x squared plus five x plus six",
+          "heard": "how do i factorise x squared plus five x plus x"
+        },
+        {
+          "voice": "piper-en_GB-alba-medium",
+          "said": "i am stuck on question four of my homework",
+          "heard": "i'm stuck on question four of my homework"
+        },
+        {
+          "voice": "piper-en_GB-alba-medium",
+          "said": "how do i round four point six seven to one decimal place",
+          "heard": "how do i round four point six seven to one decimal please"
+        }
+      ]
+    },
+    {
+      "model": "small.en",
+      "device": "cpu",
+      "compute": "int8",
+      "voices": "all",
+      "loadSeconds": 12.58,
+      "rssMb": 272,
+      "vramMb": 0,
+      "wer": {
+        "clean": 1.9,
+        "noisy": 3.0
+      },
+      "werByVoice": {
+        "piper-en_GB-alba-medium": 4.3,
+        "piper-en_GB-jenny_dioco-medium": 5.6,
+        "piper-en_GB-northern_english_male-medium": 3.5,
+        "kokoro-bf_emma": 1.2,
+        "kokoro-bm_george": 0.6,
+        "sapi-hazel": 1.4,
+        "sapi-zira": 0.6
+      },
+      "termsFoundPercent": 97.4,
+      "rtfMedian": 0.616,
+      "msMedian": 1672,
+      "msP95": 2012,
+      "clips": 420,
+      "errorExamples": [
+        {
+          "voice": "piper-en_GB-alba-medium",
+          "said": "how do i factorise x squared plus five x plus six",
+          "heard": "hydrophactors x squared plus five x plus six"
+        },
+        {
+          "voice": "piper-en_GB-alba-medium",
+          "said": "i am stuck on question four of my homework",
+          "heard": "i'm stuck on question four of my homework"
+        },
+        {
+          "voice": "piper-en_GB-alba-medium",
+          "said": "what is the hypotenuse of a right angled triangle",
+          "heard": "what is the hypotenuse of a right angle triangle"
+        }
+      ]
+    },
+    {
+      "model": "small",
+      "device": "cpu",
+      "compute": "int8",
+      "voices": "all",
+      "loadSeconds": 12.27,
+      "rssMb": 262,
+      "vramMb": 0,
+      "wer": {
+        "clean": 2.8,
+        "noisy": 3.6
+      },
+      "werByVoice": {
+        "piper-en_GB-alba-medium": 4.1,
+        "piper-en_GB-jenny_dioco-medium": 5.6,
+        "piper-en_GB-northern_english_male-medium": 3.1,
+        "kokoro-bf_emma": 0.8,
+        "kokoro-bm_george": 1.9,
+        "sapi-hazel": 3.7,
+        "sapi-zira": 3.3
+      },
+      "termsFoundPercent": 96.8,
+      "rtfMedian": 0.599,
+      "msMedian": 1665,
+      "msP95": 1748,
+      "clips": 420,
+      "errorExamples": [
+        {
+          "voice": "piper-en_GB-alba-medium",
+          "said": "how do i factorise x squared plus five x plus six",
+          "heard": "how do a factorise x squared plus five x plus six"
+        },
+        {
+          "voice": "piper-en_GB-alba-medium",
+          "said": "what is the area of a circle with radius five centimetres",
+          "heard": "what is the area of a circle with radius five cm"
+        },
+        {
+          "voice": "piper-en_GB-alba-medium",
+          "said": "i am stuck on question four of my homework",
+          "heard": "i'm stuck on question four of my homework"
+        }
+      ]
+    },
+    {
+      "model": "medium.en",
+      "device": "cpu",
+      "compute": "int8",
+      "voices": "one",
+      "loadSeconds": 38.26,
+      "rssMb": 773,
+      "vramMb": 0,
+      "wer": {
+        "clean": 2.9,
+        "noisy": 2.5
+      },
+      "werByVoice": {
+        "piper-en_GB-alba-medium": 2.7
+      },
+      "termsFoundPercent": 100.0,
+      "rtfMedian": 1.725,
+      "msMedian": 4711,
+      "msP95": 4891,
+      "clips": 60,
+      "errorExamples": [
+        {
+          "voice": "piper-en_GB-alba-medium",
+          "said": "what is the area of a circle with radius five centimetres",
+          "heard": "what is the area of a circle with radius five cm"
+        },
+        {
+          "voice": "piper-en_GB-alba-medium",
+          "said": "i am stuck on question four of my homework",
+          "heard": "i'm stuck on question four of my homework"
+        },
+        {
+          "voice": "piper-en_GB-alba-medium",
+          "said": "how do i round four point six seven to one decimal place",
+          "heard": "how do i round four point six seven to one decimal please"
+        }
+      ]
+    },
+    {
+      "model": "base.en",
+      "device": "cuda",
+      "compute": "float16",
+      "voices": "all",
+      "loadSeconds": 0.51,
+      "rssMb": 149,
+      "vramMb": 283,
+      "wer": {
+        "clean": 4.3,
+        "noisy": 5.9
+      },
+      "werByVoice": {
+        "piper-en_GB-alba-medium": 5.6,
+        "piper-en_GB-jenny_dioco-medium": 10.3,
+        "piper-en_GB-northern_english_male-medium": 6.6,
+        "kokoro-bf_emma": 1.2,
+        "kokoro-bm_george": 3.1,
+        "sapi-hazel": 5.8,
+        "sapi-zira": 3.3
+      },
+      "termsFoundPercent": 96.1,
+      "rtfMedian": 0.022,
+      "msMedian": 61,
+      "msP95": 78,
+      "clips": 420,
+      "errorExamples": [
+        {
+          "voice": "piper-en_GB-alba-medium",
+          "said": "how do i factorise x squared plus five x plus six",
+          "heard": "how do a factorise x squared plus five x plus six"
+        },
+        {
+          "voice": "piper-en_GB-alba-medium",
+          "said": "i am stuck on question four of my homework",
+          "heard": "i'm stuck on question four of my homework"
+        },
+        {
+          "voice": "piper-en_GB-alba-medium",
+          "said": "how do i round four point six seven to one decimal place",
+          "heard": "how do i round four point six seven to one decimal please"
+        }
+      ]
+    },
+    {
+      "model": "small.en",
+      "device": "cuda",
+      "compute": "float16",
+      "voices": "all",
+      "loadSeconds": 0.78,
+      "rssMb": 7,
+      "vramMb": 576,
+      "wer": {
+        "clean": 1.8,
+        "noisy": 3.1
+      },
+      "werByVoice": {
+        "piper-en_GB-alba-medium": 4.1,
+        "piper-en_GB-jenny_dioco-medium": 5.8,
+        "piper-en_GB-northern_english_male-medium": 3.7,
+        "kokoro-bf_emma": 1.4,
+        "kokoro-bm_george": 0.6,
+        "sapi-hazel": 1.2,
+        "sapi-zira": 0.2
+      },
+      "termsFoundPercent": 97.4,
+      "rtfMedian": 0.043,
+      "msMedian": 119,
+      "msP95": 141,
+      "clips": 420,
+      "errorExamples": [
+        {
+          "voice": "piper-en_GB-alba-medium",
+          "said": "how do i factorise x squared plus five x plus six",
+          "heard": "hydrophactories x squared plus five x plus six"
+        },
+        {
+          "voice": "piper-en_GB-alba-medium",
+          "said": "i am stuck on question four of my homework",
+          "heard": "i'm stuck on question four of my homework"
+        },
+        {
+          "voice": "piper-en_GB-alba-medium",
+          "said": "what is the difference between mitosis and meiosis",
+          "heard": "what is the difference between mitosis and meosis"
+        }
+      ]
+    }
+  ],
+  "tts": [
+    {
+      "engine": "piper",
+      "voice": "en_GB-alba-medium",
+      "loadSeconds": 3.06,
+      "rssMb": 86,
+      "first": {
+        "msMedian": 98,
+        "rtf": 0.037
+      },
+      "longer": {
+        "msMedian": 198,
+        "rtf": 0.038
+      },
+      "sampleRate": 22050
+    },
+    {
+      "engine": "piper",
+      "voice": "en_GB-jenny_dioco-medium",
+      "loadSeconds": 3.06,
+      "rssMb": -67,
+      "first": {
+        "msMedian": 72,
+        "rtf": 0.04
+      },
+      "longer": {
+        "msMedian": 191,
+        "rtf": 0.034
+      },
+      "sampleRate": 22050
+    },
+    {
+      "engine": "piper",
+      "voice": "en_GB-northern_english_male-medium",
+      "loadSeconds": 3.04,
+      "rssMb": -97,
+      "first": {
+        "msMedian": 76,
+        "rtf": 0.043
+      },
+      "longer": {
+        "msMedian": 169,
+        "rtf": 0.039
+      },
+      "sampleRate": 22050
+    },
+    {
+      "engine": "kokoro",
+      "voice": "bf_emma",
+      "loadSeconds": 1.15,
+      "rssMb": 321,
+      "first": {
+        "msMedian": 750,
+        "rtf": 0.382
+      },
+      "longer": {
+        "msMedian": 1750,
+        "rtf": 0.365
+      },
+      "sampleRate": 24000
+    },
+    {
+      "engine": "kokoro",
+      "voice": "bm_george",
+      "loadSeconds": 1.15,
+      "rssMb": 509,
+      "first": {
+        "msMedian": 849,
+        "rtf": 0.372
+      },
+      "longer": {
+        "msMedian": 1965,
+        "rtf": 0.33
+      },
+      "sampleRate": 24000
+    }
+  ]
+}
