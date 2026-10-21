@@ -7,6 +7,9 @@
  *   says it is unavailable, as before).
  * - A service already running on this machine outside Docker (the Ollama app, `npm run voice:dev`) is used, not duplicated.
  * - Fetches the language model the first time, if it is missing.
+ * - Also starts the LOCAL SUPABASE stack (supabase/config.toml), unless LEARNTHRIVE_SUPABASE=0. Whether the site USES it is separate: the
+ *   site keeps its in-memory accounts unless started with `npm run dev:supabase` (LEARNTHRIVE_SUPABASE_USE=1), because the in-memory
+ *   test helpers (the "tester" account) exist only on the in-memory backend.
  * - Skipped with LEARNTHRIVE_DOCKER=0 (the Playwright servers set it), in CI, and when both providers are the mock.
  */
 import { spawnSync } from "node:child_process";
@@ -59,4 +62,25 @@ if (tags && !tags.models?.some((m) => m.name === model || m.name === `${model}:l
   if (pull.status !== 0) say(`Could not download ${model}. Study Buddy needs it: run \`ollama pull ${model}\`.`);
 }
 for (const s of services) say(`${s.label}: ${(await answers(s.url)) ? `ready on ${new URL(s.url).origin}` : "NOT answering"}`);
-if (wanted.length) say("Docker services keep running after the site stops; `npm run services:down` stops them.");
+
+// The local Supabase stack. `supabase start` returns once every service is healthy; the images are cached after the first run.
+if (env.LEARNTHRIVE_SUPABASE !== "0") {
+  const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+  const supabase = (args, options = {}) => spawnSync(`npx supabase ${args}`, { shell: true, encoding: "utf8", cwd: root, ...options });
+  const isUp = () => {
+    const status = supabase("status --output json");
+    return status.status === 0 && /"API_URL"/.test(status.stdout ?? "");
+  };
+  if (isUp()) say("Supabase: the local stack is already running.");
+  else {
+    say("Starting the local Supabase stack (the first time pulls the images: a few minutes)…");
+    const start = supabase("start", { stdio: "inherit" });
+    if (start.status !== 0) say("Supabase did not start (see above). The website starts anyway; try `npm run supabase:start` to see why.");
+  }
+  if (isUp()) {
+    say("Supabase: ready (API http://127.0.0.1:54321, Studio :54323, mail catcher :54324).");
+    say(env.LEARNTHRIVE_SUPABASE_USE === "1" ? "Supabase: the site will use it (accounts, Library and storage are real)." : "Supabase: the site keeps its in-memory accounts; use `npm run dev:supabase` to point the site at it.");
+    say("Supabase: WARNING, the stack listens on every network interface and serves a keyless SQL endpoint (docs/SUPABASE_REAL_STACK.md). Do not use it on a public network; `npm run services:down` stops it.");
+  } else say("Supabase: NOT running.");
+}
+say("These keep running after the site stops; `npm run services:down` stops them all.");

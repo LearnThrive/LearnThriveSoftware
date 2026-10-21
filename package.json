@@ -17,7 +17,7 @@
   "scripts": {
     "dev": "npm run dev --workspace=apps/web",
     "services:up": "node scripts/dev-services.mjs",
-    "services:down": "docker compose -f config/compose.yaml down",
+    "services:down": "docker compose -f config/compose.yaml down && supabase stop",
     "services:logs": "docker compose -f config/compose.yaml logs -f",
     "services:rebuild": "docker compose -f config/compose.yaml build voice",
     "dev:standalone": "concurrently --kill-others --names realtime,classroom --prefix-colors green,cyan \"npm run dev --workspace=apps/realtime\" \"npm run dev --workspace=apps/classroom\"",
@@ -30,7 +30,8 @@
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop",
     "supabase:reset": "supabase db reset",
-    "test:realstack": "npm run test:realstack --workspace=packages/data && npm run test:realstack --workspace=apps/web"
+    "test:realstack": "npm run test:realstack --workspace=packages/data && npm run test:realstack --workspace=apps/web",
+    "dev:supabase": "node scripts/dev-supabase.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

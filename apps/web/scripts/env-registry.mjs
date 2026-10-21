@@ -107,6 +107,8 @@ export const REGISTRY = [
   e("VOICE_STT_MODEL", "assistant", "The sidecar's own setting: the Whisper model.", { production: "unset", check: "text" }),
   e("VOICE_STT_COMPUTE", "assistant", "The sidecar's own setting: float16 or int8.", { production: "unset", check: "text" }),
   e("VOICE_TTS_VOICE", "assistant", "The sidecar's own setting: the Piper voice.", { production: "unset", fallback: "en_GB-alba-medium", check: "text" }),
+  e("LEARNTHRIVE_SUPABASE", "supabase", "0 stops npm run dev from starting the local Supabase stack (the model and voice services are controlled by LEARNTHRIVE_DOCKER).", { production: "unset", check: "flag:0" }),
+  e("LEARNTHRIVE_SUPABASE_USE", "supabase", "1, set by npm run dev:supabase: the dev server uses the local Supabase stack (real accounts, Library and storage) instead of its in-memory accounts. Development only.", { production: "unset", check: "flag:1" }),
   e("LEARNTHRIVE_DOCKER", "assistant", "0 stops npm run dev from starting the model and voice in Docker (the Playwright servers set it).", { production: "unset", check: "flag:0" }),
   e("OLLAMA_MODELS", "assistant", "Where this machine's Ollama keeps its models; the Docker Ollama mounts the same folder.", { production: "unset", check: "text" }),
   e("OLLAMA_MODELS_DIR", "assistant", "The same folder, as the compose file names it (defaults to OLLAMA_MODELS).", { production: "unset", check: "text" }),
