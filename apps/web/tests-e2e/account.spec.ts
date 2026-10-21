@@ -54,7 +54,7 @@ test('sign up, confirm by email, sign out, sign in again', async ({ page }) => {
   expect((await page.context().cookies()).find((c) => c.name === ACCESS)).toBeUndefined();
 
   await page.goto('/account');
-  await expect(page).toHaveURL(/\/account\/sign-in\?next=%2Faccount$/);
+  await expect(page).toHaveURL(/\/login\?next=%2Faccount$/);
 
   await signIn(page, email);
   await expect(page).toHaveURL(/\/account$/);
@@ -126,7 +126,7 @@ test('sign-up checks the form before and after the server', async ({ page }) => 
 
 test('the account pages are axe clean and have no horizontal scroll at 360px', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 780 });
-  for (const path of ['/account/sign-in', '/account/sign-up', '/account/forgot', '/account/confirm?token_hash=bad&type=signup']) {
+  for (const path of ['/login', '/account/sign-up', '/account/forgot', '/account/confirm?token_hash=bad&type=signup']) {
     await page.goto(path);
     await hydrated(page);
     await expectAxeClean(page, path);
@@ -141,16 +141,25 @@ test('the API answers a signed-out caller with 401 and refuses a cross-site post
 });
 
 test('a signed-in page sends a signed-out visitor to sign-in and back, and an open redirect is refused', async ({ page }) => {
-  await page.goto('/account/sign-in?next=//evil.example/x');
+  await page.goto('/login?next=//evil.example/x');
   await hydrated(page);
   const email = address();
   await signUp(page, email);
   await confirm(page, email);
   await page.request.post('/api/account/logout', { data: {} });
-  await page.goto('/account/sign-in?next=https://evil.example');
+  await page.goto('/login?next=https://evil.example');
   const card = page.locator('[data-auth-mode]');
   await card.getByLabel('Email', { exact: true }).fill(email);
   await card.getByLabel('Password', { exact: true }).fill(PASSWORD);
   await card.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page).toHaveURL(/localhost:3100\/account$/);
+});
+
+test('the Library\'s old sign-in address leads to the one sign-in and keeps a safe next page', async ({ page }) => {
+  await page.goto('/account/sign-in');
+  await expect(page).toHaveURL(/localhost:3100\/login$/);
+  await page.goto('/account/sign-in?next=/library/search');
+  await expect(page).toHaveURL(/\/login\?next=%2Flibrary%2Fsearch$/);
+  await page.goto('/account/sign-in?next=https://evil.example');
+  await expect(page).toHaveURL(/localhost:3100\/login$/);
 });

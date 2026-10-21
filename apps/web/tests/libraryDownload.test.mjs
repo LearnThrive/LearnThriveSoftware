@@ -247,7 +247,7 @@ test("download: drafts and unknown resources are 404, a signed-out caller is 401
   assert.equal((await out.json()).code, "signed_out");
   const form = await w.call("free-two", signedOut, { accept: "text/html,application/xhtml+xml" });
   assert.equal(form.status, 303);
-  assert.equal(form.headers.get("location"), "/account/sign-in?next=%2Flibrary%2Ffree-two");
+  assert.equal(form.headers.get("location"), "/login?next=%2Flibrary%2Ffree-two");
   const refused = await w.call("later-one", pat.jar, { accept: "text/html" });
   assert.equal(refused.headers.get("location"), "/library/later-one?download=not_found");
 });

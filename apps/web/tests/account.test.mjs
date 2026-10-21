@@ -360,7 +360,7 @@ test("verify, sign in, session cookies, me, sign out", async (t) => {
   const c2 = jar();
   const signedIn = await h.handleSignIn(post("login", FORM), { rt, jar: c2 });
   assert.equal(signedIn.status, 200);
-  assert.deepEqual(await signedIn.json(), { success: true, user: { displayName: "Pat" } });
+  assert.deepEqual(await signedIn.json(), { success: true, user: { displayName: "Pat" }, next: "/account" }, "someone with no entitlement lands on their account page");
   for (const name of [session.ACCESS_COOKIE, session.REFRESH_COOKIE]) {
     assert.deepEqual(c2.options.get(name), { httpOnly: true, sameSite: "lax", secure: false, path: "/" }, "httpOnly, Lax, session cookie (no Max-Age)");
     assert.ok(!("maxAge" in c2.options.get(name)) && !("expires" in c2.options.get(name)));
@@ -481,4 +481,109 @@ test("name on downloads: needs a session, is cleaned and bounded, may be emptied
   assert.ok((await long.json()).errors.displayName);
   assert.equal((await name({ displayName: "Pat" }, { headers: { origin: "https://evil.example" } })).status, 403);
   assert.equal((await h.handleSetName(post("profile", { displayName: "Pat" }), { rt: null, jar: c })).status, 503);
+});
+
+// ── One sign-in for everyone: where each kind of person lands, and the disabled-account answer ─────────────────────────────────────
+
+async function signedUp(rt, email, mutate) {
+  const c = jar();
+  await verified(rt, c, email);
+  const id = rt.auth.userIdFor(email);
+  mutate?.(id);
+  return id;
+}
+const loginAs = async (rt, email, extra = {}, deps = {}) => {
+  const response = await h.handleSignIn(post("login", { email, password: GOOD, ...extra }), { rt, jar: jar(), ...deps });
+  return { status: response.status, body: await response.json() };
+};
+
+test("sign-in routing: staff and enrolled families open the dashboard, a subscriber Study Buddy, anyone else their account page", async (t) => {
+  environment(t, {});
+  h.resetAccountLimiters();
+  session.resetSessionCache();
+  quiet(t);
+  const rt = runtime();
+  const past = new Date(Date.now() - 60_000);
+  await signedUp(rt, "nobody@example.com");
+  await signedUp(rt, "member@example.com", (id) => rt.memory.seedEntitlement(id, "subscription", past, null));
+  await signedUp(rt, "granted@example.com", (id) => rt.memory.seedEntitlement(id, "admin_grant", past, null));
+  await signedUp(rt, "family@example.org", (id) => rt.memory.seedAssignment(rt.memory.seedStudent(id), "ACTIVE"));
+  await signedUp(rt, "paused@example.com", (id) => rt.memory.seedAssignment(rt.memory.seedStudent(id), "PAUSED"));
+  await signedUp(rt, "staff@example.com", (id) => rt.memory.seedProfile({ id, role: "TUTOR", displayName: "Tutor" }));
+  await signedUp(rt, "admin@example.com", (id) => rt.memory.seedProfile({ id, role: "ADMIN", displayName: "Admin" }));
+  const open = { studyBuddyOpen: true };
+
+  const landing = async (email, extra, deps) => (await loginAs(rt, email, extra, deps)).body.next;
+  assert.equal(await landing("nobody@example.com", {}, open), "/account");
+  assert.equal(await landing("member@example.com", {}, open), "/library/study-buddy");
+  assert.equal(await landing("granted@example.com", {}, open), "/library/study-buddy");
+  assert.equal(await landing("member@example.com", {}, {}), "/library", "Study Buddy closed: the Library is home");
+  assert.equal(await landing("family@example.org", {}, open), "/dashboard");
+  assert.equal(await landing("paused@example.com", {}, open), "/account", "a paused assignment is not enrolment");
+  assert.equal(await landing("staff@example.com", {}, open), "/dashboard");
+  assert.equal(await landing("admin@example.com", {}, open), "/dashboard");
+
+  // The signed-in app closed (production before the portal opens): enrolled families land on what is open.
+  assert.equal(await landing("family@example.org", {}, { studyBuddyOpen: true, dashboardOpen: false }), "/library/study-buddy");
+  assert.equal(await landing("family@example.org", {}, { studyBuddyOpen: false, dashboardOpen: false }), "/library");
+
+  // A page asked for is kept when the access includes it, and replaced by home when it does not.
+  assert.equal(await landing("family@example.org", { next: "/dashboard/lessons" }, open), "/dashboard/lessons");
+  assert.equal(await landing("member@example.com", { next: "/dashboard/lessons" }, open), "/library/study-buddy");
+  assert.equal(await landing("nobody@example.com", { next: "/library/study-buddy" }, open), "/account");
+  assert.equal(await landing("member@example.com", { next: "/library/search?q=maths" }, open), "/library/search?q=maths");
+  // Anything that is not a plain path on this site is ignored, never followed.
+  for (const hostile of ["//evil.example/x", "https://evil.example", "/\\evil", "dashboard", "/a\nb", 5, null, ["/dashboard"]]) {
+    assert.equal(await landing("member@example.com", { next: hostile }, open), "/library/study-buddy", String(hostile));
+    assert.equal(await landing("family@example.org", { next: hostile }, open), "/dashboard", String(hostile));
+  }
+});
+
+test("sign-in routing never fails the sign-in: if access cannot be read, the page asked for or the account page", async (t) => {
+  environment(t, {});
+  h.resetAccountLimiters();
+  session.resetSessionCache();
+  quiet(t);
+  const rt = runtime();
+  await signedUp(rt, "p@example.com");
+  rt.store.access.facts = async () => {
+    throw new Error("database down");
+  };
+  rt.store.accounts.getAccount = async () => {
+    throw new Error("database down");
+  };
+  const ok = await loginAs(rt, "p@example.com", { next: "/library/search" });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.body.next, "/library/search");
+  assert.equal((await loginAs(rt, "p@example.com")).body.next, "/account");
+});
+
+test("a disabled account is told so (after the right password) and a wrong password still gets the generic answer", async (t) => {
+  environment(t, {});
+  h.resetAccountLimiters();
+  quiet(t);
+  const rt = runtime();
+  await rt.auth.seedUser({ id: "disabled-1", email: "off@example.com", displayName: "Off", password: GOOD, disabled: true });
+  const off = await loginAs(rt, "off@example.com");
+  assert.equal(off.status, 403);
+  assert.equal(off.body.code, "account_disabled");
+  assert.match(off.body.error, /disabled/);
+  const guess = await h.handleSignIn(post("login", { email: "off@example.com", password: "not the password at all" }), { rt, jar: jar() });
+  assert.equal(guess.status, 401, "a guesser learns nothing from the disabled state");
+  assert.deepEqual(await guess.json(), { error: "Email or password is not right." });
+  const jarOff = jar();
+  await h.handleSignIn(post("login", { email: "off@example.com", password: GOOD }), { rt, jar: jarOff });
+  assert.equal(jarOff.values.size, 0, "no session for a disabled account");
+});
+
+test("seedUser registers a confirmed account with a chosen id, once, and it signs in", async () => {
+  const { auth } = memory();
+  await auth.seedUser({ id: "fixed-id-1", email: "dev@example.com", displayName: "Dev", password: GOOD });
+  await auth.seedUser({ id: "someone-else", email: "dev@example.com", displayName: "Other", password: "another password entirely" });
+  assert.equal(auth.userIdFor("dev@example.com"), "fixed-id-1", "the second call for an address is ignored");
+  const ok = await auth.signIn("dev@example.com", GOOD);
+  assert.equal(ok.ok, true);
+  assert.equal(ok.user.id, "fixed-id-1");
+  assert.equal((await auth.signIn("dev@example.com", "wrong password at all")).reason, "invalid_credentials");
+  assert.equal(auth.outbox.length, 0, "no email is sent for a seeded account");
 });

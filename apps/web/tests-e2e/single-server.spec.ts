@@ -18,7 +18,7 @@ async function login(page: Page, email: string, password: string) {
   await page.request.post('/api/auth/logout');
   await page.goto('/login');
   await page.getByLabel('Email').fill(email);
-  await page.locator('#login-password').fill(password);
+  await page.locator('input[name="password"]').fill(password);
   await Promise.all([
     page.waitForURL(/\/dashboard$/),
     page.getByRole('button', { name: 'Sign in' }).click(),

@@ -525,7 +525,7 @@ test("checkout: every refusal, in order, and nothing is created or recorded by a
 
   const accept = await checkout(w, signedOut, plan(), { accept: "text/html" });
   assert.equal(accept.status, 303);
-  assert.equal(accept.headers.get("location"), "/account/sign-in?next=%2Fpricing");
+  assert.equal(accept.headers.get("location"), "/login?next=%2Fpricing");
   assert.equal(w.api.sessions.length, 0);
   assert.equal(w.store.consents().length, 0, "no consent recorded for a refused checkout");
 
