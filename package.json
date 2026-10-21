@@ -30,7 +30,7 @@
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop",
     "supabase:reset": "supabase db reset",
-    "test:realstack": "npm run test:realstack --workspace=packages/data"
+    "test:realstack": "npm run test:realstack --workspace=packages/data && npm run test:realstack --workspace=apps/web"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
