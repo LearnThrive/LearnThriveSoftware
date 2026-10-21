@@ -132,7 +132,10 @@ const ndjson = (parts) => new Response(new ReadableStream({ start(c) { for (cons
 const sse = (parts, { done = true } = {}) => new Response(new ReadableStream({ start(c) { for (const p of parts) c.enqueue(new TextEncoder().encode(`data: ${typeof p === "string" ? p : JSON.stringify(p)}\n\n`)); if (done) c.enqueue(new TextEncoder().encode("data: [DONE]\n\n")); c.close(); } }));
 const collect = async (iterable) => {
   const out = { text: "", done: null };
-  for await (const chunk of iterable) chunk.type === "text" ? (out.text += chunk.text) : (out.done = chunk);
+  for await (const chunk of iterable) {
+    if (chunk.type === "text") out.text += chunk.text;
+    else out.done = chunk;
+  }
   return out;
 };
 const OPTS = { maxTokens: 100, temperature: 0.2, contextSize: 4096, firstTokenTimeoutMs: 2000, totalTimeoutMs: 5000 };

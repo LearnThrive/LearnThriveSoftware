@@ -7,6 +7,9 @@ export default defineConfig([
   ...nextTypeScript,
   globalIgnores([
     ".next/**",
+    ".next-*/**",
+    "storybook-static/**",
+    "test-results/**",
     "out/**",
     "build/**",
     "artifacts/**",
