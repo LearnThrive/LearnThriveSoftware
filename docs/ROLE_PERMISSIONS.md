@@ -32,8 +32,8 @@ regardless of what a higher layer already decided:
 
 | Route | Who can reach it |
 | --- | --- |
-| `/login` | Anyone unauthenticated (already-authenticated visitors redirect to `/dashboard`) |
-| `/dashboard`, `/dashboard/calendar`, `/dashboard/notifications`, `/dashboard/lessons/[id]` | Any authenticated user — content and IDOR-filtered per role within the page |
+| `/login` | Anyone unauthenticated (already-authenticated visitors are sent on: staff and enrolled families to `/dashboard`, a Library subscriber to Study Buddy, anyone else to `/account`) |
+| `/dashboard`, `/dashboard/calendar`, `/dashboard/notifications`, `/dashboard/lessons/[id]` | Any authenticated user *whose access includes the dashboard* (staff and enrolled families; a Library subscriber is sent to Study Buddy, see `docs/AUTHENTICATION.md` "One sign-in") — content and IDOR-filtered per role within the page |
 | `/dashboard/admin/**` (people, assignments, lesson creation, per-person profiles) | `ADMIN` only |
 | `/dashboard/tutor/availability` | `TUTOR` only |
 | `/api/auth/login`, `/api/auth/logout` | Anyone (these routes *are* the authentication mechanism) |
