@@ -4,18 +4,20 @@
 
 | Piece | State |
 | --- | --- |
-| Postgres schema and Row Level Security (`supabase/migrations/0001` to `0006`) | **Written and proven in-process** with PGlite (WASM Postgres). See "Proof" below. |
-| A Supabase project (hosted) | **Not created.** The owner creates it and applies the settings under "Project settings the owner applies by hand". |
-| Local stack with the Supabase CLI (`supabase start`) | **Not run here**: this machine has no Docker daemon and no Supabase CLI. The SQL is plain Postgres 15+ written for Supabase, and is exercised through PGlite with a Supabase prelude, but it has not been run on the real stack. |
-| Library repositories (`packages/data/src/library`): accounts, resources, access facts, downloads, billing | **Built (plan19 phases C to E).** `SqlLibraryStore` over a two-line `SqlExecutor`, and an in-memory twin, held to one contract suite that runs on both (the SQL one on PGlite). See "The repositories" below. |
-| Account auth against Supabase Auth | **Built** (`apps/web/src/lib/account/supabaseAuth.ts`, REST over `fetch`, no SDK), tested against a faked `fetch`. **Not run against a real project.** The in-memory provider and the development auth provider are unchanged. |
+| Postgres schema and Row Level Security (`supabase/migrations/0001` to `0009`) | **Proven twice**: in-process with PGlite (WASM Postgres, in every `npm test`), and on a **real local Supabase stack** (Postgres 17, Auth, PostgREST, Storage, the pooler), where all nine apply from nothing and the adversarial suite passes through the real API with real user tokens. See "Proof" below and `docs/SUPABASE_REAL_STACK.md`. |
+| A Supabase project (hosted) | **Exists (`learnthrive-prod`, London, Postgres 17) but is empty and untouched.** Nothing has been pushed to it: that needs the owner's approval after the dry run (`docs/SUPABASE_REAL_STACK.md`, "The hosted project"). The settings the owner applies by hand are in `docs/SUPABASE_DASHBOARD_CHECKLIST.md`. |
+| Local stack with the Supabase CLI (`npm run supabase:start`) | **Run.** CLI `supabase@2.121.0` (a pinned dev dependency, no install script), a reviewed `supabase/config.toml` with no keys, Docker images and versions listed in `docs/SUPABASE_REAL_STACK.md`. 174 real-stack tests: `npm run test:realstack`. |
+| Library repositories (`packages/data/src/library`): accounts, resources, access facts, downloads, billing | **Built (plan19 phases C to E) and run on real Postgres.** `SqlLibraryStore` over a two-line `SqlExecutor`, and an in-memory twin, held to one 29-test contract that runs on the in-memory store, on PGlite, and on the real stack (directly, through the pooler, and as the narrow server role). See "The repositories" below. |
+| Account auth against Supabase Auth | **Built and run against real Auth** (`apps/web/src/lib/account/supabaseAuth.ts`, REST over `fetch`, no SDK): sign-up, the emailed link, confirmation, sign-in, refresh, reset, sign-out, through the site's real route handlers. Found and fixed on the real service: the 72-byte password limit and a stale name after a rename (`docs/SUPABASE_REAL_STACK.md`). The in-memory provider and the development auth provider are unchanged. |
+| The site's database role | **`learnthrive_server`** (`scripts/create-server-role.mjs`): proven on the real stack. See "A narrower role" below. |
+| Operator tools | `promote-admin` (first administrator), `supabase-verify` (read-only probes), `supabase-smoke` (guarded end-to-end test), `check-env`, `check-bundle`: `docs/AUTHENTICATION.md`, `docs/ENVIRONMENT.md`, `docs/SUPABASE_RUNBOOK.md`. |
 | Lessons, attendance, reports, notifications, availability, platform settings | **Still future.** They keep the table map further down; no migration exists for them yet. |
 
 `packages/data`'s repository interfaces (`packages/data/src/repositories.ts`) remain the only thing application code talks to. A Supabase-backed provider implements the same interfaces.
 
 ## Migrations
 
-All files are in `supabase/migrations/`, numbered so the Supabase CLI applies them in order. Each is **re-runnable** (`create ... if not exists`, `create or replace`, `drop ... if exists`): applying the whole set a second time changes nothing (tested). They need **Postgres 15 or newer** (`unique nulls not distinct`).
+All files are in `supabase/migrations/`, numbered so the Supabase CLI applies them in order. **Never edit one that has been applied** (to any project, including a developer's local stack): add a new numbered file. Each is **re-runnable** (`create ... if not exists`, `create or replace`, `drop ... if exists`): applying the whole set a second time changes nothing (tested). They need **Postgres 15 or newer** (`unique nulls not distinct`).
 
 | File | Contents |
 | --- | --- |
@@ -25,6 +27,9 @@ All files are in `supabase/migrations/`, numbered so the Supabase CLI applies th
 | `0004_assistant.sql` | `chat_sessions`, `chat_messages`, `chat_files` (with deletion deadlines), `usage_counters` |
 | `0005_rls.sql` | Grants, SECURITY DEFINER helpers, `ENABLE`/`FORCE ROW LEVEL SECURITY` and every policy |
 | `0006_billing_refunds.sql` | `subscriptions.refunded_at` (a full refund ends access) and `subscriptions.ended_at` (when Stripe ended it) |
+| `0007_storage_buckets.sql` | The private buckets `library` (PDF only, 25 MB) and `chat-uploads` (JPEG, PNG, PDF, 15 MB), with **no storage policy** for `anon` or `authenticated`. Re-running restores these settings |
+| `0008_consent_withdrawal_time.sql` | A consent withdrawal is stamped with the database's `now()`, whatever the caller sent (found on the real stack: a device clock behind the server was refused, one ahead recorded a future withdrawal) |
+| `0009_server_lookups.sql` | `public.auth_email(uuid)` and `public.auth_user_by_email(text)`: the only two things the server needs from Auth, as `SECURITY DEFINER` functions, so the site's database role never touches the `auth` schema (`postgres` has no grant option on it) |
 
 The pgvector table for phase H is deliberately **not** created; `0002_library.sql` carries a clearly marked comment block describing it. It will be its own later migration (for example `0006_library_embeddings.sql`), service-role only.
 
@@ -34,16 +39,17 @@ The pgvector table for phase H is deliberately **not** created; `0002_library.sq
 
 - **One contract, two stores**: `src/testing/libraryContract.ts` is run by `libraryMemory.test.ts` and `librarySql.test.ts` (PGlite with these migrations). If the two ever disagree a test fails for one of them.
 - **Production connection**: `apps/web/src/lib/db.ts` opens a pooled `postgres` (porsager, exact 3.4.9, no dependencies) connection from `DATABASE_URL`, with `prepare: false` for Supabase's transaction pooler (port 6543). Every statement is parameterised, and every family-scoped statement names its `client_id`, because this connection **bypasses Row Level Security**; RLS (proven in `rls.test.ts`) is the second wall, not the first. It also reads `auth.users.email` for the billing emails.
-- **A narrower role, recommended**: instead of the `postgres` user, create a login role for the server with only what these repositories touch (verify the exact grants on the staging project, and that your plan allows a `bypassrls` role). Sketch:
+- **A narrower role** (`learnthrive_server`, made by `apps/web/scripts/create-server-role.mjs`): the site connects as this, **not** as `postgres`. The password comes from the environment and only its SCRAM verifier is sent, so the plaintext is never in a statement or a log; a host that is not this machine needs `--host` and the host typed at a real terminal. Run again after any migration that adds a table (grants are explicit, not default privileges: a test pins that on purpose). Exactly what it has:
 
-  ```sql
-  create role learnthrive_server login password '<generated>' bypassrls;
-  grant usage on schema public to learnthrive_server;
-  grant select, insert, update, delete on all tables in schema public to learnthrive_server;
-  grant usage, select on all sequences in schema public to learnthrive_server;
-  grant select (id, email) on auth.users to learnthrive_server;
-  ```
-- **Not tested against a real server**: the `postgres` driver's handling of arrays (`tags`, `flags`), timestamps and `bigint` was reasoned from its documentation, not run. A staging run of the import tool (`docs/LIBRARY.md`) and one sign-in covers it.
+  | | |
+  | --- | --- |
+  | Attributes | log in; **`bypassrls`** (the server names the family on every statement, and the policies are the second wall for the browser keys); not a superuser, cannot create roles or databases, cannot replicate; connection limit 30; statement and idle-in-transaction timeouts of 30 s |
+  | Tables | `select, insert, update, delete` on every table in `public`; `usage, select` on its sequences; nothing in any other schema |
+  | Functions | exactly three: `public.auth_email(uuid)`, `public.auth_user_by_email(text)` (migration 0009) and `private.tags_to_text(text[])` (the search column of `resources` calls it on every write, with the inserting role's privileges; so the role also has `usage` on `private`) |
+  | Cannot | create or alter any object, role or policy; read `auth`, `storage`, `vault`, `supabase_migrations`, `pg_authid`; use `COPY ... PROGRAM`, `pg_read_file`, `SET ROLE`; signal another role's connection |
+
+  **Result on the real local stack: `bypassrls` is allowed** (the `postgres` role may create and alter such a role; it may not even name `NOSUPERUSER` or `NOREPLICATION`, so the script omits them). The 29-test store contract passes as this role, directly. **Not yet known on the hosted project**: whether it allows the same. If it does not, the fallback is the `postgres` role through the pooler (which also bypasses row level security, so the added risk is the breadth of the role, not a different model), plus a test that fails if any repository statement lacks its family scope. One caveat that cannot be removed: **a role can change its own password** (Postgres allows it), so a compromised server could lock the site out of its database; the runbook covers recovery.
+- **Tested against a real server**: the `postgres` driver's arrays (`tags`, `flags`), timestamps, `bigint` and JSON, directly and through the pooler in transaction mode with `prepare: false`, by the same contract that the in-memory store passes (`packages/data/src/realstack.store.test.ts`). The import tool (`docs/LIBRARY.md`) ran against real Storage too.
 
 ## How access is enforced
 
@@ -105,7 +111,7 @@ Deleting an auth user removes the profile, the family account, its students, lin
 
 ## Proof: running the tests
 
-There is no Docker and no `psql` here, so the database behaviour is proven in-process with PGlite (`@electric-sql/pglite` 0.5.10, a `devDependency` of `packages/data` only; Apache-2.0, installed with `--ignore-scripts`, no network use at run time, runs Postgres 18 in WASM).
+**Two layers.** The fast, offline layer is PGlite (`@electric-sql/pglite` 0.5.10, a `devDependency` of `packages/data` only; Apache-2.0, installed with `--ignore-scripts`, no network use at run time, runs Postgres 18 in WASM): it runs in every `npm test`. The real layer is the local Supabase stack, below. PGlite cannot show roles and ownership as Supabase sets them, Storage, PostgREST, Auth, the pooler or real timings, which is why the real layer exists.
 
 ```
 cd packages/data
@@ -120,21 +126,31 @@ npm test                                               # all of the above (tsx -
 - `schema.test.ts`: migrations apply in order and re-apply as a no-op, RLS enabled on every table, every table has a policy or is deny-all, forced RLS list, complete list of user-writable columns, definer functions pinned, constraints (authorship, enums, checksums, paths), full-text search and its GIN index, entitlement and webhook constraints, retention defaults, cascade deletion.
 - `rls.test.ts`: adversarial tests as Alice, Bob, Carol, Dora, a tutor, an admin and anon. Reads are isolated per family on every family table; writes across families, re-parenting rows (also with a deliberately widened grant), role escalation, self-granting access, reading file paths, drafts and scheduled items, and calling private helpers are all refused.
 
-Limits of this proof: PGlite is Postgres but not Supabase. Storage, PostgREST, GoTrue, realtime and the CLI's migration bookkeeping are not exercised. The harness connection is a superuser, so tests run SQL as a role directly; PostgREST callers cannot run arbitrary SQL at all. Before launch the same suite should be run once against a local Supabase stack (`supabase start`) by someone with Docker.
+Limits of the PGlite layer: PGlite is Postgres but not Supabase. Storage, PostgREST, GoTrue, the pooler and the CLI's migration bookkeeping are not exercised, and the harness connection is a superuser, so tests run SQL as a role directly. **The real layer closes that:**
 
-## Local development with the Supabase CLI (needs Docker; not run here)
+### The real local stack
 
-1. Install Docker Desktop and the Supabase CLI. Check `supabase --version`.
-2. From the repo root run `supabase init` once. It creates `supabase/config.toml` next to the existing `supabase/migrations/`. Answer no to the editor-settings prompts. Review the generated file; do not commit keys.
-3. `supabase start` brings up Postgres, Auth, Storage and Studio and prints local URLs and keys (local keys only; they are not secrets for any real project).
-4. `supabase db reset` applies `supabase/migrations/*.sql` to the local database from scratch.
-5. In `supabase/config.toml` set, for local use, `[auth.email] enable_confirmations = true` (so sign-up needs a verified address; local mail appears in Inbucket/Mailpit) and set the site URL and redirect URLs to the local site.
-6. Create the buckets locally, either in Studio or in `config.toml` (`[storage.buckets.library]` with `public = false`; the exact key names depend on the CLI version).
-7. To link a real project later: `supabase link --project-ref <ref>`, then `supabase db push`. The owner reviews the SQL first; nothing in this repo pushes anything.
+```bash
+npm run supabase:start       # the CLI (needs Docker); first run pulls the images
+npm run supabase:reset       # apply every migration from nothing (local only)
+npm run test:realstack       # 174 tests, one file at a time
+npm run supabase:stop        # when you are done: the stack is open to the network (docs/SUPABASE_REAL_STACK.md)
+```
+
+The same adversarial cases as `rls.test.ts` run **over HTTP with real user tokens** through PostgREST; Auth, Storage, the narrow role, the repositories, the import tool, the download route, the retention job and the operator scripts run against the real services. Every difference from PGlite and from the faked-`fetch` tests is recorded, with its fix, in `docs/SUPABASE_REAL_STACK.md` (nine migrations; three behaviours were wrong or missing and are now migrations `0008` and `0009` and code fixes). The tests are skipped without `SUPABASE_LOCAL=1`, and the harness refuses any address that is not this machine.
+
+## Local development with the Supabase CLI
+
+1. Install Docker Desktop. The CLI is already a pinned dependency of this repository (`supabase@2.121.0`, installed with scripts disabled): `npx supabase --version`.
+2. `npm run supabase:start` brings up Postgres 17, Auth, Storage, the pooler, Studio and a mail catcher, using the committed **`supabase/config.toml`** (no keys: confirmations on, 12-character passwords, sign-in by email only, the site's own `/account/confirm` link in the emails, public-only API). It prints the local URLs and keys; they are not secrets for any real project, and `npx supabase status` prints them again.
+3. `npm run supabase:reset` applies `supabase/migrations/*.sql` to the local database from scratch. The buckets come from migration `0007`, not from the config, so the hosted project gets the same ones.
+4. To run the **site** on it, set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` and `DATABASE_URL` in `apps/web/.env` to the LOCAL values (`docs/ENVIRONMENT.md`). `npm run check:env` fails any value that points at the hosted project, so production keys cannot slip into development. **Never put the hosted keys in `apps/web/.env`.**
+5. **Stop it when you are finished** (`npm run supabase:stop`): the CLI publishes the stack on every network interface and serves a keyless SQL endpoint (`docs/SUPABASE_REAL_STACK.md`).
+6. To link the real project: `npx supabase link --project-ref <ref>` (the CLI asks for the database password, which the owner types), then `npx supabase db push --dry-run`, then, **only after the owner has seen the dry run and approved**, `npx supabase db push`. Nothing in this repository pushes anything by itself.
 
 ## Project settings the owner applies by hand
 
-The project is created by the owner (region: a UK or EU region; check the processing location against the privacy notice). Suggested starting points, owner and legal to confirm. Names follow the dashboard and vary slightly between versions.
+**Superseded by `docs/SUPABASE_DASHBOARD_CHECKLIST.md`**, which lists every setting with the value chosen, the dashboard path, and which probe or test confirms it (`npm run supabase:verify`). The text below is kept as the original reasoning. The project exists (London, Postgres 17). Names follow the dashboard and vary slightly between versions.
 
 **Authentication**
 - Providers: **Email on; every other provider off** (no Google or Apple until the owner configures them and the privacy and cookie pages are updated first). **Anonymous sign-ins off.**
@@ -166,9 +182,9 @@ The project is created by the owner (region: a UK or EU region; check the proces
 
 ## Not done, and why
 
-- No live Supabase project exists, so nothing here ran on the real service. Everything depending on it is untested: PostgREST behaviour, Auth emails, Storage buckets, rate limits and the CLI.
-- `supabase/config.toml` is not committed: it is generated by `supabase init`, and a hand-written file with a key the installed CLI does not know makes the CLI fail. Use the settings above.
-- The repositories and the Supabase Auth provider exist (above) but were never run against a real project; see "The repositories".
+- **Nothing has run on the hosted project.** It is empty. Hosted-only behaviour is unverified: whether it allows the `bypassrls` role, the hosted pooler's behaviour on a password change, the leaked-password check, the Pro-plan session limits, rate limits, the email sender and the advisors. The steps and the owner's approval points are in `docs/SUPABASE_REAL_STACK.md`.
+- `supabase/config.toml` **is** committed now (a minimal, reviewed file with no keys), replacing the earlier decision not to: the CLI accepted it, and the real-stack tests depend on it.
+- Staff multi-factor sign-in for the website's own administrators is not built (`docs/SUPABASE_DASHBOARD_CHECKLIST.md`, Decisions).
 
 ## Table map for what is still future
 

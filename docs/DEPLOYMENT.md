@@ -51,7 +51,11 @@ The flag is a build-time value (`NEXT_PUBLIC_*`), so changing it means rebuildin
 
 ## Environment variables
 
-Set these in the host's dashboard for the production environment. **Never commit values.** (The assistant that wrote this could not edit `apps/web/.env.example`, because access to `.env*` files is blocked in its environment; paste the block below into it so the example stays complete.)
+Set these in the host's dashboard for the production environment. **Never commit values.**
+
+**The complete, generated list is `docs/ENVIRONMENT.md`** (every variable the code reads, found by a test that searches the source, with what it does, where it is needed, whether it is secret and where to get it). Check an environment without printing a value: `npm run check:env -- --env production` from `apps/web`, in a shell that has Render's variables; it reports each as present, missing, malformed or forbidden, and flags a switch that is set but should stay held. The table below is the original hand-written one and is kept for its explanations.
+
+**`apps/web/.env.example`**: the assistants that wrote this could not read or edit `.env*` files (access is blocked in their environment), so it was not synchronised. It must contain names only. Regenerate it from the registry with `cd apps/web && node scripts/env-docs.mjs --template > .env.example` (review the diff first: it overwrites the file; use `node` directly, because `npm run` would print its banner into it).
 
 | Variable | Required in production? | What it does | Example / default |
 | --- | --- | --- | --- |
@@ -68,9 +72,9 @@ Set these in the host's dashboard for the production environment. **Never commit
 | `LIBRARY_DOWNLOADS_PER_HOUR` | No — default `60` | Downloads one family account may make in an hour (1 to 1000). | unset (60) |
 | `LIBRARY_ENABLED` | No — leave unset until the account backend is ready | `true` opens the account and Library routes in production (see "The Library carve-out" above). Server variable, read per request. | unset (closed) |
 | `SUPABASE_URL` | **Yes** for accounts | The project URL, for Supabase Auth. Server only: never a `NEXT_PUBLIC_` variable. With this, `SUPABASE_ANON_KEY` and `DATABASE_URL` not all set, production runs no account backend. | `https://abcdefgh.supabase.co` |
-| `SUPABASE_ANON_KEY` | **Yes** for accounts | The project's anon (publishable) key. It grants only what Auth allows anyone. Server only. | (secret-ish) |
-| `DATABASE_URL` | **Yes** for accounts | Postgres connection string for the server's own queries (use Supabase's **pooler**, transaction mode, port 6543). Connect as a role that bypasses RLS only on the server; this key must never reach the browser or a log. | `postgres://...` (secret) |
-| `SUPABASE_SERVICE_ROLE_KEY` | **Yes** for downloads and the import tool | The service role key, for the private `library` storage bucket. It bypasses every policy: server and the import tool only, never a `NEXT_PUBLIC_` variable, never logged. Rotate it if it ever leaks. | (secret) |
+| `SUPABASE_ANON_KEY` | **Yes** for accounts | The project's **publishable** key (`sb_publishable_...`, or the legacy anon JWT). It grants only what Auth allows anyone. Server only: the browser never calls Supabase. The site sends the new-style key as the `apikey` header alone (`docs/SUPABASE_REAL_STACK.md`, "The key-format decision"). | (secret-ish) |
+| `DATABASE_URL` | **Yes** for accounts | Postgres connection string for the server's own queries: Supabase's **pooler**, transaction mode, **port 6543**, as the narrow **`learnthrive_server.<project ref>`** role (`apps/web/scripts/create-server-role.mjs`), **never `postgres`**. The role bypasses RLS by design, so this value must never reach the browser or a log. `npm run check:env` refuses `postgres`, a direct connection and a local address in production. Changing the role's password has a measured 10 to 16 second pooler gap (`docs/SUPABASE_RUNBOOK.md`). | `postgresql://learnthrive_server.<ref>:...@...pooler.supabase.com:6543/postgres` (secret) |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Yes** for downloads and the import tool | The **secret** key (`sb_secret_...`, or the legacy service_role JWT), for the private `library` and `chat-uploads` storage buckets. It bypasses every policy: server and the import tool only, never a `NEXT_PUBLIC_` variable, never logged. Rotate it if it ever leaks. | (secret) |
 | `STRIPE_SECRET_KEY` | Only to take payment | `sk_test_...`, `sk_live_...` or a restricted `rk_...`. Server only; never logged. A test key puts the server in test mode and the webhook then refuses live events (and the reverse). `docs/BILLING.md` has every Stripe step. | (secret) |
 | `STRIPE_WEBHOOK_SECRET` | Only to take payment | `whsec_...` for `/api/billing/webhook`; two, comma separated, while rotating. | (secret) |
 | `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_ANNUAL` | Only to take payment | The `price_...` IDs of the recurring GBP prices. An amount is rejected: prices live in Stripe. | `price_1Abc...` |

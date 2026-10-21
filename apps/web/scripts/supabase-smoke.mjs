@@ -125,6 +125,8 @@ try {
       const url = new URL(link);
       hash = url.searchParams.get("token_hash");
       if (!/\/account\/confirm$/.test(url.pathname) || url.searchParams.get("type") !== "signup" || !hash) throw new Error("the link is not /account/confirm?token_hash=...&type=signup (check the email template and the Site URL)");
+      // The templates build the link from the dashboard's Site URL: on a hosted project it must be the public address, not a local one.
+      if (!api.local && (url.protocol !== "https:" || describeTarget(url.origin).local)) throw new Error("the link points at a local or non-https address: set the Site URL in Authentication, URL Configuration");
       return `${url.origin}${url.pathname}`;
     });
     await step("sign-in is refused until the address is confirmed", async () => {

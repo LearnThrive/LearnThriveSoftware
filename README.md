@@ -52,6 +52,10 @@ npm run services:rebuild   # after changing services/voice
 
 Loading the model through the Windows folder mount takes about 85 s the first time; it then stays loaded for 30 minutes. `LEARNTHRIVE_DOCKER=0` skips all of this (the Playwright servers set it), and so do `ASSISTANT_PROVIDER=mock` with `VOICE_PROVIDER=mock`.
 
+### Supabase on your machine (accounts, Library, storage)
+
+The site runs on in-memory accounts by default. To run it on **real Supabase locally** (Postgres 17, Auth, Storage, a mail catcher): `npm run supabase:start` (needs Docker), set the four local `SUPABASE_*` / `DATABASE_URL` values in `apps/web/.env` as [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) says, and run `npm run test:realstack` to check it (174 tests against the real services). **Stop it with `npm run supabase:stop` when you are done:** the CLI publishes it on every network interface and serves a keyless SQL endpoint ([docs/SUPABASE_REAL_STACK.md](docs/SUPABASE_REAL_STACK.md)). Production setup, the dashboard checklist and the operations runbook: [SUPABASE_MIGRATION.md](docs/SUPABASE_MIGRATION.md), [SUPABASE_DASHBOARD_CHECKLIST.md](docs/SUPABASE_DASHBOARD_CHECKLIST.md), [SUPABASE_RUNBOOK.md](docs/SUPABASE_RUNBOOK.md). Check an environment without printing a value: `cd apps/web && npm run check:env`.
+
 Joining a classroom happens from a Lesson — `/dashboard/lessons/:id` → **Join Classroom** → `/dashboard/lessons/:id/classroom` — never a separate site. A `/dev/classroom` route (hidden from all navigation, 404s outside development) retains the original manual name/room-code entry form for local debugging and is what `apps/classroom`'s own Playwright suite still drives.
 
 ## The retired standalone classroom

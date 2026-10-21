@@ -35,7 +35,8 @@
     "supabase:verify": "node scripts/supabase-verify.mjs",
     "db:create-server-role": "node scripts/create-server-role.mjs",
     "db:promote-admin": "node scripts/promote-admin.mjs",
-    "supabase:smoke": "node --import tsx scripts/supabase-smoke.mjs"
+    "supabase:smoke": "node --import tsx scripts/supabase-smoke.mjs",
+    "env:template": "node scripts/env-docs.mjs --template"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.1",

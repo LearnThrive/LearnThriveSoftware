@@ -72,16 +72,16 @@ The Library has real sign-up. It is a **separate layer** from the development ac
 
 ### What the owner sets in the Supabase dashboard
 
-(Documented, not done by the code. A person with the project does these once, in a staging project first.)
+**The complete, current list is `docs/SUPABASE_DASHBOARD_CHECKLIST.md`** (every setting, the value, the dashboard path, and which probe confirms it: `npm run supabase:verify`). The notes below are the account-specific reasoning; the checklist wins where they differ. (Documented, not done by the code.)
 
 1. **Authentication > Providers > Email**: enabled; **Confirm email: ON** (sign-in must not work before the address is confirmed); **Secure email change: ON**. Leave Google, Apple and every other provider **off** (the privacy and cookie notices have not been updated for them).
-2. **Authentication > Policies**: minimum password length **12**; require upper, lower and digits is optional (the site's own rule is length only, 12 to 128); **Prevent use of leaked passwords: ON** where the plan allows it (the site shows a friendly message when Supabase refuses a password).
-3. **Authentication > Sessions**: time-box sessions (for example **7 days**) and set an inactivity timeout (for example **24 hours**). "Remember me" is not offered; the browser cookies are session cookies.
+2. **Authentication > Policies**: minimum password length **12** and **no composition rules** (the site's own rule is length only, 12 to **72 bytes**: Supabase hashes with bcrypt and refuses more, which the real stack showed, so the site refuses first); **Prevent use of leaked passwords: ON** where the plan allows it (the site shows a friendly message when Supabase refuses a password).
+3. **Authentication > Sessions**: time-box sessions (checklist default **30 days**) and set an inactivity timeout (default **7 days**). "Remember me" is not offered; the browser cookies are session cookies.
 4. **Authentication > URL Configuration**: Site URL `https://www.learnthrivetuition.co.uk`; add the staging host to the redirect allow-list only on the staging project.
 5. **Authentication > Email Templates**: replace the **Confirm signup** and **Reset password** links so they open the site's confirm page and carry the one-time token hash, which the page spends with a button press (a POST), so a mail scanner opening the link cannot use it up:
    - Confirm signup: `{{ .SiteURL }}/account/confirm?token_hash={{ .TokenHash }}&type=signup`
    - Reset password: `{{ .SiteURL }}/account/confirm?token_hash={{ .TokenHash }}&type=recovery`
-   Keep the wording plain and do not include the person's password or any other data. Set a **custom SMTP** sender (Resend works) from the verified domain so the emails are not sent from Supabase's shared address.
+   Ready-made files are `supabase/templates/confirmation.html` and `recovery.html` (the local stack uses them, and a real-stack test reads the actual email and checks the link). The link is built from the dashboard's **Site URL**, so a wrong Site URL breaks every email: the smoke test fails if the link points at a local address. Keep the wording plain and do not include the person's password or any other data. Set a **custom SMTP** sender (Resend works) from the verified domain so the emails are not sent from Supabase's shared address.
 6. **Authentication > Rate Limits**: leave Supabase's limits on; the site adds its own (below).
 7. Confirm in **Auth > Users** that a new sign-up gets a row in `public.profiles` (the trigger in `0001_core.sql`) with `adult_confirmed_at` set. If it does not, the account page redirects to sign-in rather than crash.
 
@@ -98,9 +98,29 @@ Two cookies, set only after a person signs in or opens an emailed link, never on
 - Sign-up, reset and resend give the **same answer for an address that has an account and one that does not**; a wrong password and an unknown address give the same 401 message and take the same time.
 - Logs hold counters and reason codes only: no address, name, token or password (`logOutcome`).
 
+### The first administrator, and the other roles
+
+Roles cannot be self-assigned: the sign-up trigger always creates `CLIENT`, whatever the sign-up metadata says (proved on the real stack with metadata that names `ADMIN`), and no browser key can write `profiles.role`. There is no admin screen that promotes anyone. The one way in is the script `apps/web/scripts/promote-admin.mjs`, run by a person who holds the database connection string:
+
+```bash
+cd apps/web
+DATABASE_URL=<the server connection string> npm run db:promote-admin -- --email person@example.com --host <the database host>
+```
+
+It refuses unless **all** hold: `--host` is given and is the host of `DATABASE_URL` (even for a local database, `--host 127.0.0.1`); the address already has an account whose email is **confirmed**; the operator **types the email address again** at the prompt; and, for a database that is not on this machine, also types the host, at a real terminal. It writes `profiles.role` through the server connection and prints one counter-only JSON line to the console (host, outcome, how many administrators there are now): never the email or a name. The person must sign in again for it to take effect. An administrator's reach (read accounts for support, never conversations or consents) is proved by a real-stack test.
+
+**A tutor** is a `public.tutors` row with a display name and the person's `profile_id`, not a login role of its own. Link one with a single SQL statement in the dashboard's SQL editor, as `postgres`, after the person has signed up and confirmed:
+
+```sql
+update public.profiles set role = 'TUTOR' where id = '<the profile id>';
+insert into public.tutors (profile_id, display_name) values ('<the profile id>', '<the name families see>');
+```
+
+To take a role away: `update public.profiles set role = 'CLIENT' where id = '<the profile id>'`, then ban and sign the person out (`docs/SUPABASE_RUNBOOK.md`). **Multi-factor sign-in for administrators is not built**: until it is, keep the administrator list very short.
+
 ### Tested, and not
 
-Tested here: validation, lockout, both providers (Supabase against a faked `fetch` that checks request shapes and every error-code mapping), every route's logic, the cookie flags, and a full browser journey (sign up, confirm, sign out, sign in, reset) with axe. **Not** tested: a real Supabase project (email delivery, the dashboard settings above, the email templates, the leaked-password check) and a real browser on a phone. Do the staging run in `docs/DEPLOYMENT.md` before switching `LIBRARY_ENABLED` on.
+Tested here: validation, lockout, both providers (Supabase against a faked `fetch` that checks request shapes and every error-code mapping), every route's logic, the cookie flags, and a full browser journey (sign up, confirm, sign out, sign in, reset) with axe. **Also run against a real local Supabase stack** (`docs/SUPABASE_REAL_STACK.md`): the real emails and their links, sign-in before and after confirmation, refresh-token rotation, sign-out, reset, and the password rules. That found three things the fakes could not: the 72-byte limit, the stale name after a rename, and a consent-withdrawal clock problem (all fixed). **Not** tested: the hosted project (the leaked-password check, the Pro-plan session limits, the email sender on the real domain, hosted rate limits) and a real browser on a phone. Run the smoke test (`npm run supabase:smoke`) against the hosted project, with the owner, before switching `LIBRARY_ENABLED` on.
 
 ## Production safety
 
@@ -111,5 +131,5 @@ Tested here: validation, lockout, both providers (Supabase against a faked `fetc
 - Password reset (deliberately deferred — plan section 7 explicitly says not to build this infrastructure yet).
 - Account lockout after repeated failed attempts (a "disabled" account exists as a distinct state, but nothing currently *transitions* an account into it automatically).
 - CSRF protection beyond `SameSite=Lax` (adequate for same-site form/fetch submissions from this app's own pages; would need revisiting if this app ever needs to accept authenticated cross-site requests).
-- Multi-factor authentication.
-- Any of this surviving a server restart.
+- Multi-factor authentication, **including for the website's own administrators** (see the checklist's decisions).
+- Any of this surviving a server restart (that is the development provider; the Supabase-backed accounts do).
