@@ -14,6 +14,15 @@ npm run check:env -- --env production  # what Render's environment should look l
 
 It reports each variable as present, absent, missing, malformed (wrong prefix, too short, a service key in the publishable slot, a local address in production) or, in production, forbidden or held. In a LOCAL environment it also fails any value that points at the hosted Supabase project: with the three Supabase variables present the site uses real Supabase, so a local file must only ever reach the local stack (`npm run supabase:start`). `CHECK_ENV_ALLOW_HOSTED=1` accepts it deliberately, for one run.
 
+## `apps/web/.env.example`
+
+It must hold **names only**. It is not edited by hand or by the assistants that wrote this repository (access to `.env*` files is blocked for them). Regenerate it from the registry, review the diff, and commit it:
+
+```bash
+cd apps/web
+node scripts/env-docs.mjs --template > .env.example   # (not `npm run`: npm prints its own banner into the file)
+```
+
 ## Local development
 
 Nothing is required for the ordinary site: leave `apps/web/.env` with only the mail settings you want to try. To run on the real Supabase stack locally, start it (`npm run supabase:start`) and set these three, to the LOCAL values `npx supabase status` prints (they are not secrets for any real project):
