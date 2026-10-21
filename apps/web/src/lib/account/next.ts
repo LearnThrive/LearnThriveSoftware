@@ -1,4 +1,6 @@
 import { cookies } from "next/headers";
+import { assistantClosed } from "@/lib/assistant/runtime";
+import { PORTAL_ENABLED } from "@/lib/portal";
 import { accountRuntime } from "./runtime";
 import type { CookieJar } from "./session";
 import type { Deps } from "./handlers";
@@ -14,5 +16,6 @@ export async function nextJar(): Promise<CookieJar> {
 }
 
 export async function nextDeps(): Promise<Deps> {
-  return { rt: await accountRuntime(), jar: await nextJar() };
+  // What the front door can offer right now: Study Buddy where the assistant is open, the dashboard where the signed-in app is open.
+  return { rt: await accountRuntime(), jar: await nextJar(), studyBuddyOpen: assistantClosed(process.env, true) === null, dashboardOpen: PORTAL_ENABLED };
 }

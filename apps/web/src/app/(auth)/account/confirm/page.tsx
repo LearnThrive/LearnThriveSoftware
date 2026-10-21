@@ -17,7 +17,7 @@ export default async function ConfirmPage({ searchParams }: { searchParams: Prom
         <ConfirmPanel tokenHash={tokenHash} kind={type} />
       ) : (
         <p>
-          That link is not valid. <Link href="/account/sign-in">Back to sign in</Link>
+          That link is not valid. <Link href="/login">Back to sign in</Link>
         </p>
       )}
     </AccountShell>

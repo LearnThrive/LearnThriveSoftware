@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
+import { accountPlatformUser } from "@/lib/access/current";
 import type { AuthenticatedUser } from "./types";
 
 export const SESSION_COOKIE_NAME = "learnthrive_session";
@@ -40,10 +41,8 @@ export async function createSession(user: AuthenticatedUser, rememberMe: boolean
   });
 }
 
-/** Reads and validates the session cookie against the server-side store — never trusts the
- * cookie's mere presence, and never trusts a client-supplied role/user id directly (see plan
- * section 10's explicit warning against `role=tutor` query-parameter "authentication"). */
-export async function getSession(): Promise<AuthenticatedUser | null> {
+/** The development provider's session: the cookie checked against the server-side store, never trusted for its mere presence. */
+async function developmentSession(): Promise<AuthenticatedUser | null> {
   const store = await cookies();
   const sessionId = store.get(SESSION_COOKIE_NAME)?.value;
   if (!sessionId) return null;
@@ -54,6 +53,17 @@ export async function getSession(): Promise<AuthenticatedUser | null> {
     return null;
   }
   return record.user;
+}
+
+/**
+ * Who is signed in to the signed-in app, or null. Two sources, one answer: the development provider's session (local development only,
+ * what `/api/auth/login` issues), then the account sign-in, which is the one login page everyone uses (lib/access/current.ts: only for
+ * staff and enrolled families; a Library subscriber has an account session but no dashboard). Both are validated server-side, and
+ * neither trusts a client-supplied role or user id (see plan section 10's explicit warning against `role=tutor` query-parameter
+ * "authentication"). Every `requireSession`, `requireRole` and route handler reads this, so the source is invisible to them.
+ */
+export async function getSession(): Promise<AuthenticatedUser | null> {
+  return (await developmentSession()) ?? (await accountPlatformUser());
 }
 
 export async function destroySession(): Promise<void> {

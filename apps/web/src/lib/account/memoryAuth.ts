@@ -23,6 +23,8 @@ interface UserRow {
   displayName: string;
   passwordHash: string;
   confirmed: boolean;
+  /** Disabled (banned): the right password is still refused, and says why. */
+  disabled?: boolean;
 }
 
 const ACCESS_MS = 60 * 60 * 1000;
@@ -68,6 +70,17 @@ export class MemoryAccountAuth implements AccountAuth {
     return { accessToken, refreshToken, expiresAt };
   }
 
+  /**
+   * Development and tests only: registers an account that is already confirmed, with a chosen id, as if it had signed up and
+   * opened its link (lib/dev/accounts.ts). Idempotent per address. Does not call `onUserCreated`: the caller seeds the profile.
+   */
+  async seedUser(input: { id: string; email: string; displayName: string; password: string; disabled?: boolean }): Promise<void> {
+    if (this.users.has(input.email)) return;
+    const row: UserRow = { id: input.id, email: input.email, displayName: input.displayName, passwordHash: await hashPassword(input.password), confirmed: true, disabled: input.disabled };
+    this.users.set(row.email, row);
+    this.byId.set(row.id, row);
+  }
+
   /** Development and tests only: the id of the account for an address, for the seed route. */
   userIdFor(email: string): string | null {
     return this.users.get(email)?.id ?? null;
@@ -96,6 +109,7 @@ export class MemoryAccountAuth implements AccountAuth {
     this.dummyHash ??= hashPassword("not-a-real-password");
     const correct = await verifyPassword(password, row ? row.passwordHash : await this.dummyHash);
     if (!row || !correct) return { ok: false as const, reason: "invalid_credentials" as const };
+    if (row.disabled) return { ok: false as const, reason: "account_disabled" as const };
     if (!row.confirmed) return { ok: false as const, reason: "email_not_confirmed" as const };
     return { ok: true as const, user: this.publicUser(row), tokens: this.issueTokens(row) };
   }

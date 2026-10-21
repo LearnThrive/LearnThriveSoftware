@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { BookOpen, ChevronsLeft, ChevronsRight, House, Menu, MessagesSquare, Search, UserRound, X } from "lucide-react";
+import { BookOpen, ChevronsLeft, ChevronsRight, House, LayoutDashboard, Menu, MessagesSquare, Search, UserRound, X } from "lucide-react";
 import { BrandMark } from "@/components/brand/BrandMark";
 import styles from "./MemberShell.module.css";
 
@@ -17,14 +17,14 @@ import styles from "./MemberShell.module.css";
  * is kept in the browser). Smaller screens: a slim top bar with the brand, the page name and a menu button; the same sidebar slides
  * in as a drawer, the page behind it is inert, Escape or the scrim closes it, and a navigation closes it too.
  */
-export type MemberNavIcon = "home" | "library" | "study-buddy" | "search" | "account";
+export type MemberNavIcon = "home" | "dashboard" | "library" | "study-buddy" | "search" | "account";
 export interface MemberNavItem {
   href: string;
   label: string;
   icon: MemberNavIcon;
 }
 
-const ICONS: Record<MemberNavIcon, typeof House> = { home: House, library: BookOpen, "study-buddy": MessagesSquare, search: Search, account: UserRound };
+const ICONS: Record<MemberNavIcon, typeof House> = { home: House, dashboard: LayoutDashboard, library: BookOpen, "study-buddy": MessagesSquare, search: Search, account: UserRound };
 
 interface SidebarApi {
   slot: HTMLElement | null;

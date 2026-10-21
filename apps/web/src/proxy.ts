@@ -29,7 +29,11 @@ export function proxy(request: NextRequest) {
   });
   if (action === "notFound") return notFound(pathname);
   if (action === "next") {
-    const response = NextResponse.next();
+    // Hand the page the path being asked for (a Server Component cannot read its own URL), so a redirect to sign-in or to the renewing
+    // route can come back to it. Set here, on every request the matcher covers, so a client-supplied copy never survives.
+    const forwarded = new Headers(request.headers);
+    forwarded.set("x-learnthrive-path", pathname + request.nextUrl.search);
+    const response = NextResponse.next({ request: { headers: forwarded } });
     if (noindex) response.headers.set("X-Robots-Tag", "noindex, nofollow");
     return response;
   }

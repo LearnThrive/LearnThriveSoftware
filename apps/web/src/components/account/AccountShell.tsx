@@ -5,18 +5,18 @@ import { BrandMark } from "@/components/brand/BrandMark";
 import { MotionRuntime } from "@/components/motion/MotionRuntime";
 
 /**
- * The page around the account forms (sign in, sign up, reset, confirm): the same two-panel shell as the staff
- * sign-in, with words about the Library. It claims nothing the owners have not confirmed: no counts, no prices, no
- * promise of what is inside. Cookie-free until a person signs in.
+ * The page around the sign-in forms (sign in, sign up, reset, confirm): the platform's one front door. The same two-panel shell the
+ * staff sign-in always had, with the Library's account forms inside it. It claims nothing the owners have not confirmed: no counts,
+ * no prices, no promise of what is inside. Cookie-free until a person signs in.
  */
 export function AccountShell({ title, intro, children }: { title?: string; intro?: string; children: ReactNode }) {
   return (
     <MotionRuntime>
       <div className="auth-layout">
         <aside className="auth-brand">
-          <Link href="/library" className="auth-brand__back">
+          <Link href="/" className="auth-brand__back">
             <ArrowLeft size={16} aria-hidden="true" />
-            Back to the Library
+            Back to learnthrivetuition.co.uk
           </Link>
           <div className="auth-brand__body">
             <BrandMark className="auth-brand__mark auth-enter" />
@@ -24,17 +24,17 @@ export function AccountShell({ title, intro, children }: { title?: string; intro
               Learn. Grow. Thrive.
             </p>
             <h1 className="auth-brand__headline auth-enter" style={{ animationDelay: "100ms" }}>
-              The LearnThrive Library
+              Everything for your tuition, in one place.
             </h1>
             <ul className="auth-brand__points">
               <li className="auth-enter" style={{ animationDelay: "170ms" }}>
-                Worksheets, papers and notes made by LearnThrive
+                Your lessons, schedule and reports in one place
               </li>
               <li className="auth-enter" style={{ animationDelay: "210ms" }}>
-                Included for enrolled students
+                Study Buddy and the Library, included for enrolled students
               </li>
               <li className="auth-enter" style={{ animationDelay: "250ms" }}>
-                For parents, guardians and adult learners to sign in
+                Parents, guardians, adult learners, tutors and administrators sign in here
               </li>
             </ul>
           </div>

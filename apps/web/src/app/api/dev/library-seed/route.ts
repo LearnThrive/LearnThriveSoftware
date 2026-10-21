@@ -28,7 +28,7 @@ async function tester(rt: NonNullable<Awaited<ReturnType<typeof accountRuntime>>
     if (userId && rt.memory) rt.memory.seedAssignment(rt.memory.seedStudent(userId), "ACTIVE");
   }
   if (rt.memory) await seedCatalogue(rt.memory, storage);
-  return jsonResponse(200, { signInAt: "/account/sign-in", email: TEST_ACCOUNT.email, password: TEST_ACCOUNT.password, access: "enrolled", note: "Development only; gone when the dev server restarts." });
+  return jsonResponse(200, { signInAt: "/login", email: TEST_ACCOUNT.email, password: TEST_ACCOUNT.password, access: "enrolled", note: "Development only; gone when the dev server restarts." });
 }
 
 export async function GET(request: Request) {

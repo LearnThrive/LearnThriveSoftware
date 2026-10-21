@@ -42,7 +42,7 @@ export function ConfirmPanel({ tokenHash, kind }: { tokenHash: string; kind: Kin
       {state === "failed" ? (
         <p className={styles.error} role="alert">
           {message}{" "}
-          <Link className={styles.link} href={kind === "recovery" ? "/account/forgot" : "/account/sign-in"}>
+          <Link className={styles.link} href={kind === "recovery" ? "/account/forgot" : "/login"}>
             {kind === "recovery" ? "Ask for a new link" : "Back to sign in"}
           </Link>
         </p>

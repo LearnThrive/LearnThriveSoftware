@@ -39,7 +39,7 @@ export function DownloadPanel({ slug, free, view, message }: { slug: string; fre
         <>
           <p>{free ? "This is a free sample. Sign in or create an account to download it." : "Sign in to download. This resource is included for enrolled students."}</p>
           <p>
-            <Link className="button button--primary" href={`/account/sign-in?next=${next}`}>
+            <Link className="button button--primary" href={`/login?next=${next}`}>
               <span>Sign in</span>
             </Link>{" "}
             <Link className="button button--secondary" href="/account/sign-up">

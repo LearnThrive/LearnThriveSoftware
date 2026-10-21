@@ -108,6 +108,9 @@ export class SupabaseAccountAuth implements AccountAuth {
       return session ? { ok: true as const, ...session } : { ok: false as const, reason: "unavailable" as const };
     }
     if (SupabaseAccountAuth.code(reply) === "email_not_confirmed") return { ok: false as const, reason: "email_not_confirmed" as const };
+    // A banned user (error_code user_banned, the runbook's way to take access away) is deliberately NOT given its own answer here: Supabase's
+    // docs do not say whether it is reported only after a correct password, and a distinct message before that would tell a guesser which
+    // addresses are banned accounts. It reads as any wrong password. (The in-memory sign-in checks the password first, so it can say "disabled".)
     return { ok: false as const, reason: "invalid_credentials" as const };
   }
 

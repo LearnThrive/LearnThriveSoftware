@@ -26,9 +26,9 @@ export async function requireAccountPage(path: string): Promise<SignedIn> {
   const { rt, state } = await currentSession();
   if (!rt) notFound();
   if (state.status === "refresh_needed") redirect(`/api/account/refresh?next=${encodeURIComponent(path)}`);
-  if (state.status !== "ok") redirect(`/account/sign-in?next=${encodeURIComponent(path)}`);
+  if (state.status !== "ok") redirect(`/login?next=${encodeURIComponent(path)}`);
   const account = await rt.store.accounts.getAccount(state.user.id);
   // A signed-in user with no profile means the database trigger did not run: treat as signed out, not as a crash.
-  if (!account) redirect(`/account/sign-in?next=${encodeURIComponent(path)}`);
+  if (!account) redirect(`/login?next=${encodeURIComponent(path)}`);
   return { rt, user: state.user, account };
 }

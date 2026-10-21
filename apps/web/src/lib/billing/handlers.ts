@@ -66,7 +66,7 @@ const MESSAGE: Record<Reason, string> = {
 };
 
 const BACK: Record<Reason, string> = {
-  signed_out: "/account/sign-in?next=%2Fpricing",
+  signed_out: "/login?next=%2Fpricing",
   unavailable: "/pricing?checkout=unavailable",
   acknowledge: "/pricing?checkout=acknowledge",
   already: "/account?billing=already",

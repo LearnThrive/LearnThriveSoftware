@@ -64,7 +64,7 @@ function wantsPage(request: Request): boolean {
 function fail(request: Request, slug: string, reason: Reason, extra: Record<string, string> = {}): Response {
   logOutcome("library-download", reason);
   if (wantsPage(request)) {
-    const target = reason === "signed_out" ? `/account/sign-in?next=${encodeURIComponent(`/library/${slug}`)}` : `/library/${encodeURIComponent(slug)}?download=${reason}`;
+    const target = reason === "signed_out" ? `/login?next=${encodeURIComponent(`/library/${slug}`)}` : `/library/${encodeURIComponent(slug)}?download=${reason}`;
     return new Response(null, { status: 303, headers: { Location: target, "Cache-Control": "no-store", ...extra } });
   }
   return jsonResponse(STATUS[reason], { code: reason, error: MESSAGE[reason] }, { "Cache-Control": "no-store", ...extra });

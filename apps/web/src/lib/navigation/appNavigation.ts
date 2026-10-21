@@ -12,7 +12,8 @@ import type { Role } from "@/lib/auth/types";
 
 export type AppNavIcon =
   | "home" | "calendar" | "lessons" | "students" | "clients" | "tutors"
-  | "assignments" | "reports" | "notifications" | "activity" | "settings" | "availability";
+  | "assignments" | "reports" | "notifications" | "activity" | "settings" | "availability"
+  | "study-buddy" | "library";
 
 export interface AppNavItem {
   label: string;
@@ -119,8 +120,21 @@ const NAV_BY_ROLE: Record<Role, AppNavSection[]> = {
   STUDENT: STUDENT_NAV,
 };
 
-export function navigationFor(role: Role): AppNavSection[] {
-  return NAV_BY_ROLE[role];
+/**
+ * What the person's Library standing adds to their menu (`platformAccess` in packages/data decides it; the caller also checks the thing is
+ * open, so a link never promises a page that says "coming soon"). Both pages live in the member area, one click from here: the same
+ * sign-in, the same account, a "Dashboard" link back (components/member/MemberShell.tsx).
+ */
+export interface NavExtras {
+  studyBuddy?: boolean;
+  library?: boolean;
+}
+
+export function navigationFor(role: Role, extras: NavExtras = {}): AppNavSection[] {
+  const learning: AppNavItem[] = [];
+  if (extras.studyBuddy) learning.push({ label: "Study Buddy", href: "/library/study-buddy", icon: "study-buddy" });
+  if (extras.library) learning.push({ label: "Library", href: "/library", icon: "library" });
+  return learning.length > 0 ? [...NAV_BY_ROLE[role], { title: "Learning", items: learning }] : NAV_BY_ROLE[role];
 }
 
 /** True when `pathname` is this item's own route or a page nested under it. */
