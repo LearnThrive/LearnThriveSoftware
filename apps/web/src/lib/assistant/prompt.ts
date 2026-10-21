@@ -52,3 +52,7 @@ You do not have to deal with this alone.`;
 export const OUTPUT_BLOCKED_REPLY = "I cannot give that answer. Could you ask your study question another way?";
 
 export const AI_LABEL = "AI-generated, may be wrong";
+
+/** Shown (unticked) before a first chat while the assistant is for adults only; its hash is recorded with the consent. Owner approval needed. */
+export const ADULT_ACKNOWLEDGEMENT = "I am 18 or over, and I am the person using Study Buddy.";
+export const ADULT_ACK_VERSION = "2026-10-draft-1";
