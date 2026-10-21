@@ -97,6 +97,27 @@ create function auth.role() returns text language sql stable as $$
   )::text
 $$;
 
+-- Storage, as far as migrations touch it: the bucket table and the object table with row level security on and no policies
+-- (what a new Supabase project has). The real service is exercised in the local-stack tests (SUPABASE_LOCAL=1).
+create schema if not exists storage;
+create table storage.buckets (
+  id text primary key,
+  name text not null unique,
+  public boolean default false,
+  file_size_limit bigint,
+  allowed_mime_types text[],
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+create table storage.objects (
+  id uuid primary key default gen_random_uuid(),
+  bucket_id text references storage.buckets (id),
+  name text,
+  owner_id text,
+  created_at timestamptz default now()
+);
+alter table storage.objects enable row level security;
+
 create role anon nologin noinherit;
 create role authenticated nologin noinherit;
 create role service_role nologin noinherit bypassrls;
