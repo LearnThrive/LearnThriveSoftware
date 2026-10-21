@@ -8,16 +8,18 @@
 import { createExecutor } from "../../../apps/web/src/lib/db";
 import { SqlLibraryStore } from "./library";
 import { libraryContract } from "./testing/libraryContract";
-import { newUser, openDb, poolerUrl, resetPublicData, stack } from "./testing/realstack";
+import { ensureServerRole, newUser, openDb, poolerUrl, resetPublicData, stack } from "./testing/realstack";
 
 // SUPABASE_LOCAL_SERIAL is set only by `npm run test:realstack`, which runs the real-stack files one at a time.
 if (process.env.SUPABASE_LOCAL === "1" && process.env.SUPABASE_LOCAL_SERIAL === "1") {
-  for (const via of ["direct", "pooler"] as const) {
+  // As the postgres role directly and through the pooler, and as the narrow learnthrive_server role the site is meant to use.
+  for (const via of ["direct", "pooler", "the narrow server role, direct"] as const) {
     libraryContract(`sql on the real local stack, ${via}`, async () => {
       const s = stack();
       const admin = openDb(s);
       await resetPublicData(admin);
-      const { executor, close } = await createExecutor(via === "direct" ? s.dbUrl : poolerUrl(s));
+      const url = via === "direct" ? s.dbUrl : via === "pooler" ? poolerUrl(s) : ensureServerRole(s).directUrl;
+      const { executor, close } = await createExecutor(url);
       const owner = async <T = Record<string, any>>(text: string, params?: unknown[]) => executor.query<T>(text, params);
       const store = new SqlLibraryStore(executor);
       const made: string[] = [];

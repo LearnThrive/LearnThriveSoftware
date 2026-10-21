@@ -50,7 +50,7 @@ try {
     console.log(ok ? "Revoked: access from that grant has ended." : "No active grant with that id.");
     process.exitCode = ok ? 0 : 1;
   } else {
-    const users = await executor.query("select id from auth.users where lower(email) = $1", [email]);
+    const users = await executor.query("select id from public.auth_user_by_email($1)", [email]);
     if (!users[0]) {
       console.error("No account with that email address. The family must sign up first.");
       process.exit(1);

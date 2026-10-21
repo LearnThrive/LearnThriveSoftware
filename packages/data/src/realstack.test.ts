@@ -7,7 +7,9 @@
 // access token and the publishable key. A refused request is a 401 or 403 with SQLSTATE 42501; a request RLS hides is an empty list.
 // The harness (./testing/realstack.ts) refuses to run against anything that is not this machine.
 import assert from "node:assert/strict";
+import { readdirSync } from "node:fs";
 import { after, before, describe, test } from "node:test";
+import { MIGRATIONS_DIR } from "./testing/pglite";
 import { auth, deleteUser, lastMail, newUser, openDb, PASSWORD, rest, rpc, runId, signIn, stack, type NewUser, type Reply, type Sql, type Stack } from "./testing/realstack";
 
 const ENABLED = process.env.SUPABASE_LOCAL === "1";
@@ -146,7 +148,8 @@ describe("the real local Supabase stack", { skip: ENABLED ? false : "set SUPABAS
   describe("the database itself", () => {
     test("every migration is applied, the server is Postgres 17, RLS is on for every table", async () => {
       const applied = (await own("select version from supabase_migrations.schema_migrations order by version")).map((r) => r.version);
-      assert.deepEqual(applied, ["0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008"]);
+      // Every file in supabase/migrations, in order: nothing missing and nothing extra applied.
+      assert.deepEqual(applied, readdirSync(MIGRATIONS_DIR).filter((f) => /^\d+_.+\.sql$/.test(f)).map((f) => f.slice(0, 4)).sort());
       assert.match((await own("show server_version"))[0]!.server_version, /^17\./);
       const off = await own("select relname from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r' and not relrowsecurity");
       assert.deepEqual(off, []);

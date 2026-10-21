@@ -12,6 +12,7 @@
  * throws before any request is made, so this can never be pointed at the hosted project by accident.
  */
 import { spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import postgres from "postgres";
 
@@ -67,6 +68,51 @@ export function poolerUrl(s: Stack): string {
   url.username = `${url.username}.pooler-dev`;
   url.port = "54329";
   return url.toString();
+}
+
+/**
+ * Creates (or refreshes) the narrow `learnthrive_server` role on the LOCAL stack by running the real script, with a fresh random
+ * password passed only through the environment, and returns URLs to connect as it. The password lives in memory for the test run.
+ */
+export function ensureServerRole(s: Stack): { directUrl: string; poolerUrl: string } {
+  const password = randomBytes(32).toString("base64url");
+  const run = spawnSync(process.execPath, ["scripts/create-server-role.mjs"], {
+    cwd: fileURLToPath(new URL("../../../../apps/web/", import.meta.url)),
+    encoding: "utf8",
+    env: { ...process.env, DATABASE_ADMIN_URL: s.dbUrl, LEARNTHRIVE_SERVER_PASSWORD: password },
+  });
+  if (run.status !== 0) throw new Error(`create-server-role failed: ${run.stdout}${run.stderr}`.replace(password, "***"));
+  const as = (user: string, port: string) => {
+    const url = new URL(s.dbUrl);
+    url.username = user;
+    url.password = password;
+    url.port = port;
+    return url.toString();
+  };
+  return { directUrl: as("learnthrive_server", new URL(s.dbUrl).port), poolerUrl: as("learnthrive_server.pooler-dev", "54329") };
+}
+
+/**
+ * Waits until a connection string works, for a role whose password has just changed. Measured on the local stack: the pooler
+ * (Supavisor) keeps the old verifier cached and refuses BOTH passwords for about 10 to 16 seconds, and a burst of refused attempts
+ * trips its circuit breaker ("too many authentication failures, new connections are temporarily blocked"), which blocks the whole
+ * tenant. So: wait out the cache first without touching the pooler, then retry slowly. (The runbook says the same for production.)
+ */
+export async function waitUntilConnects(url: string, { settleMs = 18_000, retryMs = 6_000, timeoutMs = 90_000 } = {}): Promise<number> {
+  const started = Date.now();
+  await new Promise((r) => setTimeout(r, settleMs));
+  for (;;) {
+    const probe = postgres(url, { max: 1, prepare: false, connect_timeout: 8, onnotice: () => {} });
+    try {
+      await probe`select 1`;
+      return Date.now() - started;
+    } catch (error) {
+      if (Date.now() - started > timeoutMs) throw error;
+    } finally {
+      await probe.end({ timeout: 1 }).catch(() => {});
+    }
+    await new Promise((r) => setTimeout(r, retryMs));
+  }
 }
 
 export type Sql = ReturnType<typeof openDb>;

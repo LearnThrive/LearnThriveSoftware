@@ -3,7 +3,7 @@
 // never run beside the others). Start the stack first: `npm run supabase:start` from the repo root.
 import { spawnSync } from "node:child_process";
 
-const run = spawnSync("npx", ["tsx", "--test", "--test-concurrency=1", "src/realstack.test.ts", "src/realstack.store.test.ts"], {
+const run = spawnSync("npx", ["tsx", "--test", "--test-concurrency=1", "src/realstack.test.ts", "src/realstack.store.test.ts", "src/realstack.role.test.ts"], {
   stdio: "inherit",
   shell: true,
   env: { ...process.env, SUPABASE_LOCAL: "1", SUPABASE_LOCAL_SERIAL: "1" },
