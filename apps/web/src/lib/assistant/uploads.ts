@@ -1,3 +1,4 @@
+import { paperLimits } from "@/lib/paper/limits";
 import { extensionOf, formatBytes, sanitiseFileName, sniffKind, type FileProblem } from "@/lib/careers-files";
 import { inspectPdf } from "@/lib/careers-files-server";
 import { preparePhoto, readPdfDocument } from "./documents";
@@ -12,10 +13,10 @@ import { preparePhoto, readPdfDocument } from "./documents";
  *            open, as many exam-board papers are) is read; one that needs a password is refused with that reason. Text pages,
  *            scans and pages with pictures are all accepted; what the model is shown is decided when the question is sent
  *
- * Limits: 8 MB a photo, 15 MB a PDF, 20 pages, three files a message. HEIC (an iPhone's default) is refused with a way forward.
+ * Limits: 8 MB a photo, 15 MB a PDF (the storage bucket's own limit), PAPER_MAX_PAGES pages (default 60), three files a message. HEIC (an iPhone's default) is refused with a way forward.
  * No network, no storage. Uploaded content is UNTRUSTED material for the model to read, never instructions.
  */
-export const UPLOAD_LIMITS = { imageBytes: 8 * 1024 * 1024, pdfBytes: 15 * 1024 * 1024, pdfPages: 20, filesPerMessage: 3 } as const;
+export const UPLOAD_LIMITS = { imageBytes: 8 * 1024 * 1024, pdfBytes: 15 * 1024 * 1024, pdfPages: paperLimits().maxPages, filesPerMessage: 3 } as const;
 
 /** pdf_text: every page has readable text; pdf_scan: none does (pages are pictures); pdf_mixed: some of each. */
 export type UploadKind = "image" | "pdf_text" | "pdf_scan" | "pdf_mixed";

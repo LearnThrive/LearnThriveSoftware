@@ -129,6 +129,9 @@ Set these in Render's environment, as secrets where the table says so, and nowhe
 | `LEARNER_INVITE_HOURS` | How long a guardian's learner invitation link works, in hours. | optional | optional | no | n/a | 72 |
 | `LEARNER_INVITES_PER_DAY` | Learner invitations one student may be sent in a day (re-inviting counts). | optional | optional | no | n/a | 5 |
 | `LEARNER_DIRECT_MIN_YEAR` | The school year from which a minor may have a sign-in of their own (below it: the guardian's supervised view). A conservative staging default; the production rule is the owner's. | optional | optional | no | n/a | 9 |
+| `PAPER_MAX_PAGES` | Pages a PDF may have for Study Buddy and the Paper Tutor (one limit for the upload check, the reader and the paper). | optional | optional | no | n/a | 60 |
+| `PAPER_MAX_QUESTIONS` | Question parts one paper may list. Beyond it the rest are named in the job's notice, never dropped silently. | optional | optional | no | n/a | 150 |
+| `PAPER_RENDER_BATCH` | Pages drawn at a time while measuring answer space (memory stays flat however long the paper is). | optional | optional | no | n/a | 6 |
 | `ASSISTANT_PER_MINUTE` | Messages one account may send a minute. | optional | optional | no | n/a | 6 |
 | `ASSISTANT_DAILY_TOKEN_BUDGET` | Hosted providers: completion tokens per account per day (the cost cap). | optional | optional | no | n/a | 40000 |
 | `ASSISTANT_CONCURRENCY` | Answers generated at once on this server. | optional | optional | no | n/a | 1 |
