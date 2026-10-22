@@ -109,3 +109,23 @@ test("a scan's reading is a different kind of evidence from the printed question
   const verdict = verify(scanned, sol({ final_answer: "6", check: { kind: "solve", equations: ["2x + 7 = 19"], answer: "x = 6" } }));
   assert.equal(verdict.status, "checked_reading");
 });
+
+test("found by the benchmark: marks printed after a question are not maths, a part's own words come before its stem, and 'x' between numbers is times", () => {
+  // "Solve x^2 = 4 (2)": the (2) marks must not turn the equation into x^2 = 4 x 2.
+  const half = verify(q("Solve x^2 = 4 (2)"), sol({ final_answer: "x = 2" }));
+  assert.equal(half.status, "failed");
+  assert.match(half.detail, /-2/, "the reason is the missing solution, not a broken equation");
+  assert.equal(verify(q("Solve x^2 = 4 [2 marks]"), sol({ final_answer: "x = 2 or x = -2" })).status, "verified");
+  // 2(b)(i): the stem says "Expand each expression", the part says what to expand.
+  const part = q("(b) Expand each expression.\nExpand 3(x + 4) (1)", { ownText: "Expand 3(x + 4) (1)", stem: "(b) Expand each expression." });
+  assert.equal(verify(part, sol({ final_answer: "3x + 12" })).status, "verified");
+  assert.equal(verify(part, sol({ final_answer: "3x + 4" })).status, "failed");
+  // A part with nothing to check of its own takes the equation from the stem it shares.
+  const shared = q("x^2 - 5x + 6 = 0\nSolve it.", { ownText: "Solve it.", stem: "x^2 - 5x + 6 = 0" });
+  assert.equal(verify(shared, sol({ final_answer: "x = 2" })).status, "failed");
+  assert.equal(verify(shared, sol({ final_answer: "x = 2 or x = 3" })).status, "verified");
+  assert.equal(verify(q("Work out 12 x 7 (1)"), sol({ final_answer: "84" })).status, "verified");
+  assert.equal(verify(q("Work out 12 x 7 (1)"), sol({ final_answer: "74" })).status, "failed");
+  // A working line that lists the solutions is not a chain of equal expressions.
+  assert.deepEqual(ev.checkWorking([{ math: "x = 3 or x = 2" }, { math: "x = \pm 2" }, { math: "x < 5, x > 1" }]), { checked: 0, flawed: [] });
+});

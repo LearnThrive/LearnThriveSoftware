@@ -1,0 +1,22 @@
+{
+  "note": "External cases are real papers the owner downloads into benchmarks/paper/data/ (not committed). Each needs the source URL, licence, SHA-256 and the annotator's expected questions and answers. See docs/PAPER_BENCHMARK.md. Until some are added, the benchmark has measured nothing about real papers.",
+  "cases": [
+    {
+      "example": true,
+      "id": "example-edexcel-1ma1-1h",
+      "title": "Illustrative entry only (ignored by the harness): how a real paper is described",
+      "split": "dev",
+      "source": { "kind": "external", "board": "Pearson Edexcel", "series": "GCSE Mathematics 1MA1, Paper 1H, June 2023", "url": null, "licence": "check the board's terms before use; the paper is not committed" },
+      "file": "data/example-edexcel-1ma1-1h.pdf",
+      "sha256": null,
+      "expected": {
+        "pages": 28,
+        "skippedPages": [1],
+        "questions": [
+          { "label": "1", "text": "the printed text, or a distinctive part of it", "answer": "the right final answer", "marks": 2 },
+          { "label": "2(a)", "text": "the printed text of this part", "answer": "its right final answer", "marks": 1 }
+        ]
+      }
+    }
+  ]
+}

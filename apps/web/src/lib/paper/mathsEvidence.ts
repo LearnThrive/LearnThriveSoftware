@@ -187,7 +187,13 @@ export function checkWorking(steps: ReadonlyArray<{ math?: string }>): WorkingCh
   steps.forEach((step, index) => {
     const line = step.math?.trim();
     if (!line) return;
-    const parts = normaliseMaths(line).split("=").map((p) => p.trim());
+    const normalised = normaliseMaths(line);
+    // Alternatives, implications and inequalities are not a chain of equal expressions ("x = 2 or x = 3", "x^2 = 4 \Rightarrow x = \pm 2"): not judged here.
+    if (/\bor\b|\band\b|[,;]|\\text|\\pm|\\Rightarrow|\\implies|\\leq?|\\geq?|\\neq|[<>]/i.test(normalised)) {
+      previous = null;
+      return;
+    }
+    const parts = normalised.split("=").map((p) => p.trim());
     if (parts.length < 2 || parts.some((p) => !p)) {
       previous = null;
       return;
