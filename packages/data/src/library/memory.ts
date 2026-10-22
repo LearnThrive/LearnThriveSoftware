@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { deriveEntitlement, type AdminGrantRecord, type SubscriptionRecord } from "./billing";
 import { CHAT_TEXT_DAYS, CHAT_UPLOAD_DAYS, DAY_MS, type ChatExport, type ChatFileRecord, type ChatMessageRecord, type ChatSessionRecord } from "./chat";
 import type { AcceptFailure, AccessMode, InvitationPeek, IdentityAuditEntry, IdentityRepository, InvitationRecord, LearnerContext, LinkStatus, StudentRecord } from "./identity";
+import { PAPER_JOB_DAYS, PAPER_JOB_MAX_ATTEMPTS, type PaperJobRecord, type PaperJobRepository } from "./papers";
 import type { AccessRepository, AccountRepository, BillingRepository, ChatRepository, DownloadRepository, LibraryStore, ResourceRepository } from "./ports";
 import type {
   AccessFacts,
@@ -647,6 +648,7 @@ export class InMemoryLibraryStore implements LibraryStore {
       this.chatFiles = this.chatFiles.filter((f) => !(f.deleteAfter <= now || gone.has(f.sessionId)));
       this.chatMessages = this.chatMessages.filter((m) => !(m.deleteAfter <= now || gone.has(m.sessionId)));
       for (const id of gone) this.chatSessions.delete(id);
+      for (const [jobId, job] of this.paperJobs) if (gone.has(job.sessionId)) this.paperJobs.delete(jobId);
       return { sessions: gone.size, messages: messagesBefore - this.chatMessages.length, files: filesBefore - this.chatFiles.length };
     },
     incrementUsage: async (clientId, kind, windowStart, by) => {
@@ -656,6 +658,109 @@ export class InMemoryLibraryStore implements LibraryStore {
       return total;
     },
     usageCount: async (clientId, kind, windowStart) => this.usage.get(`${clientId}|${kind}|${windowStart.getTime()}`) ?? 0,
+  };
+
+  private paperJobs = new Map<string, PaperJobRecord>();
+
+  private paperOwns(owner: { clientId: string; studentId: string | null }, job: PaperJobRecord): boolean {
+    return job.clientId === owner.clientId && job.studentId === owner.studentId;
+  }
+
+  private paperActive(clientId: string, except?: string): PaperJobRecord | undefined {
+    return [...this.paperJobs.values()].find((j) => j.clientId === clientId && j.id !== except && (j.state === "extracting" || j.state === "solving"));
+  }
+
+  /** The job as the worker holds it: lease live and owned. */
+  private paperHeld(id: string, workerId: string): PaperJobRecord | null {
+    const job = this.paperJobs.get(id);
+    return job && job.leaseOwner === workerId && (job.state === "extracting" || job.state === "solving") ? job : null;
+  }
+
+  papers: PaperJobRepository = {
+    create: async (owner, input, worker, now) => {
+      const session = this.chatSessions.get(input.sessionId);
+      if (!session || !this.owns(owner, session) || session.deletionRequestedAt) return { ok: false, code: "not_found" };
+      if (this.paperActive(owner.clientId)) return { ok: false, code: "busy" };
+      const job: PaperJobRecord = {
+        id: randomUUID(), clientId: owner.clientId, studentId: owner.studentId, sessionId: input.sessionId, fileId: input.fileId, schemeFileId: input.schemeFileId,
+        kind: input.kind, state: "extracting", mode: null, selectedIds: null, questions: [], checkpoints: {}, progress: [], resultFileId: null, pageCount: null,
+        workedPages: [], message: null, attempts: 1, leaseOwner: worker.id, leaseExpiresAt: new Date(now.getTime() + worker.leaseMs),
+        createdAt: now, updatedAt: now, expiresAt: new Date(now.getTime() + PAPER_JOB_DAYS * DAY_MS),
+      };
+      this.paperJobs.set(job.id, job);
+      return { ok: true, job: structuredClone(job) };
+    },
+    get: async (owner, id) => {
+      const job = this.paperJobs.get(id);
+      return job && this.paperOwns(owner, job) ? structuredClone(job) : null;
+    },
+    activeForFamily: async (clientId) => {
+      const job = this.paperActive(clientId);
+      return job ? structuredClone(job) : null;
+    },
+    begin: async (owner, id, input, worker, now) => {
+      const job = this.paperJobs.get(id);
+      if (!job || !this.paperOwns(owner, job)) return { ok: false, code: "not_found" };
+      if (job.state !== "ready") return { ok: false, code: "not_ready" };
+      if (this.paperActive(owner.clientId, id)) return { ok: false, code: "busy" };
+      Object.assign(job, { state: "solving", mode: input.mode, selectedIds: input.selectedIds, leaseOwner: worker.id, leaseExpiresAt: new Date(now.getTime() + worker.leaseMs), attempts: 1, progress: [], updatedAt: now });
+      return { ok: true, job: structuredClone(job) };
+    },
+    save: async (id, workerId, patch, worker, now) => {
+      const job = this.paperHeld(id, workerId);
+      if (!job) return null;
+      if (patch.questions) job.questions = structuredClone(patch.questions);
+      if (patch.progress) job.progress = structuredClone(patch.progress);
+      if (patch.message !== undefined) job.message = patch.message;
+      if (patch.checkpoint) job.checkpoints[patch.checkpoint.questionId] = structuredClone(patch.checkpoint.value);
+      job.leaseExpiresAt = new Date(now.getTime() + worker.leaseMs);
+      job.updatedAt = now;
+      return structuredClone(job);
+    },
+    finish: async (id, workerId, outcome, now) => {
+      const job = this.paperHeld(id, workerId);
+      if (!job) return false;
+      job.state = outcome.state;
+      if (outcome.message !== undefined) job.message = outcome.message;
+      if (outcome.resultFileId !== undefined) job.resultFileId = outcome.resultFileId;
+      if (outcome.pageCount !== undefined) job.pageCount = outcome.pageCount;
+      if (outcome.workedPages !== undefined) job.workedPages = [...outcome.workedPages];
+      job.leaseOwner = null;
+      job.leaseExpiresAt = null;
+      job.updatedAt = now;
+      return true;
+    },
+    cancel: async (owner, id, now) => {
+      const job = this.paperJobs.get(id);
+      if (!job || !this.paperOwns(owner, job)) return false;
+      if (job.state === "extracting" || job.state === "solving" || job.state === "ready") Object.assign(job, { state: "cancelled", message: "Cancelled.", leaseOwner: null, leaseExpiresAt: null, updatedAt: now });
+      return true;
+    },
+    claimStale: async (worker, now, maxAttempts = PAPER_JOB_MAX_ATTEMPTS) => {
+      const claimed: PaperJobRecord[] = [];
+      let failed = 0;
+      for (const job of this.paperJobs.values()) {
+        if ((job.state !== "extracting" && job.state !== "solving") || !job.leaseExpiresAt || job.leaseExpiresAt > now) continue;
+        if (job.attempts >= maxAttempts) {
+          Object.assign(job, { state: "failed", message: "Something went wrong with that paper more than once. Please try again.", leaseOwner: null, leaseExpiresAt: null, updatedAt: now });
+          failed += 1;
+          continue;
+        }
+        Object.assign(job, { attempts: job.attempts + 1, leaseOwner: worker.id, leaseExpiresAt: new Date(now.getTime() + worker.leaseMs), updatedAt: now });
+        claimed.push(structuredClone(job));
+      }
+      return { claimed, failed };
+    },
+    purgeDue: async (now) => {
+      let removed = 0;
+      for (const [id, job] of this.paperJobs) {
+        if (job.expiresAt <= now && job.state !== "extracting" && job.state !== "solving") {
+          this.paperJobs.delete(id);
+          removed += 1;
+        }
+      }
+      return removed;
+    },
   };
 
   downloads: DownloadRepository = {

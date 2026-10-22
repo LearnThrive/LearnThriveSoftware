@@ -1,5 +1,6 @@
 import type { ChatExport, ChatFileInput, ChatOwner, ChatFileRecord, ChatMessageRecord, ChatRole, ChatSessionRecord, PurgeResult } from "./chat";
 import type { IdentityRepository } from "./identity";
+import type { PaperJobRepository } from "./papers";
 import type { AdminGrantInput, AdminGrantRecord, ClaimResult, EntitlementWindow, SubscriptionInput, SubscriptionRecord } from "./billing";
 import type {
   AccessFacts,
@@ -160,4 +161,5 @@ export interface LibraryStore {
   billing: BillingRepository;
   chat: ChatRepository;
   identity: IdentityRepository;
+  papers: PaperJobRepository;
 }

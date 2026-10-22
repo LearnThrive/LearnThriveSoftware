@@ -8,3 +8,4 @@ export * from "./chat";
 export * from "./identity";
 export * from "./facts";
 export * from "./actor";
+export * from "./papers";
