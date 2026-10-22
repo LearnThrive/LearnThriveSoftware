@@ -3,7 +3,11 @@ import Link from "next/link";
 import { NameForm } from "@/components/account/NameForm";
 import { BillingSection } from "@/components/account/BillingSection";
 import { SignOutButton } from "@/components/account/SignOutButton";
+import { accessFactsFor } from "@learnthrive/data/library";
 import { requireAccountPage } from "@/lib/account/pages";
+import { nextJar } from "@/lib/account/next";
+import { inSupervisedView } from "@/lib/learner/resolve";
+import { redirect } from "next/navigation";
 import { subscriptionOffer } from "@/lib/billing/offer";
 import { libraryShows } from "@/lib/library-config";
 import styles from "./account.module.css";
@@ -18,14 +22,21 @@ const BILLING_MESSAGES: Record<string, string> = {
 
 export default async function AccountPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { rt, user, account } = await requireAccountPage("/account");
+  // Inside a supervised view the account (and the money) is closed: the guardian leaves the view with their password first.
+  if (await inSupervisedView(rt, await nextJar(), account.profileId)) redirect("/library/study-buddy");
+  const learner = account.learner;
   const raw = (await searchParams).billing;
   const message = typeof raw === "string" && Object.hasOwn(BILLING_MESSAGES, raw) ? BILLING_MESSAGES[raw] : null;
   const subscriptions = account.clientId ? await rt.store.billing.listSubscriptions(account.clientId) : [];
   const hasCustomer = account.clientId ? (await rt.store.billing.getStripeCustomerId(account.clientId)) !== null : false;
   const offer = await subscriptionOffer(rt.store);
-  const facts = account.clientId ? await rt.store.access.facts(account.clientId) : { enrolled: false, subscription: false, adminGrant: false };
+  const facts = await accessFactsFor(rt.store, account);
   // What this account can download, in plain words. Free samples are open to every signed-in adult account.
-  const access = facts.enrolled
+  const access = learner
+    ? facts.enrolled || facts.subscription || facts.adminGrant
+      ? "Included: your family's LearnThrive Library benefit."
+      : "Free samples only."
+    : facts.enrolled
     ? "Included: your family is enrolled with LearnThrive."
     : facts.subscription
       ? "Included: your subscription."
@@ -42,7 +53,14 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
         <dt>Library</dt>
         <dd>{access}</dd>
       </dl>
-      <BillingSection subscriptions={subscriptions} hasCustomer={hasCustomer} offerOpen={offer.open} now={new Date()} message={message} />
+      {learner ? null : <BillingSection subscriptions={subscriptions} hasCustomer={hasCustomer} offerOpen={offer.open} now={new Date()} message={message} />}
+      {!learner && account.adultConfirmed ? (
+        <p>
+          <Link className="text-link" href="/account/learners">
+            Manage your learners <span aria-hidden="true">→</span>
+          </Link>
+        </p>
+      ) : null}
       <NameForm initialName={account.displayName} />
       {libraryShows().catalogue ? (
         <p>

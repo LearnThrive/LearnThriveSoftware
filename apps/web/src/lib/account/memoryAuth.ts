@@ -34,7 +34,7 @@ const sha = (text: string) => createHash("sha256").update(text).digest("hex");
 export interface MemoryAuthOptions {
   now?: () => number;
   /** Called once per new account, so the Library store can hold the matching profile. */
-  onUserCreated?: (user: { id: string; displayName: string; email: string }) => void;
+  onUserCreated?: (user: { id: string; displayName: string; email: string; adultConfirmed: boolean }) => void;
 }
 
 export class MemoryAccountAuth implements AccountAuth {
@@ -98,7 +98,7 @@ export class MemoryAccountAuth implements AccountAuth {
     const row: UserRow = { id: crypto.randomUUID(), email: input.email, displayName: input.displayName, passwordHash: await hashPassword(input.password), confirmed: false };
     this.users.set(row.email, row);
     this.byId.set(row.id, row);
-    this.options.onUserCreated?.({ id: row.id, displayName: row.displayName, email: row.email });
+    this.options.onUserCreated?.({ id: row.id, displayName: row.displayName, email: row.email, adultConfirmed: input.adultConfirmed });
     this.issueLink(row, "signup");
     return { ok: true as const };
   }

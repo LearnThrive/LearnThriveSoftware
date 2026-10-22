@@ -19,6 +19,17 @@ const NONE: AccessFacts = { enrolled: false, subscription: false, adminGrant: fa
 export const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
 export const newToken = () => randomBytes(24).toString("base64url");
 
+/** The learner this guardian's session is viewing as, or null. Read only (a Server Component may call it): it never clears a stale cookie. */
+export async function supervisedLearner(rt: AccountRuntime, jar: Pick<CookieJar, "get">, profileId: string, now: Date = new Date()): Promise<LearnerContext | null> {
+  const token = jar.get(SUPERVISED_COOKIE);
+  return token ? rt.store.identity.getSupervised(hashToken(token), profileId, now) : null;
+}
+
+/** True while this guardian's session has a learner selected (a supervised view): adult operations must be refused until they leave it. */
+export async function inSupervisedView(rt: AccountRuntime, jar: Pick<CookieJar, "get">, profileId: string, now: Date = new Date()): Promise<boolean> {
+  return (await supervisedLearner(rt, jar, profileId, now)) !== null;
+}
+
 export interface ResolvedActor {
   actor: Actor;
   account: Account;

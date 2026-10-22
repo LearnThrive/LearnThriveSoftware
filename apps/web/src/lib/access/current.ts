@@ -1,10 +1,12 @@
 import { cache } from "react";
-import { platformAccess, type Account, type AccessFacts, type PlatformAccess } from "@learnthrive/data/library";
+import { accessFactsFor, platformAccess, type Account, type AccessFacts, type PlatformAccess } from "@learnthrive/data/library";
 import { currentSession } from "@/lib/account/pages";
 import type { AccountRuntime } from "@/lib/account/runtime";
 import type { AuthUser } from "@/lib/account/types";
 import type { AuthenticatedUser } from "@/lib/auth/types";
 import { PORTAL_ENABLED } from "@/lib/portal";
+import { nextJar } from "@/lib/account/next";
+import { inSupervisedView } from "@/lib/learner/resolve";
 import { toPlatformUser } from "./platformUser";
 
 /**
@@ -23,8 +25,6 @@ export interface SignedInAccess {
   access: PlatformAccess;
 }
 
-const NO_FACTS: AccessFacts = { enrolled: false, subscription: false, adminGrant: false };
-
 /**
  * The signed-in account with its access, or null (not signed in, an expired access token that needs the renewing route, no backend,
  * or no profile). Cached for one render so a layout and its page ask the database once. Never sets a cookie.
@@ -34,7 +34,8 @@ export const currentAccess = cache(async (): Promise<SignedInAccess | null> => {
   if (!rt || state.status !== "ok") return null;
   const account = await rt.store.accounts.getAccount(state.user.id);
   if (!account) return null;
-  const facts = account.clientId ? await rt.store.access.facts(account.clientId) : NO_FACTS;
+  // A learner's facts are their own (docs/IDENTITY.md), the family's for an adult: one function for every guard.
+  const facts = await accessFactsFor(rt.store, account);
   return { rt, user: state.user, account, facts, access: platformAccess(account.role, facts) };
 });
 
@@ -53,5 +54,7 @@ export async function accountPlatformUser(): Promise<AuthenticatedUser | null> {
   if (!PORTAL_ENABLED) return null;
   const who = await currentAccess();
   if (!who || !who.access.dashboard) return null;
+  // A guardian viewing as a learner has the learner's view, not the family's: the dashboard (the family's lessons and billing) is closed.
+  if (await inSupervisedView(who.rt, await nextJar(), who.account.profileId)) return null;
   return toPlatformUser(who.user, who.account);
 }

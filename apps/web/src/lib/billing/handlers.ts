@@ -1,5 +1,6 @@
 import { renewSession, type CookieJar } from "@/lib/account/session";
 import type { AccountRuntime } from "@/lib/account/runtime";
+import { inSupervisedView } from "@/lib/learner/resolve";
 import { libraryPhase } from "@/lib/library-config";
 import { SlidingWindowLimiter, clientAddress } from "@/lib/rate-limit";
 import { jsonResponse, logOutcome, originAllowed, readBodyLimited } from "@/lib/request-guards";
@@ -134,6 +135,8 @@ export async function handleCheckout(request: Request, deps: BillingDeps): Promi
   const account = await rt.store.accounts.getAccount(session.user.id);
   if (!account) return refuse(request, event, "signed_out");
   if (!account.adultConfirmed) return refuse(request, event, "adult_required");
+  // Paying is an adult operation: not from inside a supervised learner view (the guardian leaves it with their password first).
+  if (await inSupervisedView(rt, deps.jar, account.profileId)) return refuse(request, event, "adult_required");
 
   const form = await readForm(request);
   if (!form) return refuse(request, event, "bad_request");
@@ -194,6 +197,7 @@ export async function handlePortal(request: Request, deps: BillingDeps): Promise
   if (session.status !== "ok") return refuse(request, event, "signed_out");
   const account = await rt.store.accounts.getAccount(session.user.id);
   if (!account?.clientId) return refuse(request, event, "no_customer");
+  if (await inSupervisedView(rt, deps.jar, account.profileId)) return refuse(request, event, "adult_required");
   const customerId = await rt.store.billing.getStripeCustomerId(account.clientId);
   if (!customerId) return refuse(request, event, "no_customer");
   let created: { url: string };

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { canAccess } from "@learnthrive/data/library";
+import { accessFactsFor, canAccess, familyClientIdOf } from "@learnthrive/data/library";
 import { downloadsPerHour } from "@/lib/library-config";
 import { renewSession, type CookieJar } from "@/lib/account/session";
 import type { AccountRuntime } from "@/lib/account/runtime";
@@ -85,13 +85,15 @@ export async function handleDownload(request: Request, slug: string, deps: Downl
   if (session.status !== "ok") return fail(request, slug, "signed_out");
   const account = await rt.store.accounts.getAccount(session.user.id);
   if (!account) return fail(request, slug, "signed_out");
-  if (!account.adultConfirmed) return fail(request, slug, "adult_required");
+  // A learner downloads through their family's household benefit (never as a buyer); anyone else must be a confirmed adult.
+  if (!account.adultConfirmed && !account.learner) return fail(request, slug, "adult_required");
 
   const resource = await rt.store.resources.getBySlug(slug, now);
   if (!resource) return fail(request, slug, "not_found");
 
-  const clientId = account.clientId ?? (await rt.store.accounts.ensureClient(account.profileId));
-  const facts = await rt.store.access.facts(clientId, now);
+  const clientId = account.learner ? familyClientIdOf(account) : (account.clientId ?? (await rt.store.accounts.ensureClient(account.profileId)));
+  if (!clientId) return fail(request, slug, "no_access");
+  const facts = await accessFactsFor(rt.store, account, now);
   const decision = canAccess(account, resource, facts, now);
   if (!decision.allowed) return fail(request, slug, "no_access");
 

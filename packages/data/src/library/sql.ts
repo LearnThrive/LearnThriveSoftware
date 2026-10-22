@@ -1,6 +1,6 @@
 import { deriveEntitlement, type AdminGrantRecord, type PlanInterval, type SubscriptionRecord, type SubscriptionStatus } from "./billing";
 import type { ChatExport, ChatFileRecord, ChatMessageRecord, ChatSessionRecord } from "./chat";
-import type { AccessMode, IdentityAuditEntry, IdentityRepository, InvitationRecord, LearnerContext, LinkStatus, StudentRecord } from "./identity";
+import type { AccessMode, IdentityAuditEntry, InvitationPeek, IdentityRepository, InvitationRecord, LearnerContext, LinkStatus, StudentRecord } from "./identity";
 import type { AccessRepository, AccountRepository, BillingRepository, ChatRepository, DownloadRepository, LibraryStore, ResourceRepository, SqlExecutor } from "./ports";
 import type { AccessFacts, Account, Facet, FacetScope, Level, Resource, ResourceFacets, ResourceFile, ResourcePage, ResourceQuery, ResourceType } from "./types";
 
@@ -348,6 +348,15 @@ export class SqlLibraryStore implements LibraryStore {
     },
     listInvitations: async (clientId, studentId) =>
       (await this.db.query<Row>(`select * from public.learner_invitations where client_id = $1 and student_id = $2 order by created_at desc, id`, [clientId, studentId])).map(toInvitation),
+    peekInvitation: async (tokenHash, now): Promise<InvitationPeek> => {
+      const rows = await this.db.query<Row>(`select email, accepted_at, revoked_at, expires_at from public.learner_invitations where token_hash = $1`, [tokenHash]);
+      const r = rows[0];
+      if (!r) return { state: "invalid" };
+      if (r.accepted_at) return { state: "used" };
+      if (r.revoked_at) return { state: "revoked" };
+      if (new Date(r.expires_at).getTime() <= now.getTime()) return { state: "expired" };
+      return { state: "open", email: r.email };
+    },
     revokeInvitation: async (clientId, invitationId, actor, now) => {
       const rows = await this.db.query<Row>(
         `with u as (
