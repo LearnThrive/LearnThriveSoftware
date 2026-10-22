@@ -4,7 +4,7 @@ import { annotatePaper, type OutputMode, type Placement, type SolvedQuestion } f
 import { markQuestion, type MarkedQuestion, type Outcome } from "./mark";
 import { markPaper } from "./markPdf";
 import { paperLimits, type PaperLimits } from "./limits";
-import { findQuestions, refineAnswerSpace, type PaperQuestion } from "./questions";
+import { classifyPage, findQuestions, refineAnswerSpace, type PageKind, type PaperQuestion } from "./questions";
 import { listQuestionsFromPicture, solveQuestion, type SolveDeps } from "./solve";
 
 /**
@@ -24,6 +24,8 @@ export interface PaperDocument {
   questions: PaperQuestion[];
   /** What a configured limit left out, said exactly (never silent). Null when everything was kept. */
   omitted: { questions: number; firstOmitted: string; limit: number } | null;
+  /** Pages that hold no questions (the cover, a formulae sheet, a blank page): not searched, and said so. */
+  skipped?: Array<{ page: number; kind: Exclude<PageKind, "questions"> }>;
 }
 
 /** A photo as a one-page PDF, the page the size of the photo at 72 dpi (scaled to fit A4 width at most). */
@@ -43,6 +45,7 @@ export async function extractQuestions(deps: SolveDeps | null, bytes: Uint8Array
   const reading = await readPdfDocument(bytes, { render: false, maxPages: limits.maxPages });
   if (!reading.ok) return { problem: reading.problem.message };
   const questions = findQuestions(reading.pages);
+  const kinds = new Map(reading.pages.map((p, i) => [p.number, classifyPage(p, i === 0)] as const));
   // Pages are drawn a few at a time: each drawing measures the answer space of its questions (and, for a page with no text layer, is
   // shown to the vision model), then is dropped. Memory stays flat however long the paper is.
   const numbers = reading.pages.map((p) => p.number);
@@ -51,15 +54,23 @@ export async function extractQuestions(deps: SolveDeps | null, bytes: Uint8Array
     for (const picture of batch) {
       const page = reading.pages.find((p) => p.number === picture.number)!;
       refineAnswerSpace(questions, reading.pages, picture);
-      if (!deps || page.textQuality === "good") continue;
+      if (!deps || page.textQuality === "good" || kinds.get(page.number) !== "questions") continue;
       const listed = await listQuestionsFromPicture(deps, page.number, b64(picture.jpeg()));
-      for (const q of listed) if (!questions.some((existing) => existing.id === q.id)) questions.push(q);
+      for (const q of listed) if (!questions.some((existing) => existing.page === q.page && existing.number === q.number)) questions.push(q);
     }
   }
-  questions.sort((a, b) => a.page - b.page || Number(a.number) - Number(b.number));
+  // Paper order: by page (a stable sort keeps the order found within a page). The ids are opaque and follow that order; the printed label is `number`.
+  questions.sort((a, b) => a.page - b.page);
+  questions.forEach((q, i) => {
+    q.id = `q${i + 1}`;
+  });
   const kept = questions.slice(0, limits.maxQuestions);
+  const skipped = reading.pages.flatMap((p) => {
+    const kind = kinds.get(p.number);
+    return kind && kind !== "questions" ? [{ page: p.number, kind }] : [];
+  });
   const dropped = questions.slice(limits.maxQuestions);
-  return { bytes, pages: reading.pages, questions: kept, omitted: dropped.length ? { questions: dropped.length, firstOmitted: dropped[0]!.number, limit: limits.maxQuestions } : null };
+  return { bytes, pages: reading.pages, questions: kept, skipped, omitted: dropped.length ? { questions: dropped.length, firstOmitted: dropped[0]!.number, limit: limits.maxQuestions } : null };
 }
 
 export type Progress = { questionId: string; state: "waiting" | "solving" | "done"; status?: SolvedQuestion["status"]; outcome?: Outcome };
