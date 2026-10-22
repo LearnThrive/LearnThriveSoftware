@@ -3,7 +3,8 @@ import { readPdfDocument, renderPdfPages, type PageReading } from "@/lib/assista
 import { annotatePaper, type OutputMode, type Placement, type SolvedQuestion } from "./annotate";
 import { markQuestion, type MarkedQuestion, type Outcome } from "./mark";
 import { markPaper } from "./markPdf";
-import { findQuestions, type PaperQuestion } from "./questions";
+import { paperLimits, type PaperLimits } from "./limits";
+import { findQuestions, refineAnswerSpace, type PaperQuestion } from "./questions";
 import { listQuestionsFromPicture, solveQuestion, type SolveDeps } from "./solve";
 
 /**
@@ -21,9 +22,9 @@ export interface PaperDocument {
   bytes: Uint8Array;
   pages: PageReading[];
   questions: PaperQuestion[];
+  /** What a configured limit left out, said exactly (never silent). Null when everything was kept. */
+  omitted: { questions: number; firstOmitted: string; limit: number } | null;
 }
-
-const MAX_QUESTIONS = 30;
 
 /** A photo as a one-page PDF, the page the size of the photo at 72 dpi (scaled to fit A4 width at most). */
 export async function photoToPdf(bytes: Uint8Array, contentType: "image/jpeg" | "image/png"): Promise<Uint8Array> {
@@ -38,22 +39,27 @@ export async function photoToPdf(bytes: Uint8Array, contentType: "image/jpeg" | 
 const b64 = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64");
 
 /** Reads the document and finds its questions (asking the vision model about pages that have no text layer). */
-export async function extractQuestions(deps: SolveDeps | null, bytes: Uint8Array): Promise<PaperDocument | { problem: string }> {
-  const reading = await readPdfDocument(bytes, { render: false, maxPages: 20 });
+export async function extractQuestions(deps: SolveDeps | null, bytes: Uint8Array, limits: PaperLimits = paperLimits()): Promise<PaperDocument | { problem: string }> {
+  const reading = await readPdfDocument(bytes, { render: false, maxPages: limits.maxPages });
   if (!reading.ok) return { problem: reading.problem.message };
-  const renders = await renderPdfPages(bytes, { scale: 1.5 });
-  const questions = findQuestions(reading.pages, renders);
-  if (deps) {
-    for (const page of reading.pages) {
-      if (page.textQuality === "good") continue;
-      const picture = renders.find((r) => r.number === page.number);
-      if (!picture) continue;
+  const questions = findQuestions(reading.pages);
+  // Pages are drawn a few at a time: each drawing measures the answer space of its questions (and, for a page with no text layer, is
+  // shown to the vision model), then is dropped. Memory stays flat however long the paper is.
+  const numbers = reading.pages.map((p) => p.number);
+  for (let i = 0; i < numbers.length; i += limits.renderBatch) {
+    const batch = await renderPdfPages(bytes, { scale: 1.5, pages: numbers.slice(i, i + limits.renderBatch) });
+    for (const picture of batch) {
+      const page = reading.pages.find((p) => p.number === picture.number)!;
+      refineAnswerSpace(questions, reading.pages, picture);
+      if (!deps || page.textQuality === "good") continue;
       const listed = await listQuestionsFromPicture(deps, page.number, b64(picture.jpeg()));
       for (const q of listed) if (!questions.some((existing) => existing.id === q.id)) questions.push(q);
     }
   }
   questions.sort((a, b) => a.page - b.page || Number(a.number) - Number(b.number));
-  return { bytes, pages: reading.pages, questions: questions.slice(0, MAX_QUESTIONS) };
+  const kept = questions.slice(0, limits.maxQuestions);
+  const dropped = questions.slice(limits.maxQuestions);
+  return { bytes, pages: reading.pages, questions: kept, omitted: dropped.length ? { questions: dropped.length, firstOmitted: dropped[0]!.number, limit: limits.maxQuestions } : null };
 }
 
 export type Progress = { questionId: string; state: "waiting" | "solving" | "done"; status?: SolvedQuestion["status"]; outcome?: Outcome };

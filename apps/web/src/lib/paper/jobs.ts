@@ -151,11 +151,11 @@ export class PaperJobs {
         job.document = document;
         job.questions = document.questions.map((q) => ({ id: q.id, number: q.number, page: q.page, text: q.text.slice(0, 400), marks: q.marks, fromText: q.fromText }));
         job.state = "ready";
-        job.message = document.questions.length
-          ? scheme && !job.scheme
-            ? "I could not read that mark scheme (it needs to be a PDF with its text in it), so I will mark without it."
-            : null
-          : "I could not find any numbered questions in that document. You can still ask me about it in the chat.";
+        const notices = [
+          document.omitted ? `This paper has ${document.questions.length + document.omitted.questions} questions. Only the first ${document.omitted.limit} are listed (the limit is set by PAPER_MAX_PAGES / PAPER_MAX_QUESTIONS); question ${document.omitted.firstOmitted} onwards are NOT included, so this will not be a complete paper. Send the rest as a second document to cover them.` : null,
+          scheme && !job.scheme ? "I could not read that mark scheme (it needs to be a PDF with its text in it), so I will mark without it." : null,
+        ].filter(Boolean);
+        job.message = document.questions.length ? (notices.length ? notices.join(" ") : null) : "I could not find any numbered questions in that document. You can still ask me about it in the chat.";
         deps.log?.("paper_extracted", { questions: document.questions.length });
       } catch (error) {
         if (job.state === "cancelled") return;

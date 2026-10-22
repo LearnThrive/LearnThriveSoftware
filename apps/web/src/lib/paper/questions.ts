@@ -37,9 +37,11 @@ export interface PaperQuestion {
   answerLine: Rect | null;
   /** True when the text came from the page's text layer (and can be compared with the model's transcription). */
   fromText: boolean;
+  /** Where to look for answer space: kept so the space can be measured later, page by page, from a drawing of the page. */
+  space?: { left: number; right: number; bottom: number; top: number };
 }
 
-const START = /^(?:question\s*|q\.?\s*)?(\d{1,2})(?:\s*[.):]\s*|\s+(?=\(?[a-z(])|\s*$)/i;
+const START = /^(?:question\s*|q\.?\s*)?(\d{1,3})(?:\s*[.):]\s*|\s+(?=\(?[a-z(])|\s*$)/i;
 const WRITABLE = /^[\s.…_\-–]*$|^\s*answer\b[\s.…_:]*(?:\S{0,4})\s*$|\.{6,}|_{6,}|…{3,}/i;
 const MARKS = /\((\d{1,2})\s*marks?\)|\[(\d{1,2})\s*marks?\]|\((\d{1,2})\)\s*$/i;
 const MARGIN = 36;
@@ -122,6 +124,21 @@ export function freeBands(render: RenderedPage, page: { height: number; originX?
   return bands;
 }
 
+/**
+ * Measures the answer space of the questions on ONE drawn page and replaces their text-only estimate. Called page by page, each drawing
+ * dropped before the next, so a long paper never holds every page's pixels at once. The same measurement as passing every render to
+ * findQuestions, which is what the tests hold it to.
+ */
+export function refineAnswerSpace(questions: readonly PaperQuestion[], pages: readonly PageReading[], render: RenderedPage): void {
+  const page = pages.find((p) => p.number === render.number);
+  if (!page) return;
+  for (const q of questions) {
+    if (q.page !== render.number || !q.space) continue;
+    q.bands = freeBands(render, page, q.space);
+    q.answer = q.bands.reduce<Rect | null>((tallest, band) => (!tallest || band.h > tallest.h ? band : tallest), null);
+  }
+}
+
 /** The questions on the paper, in order. With renders of the pages, answer space avoids diagrams and pictures as well as text. */
 export function findQuestions(pages: readonly PageReading[], renders: readonly RenderedPage[] = []): PaperQuestion[] {
   const found: Array<{ q: PaperQuestion; lines: LineBox[] }> = [];
@@ -172,7 +189,8 @@ export function findQuestions(pages: readonly PageReading[], renders: readonly R
       if (cut) bestTop = cut.y - 2;
     }
     const render = renders.find((r) => r.number === q.page);
-    q.bands = render ? freeBands(render, page, { left, right, bottom: floor, top: ceiling }) : best ? [best] : [];
+    q.space = { left, right, bottom: floor, top: ceiling };
+    q.bands = render ? freeBands(render, page, q.space) : best ? [best] : [];
     q.answer = q.bands.reduce<Rect | null>((tallest, band) => (!tallest || band.h > tallest.h ? band : tallest), null);
     const answerLine = lines.find((l) => /^\s*answer\b/i.test(l.text) && WRITABLE.test(l.text));
     q.answerLine = answerLine ? { x: answerLine.x, y: answerLine.y, w: answerLine.w, h: answerLine.h } : null;

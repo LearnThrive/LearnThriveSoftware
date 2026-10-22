@@ -150,7 +150,7 @@ test("pdf (real documents): every kind of readable PDF is accepted, and each ref
   const blank = new Uint8Array(await (async () => { const d = await PDFDocument.create(); d.addPage([100, 100]); return d.save({ useObjectStreams: false }); })());
   assert.match((await up.inspectChatUpload("blank.pdf", blank)).problem.message, /every page looks empty/);
   const long = await up.inspectChatUpload("long.pdf", await textPdf(up.UPLOAD_LIMITS.pdfPages + 1, ["Some readable text goes on this line of the page."]));
-  assert.match(long.problem.message, /21 pages; the limit is 20/);
+  assert.match(long.problem.message, new RegExp(`${up.UPLOAD_LIMITS.pdfPages + 1} pages; the limit is ${up.UPLOAD_LIMITS.pdfPages}`));
   for (const name of ["text-native.pdf", "scan-flate.pdf", "mixed.pdf"]) {
     const message = (await up.inspectChatUpload(name, fixture(name))).problem?.message ?? "";
     assert.doesNotMatch(message, /take a photo/, "a readable PDF is never told to send a photo instead");
