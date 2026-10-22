@@ -3,7 +3,7 @@ import Link from "next/link";
 import { BookOpen, Plus } from "lucide-react";
 import { requireSession } from "@/lib/auth/guard";
 import { createMetadata } from "@/lib/metadata";
-import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
+import { getDataProvider } from "@/lib/data/provider";
 import { lessonBucketsFor } from "@/lib/dashboard/queries";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Card } from "@/components/ui/Card";

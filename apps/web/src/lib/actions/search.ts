@@ -1,6 +1,6 @@
 "use server";
 
-import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
+import { getDataProvider } from "@/lib/data/provider";
 import { getSession } from "@/lib/auth/session";
 import { searchApp, type AppSearchResult } from "@/lib/search/appSearch";
 

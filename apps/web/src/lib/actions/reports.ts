@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
+import { getDataProvider } from "@/lib/data/provider";
 import { requireRole } from "@/lib/auth/guard";
 import { approveReport, getOrCreateDraft, ReportError, saveDraft, submitReport } from "@/lib/reports/reportService";
 import type { ReportAssessmentLevel } from "@learnthrive/data/domain";

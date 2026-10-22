@@ -3,7 +3,7 @@ import Link from "next/link";
 import { GraduationCap } from "lucide-react";
 import { requireRole } from "@/lib/auth/guard";
 import { createMetadata } from "@/lib/metadata";
-import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
+import { getDataProvider } from "@/lib/data/provider";
 import { lessonBucketsFor, nextLessonForStudent, visibleStudentsFor } from "@/lib/dashboard/queries";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";

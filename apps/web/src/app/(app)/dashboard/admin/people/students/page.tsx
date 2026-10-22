@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { GraduationCap, Plus } from "lucide-react";
 import { requireRole } from "@/lib/auth/guard";
 import { createMetadata } from "@/lib/metadata";
-import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
+import { getDataProvider } from "@/lib/data/provider";
 import { createStudentAction } from "@/lib/actions/people";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { PeopleTabs } from "@/components/people/PeopleTabs";

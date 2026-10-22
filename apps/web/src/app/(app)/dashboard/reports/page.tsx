@@ -3,7 +3,7 @@ import Link from "next/link";
 import { FileText } from "lucide-react";
 import { requireSession } from "@/lib/auth/guard";
 import { createMetadata } from "@/lib/metadata";
-import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
+import { getDataProvider } from "@/lib/data/provider";
 import { visibleReportsFor } from "@/lib/dashboard/queries";
 import { visibleReportFor } from "@/lib/reports/reportService";
 import { PageHeader } from "@/components/shell/PageHeader";

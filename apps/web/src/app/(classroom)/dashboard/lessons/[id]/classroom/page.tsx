@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth/guard";
-import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
+import { getDataProvider } from "@/lib/data/provider";
 import { signClassroomJoinToken } from "@learnthrive/shared/classroomToken";
 import { isWithinJoinWindow } from "@/lib/scheduling/joinWindow";
 import { ClassroomClient } from "@/features/classroom/ClassroomClient";

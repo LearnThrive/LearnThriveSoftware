@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { FileText } from "lucide-react";
-import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
+import { getDataProvider } from "@/lib/data/provider";
 import type { AuthenticatedUser } from "@/lib/auth/types";
 import { lessonBucketsFor, visibleStudentsFor } from "@/lib/dashboard/queries";
 import { PageHeader } from "@/components/shell/PageHeader";

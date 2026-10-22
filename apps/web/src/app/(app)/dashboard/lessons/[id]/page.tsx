@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { AlertCircle, CheckCircle2, Lock, Video, CalendarPlus, Download } from "lucide-react";
 import { requireSession } from "@/lib/auth/guard";
 import { createMetadata } from "@/lib/metadata";
-import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
+import { getDataProvider } from "@/lib/data/provider";
 import { cancelLessonAction } from "@/lib/actions/lessons";
 import { markAttendanceAction, completeLessonAction } from "@/lib/actions/attendance";
 import { approveReportAction, saveReportDraftAction, submitReportAction } from "@/lib/actions/reports";

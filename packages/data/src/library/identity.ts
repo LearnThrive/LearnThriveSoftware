@@ -145,6 +145,9 @@ export interface IdentityRepository {
   /** Leaves the supervised view. Returns whether one was open. */
   endSupervised(tokenHash: string, guardianProfileId: string, now: Date): Promise<boolean>;
 
+  /** Writes one audit entry (ids and an action word, never personal data). For staff operations outside this repository, such as enrolment changes. */
+  recordAudit(input: { actor: string; action: string; clientId?: string | null; studentId?: string | null; now: Date }): Promise<void>;
+
   /** Newest first. For staff and tests. */
   auditFor(studentId: string, limit?: number): Promise<IdentityAuditEntry[]>;
 }

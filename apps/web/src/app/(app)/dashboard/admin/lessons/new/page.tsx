@@ -3,7 +3,7 @@ import Link from "next/link";
 import { CalendarPlus } from "lucide-react";
 import { requireRole } from "@/lib/auth/guard";
 import { createMetadata } from "@/lib/metadata";
-import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
+import { getDataProvider } from "@/lib/data/provider";
 import { LessonForm } from "@/components/LessonForm";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Card, CardBody } from "@/components/ui/Card";

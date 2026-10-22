@@ -21,6 +21,13 @@ const EXPECTED_TABLES = [
   "identity_audit",
   "learner_identities",
   "learner_invitations",
+  "lesson_activity",
+  "lesson_attendance",
+  "lesson_reports",
+  "lesson_students",
+  "lessons",
+  "notifications",
+  "platform_settings",
   "profiles",
   "resource_files",
   "resources",
@@ -29,6 +36,7 @@ const EXPECTED_TABLES = [
   "subscriptions",
   "supervised_contexts",
   "tuition_assignments",
+  "tutor_availability_blocks",
   "tutors",
   "usage_counters",
 ];
@@ -45,11 +53,19 @@ const FORCED_TABLES = [
   "entitlements",
   "identity_audit",
   "learner_invitations",
+  "lesson_activity",
+  "lesson_attendance",
+  "lesson_reports",
+  "lesson_students",
+  "lessons",
+  "notifications",
+  "platform_settings",
   "resource_files",
   "resources",
   "stripe_webhook_events",
   "subscriptions",
   "supervised_contexts",
+  "tutor_availability_blocks",
   "usage_counters",
 ];
 
@@ -114,6 +130,7 @@ describe("migrations", () => {
       "0008_consent_withdrawal_time.sql",
       "0009_server_lookups.sql",
       "0010_learner_identity.sql",
+      "0011_tuition_domain.sql",
     ]);
     assert.deepEqual(
       applied.map((f) => Number(f.slice(0, 4))),
@@ -203,7 +220,7 @@ describe("migrations", () => {
       assert.ok(r.policies > 0 || !r.open, `${r.tbl} has no policy yet is reachable by an API role`);
     }
     // and the tables that must be deny-all really are
-    for (const t of ["resource_files", "billing_customers", "admin_grants", "download_events", "stripe_webhook_events", "supervised_contexts"]) {
+    for (const t of ["resource_files", "billing_customers", "admin_grants", "download_events", "stripe_webhook_events", "supervised_contexts", "lessons", "lesson_students", "lesson_attendance", "lesson_activity", "lesson_reports", "notifications", "platform_settings", "tutor_availability_blocks"]) {
       const r = rows.find((x) => x.tbl === t)!;
       assert.equal(r.policies, 0, `${t} should have no policy`);
       assert.equal(r.open, false, `${t} must be unreachable for anon and authenticated`);

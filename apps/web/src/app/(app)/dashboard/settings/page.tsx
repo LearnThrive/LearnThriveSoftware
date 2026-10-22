@@ -10,7 +10,7 @@ import { MotionToggle } from "@/components/MotionToggle";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Dialog } from "@/components/ui/Dialog";
 import { FormActions } from "@/components/ui/Field";
-import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
+import { getDataProvider } from "@/lib/data/provider";
 import { setReportApprovalAction } from "@/lib/actions/settings";
 
 export const metadata: Metadata = createMetadata({

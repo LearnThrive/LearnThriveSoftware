@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { Download, TrendingUp } from "lucide-react";
 import { requireSession } from "@/lib/auth/guard";
 import { createMetadata } from "@/lib/metadata";
-import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
+import { getDataProvider } from "@/lib/data/provider";
 import { studentProgressFor, type ProgressEntry } from "@/lib/dashboard/progress";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Card, CardBody, CardHeader, StatTile } from "@/components/ui/Card";

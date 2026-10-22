@@ -3,7 +3,7 @@ import Link from "next/link";
 import { CalendarPlus } from "lucide-react";
 import { requireSession } from "@/lib/auth/guard";
 import { createMetadata } from "@/lib/metadata";
-import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
+import { getDataProvider } from "@/lib/data/provider";
 import { visibleLessonsFor } from "@/lib/scheduling/visibleLessons";
 import { isWithinJoinWindow, JOIN_WINDOW_MINUTES } from "@/lib/scheduling/joinWindow";
 import { PageHeader } from "@/components/shell/PageHeader";

@@ -1,4 +1,4 @@
-import { InMemoryLibraryStore, SqlLibraryStore, type LibraryStore } from "@learnthrive/data/library";
+import { InMemoryLibraryStore, SqlLibraryStore, type LibraryStore, type SqlExecutor } from "@learnthrive/data/library";
 import { createExecutor } from "@/lib/db";
 import { isDevelopmentBuild } from "@/lib/dev/accounts";
 import { seedDevAccounts } from "@/lib/dev/seedAccounts";
@@ -28,6 +28,8 @@ export interface AccountRuntime {
   backend: Exclude<AccountBackend, "off">;
   auth: AccountAuth;
   store: LibraryStore;
+  /** The Postgres connection the store uses (supabase backend only). The tuition domain provider shares it: one pool, one set of settings. */
+  db: SqlExecutor | null;
   lockout: SignInLockout;
   /** Memory backend only: the "emails" it would have sent, for the development route and the tests. */
   outbox: MemoryAccountAuth["outbox"] | null;
@@ -43,10 +45,12 @@ const g = globalThis as unknown as { __learnthriveAccount?: AccountRuntime; __le
 
 async function create(backend: Exclude<AccountBackend, "off">, env: Env): Promise<AccountRuntime> {
   if (backend === "supabase") {
+    const { executor } = await createExecutor(env.DATABASE_URL!);
     return {
       backend,
       auth: new SupabaseAccountAuth({ url: env.SUPABASE_URL!, anonKey: env.SUPABASE_ANON_KEY! }),
-      store: new SqlLibraryStore((await createExecutor(env.DATABASE_URL!)).executor),
+      store: new SqlLibraryStore(executor),
+      db: executor,
       lockout: new SignInLockout(),
       outbox: null,
       memory: null,
@@ -57,7 +61,7 @@ async function create(backend: Exclude<AccountBackend, "off">, env: Env): Promis
   // A local dev server also has the development accounts (lib/dev/accounts.ts) behind this same sign-in, so one login page serves
   // every kind of person. Tests that build their own runtime (NODE_ENV unset) get none: they start empty.
   if (isDevelopmentBuild(env)) await seedDevAccounts(auth, memory);
-  return { backend, auth, store: memory, lockout: new SignInLockout(), outbox: auth.outbox, memory };
+  return { backend, auth, store: memory, db: null, lockout: new SignInLockout(), outbox: auth.outbox, memory };
 }
 
 export async function accountRuntime(env: Env = process.env): Promise<AccountRuntime | null> {

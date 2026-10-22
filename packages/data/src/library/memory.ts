@@ -196,6 +196,8 @@ export class InMemoryLibraryStore implements LibraryStore {
       if (this.learnerOf(profileId)) throw new Error("a learner cannot own a family account");
       return this.clientFor(profileId);
     },
+    // The in-memory store has no tuition domain of its own: development maps accounts to the seeded records (apps/web lib/dev/accounts.ts).
+    domainRef: async () => null,
     getEmail: async (profileId) => this.profiles.get(profileId)?.email ?? null,
     getOwnerProfileId: async (clientId) => [...this.clients].find(([, id]) => id === clientId)?.[0] ?? null,
     updateDisplayName: async (profileId, displayName) => {
@@ -443,6 +445,7 @@ export class InMemoryLibraryStore implements LibraryStore {
       this.audit(guardianProfileId, "supervised_ended", this.clients.get(guardianProfileId) ?? null, row.studentId, now);
       return true;
     },
+    recordAudit: async ({ actor, action, clientId, studentId, now }) => void this.audit(actor, action, clientId ?? null, studentId ?? null, now),
     auditFor: async (studentId, limit = 50) => this.auditRows.filter((a) => a.studentId === studentId).slice().reverse().slice(0, limit),
   };
 

@@ -12,6 +12,7 @@
     "./domain": "./src/domain.ts",
     "./repositories": "./src/repositories.ts",
     "./inMemoryProvider": "./src/inMemoryProvider.ts",
+    "./sqlProvider": "./src/sqlProvider.ts",
     "./library": "./src/library/index.ts"
   },
   "devDependencies": {
