@@ -3,6 +3,7 @@ import type { GenerationQueue } from "@/lib/assistant/queue";
 import type { ChatProvider, ProviderMessage } from "@/lib/assistant/types";
 import type { SolveStatus, SolvedQuestion, WorkedStep } from "./annotate";
 import { equivalent, evaluate, readSolutions, sameValue, satisfies, sides, squeeze, valueOf, variables } from "./maths";
+import { checkForm, checkWorking, completeness, roundingAsked, solutionsOf } from "./mathsEvidence";
 import type { PaperQuestion } from "./questions";
 
 /**
@@ -136,8 +137,28 @@ export function printedChecks(text: string): { equations: string[]; expression: 
   return { equations, expression: expression && variables(expression).length ? expression : null, calculation: calc && evaluate(calc) !== null ? calc : null };
 }
 
-/** The verdict on a solution: a calculation, never the model's word. */
-export function verify(q: PaperQuestion, s: ModelSolution): { status: SolveStatus; note: string; detail?: string } {
+export interface Verdict {
+  status: SolveStatus;
+  note: string;
+  detail?: string;
+  evidence?: string[];
+}
+
+/**
+ * The verdict on a solution: a calculation, never the model's word. The ANSWER is judged first (verifyAnswer); then, if it stands, the shown
+ * WORKING is tested too: a right answer reached through a step that does not follow is not "checked", it is left for a person to look over.
+ */
+export function verify(q: PaperQuestion, s: ModelSolution): Verdict {
+  const verdict = verifyAnswer(q, s);
+  if (verdict.status !== "verified" && verdict.status !== "checked_reading") return verdict;
+  const working = checkWorking(s.steps.map(tidyStep));
+  if (working.flawed.length > 0) {
+    return { status: "unchecked", note: `The answer checks out, but step ${working.flawed[0]! + 1} of the working does not follow from the one before: look it over.`, evidence: [...(verdict.evidence ?? []), "answer_checked", "working_flawed"] };
+  }
+  return { ...verdict, evidence: [...(verdict.evidence ?? []), working.checked > 0 ? "working_consistent" : "working_not_checkable"] };
+}
+
+function verifyAnswer(q: PaperQuestion, s: ModelSolution): Verdict {
   const final = stripDollars(s.final_answer);
   if (!final || s.confidence === "low") return { status: "unsolved", note: "The AI could not read or solve this confidently." };
   // First, against the printed question (text pages only: a picture's text is the AI's own reading).
@@ -147,7 +168,21 @@ export function verify(q: PaperQuestion, s: ModelSolution): { status: SolveStatu
     if (printed.equations.length && unknowns.length <= printed.equations.length) {
       const answer = !final.includes("=") && unknowns.length === 1 ? `${unknowns[0]} = ${final}` : final;
       const holds = satisfies(printed.equations, answer);
-      if (holds === true) return { status: "verified", note: "" };
+      if (holds === true) {
+        // Putting the answer back is only a necessary check: x^2 = 4 answered "x = 2" works and is still not the whole solution.
+        if (unknowns.length === 1 && printed.equations.length === 1) {
+          const claimed = (readSolutions(answer) ?? []).map((v) => v[unknowns[0]!]).filter((n): n is number => n !== undefined);
+          const verdict = completeness(printed.equations[0]!, claimed);
+          if (verdict === "incomplete") {
+            const all = solutionsOf(printed.equations[0]!)?.roots.map((r) => Number(r.toPrecision(6))).join(", ");
+            return { status: "failed", note: "The answer works, but it is not the whole solution set: this equation has other solutions.", detail: `Your answer ${final} works but is incomplete: all the real solutions of ${printed.equations[0]} are ${unknowns[0]} = ${all}. Give every solution.`, evidence: ["answer_substituted", "solution_set_incomplete"] };
+          }
+          if (verdict === "undefined_at_answer") return { status: "failed", note: "This answer makes part of the question undefined (a zero denominator or the root of a negative).", detail: `With ${final}, ${printed.equations[0]} is not defined.`, evidence: ["answer_undefined"] };
+          if (verdict === "unknown") return { status: "unchecked", note: "Putting the answer back in works, but that does not prove it is the whole solution set.", evidence: ["answer_substituted", "completeness_unknown"] };
+          return { status: "verified", note: "", evidence: ["answer_substituted", "solution_set_complete"] };
+        }
+        return { status: "verified", note: "", evidence: ["answer_substituted"] };
+      }
       if (holds === false) {
         // Say which equation breaks and what it comes to, so a second attempt can see its own mistake.
         const values = readSolutions(answer)?.[0] ?? {};
@@ -167,7 +202,13 @@ export function verify(q: PaperQuestion, s: ModelSolution): { status: SolveStatu
     if (printed.calculation) {
       const expected = evaluate(printed.calculation);
       const shown = valueOf(final);
-      if (expected !== null && shown !== null) return sameValue(expected, shown) ? { status: "verified", note: "" } : { status: "failed", note: "Working out the question's calculation does not give this answer." };
+      if (expected !== null && shown !== null) {
+        // A rounded answer is judged by checkForm (is it the true value rounded as asked?), not by equality with the unrounded value.
+        const rounded = roundingAsked(q.text) && checkForm(q.text, final, expected).ok;
+        if (!rounded && !sameValue(expected, shown)) return { status: "failed", note: "Working out the question's calculation does not give this answer." };
+        const form = checkForm(q.text, final, expected);
+        return form.ok ? { status: "verified", note: "", evidence: ["value_computed", "form_as_asked"] } : { status: "failed", note: form.note, evidence: ["value_computed", "form_not_as_asked"] };
+      }
     }
   }
   const check = s.check;
@@ -178,7 +219,7 @@ export function verify(q: PaperQuestion, s: ModelSolution): { status: SolveStatu
     const given = valueOf(check.answer);
     const shown = valueOf(final);
     // A check whose answer is not the final answer (for example a substitution) says nothing about the final answer.
-    agrees = expected === null || given === null || shown === null || !sameValue(given, shown) ? null : sameValue(expected, given);
+    agrees = expected === null || given === null || shown === null || !sameValue(given, shown) ? null : sameValue(expected, given) || (roundingAsked(q.text) && checkForm(q.text, check.answer, expected).ok);
     grounds = [check.expression];
   } else if (check.kind === "solve") {
     const unknowns = [...new Set(check.equations.flatMap((e) => variables(e.replace("=", "-(") + ")")))];
@@ -197,6 +238,11 @@ export function verify(q: PaperQuestion, s: ModelSolution): { status: SolveStatu
   }
   if (agrees === null) return { status: "unchecked", note: "" };
   if (!agrees) return { status: "failed", note: "A calculation check did not agree with this answer." };
+  if (check.kind === "evaluate") {
+    const exact = valueOf(check.expression);
+    const form = exact === null ? ({ ok: true } as const) : checkForm(q.text, final, exact);
+    if (!form.ok) return { status: "failed", note: form.note, evidence: ["value_computed", "form_not_as_asked"] };
+  }
   // The check passed. Was it checking the question as printed, or the AI's reading of it?
   const page = squeeze(q.text);
   const printed = q.fromText && grounds.every((g) => {
@@ -235,6 +281,7 @@ export async function solveQuestion(deps: SolveDeps, q: PaperQuestion, picture: 
   if (!s) return { ...q, transcription: q.text, finalAnswer: "", steps: [], explanation: "", status: "unsolved", statusNote: "The AI did not produce a usable solution." };
   const first = verify(q, s);
   let { status, note } = first;
+  let evidence = first.evidence;
   if (status === "failed") {
     // The calculation disagreed: one more attempt, told exactly what did not hold. Only a calculation can make the new one checked.
     const told = first.detail ?? describeFailure(s);
@@ -247,6 +294,7 @@ export async function solveQuestion(deps: SolveDeps, q: PaperQuestion, picture: 
         if (second.status === "verified" || second.status === "checked_reading") {
           s = again;
           ({ status, note } = second);
+          evidence = second.evidence;
         }
       }
     } catch (error) {
@@ -262,6 +310,7 @@ export async function solveQuestion(deps: SolveDeps, q: PaperQuestion, picture: 
     explanation: s.explanation.trim(),
     status,
     statusNote: note,
+    evidence,
   };
 }
 
