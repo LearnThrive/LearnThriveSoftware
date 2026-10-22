@@ -47,7 +47,7 @@ test('a guardian adds a young learner, agrees to Study Buddy, views as them, and
   const banner = page.getByRole('region', { name: 'Supervised view' });
   await expect(banner).toContainText('Viewing as Kit');
   // The account and the guardian controls are shut inside the view, by the server as well as the menu.
-  await expect(page.getByRole('navigation', { name: 'Library', exact: true }).getByRole('link', { name: 'Account' })).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Account' })).toHaveCount(0);
   await page.goto('/account');
   await expect(page).toHaveURL(/\/library\/study-buddy$/);
   await page.goto('/account/learners');

@@ -13,7 +13,7 @@ import type { Role } from "@/lib/auth/types";
 export type AppNavIcon =
   | "home" | "calendar" | "lessons" | "students" | "clients" | "tutors"
   | "assignments" | "reports" | "notifications" | "activity" | "settings" | "availability"
-  | "study-buddy" | "library";
+  | "study-buddy" | "library" | "search" | "account";
 
 export interface AppNavItem {
   label: string;
@@ -135,6 +135,38 @@ export function navigationFor(role: Role, extras: NavExtras = {}): AppNavSection
   if (extras.studyBuddy) learning.push({ label: "Study Buddy", href: "/library/study-buddy", icon: "study-buddy" });
   if (extras.library) learning.push({ label: "Library", href: "/library", icon: "library" });
   return learning.length > 0 ? [...NAV_BY_ROLE[role], { title: "Learning", items: learning }] : NAV_BY_ROLE[role];
+}
+
+/**
+ * The ONE navigation of the signed-in product, built from capabilities, never from a hard-coded role list (docs/IDENTITY.md, "One shell"):
+ *
+ *   tuition      the dashboard areas for this role (families, learners with their own enrolment, tutors, administrators)
+ *   studyBuddy   Study Buddy, where the assistant is open and this person's access includes it
+ *   library      the Library and its search, where the catalogue is open and this person's access includes it
+ *   account      the account page (adult account holders and learners; closed inside a supervised view)
+ *
+ * A link appears only for a page that is open to this person, but hiding a link is never the control: every page and API checks again.
+ */
+export interface PlatformNavInput {
+  role: Role;
+  tuition: boolean;
+  studyBuddy: boolean;
+  library: boolean;
+  account: boolean;
+}
+
+export function platformNavigation(input: PlatformNavInput): AppNavSection[] {
+  const sections: AppNavSection[] = input.tuition ? [...NAV_BY_ROLE[input.role]] : [];
+  const learning: AppNavItem[] = [];
+  if (input.studyBuddy) learning.push({ label: "Study Buddy", href: "/library/study-buddy", icon: "study-buddy" });
+  if (input.library) learning.push({ label: "Library", href: "/library", icon: "library", matchPrefix: "/library/search" });
+  // A person with the whole platform keeps a short sidebar: the Library's search is in the top-bar palette and the account is in the
+  // account menu. A Library-only member has no such tools, so their small menu carries both.
+  if (!input.tuition && input.library) learning.push({ label: "Search", href: "/library/search", icon: "search" });
+  const account: AppNavItem[] = input.account && !input.tuition ? [{ label: "Account", href: "/account", icon: "account" }] : [];
+  if (sections.length === 0) return [{ items: [...learning, ...account] }].filter((s) => s.items.length > 0);
+  if (learning.length > 0) sections.push({ title: "Learning", items: learning });
+  return sections;
 }
 
 /** True when `pathname` is this item's own route or a page nested under it. */

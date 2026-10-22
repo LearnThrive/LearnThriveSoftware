@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { AppShell } from "@/components/shell/AppShell";
+import { PlatformShell } from "@/components/shell/PlatformShell";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
-  return <AppShell>{children}</AppShell>;
+  return <PlatformShell requireDashboard>{children}</PlatformShell>;
 }

@@ -207,9 +207,9 @@ test('on a phone the navigation is a drawer: it opens, keeps its links and the c
   await open(page);
   await ask(page, 'First phone question', { first: true });
   await expect(page.getByRole('button', { name: 'Copy' })).toBeVisible();
-  const menu = page.getByRole('button', { name: 'Open menu' });
+  const menu = page.getByRole('button', { name: 'Open navigation' });
   await menu.click();
-  const nav = page.getByRole('navigation', { name: 'Library' });
+  const nav = page.getByRole('dialog', { name: 'Navigation' }).getByRole('navigation', { name: 'Main navigation' });
   await expect(nav.getByRole('link', { name: 'Study Buddy' })).toHaveAttribute('aria-current', 'page');
   await expect(page.getByRole('region', { name: 'Your chats' }).getByRole('button', { name: 'First phone question', exact: true })).toBeVisible();
   await expectAxeClean(page, 'study buddy, phone drawer');

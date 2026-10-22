@@ -33,7 +33,7 @@ async function signIn(page: Page, who: { email: string; password: string }, land
 }
 
 const dashboardMenu = (page: Page) => page.getByRole('navigation', { name: 'Main navigation' });
-const memberMenu = (page: Page) => page.getByRole('navigation', { name: 'Library', exact: true });
+const memberMenu = (page: Page) => page.getByRole('navigation', { name: 'Main navigation' });
 
 test('/login is the one sign-in page, and the Library\'s old address leads to it', async ({ page }) => {
   await page.goto('/login');
@@ -57,7 +57,7 @@ test('an enrolled family signs in to the dashboard and finds Study Buddy and the
   await menu.getByRole('link', { name: 'Study Buddy' }).click();
   await expect(page).toHaveURL(/\/library\/study-buddy$/);
   // And the way back is in the member menu.
-  await memberMenu(page).getByRole('link', { name: 'Dashboard' }).click();
+  await memberMenu(page).getByRole('link', { name: 'Home' }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 });
 
@@ -172,4 +172,32 @@ test('a disabled account is told so, with no session, and a wrong password gets 
   await fill(page, { email: WHO.client.email, password: 'definitely not the password' });
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page.locator('form [role="alert"]')).toContainText('Email or password is not right.');
+});
+
+test('one shell, by keyboard alone: the skip link first, the menu in reading order, Enter follows a link, and the account menu opens and closes', async ({ page }) => {
+  await signIn(page, WHO.member, /\/library\/study-buddy$/);
+  await page.goto('/account');
+  await hydrated(page);
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('link', { name: 'Skip to main content' })).toBeFocused();
+  const order: string[] = [];
+  for (let i = 0; i < 8 && order.length < 4; i += 1) {
+    await page.keyboard.press('Tab');
+    const name = await page.evaluate(() => (document.activeElement as HTMLElement | null)?.textContent?.trim() ?? '');
+    if (['Study Buddy', 'Library', 'Search', 'Account'].includes(name)) order.push(name);
+  }
+  expect(order).toEqual(['Study Buddy', 'Library', 'Search', 'Account']);
+  // Shift+Tab back to Study Buddy and follow it with Enter.
+  for (let i = 0; i < 3; i += 1) await page.keyboard.press('Shift+Tab');
+  await expect(dashboardMenu(page).getByRole('link', { name: 'Study Buddy' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/library\/study-buddy$/);
+  // The account menu: opens from its button, Escape closes it and returns focus to the button.
+  const trigger = page.getByRole('button', { name: 'Account menu' });
+  await trigger.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('menu')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menu')).toBeHidden();
+  await expect(trigger).toBeFocused();
 });

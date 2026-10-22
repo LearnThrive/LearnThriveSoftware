@@ -382,6 +382,17 @@
    did). Genuinely not done, not quietly downgraded — see the plan8 report's Bugs/Remaining
    sections. */
 
+/* One focused working area (Study Buddy's conversation): the whole content column, no padding or width limit, height owned by the page. */
+.app-content.app-content--flush { max-width: none; padding: 0; display: flex; flex-direction: column; }
+.app-content--flush > * { flex: 1; min-height: 0; }
+
+/* The secondary slot (SidebarSlot.tsx): a page renders its own section under the navigation, in the sidebar or the mobile drawer. */
+.app-slot-host { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.app-slot { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: var(--space-3); }
+.app-slot:empty { display: none; }
+/* A page's own section gets a usable height even beside a long navigation: the sidebar scrolls instead of squeezing it. */
+.app-slot-host:has(.app-slot > *) { flex: 1 1 12rem; min-height: 12rem; }
+
 .page-header { margin-bottom: var(--space-5); }
 .page-header__nav { display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-3); flex-wrap: wrap; }
 
@@ -626,3 +637,12 @@
    through wherever it doesn't, most visibly behind the whole post-class "ended" screen. */
 .classroom-route { min-height: 100vh; }
 .auth-route { min-height: 100vh; }
+
+/* A long name or address must never push the top bar wider than the screen: it is cut with an ellipsis, and on a phone only the avatar stays. */
+.app-usermenu__trigger { max-width: 100%; }
+.app-usermenu__who { min-width: 0; }
+.app-usermenu__who .app-usermenu__name,
+.app-usermenu__who .app-usermenu__role { display: block; max-width: 11rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 30rem) {
+  .app-usermenu__who { display: none; }
+}

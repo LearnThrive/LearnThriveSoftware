@@ -1,6 +1,6 @@
 import {
   Activity, BookOpen, CalendarDays, ClipboardList, Cog, GraduationCap,
-  Home, Users, UserRound, Bell, CalendarClock, FileText, Library, MessagesSquare,
+  Home, Users, UserRound, Bell, CalendarClock, FileText, Library, MessagesSquare, Search,
 } from "lucide-react";
 import type { AppNavIcon } from "@/lib/navigation/appNavigation";
 
@@ -21,6 +21,8 @@ const ICONS: Record<AppNavIcon, typeof Home> = {
   availability: CalendarClock,
   "study-buddy": MessagesSquare,
   library: Library,
+  search: Search,
+  account: UserRound,
 };
 
 export function NavIcon({ name, size = 18 }: { name: AppNavIcon; size?: number }) {
