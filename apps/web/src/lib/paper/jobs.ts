@@ -33,6 +33,10 @@ export interface JobQuestion {
   page: number;
   text: string;
   marks: number | null;
+  /** The question it belongs to ("3" for 3(a)(ii)): the page groups parts under it. */
+  group?: string;
+  /** "(a)" or "(ii)" as printed; absent for a whole question. `number` is the full label. */
+  partLabel?: string;
   /** Read from the page's text, or from a picture of it by the AI (the student can tell which to double-check). */
   fromText: boolean;
 }
@@ -216,9 +220,11 @@ export class PaperJobs {
         if (signal.aborted) return;
         if ("problem" in document) throw Object.assign(new Error("unreadable"), { userMessage: document.problem });
         const scheme = job.kind === "mark" ? await this.markScheme(deps, job) : null;
-        const questions: JobQuestion[] = document.questions.map((q) => ({ id: q.id, number: q.number, page: q.page, text: q.text.slice(0, 400), marks: q.marks, fromText: q.fromText }));
+        const questions: JobQuestion[] = document.questions.map((q) => ({ id: q.id, number: q.number, page: q.page, text: (q.ownText ?? q.text).slice(0, 400), marks: q.marks, group: q.group, partLabel: q.partLabel, fromText: q.fromText }));
+        const skipped = document.skipped?.length ? `Not searched for questions: ${document.skipped.map((s) => `page ${s.page} (${s.kind === "formulae" ? "formulae sheet" : s.kind})`).join(", ")}.` : null;
         const notices = [
           document.omitted ? `This paper has ${document.questions.length + document.omitted.questions} questions. Only the first ${document.omitted.limit} are listed (the limit is set by PAPER_MAX_PAGES / PAPER_MAX_QUESTIONS); question ${document.omitted.firstOmitted} onwards are NOT included, so this will not be a complete paper. Send the rest as a second document to cover them.` : null,
+          skipped,
           job.schemeFileId && !scheme ? "I could not read that mark scheme (it needs to be a PDF with its text in it), so I will mark without it." : null,
         ].filter(Boolean);
         const message = questions.length ? (notices.length ? notices.join(" ") : null) : "I could not find any numbered questions in that document. You can still ask me about it in the chat.";

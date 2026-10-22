@@ -3,7 +3,9 @@ import type { LineBox, PageReading, RenderedPage } from "@/lib/assistant/documen
 /**
  * Finds the questions on a paper and the empty space each one leaves for its answer, from the text layer's positioned lines.
  *
- * A question starts at a line beginning with its number ("3", "3.", "3)", "Question 3", "Q3"), in increasing order down the paper.
+ * A question starts at a line beginning with its number ("3", "3.", "3)", "Question 3", "Q3"), in increasing order down the paper. Parts follow
+ * in sequence: (a), (b) ... and, inside a part, (i), (ii) ...; what is solved is each LEAF (3(a)(ii), or 3 itself if it has no parts), with the words the
+ * parts share as its stem. The id is opaque (q1, q2 ... in paper order); the label as printed is `number`. Cover, formulae and blank pages hold no questions.
  * Its answer space is the tallest band of the page, between the end of its text and the start of the next question (or the page's
  * bottom margin), that holds no printed text, where dotted or underlined answer lines count as space (writing on them is the point).
  * Coordinates are PDF units with the origin at the bottom left, as pdf.js and pdf-lib both use.
@@ -37,6 +39,16 @@ export interface PaperQuestion {
   answerLine: Rect | null;
   /** True when the text came from the page's text layer (and can be compared with the model's transcription). */
   fromText: boolean;
+  /** The question it belongs to ("3" for 3(a)(ii)). A question with parts is not solved as a whole: each part is, with the stem as its context. */
+  group?: string;
+  /** "(a)" or "(ii)" as printed; absent for a whole question. `number` is the full printed label, "3(a)(ii)". */
+  partLabel?: string;
+  /** What the parts share (the words before (a), and the part above for (i)): context for this part, already included in `text`. */
+  stem?: string;
+  /** This part on its own, without the stem, for display. */
+  ownText?: string;
+  /** The question runs on over a page; the text includes the part that carried over. */
+  continued?: boolean;
   /** Where to look for answer space: kept so the space can be measured later, page by page, from a drawing of the page. */
   space?: { left: number; right: number; bottom: number; top: number };
 }
@@ -139,12 +151,92 @@ export function refineAnswerSpace(questions: readonly PaperQuestion[], pages: re
   }
 }
 
+// ---------------------------------------------------------------------------------------------------------------------------------
+// What kind of page it is
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+export type PageKind = "questions" | "cover" | "formulae" | "blank";
+
+const COVER_SIGNS = [/candidate/i, /centre\s*(?:number|no)/i, /surname/i, /forename|first name/i, /time allowed/i, /total marks|maximum mark/i, /you must have/i, /^\s*instructions?\s*$/im, /information for candidates/i, /paper (?:reference|code)/i, /signature/i, /write your name/i, /do not return the (?:question|exam) paper/i];
+
+/**
+ * A page that holds no questions: the cover (name boxes, "Time allowed 1 hour 30 minutes", instructions), a formulae sheet, or a blank page. The cover
+ * matters most: "1 hour 30 minutes" looks exactly like the start of question 1. A page is only called blank when it has no content line at all, or says so.
+ */
+export function classifyPage(page: PageReading, isFirst: boolean): PageKind {
+  const content = page.lines.filter((l) => !furniture(l, page));
+  const says = /intentionally left blank|this page is blank|blank page|do not write on this page/i.test(page.text);
+  if (page.textQuality === "good" && (content.length === 0 || (says && content.length <= 8))) return "blank";
+  if (page.textQuality === "none" && !page.hasPictures && page.text.trim() === "") return "blank";
+  if (page.textQuality !== "good") return "questions";
+  if (isFirst && COVER_SIGNS.filter((re) => re.test(page.text)).length >= 3) return "cover";
+  const head = [...content].sort((a, b) => b.y - a.y).slice(0, 4).map((l) => l.text).join(" ");
+  if (/\bformulae?\b|formula sheet|data sheet/i.test(head)) return "formulae";
+  return "questions";
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Question parts: 1(a)(ii)
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+const ROMAN = ["i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x", "xi", "xii"];
+const PART = /^(?:\(([a-z]|[ivx]{1,4})\)|([a-z])\))\s*/i;
+
+interface Node {
+  /** "3", "3(a)", "3(a)(ii)" as printed. */
+  label: string;
+  /** The part on its own: "(a)", "(ii)"; empty for a whole question. */
+  partLabel: string;
+  depth: number;
+  parent: Node | null;
+  children: Node[];
+  /** The node's own lines on the page it starts on. */
+  lines: LineBox[];
+  page: number;
+  /** Lines that carry on over the page (a question that runs onto the next page). */
+  continued: Array<{ page: number; lines: LineBox[] }>;
+  /** "3" for every node of question 3. */
+  group: string;
+}
+
+const content = (lines: readonly LineBox[]) => lines.filter((l) => !WRITABLE.test(l.text));
+
 /** The questions on the paper, in order. With renders of the pages, answer space avoids diagrams and pictures as well as text. */
 export function findQuestions(pages: readonly PageReading[], renders: readonly RenderedPage[] = []): PaperQuestion[] {
-  const found: Array<{ q: PaperQuestion; lines: LineBox[] }> = [];
+  const nodes: Node[] = [];
   let expect = 1;
+  let top: Node | null = null;
+  let letter: Node | null = null;
+  let letterCode = 0;
+  let roman = 0;
+
+  /** Which part a line opens, if any, judged by the sequence: the next letter, or the next roman numeral. Never from the look of the line alone. */
+  const partOf = (text: string): { token: string; kind: "letter" | "roman"; length: number } | null => {
+    const m = PART.exec(text);
+    if (!m || !top) return null;
+    const token = (m[1] ?? m[2] ?? "").toLowerCase();
+    const nextLetter = String.fromCharCode((letterCode || 96) + 1);
+    const asLetter = token.length === 1 && token === nextLetter;
+    const asRoman = ROMAN[roman] === token;
+    if (asRoman && (!asLetter || !(token === "i" && nextLetter === "i"))) return { token, kind: "roman", length: m[0].length };
+    if (asLetter) return { token, kind: "letter", length: m[0].length };
+    return null;
+  };
+  const open = (part: { token: string; kind: "letter" | "roman"; length: number }, line: LineBox, page: PageReading): Node => {
+    const parent = part.kind === "roman" ? letter ?? top! : top!;
+    const node: Node = { label: `${parent.label}(${part.token})`, partLabel: `(${part.token})`, depth: parent.depth + 1, parent, children: [], lines: [line], page: page.number, continued: [], group: top!.group };
+    parent.children.push(node);
+    nodes.push(node);
+    if (part.kind === "letter") {
+      letter = node;
+      letterCode = part.token.charCodeAt(0);
+      roman = 0;
+    } else roman += 1;
+    return node;
+  };
+
   for (const page of pages) {
-    if (page.textQuality !== "good") continue;
+    if (page.textQuality !== "good" || classifyPage(page, page === pages[0]) !== "questions") continue;
     const lines = [...page.lines].sort((a, b) => b.y - a.y || a.x - b.x);
     for (const line of lines) {
       const m = START.exec(line.text);
@@ -152,30 +244,81 @@ export function findQuestions(pages: readonly PageReading[], renders: readonly R
       // A new question: the next number (or a jump forward of a few, for a paper that starts mid-way), never backwards.
       if (m && n >= expect && n <= expect + 3 && !WRITABLE.test(line.text)) {
         expect = n + 1;
-        found.push({ q: { id: `q${n}`, number: String(n), page: page.number, text: "", marks: null, box: null, answer: null, bands: [], answerLine: null, fromText: true }, lines: [line] });
+        top = { label: String(n), partLabel: "", depth: 0, parent: null, children: [], lines: [line], page: page.number, continued: [], group: String(n) };
+        nodes.push(top);
+        letter = null;
+        letterCode = 0;
+        roman = 0;
+        // "1 (a) Work out ...": the number and the first part share a line, so there is no stem and the line belongs to the part.
+        const first = partOf(line.text.slice(m[0].length));
+        if (first) {
+          top.lines = [];
+          open(first, line, page);
+        }
         continue;
       }
-      const current = found.at(-1);
-      if (current && current.q.page === page.number && !furniture(line, page)) current.lines.push(line);
+      const part = partOf(line.text);
+      if (part) {
+        open(part, line, page);
+        continue;
+      }
+      const current = nodes.at(-1);
+      if (!current || furniture(line, page)) continue;
+      if (current.page === page.number) current.lines.push(line);
+      else {
+        const run = current.continued.find((c) => c.page === page.number);
+        if (run) run.lines.push(line);
+        else current.continued.push({ page: page.number, lines: [line] });
+      }
     }
   }
 
-  for (let i = 0; i < found.length; i += 1) {
-    const { q, lines } = found[i]!;
-    const page = pages.find((p) => p.number === q.page)!;
-    const content = lines.filter((l) => !WRITABLE.test(l.text));
-    const joined = content.map((l) => l.text).join("\n").replace(START, (all) => (/question|q/i.test(all) ? "" : all)).trim();
-    q.marks = marksOf(joined);
-    q.text = joined.replace(/^\s*[([]\d{1,2}\s*marks?[)\]]\s*/i, "").trim();
-    const top = Math.max(...content.map((l) => l.y + l.h));
-    const bottom = Math.min(...content.map((l) => l.y));
+  /** A node's own words: its lines, then what ran over onto later pages. A part's own label is dropped (it is in the label). */
+  const own = (node: Node): string => {
+    const all = [...content(node.lines), ...node.continued.flatMap((c) => content(c.lines))].map((l) => l.text).join("\n");
+    const text = node.depth === 0 ? all.replace(START, (whole) => (/question|q/i.test(whole) ? "" : whole)) : all.replace(PART, "");
+    return text.trim();
+  };
+
+  const leaves = nodes.filter((n) => n.children.length === 0);
+  const made: PaperQuestion[] = [];
+  for (const leaf of leaves) {
+    const lines = leaf.lines;
+    const page = pages.find((p) => p.number === leaf.page)!;
+    const chain: Node[] = [];
+    for (let at: Node | null = leaf; at; at = at.parent) chain.unshift(at);
+    const body = content(lines);
+    if (body.length === 0) continue;
+    const mine = own(leaf);
+    const stem = chain.slice(0, -1).map(own).filter(Boolean).join("\n");
+    const joined = [stem, mine].filter(Boolean).join("\n");
+    const q: PaperQuestion = {
+      id: `q${made.length + 1}`,
+      number: leaf.label,
+      page: leaf.page,
+      text: joined.replace(/^\s*[([]\d{1,2}\s*marks?[)\]]\s*/i, "").trim(),
+      marks: marksOf(mine),
+      box: null,
+      answer: null,
+      bands: [],
+      answerLine: null,
+      fromText: true,
+      group: leaf.group,
+      partLabel: leaf.partLabel || undefined,
+      stem: stem || undefined,
+      ownText: mine.replace(/^\s*[([]\d{1,2}\s*marks?[)\]]\s*/i, "").trim(),
+      continued: leaf.continued.length > 0 || undefined,
+    };
+    const topY = Math.max(...body.map((l) => l.y + l.h));
+    const bottom = Math.min(...body.map((l) => l.y));
     const left = Math.min(...page.lines.map((l) => l.x), MARGIN * 2);
     const right = Math.max(...page.lines.map((l) => l.x + l.w), page.width - MARGIN * 2);
-    q.box = { x: left, y: bottom, w: right - left, h: top - bottom };
+    q.box = { x: left, y: bottom, w: right - left, h: topY - bottom };
 
-    // The band below the text, down to the next question on the same page (or the bottom margin).
-    const next = found[i + 1];
-    const floor = next && next.q.page === q.page ? Math.max(...next.lines.map((l) => l.y + l.h)) + 6 : MARGIN;
+    // The band below the text, down to whatever starts next on the same page (a part, a question, or a stem between parts) or the bottom margin.
+    const at = nodes.indexOf(leaf);
+    const next = nodes.slice(at + 1).find((n) => n.lines.length > 0);
+    const floor = next && next.page === leaf.page ? Math.max(...next.lines.map((l) => l.y + l.h)) + 6 : MARGIN;
     const ceiling = bottom - 4;
     const obstacles = page.lines
       .filter((l) => !WRITABLE.test(l.text) && !furniture(l, page) && l.y < ceiling && l.y + l.h > floor)
@@ -188,12 +331,13 @@ export function findQuestions(pages: readonly PageReading[], renders: readonly R
       if (height >= MIN_ANSWER_HEIGHT && (!best || height > best.h)) best = { x: left, y: bandBottom, w: right - left, h: height };
       if (cut) bestTop = cut.y - 2;
     }
-    const render = renders.find((r) => r.number === q.page);
+    const render = renders.find((r) => r.number === leaf.page);
     q.space = { left, right, bottom: floor, top: ceiling };
     q.bands = render ? freeBands(render, page, q.space) : best ? [best] : [];
     q.answer = q.bands.reduce<Rect | null>((tallest, band) => (!tallest || band.h > tallest.h ? band : tallest), null);
     const answerLine = lines.find((l) => /^\s*answer\b/i.test(l.text) && WRITABLE.test(l.text));
     q.answerLine = answerLine ? { x: answerLine.x, y: answerLine.y, w: answerLine.w, h: answerLine.h } : null;
+    made.push(q);
   }
-  return found.map((f) => f.q);
+  return made;
 }
