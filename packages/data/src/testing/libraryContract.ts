@@ -690,6 +690,62 @@ export function libraryContract(name: string, make: () => Promise<{ harness: Con
         assert.equal(await store.papers.activeForFamily(f.clientId), null, "a failed job frees the family");
       });
 
+      test("assessment versions: the AI's value is kept as version 1, each change adds one and becomes current, and only the owner or staff can make or read them", async () => {
+        const now = new Date("2026-10-22T10:00:00Z");
+        const f = await family();
+        const stranger = await family();
+        const ava = await h.student(f.profile);
+        const ben = await h.student(f.profile);
+        const { result } = await start(own(f, ava), now);
+        const id = (result as Created).job.id;
+        const ai = { id: "q1", student: { answer: "5" }, marks: 0 };
+        assert.deepEqual(await store.papers.amend({ kind: "owner", owner: own(f, ava) }, id, "q1", { kind: "correction", actorKind: "student", actorId: null, value: ai, note: null }, now), { ok: false, code: "not_done" }, "not before the job is finished");
+        await store.papers.save(id, W1.id, { checkpoint: { questionId: "q1", value: ai } }, W1, now);
+        await store.papers.finish(id, W1.id, { state: "done" }, now);
+
+        const asAva = { kind: "owner" as const, owner: own(f, ava) };
+        assert.deepEqual(await store.papers.amend(asAva, id, "q9", { kind: "correction", actorKind: "student", actorId: null, value: {}, note: null }, now), { ok: false, code: "no_question" });
+        for (const [who, name] of [[{ kind: "owner" as const, owner: own(f, ben) }, "a sibling"], [{ kind: "owner" as const, owner: own(f) }, "the guardian"], [{ kind: "owner" as const, owner: own(stranger) }, "another family"]] as const) {
+          assert.deepEqual(await store.papers.amend(who, id, "q1", { kind: "correction", actorKind: "student", actorId: null, value: { id: "q1", intruder: true }, note: null }, now), { ok: false, code: "not_found" }, `${name}: amend`);
+          assert.deepEqual(await store.papers.versions(who, id, "q1"), [], `${name}: versions`);
+        }
+
+        const fixed = { id: "q1", student: { answer: "6" }, marks: 2 };
+        const later = new Date(now.getTime() + 60_000);
+        assert.deepEqual(await store.papers.amend(asAva, id, "q1", { kind: "correction", actorKind: "student", actorId: null, value: fixed, note: "I misread my own 6" }, later), { ok: true, version: 2 });
+        assert.deepEqual((await store.papers.get(own(f, ava), id))?.checkpoints.q1, fixed, "the current value is the latest");
+        const reviewed = { id: "q1", student: { answer: "6" }, marks: 1, override: true };
+        const tutor = randomUUID();
+        assert.deepEqual(await store.papers.amend({ kind: "staff" }, id, "q1", { kind: "review", actorKind: "tutor", actorId: tutor, value: reviewed, note: "one method mark only" }, later), { ok: true, version: 3 });
+        const history = await store.papers.versions(asAva, id, "q1");
+        assert.deepEqual(history.map((v) => [v.version, v.kind, v.actorKind]), [[1, "ai", "system"], [2, "correction", "student"], [3, "review", "tutor"]]);
+        assert.deepEqual(history.map((v) => v.value), [ai, fixed, reviewed], "nothing was overwritten");
+        assert.equal(history[2]!.actorId, tutor);
+        assert.equal(history[2]!.note, "one method mark only");
+        assert.equal((await store.papers.versions({ kind: "staff" }, id, "q1")).length, 3);
+        assert.deepEqual(await store.papers.versions(asAva, id, "q2"), []);
+        assert.equal((await store.papers.getById(id))?.id, id);
+        assert.equal(await store.papers.getById(randomUUID()), null);
+      });
+
+      test("the blank paper is recorded with the job; versions go with the job", async () => {
+        const now = new Date("2026-10-22T10:00:00Z");
+        const f = await family();
+        const session = await store.chat.createSession(own(f), {}, now);
+        const blank = randomUUID();
+        const made = await store.papers.create(own(f), { sessionId: session.id, fileId: randomUUID(), schemeFileId: null, blankFileId: blank, kind: "mark" }, W1, now);
+        assert.equal(made.ok, true);
+        const id = (made as Created).job.id;
+        assert.equal((await store.papers.get(own(f), id))?.blankFileId, blank);
+        await store.papers.save(id, W1.id, { checkpoint: { questionId: "q1", value: { id: "q1" } } }, W1, now);
+        await store.papers.finish(id, W1.id, { state: "done" }, now);
+        await store.papers.amend({ kind: "owner", owner: own(f) }, id, "q1", { kind: "correction", actorKind: "guardian", actorId: null, value: { id: "q1", v: 2 }, note: null }, now);
+        assert.equal((await store.papers.versions({ kind: "staff" }, id, "q1")).length, 2);
+        await store.papers.purgeDue(new Date(now.getTime() + 8 * DAYS));
+        assert.equal(await store.papers.getById(id), null);
+        assert.deepEqual(await store.papers.versions({ kind: "staff" }, id, "q1"), [], "the history goes with its job");
+      });
+
       test("retention: finished jobs go after seven days, active ones stay, and a deleted chat takes its jobs with it", async () => {
         const now = new Date("2026-10-22T10:00:00Z");
         const f = await family();

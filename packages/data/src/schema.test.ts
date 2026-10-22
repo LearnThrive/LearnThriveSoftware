@@ -27,6 +27,7 @@ const EXPECTED_TABLES = [
   "lesson_students",
   "lessons",
   "notifications",
+  "paper_assessment_versions",
   "paper_jobs",
   "platform_settings",
   "profiles",
@@ -60,6 +61,7 @@ const FORCED_TABLES = [
   "lesson_students",
   "lessons",
   "notifications",
+  "paper_assessment_versions",
   "paper_jobs",
   "platform_settings",
   "resource_files",
@@ -134,6 +136,7 @@ describe("migrations", () => {
       "0010_learner_identity.sql",
       "0011_tuition_domain.sql",
       "0012_paper_jobs.sql",
+      "0013_paper_assessments.sql",
     ]);
     assert.deepEqual(
       applied.map((f) => Number(f.slice(0, 4))),
@@ -150,6 +153,27 @@ describe("migrations", () => {
     const rows = await db.asUser(family.userId, (q) => q.query("select display_name from public.students"));
     assert.deepEqual(rows, [{ display_name: "Kid" }]);
     assert.equal((await db.asAnon((q) => q.query("select slug from public.resources"))).length, 1);
+  });
+
+  test("assessment versions are append-only (no update, no delete) but go with their job", async () => {
+    const family = await createFamily(db, { name: "Append", students: ["Kid"] });
+    const jobId = await db.asOwner(async (q) => {
+      const session = await q.query<{ id: string }>("insert into public.chat_sessions (client_id) values ($1) returning id", [family.clientId]);
+      const job = await q.query<{ id: string }>(
+        `insert into public.paper_jobs (client_id, session_id, file_id, kind, state) values ($1, $2, gen_random_uuid(), 'mark', 'done') returning id`,
+        [family.clientId, session[0]!.id],
+      );
+      await q.query(`insert into public.paper_assessment_versions (job_id, question_id, version, kind, actor_kind, value) values ($1, 'q1', 1, 'ai', 'system', '{}'::jsonb)`, [job[0]!.id]);
+      return job[0]!.id;
+    });
+    await assert.rejects(() => db.asOwner((q) => q.query(`update public.paper_assessment_versions set note = 'edited' where job_id = $1`, [jobId])), /append-only/);
+    await assert.rejects(() => db.asOwner((q) => q.query(`delete from public.paper_assessment_versions where job_id = $1`, [jobId])), /append-only/);
+    await assert.rejects(() => db.asOwner((q) => q.query(`insert into public.paper_assessment_versions (job_id, question_id, version, kind, actor_kind, value) values ($1, 'q1', 1, 'ai', 'system', '{}'::jsonb)`, [jobId])), /duplicate|unique/i, "a version number is used once");
+    await assert.rejects(() => db.asOwner((q) => q.query(`insert into public.paper_assessment_versions (job_id, question_id, version, kind, actor_kind, value) values ($1, 'q1', 2, 'review', 'system', '{}'::jsonb)`, [jobId])), /check/i, "a review cannot be the system's");
+    await db.asOwner((q) => q.query(`delete from public.paper_jobs where id = $1`, [jobId]));
+    const left = await db.asOwner((q) => q.query(`select 1 from public.paper_assessment_versions where job_id = $1`, [jobId]));
+    assert.equal(left.length, 0, "removed with its job");
+    assert.deepEqual(await db.asUser(family.userId, (q) => q.query("select 1 from public.paper_jobs")).catch(() => "denied"), "denied", "the API role cannot even read the table");
   });
 
   test("the public schema holds exactly the expected tables", async () => {

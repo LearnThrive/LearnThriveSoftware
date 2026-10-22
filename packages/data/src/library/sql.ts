@@ -1,7 +1,7 @@
 import { deriveEntitlement, type AdminGrantRecord, type PlanInterval, type SubscriptionRecord, type SubscriptionStatus } from "./billing";
 import type { ChatExport, ChatFileRecord, ChatMessageRecord, ChatSessionRecord } from "./chat";
 import type { AccessMode, IdentityAuditEntry, InvitationPeek, IdentityRepository, InvitationRecord, LearnerContext, LinkStatus, StudentRecord } from "./identity";
-import { PAPER_JOB_DAYS, PAPER_JOB_MAX_ATTEMPTS, type PaperJobKind, type PaperJobRecord, type PaperJobRepository, type PaperJobState } from "./papers";
+import { PAPER_JOB_DAYS, PAPER_JOB_MAX_ATTEMPTS, type AssessmentVersion, type PaperJobKind, type PaperJobRecord, type PaperJobRepository, type PaperJobState } from "./papers";
 import type { AccessRepository, AccountRepository, BillingRepository, ChatRepository, DownloadRepository, LibraryStore, ResourceRepository, SqlExecutor } from "./ports";
 import type { AccessFacts, Account, Facet, FacetScope, Level, Resource, ResourceFacets, ResourceFile, ResourcePage, ResourceQuery, ResourceType } from "./types";
 
@@ -38,7 +38,7 @@ const json = <T>(value: unknown, fallback: T): T => (value === null || value ===
 
 function toPaperJob(row: Row): PaperJobRecord {
   return {
-    id: row.id, clientId: row.client_id, studentId: row.student_id, sessionId: row.session_id, fileId: row.file_id, schemeFileId: row.scheme_file_id,
+    id: row.id, clientId: row.client_id, studentId: row.student_id, sessionId: row.session_id, fileId: row.file_id, schemeFileId: row.scheme_file_id, blankFileId: row.blank_file_id ?? null,
     kind: row.kind as PaperJobKind, state: row.state as PaperJobState, mode: row.mode, selectedIds: json<string[] | null>(row.selected_ids, null),
     questions: json<unknown[]>(row.questions, []), checkpoints: json<Record<string, unknown>>(row.checkpoints, {}), progress: json<unknown[]>(row.progress, []),
     resultFileId: row.result_file_id, pageCount: row.page_count === null ? null : Number(row.page_count), workedPages: (row.worked_pages ?? []).map(Number), message: row.message,
@@ -783,12 +783,12 @@ export class SqlLibraryStore implements LibraryStore {
   papers: PaperJobRepository = {
     create: async (owner, input, worker, now) => {
       const rows = await this.db.query<Row>(
-        `insert into public.paper_jobs (client_id, student_id, session_id, file_id, scheme_file_id, kind, state, attempts, lease_owner, lease_expires_at, created_at, updated_at, expires_at)
-         select $1, $2::uuid, $3, $4, $5, $6, 'extracting', 1, $7, $8, $9, $9, $10
+        `insert into public.paper_jobs (client_id, student_id, session_id, file_id, scheme_file_id, kind, state, attempts, lease_owner, lease_expires_at, created_at, updated_at, expires_at, blank_file_id)
+         select $1, $2::uuid, $3, $4, $5, $6, 'extracting', 1, $7, $8, $9, $9, $10, $11::uuid
           where exists (select 1 from public.chat_sessions s where s.id = $3 and s.client_id = $1 and s.student_id is not distinct from $2::uuid and s.deletion_requested_at is null)
          on conflict (client_id) where state in ('extracting', 'solving') do nothing
          returning *`,
-        [owner.clientId, owner.studentId, input.sessionId, input.fileId, input.schemeFileId, input.kind, worker.id, new Date(now.getTime() + worker.leaseMs), now, new Date(now.getTime() + PAPER_JOB_DAYS * 86_400_000)],
+        [owner.clientId, owner.studentId, input.sessionId, input.fileId, input.schemeFileId, input.kind, worker.id, new Date(now.getTime() + worker.leaseMs), now, new Date(now.getTime() + PAPER_JOB_DAYS * 86_400_000), input.blankFileId ?? null],
       );
       if (rows[0]) return { ok: true, job: toPaperJob(rows[0]) };
       const mine = await this.db.query<Row>(`select 1 from public.chat_sessions s where s.id = $3 and ${OWN}`, [owner.clientId, owner.studentId, input.sessionId]);
@@ -797,6 +797,52 @@ export class SqlLibraryStore implements LibraryStore {
     get: async (owner, id) => {
       const rows = await this.db.query<Row>(`select * from public.paper_jobs where id = $3 and client_id = $1 and student_id is not distinct from $2::uuid`, [owner.clientId, owner.studentId, id]);
       return rows[0] ? toPaperJob(rows[0]) : null;
+    },
+    getById: async (id) => {
+      const rows = await this.db.query<Row>(`select * from public.paper_jobs where id = $1`, [id]);
+      return rows[0] ? toPaperJob(rows[0]) : null;
+    },
+    amend: async (scope, jobId, questionId, change, now) => {
+      const staff = scope.kind === "staff";
+      const owner = scope.kind === "owner" ? scope.owner : { clientId: null, studentId: null };
+      let rows: Row[];
+      try {
+        rows = await this.db.query<Row>(
+          `with j as (
+             select id, checkpoints, updated_at from public.paper_jobs
+              where id = $1 and state = 'done' and ($2::boolean or (client_id = $3 and student_id is not distinct from $4::uuid)) and jsonb_exists(checkpoints, $5)
+                for update),
+           cur as (select coalesce(max(version), 0) as v from public.paper_assessment_versions where job_id = $1 and question_id = $5),
+           base as (
+             insert into public.paper_assessment_versions (job_id, question_id, version, kind, actor_kind, value, created_at)
+             select $1, $5, 1, 'ai', 'system', j.checkpoints -> $5, j.updated_at from j, cur where cur.v = 0 returning version),
+           nxt as (
+             insert into public.paper_assessment_versions (job_id, question_id, version, kind, actor_kind, actor_id, value, note, created_at)
+             select $1, $5, greatest(cur.v, 1) + 1, $6, $7, $8::uuid, $9::jsonb, $10, $11 from j, cur returning version),
+           upd as (
+             update public.paper_jobs set checkpoints = checkpoints || jsonb_build_object($5::text, $9::jsonb), updated_at = $11
+              where id = $1 and exists (select 1 from nxt) returning id)
+           select (select version from nxt) as version`,
+          [jobId, staff, owner.clientId, owner.studentId, questionId, change.kind, change.actorKind, change.actorId, JSON.stringify(change.value), change.note, now],
+        );
+      } catch (error) {
+        if ((error as { code?: string }).code === "23505") return { ok: false, code: "conflict" };
+        throw error;
+      }
+      if (rows[0]?.version) return { ok: true, version: Number(rows[0].version) };
+      const job = await this.db.query<Row>(`select state, jsonb_exists(checkpoints, $2) as has from public.paper_jobs where id = $1 and ($3::boolean or (client_id = $4 and student_id is not distinct from $5::uuid))`, [jobId, questionId, staff, owner.clientId, owner.studentId]);
+      if (!job[0]) return { ok: false, code: "not_found" };
+      return { ok: false, code: job[0].state !== "done" ? "not_done" : "no_question" };
+    },
+    versions: async (scope, jobId, questionId) => {
+      const staff = scope.kind === "staff";
+      const owner = scope.kind === "owner" ? scope.owner : { clientId: null, studentId: null };
+      const rows = await this.db.query<Row>(
+        `select v.* from public.paper_assessment_versions v join public.paper_jobs j on j.id = v.job_id
+          where v.job_id = $1 and v.question_id = $2 and ($3::boolean or (j.client_id = $4 and j.student_id is not distinct from $5::uuid)) order by v.version`,
+        [jobId, questionId, staff, owner.clientId, owner.studentId],
+      );
+      return rows.map((r): AssessmentVersion => ({ jobId: r.job_id, questionId: r.question_id, version: Number(r.version), kind: r.kind, actorKind: r.actor_kind, actorId: r.actor_id, value: json<unknown>(r.value, null), note: r.note, createdAt: new Date(r.created_at) }));
     },
     activeForFamily: async (clientId) => {
       const rows = await this.db.query<Row>(`select * from public.paper_jobs where client_id = $1 and state in ('extracting', 'solving')`, [clientId]);
