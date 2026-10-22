@@ -47,6 +47,8 @@ export interface PaperQuestion {
   stem?: string;
   /** This part on its own, without the stem, for display. */
   ownText?: string;
+  /** Where the answer space on a scanned page came from, and how sure the model was (it was checked against the drawing of the page before use). */
+  layout?: { source: "vision"; confidence: number };
   /** The question runs on over a page; the text includes the part that carried over. */
   continued?: boolean;
   /** Where to look for answer space: kept so the space can be measured later, page by page, from a drawing of the page. */
