@@ -38,6 +38,8 @@ export interface SolvedQuestion extends PaperQuestion {
   explanation: string;
   status: SolveStatus;
   statusNote: string;
+  /** What the checks established, in words a reviewer (and the benchmark) can read: kept apart from the status. */
+  evidence?: string[];
 }
 
 export interface Placement {

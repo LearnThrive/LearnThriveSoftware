@@ -205,14 +205,29 @@ const close = (a: number, b: number) => Math.abs(a - b) <= 1e-9 * Math.max(1, Ma
 /** Spot values used to compare two expressions: a few awkward numbers, none special (not 0, 1 or 2). */
 const SPOTS = [1.37, -2.71, 0.53, 3.19, -0.87, 5.41];
 
-/** True if two expressions agree at several spot values of their variables (expanded, factorised and simplified forms). */
+/** A repeatable pseudo-random number in [0, 1) from text: the extra check points depend on the expressions, so they cannot be anticipated. */
+function seeded(text: string, k: number): number {
+  let h = 2166136261 ^ k;
+  for (let i = 0; i < text.length; i += 1) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+  h = Math.imul(h ^ (h >>> 15), 2246822507);
+  return ((h ^ (h >>> 13)) >>> 0) / 4294967296;
+}
+
+/**
+ * True if two expressions agree at many spot values of their variables (expanded, factorised and simplified forms): six fixed awkward values
+ * and twelve more drawn from the expressions' own text. For polynomials of low degree that is exact; for anything else it is strong
+ * evidence, NOT proof, and callers must not call it proof.
+ */
 export function equivalent(a: string, b: string): boolean | null {
   const ta = parse(a);
   const tb = parse(b);
   if (!ta || !tb) return null;
   const names = [...new Set([...variablesOf(ta), ...variablesOf(tb)])];
-  for (let k = 0; k < SPOTS.length; k += 1) {
-    const values = Object.fromEntries(names.map((name, i) => [name, SPOTS[(k + i) % SPOTS.length]! + i * 0.11]));
+  const extra = 12;
+  for (let k = 0; k < SPOTS.length + extra; k += 1) {
+    const values = Object.fromEntries(
+      names.map((name, i) => [name, k < SPOTS.length ? SPOTS[(k + i) % SPOTS.length]! + i * 0.11 : Math.round((seeded(`${a}|${b}|${name}`, k) * 14 - 7) * 1000) / 1000 + 0.0013 * (i + 1)]),
+    );
     let va: number;
     let vb: number;
     try {
@@ -245,6 +260,11 @@ export function readSolutions(answer: string): Array<Record<string, number>> | n
     for (const [, name, raw] of pairs) {
       const v = evaluate(raw!);
       if (v === null) return null;
+      // "x = 2, x = -2": a repeated unknown is another solution, not a correction of the first.
+      if (name!.toLowerCase() in values) {
+        out.push({ ...values });
+        for (const key of Object.keys(values)) delete values[key];
+      }
       values[name!.toLowerCase()] = v;
     }
     out.push(values);
@@ -283,4 +303,11 @@ export function sameValue(a: number, b: number): boolean {
 /** Squeezes text for a "does this appear in the document" comparison: no spaces, one kind of minus and times sign, lower case. */
 export function squeeze(text: string): string {
   return normaliseMaths(text).toLowerCase().replace(/\s+/g, "").replace(/\*/g, "x");
+}
+
+// For mathsEvidence.ts: the same parser and evaluator, so completeness, working and form are judged on exactly what the checker reads.
+export { parse as parseMaths, run as runMaths };
+export type { Node as MathNode };
+export function variablesOfNode(node: Node): Set<string> {
+  return variablesOf(node);
 }
