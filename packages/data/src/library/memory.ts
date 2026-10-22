@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { deriveEntitlement, type AdminGrantRecord, type SubscriptionRecord } from "./billing";
 import { CHAT_TEXT_DAYS, CHAT_UPLOAD_DAYS, DAY_MS, type ChatExport, type ChatFileRecord, type ChatMessageRecord, type ChatSessionRecord } from "./chat";
 import type { AcceptFailure, AccessMode, InvitationPeek, IdentityAuditEntry, IdentityRepository, InvitationRecord, LearnerContext, LinkStatus, StudentRecord } from "./identity";
-import { PAPER_JOB_DAYS, PAPER_JOB_MAX_ATTEMPTS, type PaperJobRecord, type PaperJobRepository } from "./papers";
+import { PAPER_JOB_DAYS, PAPER_JOB_MAX_ATTEMPTS, type AssessmentVersion, type PaperJobRecord, type PaperJobRepository, type PaperScope } from "./papers";
 import type { AccessRepository, AccountRepository, BillingRepository, ChatRepository, DownloadRepository, LibraryStore, ResourceRepository } from "./ports";
 import type {
   AccessFacts,
@@ -649,6 +649,7 @@ export class InMemoryLibraryStore implements LibraryStore {
       this.chatMessages = this.chatMessages.filter((m) => !(m.deleteAfter <= now || gone.has(m.sessionId)));
       for (const id of gone) this.chatSessions.delete(id);
       for (const [jobId, job] of this.paperJobs) if (gone.has(job.sessionId)) this.paperJobs.delete(jobId);
+      this.paperVersions = this.paperVersions.filter((v) => this.paperJobs.has(v.jobId));
       return { sessions: gone.size, messages: messagesBefore - this.chatMessages.length, files: filesBefore - this.chatFiles.length };
     },
     incrementUsage: async (clientId, kind, windowStart, by) => {
@@ -661,6 +662,13 @@ export class InMemoryLibraryStore implements LibraryStore {
   };
 
   private paperJobs = new Map<string, PaperJobRecord>();
+  private paperVersions: AssessmentVersion[] = [];
+
+  private paperIn(scope: PaperScope, id: string): PaperJobRecord | null {
+    const job = this.paperJobs.get(id);
+    if (!job) return null;
+    return scope.kind === "staff" || this.paperOwns(scope.owner, job) ? job : null;
+  }
 
   private paperOwns(owner: { clientId: string; studentId: string | null }, job: PaperJobRecord): boolean {
     return job.clientId === owner.clientId && job.studentId === owner.studentId;
@@ -682,7 +690,7 @@ export class InMemoryLibraryStore implements LibraryStore {
       if (!session || !this.owns(owner, session) || session.deletionRequestedAt) return { ok: false, code: "not_found" };
       if (this.paperActive(owner.clientId)) return { ok: false, code: "busy" };
       const job: PaperJobRecord = {
-        id: randomUUID(), clientId: owner.clientId, studentId: owner.studentId, sessionId: input.sessionId, fileId: input.fileId, schemeFileId: input.schemeFileId,
+        id: randomUUID(), clientId: owner.clientId, studentId: owner.studentId, sessionId: input.sessionId, fileId: input.fileId, schemeFileId: input.schemeFileId, blankFileId: input.blankFileId ?? null,
         kind: input.kind, state: "extracting", mode: null, selectedIds: null, questions: [], checkpoints: {}, progress: [], resultFileId: null, pageCount: null,
         workedPages: [], message: null, attempts: 1, leaseOwner: worker.id, leaseExpiresAt: new Date(now.getTime() + worker.leaseMs),
         createdAt: now, updatedAt: now, expiresAt: new Date(now.getTime() + PAPER_JOB_DAYS * DAY_MS),
@@ -693,6 +701,27 @@ export class InMemoryLibraryStore implements LibraryStore {
     get: async (owner, id) => {
       const job = this.paperJobs.get(id);
       return job && this.paperOwns(owner, job) ? structuredClone(job) : null;
+    },
+    getById: async (id) => {
+      const job = this.paperJobs.get(id);
+      return job ? structuredClone(job) : null;
+    },
+    amend: async (scope, jobId, questionId, change, now) => {
+      const job = this.paperIn(scope, jobId);
+      if (!job) return { ok: false, code: "not_found" };
+      if (job.state !== "done") return { ok: false, code: "not_done" };
+      if (!(questionId in job.checkpoints)) return { ok: false, code: "no_question" };
+      const mine = this.paperVersions.filter((v) => v.jobId === jobId && v.questionId === questionId);
+      if (mine.length === 0) this.paperVersions.push({ jobId, questionId, version: 1, kind: "ai", actorKind: "system", actorId: null, value: structuredClone(job.checkpoints[questionId]), note: null, createdAt: job.updatedAt });
+      const version = Math.max(1, ...mine.map((v) => v.version)) + 1;
+      this.paperVersions.push({ jobId, questionId, version, kind: change.kind, actorKind: change.actorKind, actorId: change.actorId, value: structuredClone(change.value), note: change.note, createdAt: now });
+      job.checkpoints[questionId] = structuredClone(change.value);
+      job.updatedAt = now;
+      return { ok: true, version };
+    },
+    versions: async (scope, jobId, questionId) => {
+      if (!this.paperIn(scope, jobId)) return [];
+      return this.paperVersions.filter((v) => v.jobId === jobId && v.questionId === questionId).sort((a, b) => a.version - b.version).map((v) => structuredClone(v));
     },
     activeForFamily: async (clientId) => {
       const job = this.paperActive(clientId);
@@ -756,6 +785,7 @@ export class InMemoryLibraryStore implements LibraryStore {
       for (const [id, job] of this.paperJobs) {
         if (job.expiresAt <= now && job.state !== "extracting" && job.state !== "solving") {
           this.paperJobs.delete(id);
+          this.paperVersions = this.paperVersions.filter((v) => v.jobId !== id);
           removed += 1;
         }
       }

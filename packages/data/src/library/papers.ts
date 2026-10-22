@@ -22,6 +22,8 @@ export interface PaperJobRecord {
   sessionId: string;
   fileId: string;
   schemeFileId: string | null;
+  /** The blank question paper uploaded with a completed one, if any. */
+  blankFileId: string | null;
   kind: PaperJobKind;
   state: PaperJobState;
   /** The output mode chosen for a solve job (opaque here). */
@@ -56,7 +58,37 @@ export interface PaperJobInput {
   sessionId: string;
   fileId: string;
   schemeFileId: string | null;
+  blankFileId?: string | null;
   kind: PaperJobKind;
+}
+
+/**
+ * Who is asking for a job. The family's own people go through `owner` (the family and the learner); a tutor reviewing a learner's marked work goes through
+ * `staff`, which the CALLER may use only after checking that this tutor is assigned to that learner. It is a separate word so the route that uses it is
+ * easy to find and to review.
+ */
+export type PaperScope = { kind: "owner"; owner: ChatOwner } | { kind: "staff" };
+
+export interface AssessmentVersion {
+  jobId: string;
+  questionId: string;
+  /** 1 is the AI's own assessment; each correction or review after it adds one. */
+  version: number;
+  kind: "ai" | "correction" | "review";
+  actorKind: "system" | "student" | "guardian" | "tutor";
+  actorId: string | null;
+  /** The whole assessed question at this version (opaque JSON to the store). */
+  value: unknown;
+  note: string | null;
+  createdAt: Date;
+}
+
+export interface AssessmentChange {
+  kind: "correction" | "review";
+  actorKind: "student" | "guardian" | "tutor";
+  actorId: string | null;
+  value: unknown;
+  note: string | null;
 }
 
 /** What a worker may change on a job it holds. */
@@ -81,6 +113,15 @@ export interface PaperJobRepository {
   create(owner: ChatOwner, input: PaperJobInput, worker: PaperWorker, now: Date): Promise<{ ok: true; job: PaperJobRecord } | { ok: false; code: "busy" | "not_found" }>;
   /** The owner's own job, or null for anyone else's. */
   get(owner: ChatOwner, id: string): Promise<PaperJobRecord | null>;
+  /** Any job by id. For a tutor's review route, after it has checked the tutor is assigned to the learner; never for a family's own calls. */
+  getById(id: string): Promise<PaperJobRecord | null>;
+  /**
+   * Records a new version of one finished question's assessment (a correction of the reading, or a tutor's review) and makes it the current one. The
+   * first change also keeps the AI's own value as version 1, so nothing is lost. Only a finished job, and only a question that was assessed.
+   */
+  amend(scope: PaperScope, jobId: string, questionId: string, change: AssessmentChange, now: Date): Promise<{ ok: true; version: number } | { ok: false; code: "not_found" | "not_done" | "no_question" | "conflict" }>;
+  /** Every version of a question's assessment, oldest first. */
+  versions(scope: PaperScope, jobId: string, questionId: string): Promise<AssessmentVersion[]>;
   /** The family's extracting or solving job, whichever learner started it (one local model, one job at a time). */
   activeForFamily(clientId: string): Promise<PaperJobRecord | null>;
   /** ready -> solving with the lease. */
