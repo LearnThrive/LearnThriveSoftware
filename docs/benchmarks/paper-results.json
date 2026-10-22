@@ -1,0 +1,306 @@
+{
+  "provider": "stand-in",
+  "solve": true,
+  "summaries": {
+    "dev": {
+      "split": "dev",
+      "cases": 3,
+      "run": 3,
+      "notRun": 0,
+      "extractionRecall": 1,
+      "extractionPrecision": 1,
+      "transcription": 1,
+      "answerAccuracy": 1,
+      "verifiedCoverage": 0.9772727272727273,
+      "falseVerified": 0,
+      "placementBad": 0,
+      "seconds": 0.5113333333333333,
+      "gates": {
+        "extractionRecall": "met",
+        "extractionPrecision": "met",
+        "transcription": "met",
+        "falseVerified": "met",
+        "placementBad": "met"
+      }
+    },
+    "heldout": {
+      "split": "heldout",
+      "cases": 1,
+      "run": 1,
+      "notRun": 0,
+      "extractionRecall": 1,
+      "extractionPrecision": 1,
+      "transcription": 1,
+      "answerAccuracy": 0,
+      "verifiedCoverage": null,
+      "falseVerified": 0,
+      "placementBad": 0,
+      "seconds": 0.082,
+      "gates": {
+        "extractionRecall": "met",
+        "extractionPrecision": "met",
+        "transcription": "met",
+        "falseVerified": "met",
+        "placementBad": "met"
+      }
+    },
+    "all": {
+      "split": "all",
+      "cases": 4,
+      "run": 4,
+      "notRun": 0,
+      "extractionRecall": 1,
+      "extractionPrecision": 1,
+      "transcription": 1,
+      "answerAccuracy": 0.9496402877697842,
+      "verifiedCoverage": 0.9772727272727273,
+      "falseVerified": 0,
+      "placementBad": 0,
+      "seconds": 0.40399999999999997,
+      "gates": {
+        "extractionRecall": "met",
+        "extractionPrecision": "met",
+        "transcription": "met",
+        "falseVerified": "met",
+        "placementBad": "met"
+      }
+    }
+  },
+  "reports": [
+    {
+      "id": "syn-worksheet",
+      "split": "dev",
+      "status": "run",
+      "extraction": {
+        "expected": 6,
+        "found": 6,
+        "matched": 6,
+        "missing": [],
+        "extra": [],
+        "inOrder": true,
+        "precision": 1,
+        "recall": 1
+      },
+      "transcription": {
+        "scored": 6,
+        "mean": 1,
+        "worst": [
+          {
+            "label": "1",
+            "similarity": 1
+          },
+          {
+            "label": "2",
+            "similarity": 1
+          },
+          {
+            "label": "3",
+            "similarity": 1
+          },
+          {
+            "label": "4",
+            "similarity": 1
+          },
+          {
+            "label": "5",
+            "similarity": 1
+          }
+        ]
+      },
+      "answers": {
+        "scored": 6,
+        "correct": 6,
+        "accuracy": 1,
+        "verified": 5,
+        "falseVerified": [],
+        "verifiedCoverage": 0.8333333333333334,
+        "status": {
+          "verified": 5,
+          "unchecked": 1
+        }
+      },
+      "placement": {
+        "placements": 6,
+        "bad": [],
+        "ok": 6
+      },
+      "seconds": 0.86
+    },
+    {
+      "id": "syn-gcse-parts",
+      "split": "dev",
+      "status": "run",
+      "extraction": {
+        "expected": 6,
+        "found": 6,
+        "matched": 6,
+        "missing": [],
+        "extra": [],
+        "inOrder": true,
+        "precision": 1,
+        "recall": 1
+      },
+      "transcription": {
+        "scored": 6,
+        "mean": 1,
+        "worst": [
+          {
+            "label": "1(a)",
+            "similarity": 1
+          },
+          {
+            "label": "1(b)",
+            "similarity": 1
+          },
+          {
+            "label": "2(a)",
+            "similarity": 1
+          },
+          {
+            "label": "2(b)(i)",
+            "similarity": 1
+          },
+          {
+            "label": "2(b)(ii)",
+            "similarity": 1
+          }
+        ]
+      },
+      "answers": {
+        "scored": 6,
+        "correct": 6,
+        "accuracy": 1,
+        "verified": 4,
+        "falseVerified": [],
+        "verifiedCoverage": 0.6666666666666666,
+        "status": {
+          "unchecked": 2,
+          "verified": 4
+        }
+      },
+      "placement": {
+        "placements": 6,
+        "bad": [],
+        "ok": 6
+      },
+      "seconds": 0.101
+    },
+    {
+      "id": "syn-long-120",
+      "split": "dev",
+      "status": "run",
+      "extraction": {
+        "expected": 120,
+        "found": 120,
+        "matched": 120,
+        "missing": [],
+        "extra": [],
+        "inOrder": true,
+        "precision": 1,
+        "recall": 1
+      },
+      "transcription": {
+        "scored": 120,
+        "mean": 1,
+        "worst": [
+          {
+            "label": "1",
+            "similarity": 1
+          },
+          {
+            "label": "2",
+            "similarity": 1
+          },
+          {
+            "label": "3",
+            "similarity": 1
+          },
+          {
+            "label": "4",
+            "similarity": 1
+          },
+          {
+            "label": "5",
+            "similarity": 1
+          }
+        ]
+      },
+      "answers": {
+        "scored": 120,
+        "correct": 120,
+        "accuracy": 1,
+        "verified": 120,
+        "falseVerified": [],
+        "verifiedCoverage": 1,
+        "status": {
+          "verified": 120
+        }
+      },
+      "placement": {
+        "placements": 120,
+        "bad": [],
+        "ok": 120
+      },
+      "seconds": 0.573
+    },
+    {
+      "id": "syn-pitfalls",
+      "split": "heldout",
+      "status": "run",
+      "extraction": {
+        "expected": 7,
+        "found": 7,
+        "matched": 7,
+        "missing": [],
+        "extra": [],
+        "inOrder": true,
+        "precision": 1,
+        "recall": 1
+      },
+      "transcription": {
+        "scored": 7,
+        "mean": 1,
+        "worst": [
+          {
+            "label": "1",
+            "similarity": 1
+          },
+          {
+            "label": "2",
+            "similarity": 1
+          },
+          {
+            "label": "3",
+            "similarity": 1
+          },
+          {
+            "label": "4",
+            "similarity": 1
+          },
+          {
+            "label": "5",
+            "similarity": 1
+          }
+        ]
+      },
+      "answers": {
+        "scored": 7,
+        "correct": 0,
+        "accuracy": 0,
+        "verified": 0,
+        "falseVerified": [],
+        "verifiedCoverage": 1,
+        "status": {
+          "failed": 6,
+          "unchecked": 1
+        }
+      },
+      "placement": {
+        "placements": 7,
+        "bad": [],
+        "ok": 7
+      },
+      "seconds": 0.082
+    }
+  ]
+}

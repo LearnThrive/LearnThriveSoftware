@@ -122,7 +122,8 @@ export async function modelSolution(deps: SolveDeps, q: PaperQuestion, picture: 
  * itself, so they are the strongest evidence; the model's own suggested check is only used when none applies.
  */
 export function printedChecks(text: string): { equations: string[]; expression: string | null; calculation: string | null } {
-  const flat = text.replace(/\n/g, " ");
+  // The marks printed after a question ("(2)", "[2 marks]") are not part of its maths: "2x + 7 = 19 (2)" is not an equation with a factor of 2.
+  const flat = text.replace(/\n/g, " ").replace(/\s*(?:\(\s*\d{1,2}\s*marks?\s*\)|\[\s*\d{1,2}\s*marks?\s*\])/gi, "").replace(/\s*\(\s*\d{1,2}\s*\)\s*$/, "");
   const equations: string[] = [];
   // Runs of maths: digits, operators, brackets, spaces and single letters standing alone (x, y: not the letters of a word).
   for (const m of flat.matchAll(/(?:(?<![a-z])[a-z](?![a-z])|[0-9().+\-−×*/^=]|\s)+/gi)) {
@@ -133,7 +134,8 @@ export function printedChecks(text: string): { equations: string[]; expression: 
     if (pair && variables(candidate.replace("=", "+")).length > 0 && evaluate(fill(pair[0])) !== null && evaluate(fill(pair[1])) !== null) equations.push(candidate);
   }
   const expression = /\b(?:simplify|expand|factorise|factorize|multiply out)\s+(?:fully\s+)?([^.?:]+)/i.exec(flat)?.[1]?.trim() ?? null;
-  const calc = /\b(?:work out|calculate|evaluate|find the value of)\s+([0-9\s+\-−×*/^().%£]+?)(?:\.|\?|$|\s+give)/i.exec(flat)?.[1]?.trim() ?? null;
+  // "12 x 7": a letter x between two numbers is a times sign (the equation search above is unaffected).
+  const calc = /\b(?:work out|calculate|evaluate|find the value of)\s+([0-9\s+\-−×*/^().%£]+?)(?:\.|\?|$|\s+give)/i.exec(flat.replace(/(?<=\d)\s*x\s*(?=\d)/gi, " × "))?.[1]?.trim() ?? null;
   return { equations, expression: expression && variables(expression).length ? expression : null, calculation: calc && evaluate(calc) !== null ? calc : null };
 }
 
@@ -163,7 +165,9 @@ function verifyAnswer(q: PaperQuestion, s: ModelSolution): Verdict {
   if (!final || s.confidence === "low") return { status: "unsolved", note: "The AI could not read or solve this confidently." };
   // First, against the printed question (text pages only: a picture's text is the AI's own reading).
   if (q.fromText) {
-    const printed = printedChecks(q.text);
+    // The part's own words first ("Expand 3(x + 4)"), then the stem it shares ("x^2 - 5x + 6 = 0"): the stem's "Expand each expression" must not hide the part's expression.
+    const own = printedChecks(q.ownText ?? q.text);
+    const printed = own.equations.length || own.expression || own.calculation ? own : printedChecks(q.text);
     const unknowns = [...new Set(printed.equations.flatMap((e) => variables(e.replace("=", "+"))))];
     if (printed.equations.length && unknowns.length <= printed.equations.length) {
       const answer = !final.includes("=") && unknowns.length === 1 ? `${unknowns[0]} = ${final}` : final;
