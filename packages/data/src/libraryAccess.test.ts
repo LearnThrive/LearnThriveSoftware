@@ -54,7 +54,13 @@ const closed = { studyBuddyOpen: false };
 
 test("platformAccess: an enrolled family has everything, a subscriber only the Library and Study Buddy, nobody else anything", () => {
   assert.deepEqual(platformAccess("CLIENT", facts({ enrolled: true })), { tier: "enrolled", dashboard: true, library: true, studyBuddy: true });
-  assert.deepEqual(platformAccess("STUDENT", facts({ enrolled: true })), { tier: "enrolled", dashboard: true, library: true, studyBuddy: true });
+  // A learner's own login (migration 0010): the household being enrolled gives the Library and Study Buddy, but THEIR lessons need THEIR enrolment.
+  assert.deepEqual(platformAccess("STUDENT", facts({ enrolled: true })), { tier: "library", dashboard: false, library: true, studyBuddy: true });
+  assert.deepEqual(platformAccess("STUDENT", facts({ enrolled: true, ownTuition: true })), { tier: "enrolled", dashboard: true, library: true, studyBuddy: true });
+  assert.deepEqual(platformAccess("STUDENT", facts({ ownTuition: true })), { tier: "enrolled", dashboard: true, library: true, studyBuddy: true });
+  assert.deepEqual(platformAccess("STUDENT", facts({ subscription: true })), { tier: "library", dashboard: false, library: true, studyBuddy: true });
+  assert.deepEqual(platformAccess("STUDENT", none), { tier: "none", dashboard: false, library: false, studyBuddy: false });
+  assert.equal(platformAccess("CLIENT", facts({ ownTuition: true })).dashboard, false, "ownTuition is only ever read for a learner");
   assert.deepEqual(platformAccess("CLIENT", facts({ subscription: true })), { tier: "library", dashboard: false, library: true, studyBuddy: true });
   assert.deepEqual(platformAccess("CLIENT", facts({ adminGrant: true })), { tier: "library", dashboard: false, library: true, studyBuddy: true });
   assert.deepEqual(platformAccess("CLIENT", none), { tier: "none", dashboard: false, library: false, studyBuddy: false });

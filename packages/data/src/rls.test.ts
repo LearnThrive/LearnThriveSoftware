@@ -103,7 +103,7 @@ before(async () => {
     await owner("insert into public.usage_counters (client_id, kind, window_start, count) values ($1,'assistant_message_day', date_trunc('day', now()), 3)", [f.clientId]);
     await owner("insert into public.consents (profile_id, kind, version, text_sha256) values ($1,'terms','1',$2)", [f.userId, SHA]);
     ids_.session = (
-      await owner<{ id: string }>("insert into public.chat_sessions (client_id, student_id, title) values ($1,$2,'Help') returning id", [f.clientId, f.studentIds[0]])
+      await owner<{ id: string }>("insert into public.chat_sessions (client_id, title) values ($1,'Help') returning id", [f.clientId])
     )[0]!.id;
     ids_.message = (
       await owner<{ id: string }>("insert into public.chat_messages (session_id, role, content) values ($1,'user','a secret question') returning id", [ids_.session])
@@ -182,6 +182,22 @@ describe("a signed-in user reads only their own family's rows", () => {
     }
   });
 
+  test("a guardian cannot read a learner's conversations, even in their own family (0010); only the server can", async () => {
+    const ava = alice.studentIds[0]!;
+    const learnerChat = (await owner<{ id: string }>("insert into public.chat_sessions (client_id, student_id, title) values ($1,$2,'Ava only') returning id", [alice.clientId, ava]))[0]!.id;
+    const message = (await owner<{ id: string }>("insert into public.chat_messages (session_id, role, content) values ($1,'user','private to the learner') returning id", [learnerChat]))[0]!.id;
+    await owner("insert into public.chat_files (session_id, message_id, storage_path, bytes, content_type) values ($1,$2,'chat/learner-only.png',10,'image/png')", [learnerChat, message]);
+    try {
+      assert.deepEqual(ids_of(await db.asUser(alice.userId, (q) => q.query("select id from public.chat_sessions"))), [ids.A.session!], "only the adult's own chat");
+      assert.deepEqual(await db.asUser(alice.userId, (q) => q.query("select id from public.chat_messages where id = $1", [message])), []);
+      assert.deepEqual(await db.asUser(alice.userId, (q) => q.query("select id from public.chat_files where session_id = $1", [learnerChat])), []);
+      assert.deepEqual(await db.asUser(alice.userId, (q) => q.query("select public.request_chat_deletion($1) as ok", [learnerChat])), [{ ok: false }], "nor delete it through the API");
+      assert.equal(await db.asUser(alice.userId, (q) => q.run("update public.chat_sessions set title = 'x' where id = $1", [learnerChat])), 0);
+    } finally {
+      await owner("delete from public.chat_sessions where id = $1", [learnerChat]);
+    }
+  });
+
   test("a second guardian linked by the server can read the student but not change or delete it, and sees no chats", async () => {
     const ava = alice.studentIds[0]!;
     await owner("insert into public.client_students (client_id, student_id) values ($1,$2)", [bob.clientId, ava]);
@@ -191,7 +207,7 @@ describe("a signed-in user reads only their own family's rows", () => {
       assert.equal(await db.asUser(bob.userId, (q) => q.run("update public.students set display_name = 'Hijack' where id = $1", [ava])), 0);
       assert.equal(await db.asUser(bob.userId, (q) => q.run("delete from public.students where id = $1", [ava])), 0);
       assert.deepEqual(await owner("select display_name from public.students where id = $1", [ava]), [{ display_name: "Ava" }]);
-      // Alice's chat about Ava is Alice's, not the guardian's
+      // Alice's own chat is Alice's, not the second guardian's
       assert.deepEqual(ids_of(await db.asUser(bob.userId, (q) => q.query("select id from public.chat_sessions"))), [ids.B.session!]);
     } finally {
       await owner("delete from public.client_students where client_id = $1 and student_id = $2", [bob.clientId, ava]);
@@ -282,7 +298,8 @@ describe("a user cannot write into another family, or move rows between families
       db.asUser(me.userId, (q) => q.run("insert into public.chat_sessions (client_id, student_id, title) values ($1,$2,'t')", [client, student]));
     await assert.rejects(insert(alice, bob.clientId, null), RLS);
     await assert.rejects(insert(alice, alice.clientId, bob.studentIds[0]!), RLS, "a chat about someone else's child");
-    assert.equal(await insert(alice, alice.clientId, alice.studentIds[0]!), 1);
+    // A chat that belongs to a learner is the server's to create (0010): not even their own guardian can write one through the API.
+    await assert.rejects(insert(alice, alice.clientId, alice.studentIds[0]!), RLS, "a learner's chat is server-only");
     assert.equal(await insert(alice, alice.clientId, null), 1);
     const bobSession = ids.B.session!;
     assert.equal(await db.asUser(alice.userId, (q) => q.run("update public.chat_sessions set title = 'x' where id = $1", [bobSession])), 0);

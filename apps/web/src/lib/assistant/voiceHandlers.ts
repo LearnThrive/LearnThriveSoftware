@@ -27,8 +27,8 @@ async function voiceGate(request: Request, deps: VoiceDeps, event: string, count
   }
   const now = (deps.now ?? (() => new Date()))();
   const hour = new Date(Math.floor(now.getTime() / 3_600_000) * 3_600_000);
-  if ((await g.rt.store.chat.usageCount(g.account.clientId, counter, hour)) >= perHour) return { ok: false as const, response: refuse("rate_limited", { "Retry-After": "600" }) };
-  await g.rt.store.chat.incrementUsage(g.account.clientId, counter, hour, 1);
+  if ((await g.rt.store.chat.usageCount(g.owner.clientId, counter, hour)) >= perHour) return { ok: false as const, response: refuse("rate_limited", { "Retry-After": "600" }) };
+  await g.rt.store.chat.incrementUsage(g.owner.clientId, counter, hour, 1);
   return { ok: true as const, g, voice: deps.voice };
 }
 

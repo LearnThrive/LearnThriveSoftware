@@ -53,6 +53,13 @@ export interface PlatformAccess {
 export function platformAccess(role: AccountRole, facts: AccessFacts): PlatformAccess {
   const libraryRight = role === "ADMIN" || facts.enrolled || facts.subscription || facts.adminGrant;
   if (role === "ADMIN" || role === "TUTOR") return { tier: "staff", dashboard: true, library: libraryRight, studyBuddy: libraryRight };
+  // A learner's own login: the tuition routes follow THEIR OWN enrolment (never a sibling's); the household's Library benefit
+  // (the family is enrolled, subscribed or granted) gives the Library and Study Buddy and nothing else.
+  if (role === "STUDENT") {
+    if (facts.ownTuition) return { tier: "enrolled", dashboard: true, library: true, studyBuddy: true };
+    if (libraryRight) return { tier: "library", dashboard: false, library: true, studyBuddy: true };
+    return { tier: "none", dashboard: false, library: false, studyBuddy: false };
+  }
   if (facts.enrolled) return { tier: "enrolled", dashboard: true, library: true, studyBuddy: true };
   if (libraryRight) return { tier: "library", dashboard: false, library: true, studyBuddy: true };
   return { tier: "none", dashboard: false, library: false, studyBuddy: false };

@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { loadTsFrom } from "./_tsLoader.mjs";
 
+const own = (clientId, studentId = null) => ({ clientId, studentId });
+
 // Marking a student's completed paper (opt-in). The rule under test: a verdict comes from a CALCULATION against a reference that was
 // itself confirmed by calculation; what cannot be read or confirmed is "needs checking", never wrong; marks are estimates, only where
 // the paper prints the marks; and the student's own pages are never altered.
@@ -143,16 +145,16 @@ async function jobWorld() {
   const b = await store.accounts.ensureClient(store.seedProfile({ email: "b@example.com" }));
   const uploads = new MemoryLibraryStorage();
   const now = new Date("2026-10-21T10:00:00Z");
-  const session = await store.chat.createSession(a, {}, now);
+  const session = await store.chat.createSession(own(a), {}, now);
   await uploads.put(`${session.id}/w.pdf`, WORKSHEET, "application/pdf");
-  const file = await store.chat.addFile(a, session.id, { storagePath: `${session.id}/w.pdf`, bytes: WORKSHEET.length, contentType: "application/pdf" }, now);
+  const file = await store.chat.addFile(own(a), session.id, { storagePath: `${session.id}/w.pdf`, bytes: WORKSHEET.length, contentType: "application/pdf" }, now);
   const solve = { provider: new MockProvider({ delayMs: 0 }), queue: new GenerationQueue(2, 10), model: "mock" };
   return { store, uploads, a, b, session, file, jobs: new PaperJobs(), deps: { store, uploads, solve, now: () => now } };
 }
 
 async function until(jobs, client, id, states) {
   for (let i = 0; i < 600; i += 1) {
-    const job = jobs.get(client, id);
+    const job = jobs.get(own(client), id);
     if (states.includes(job?.state)) return job;
     await new Promise((r) => setTimeout(r, 25));
   }
@@ -161,12 +163,12 @@ async function until(jobs, client, id, states) {
 
 test("a marking job judges what a calculation can, posts the feedback into the chat and keeps other families out", async () => {
   const w = await jobWorld();
-  const started = await w.jobs.start(w.deps, { clientId: w.a, sessionId: w.session.id, fileId: w.file.id, kind: "mark" });
+  const started = await w.jobs.start(w.deps, { owner: own(w.a), sessionId: w.session.id, fileId: w.file.id, kind: "mark" });
   assert.equal(started.ok, true);
   assert.equal(started.job.kind, "mark");
-  assert.equal(w.jobs.get(w.b, started.job.id), null);
+  assert.equal(w.jobs.get(own(w.b), started.job.id), null);
   await until(w.jobs, w.a, started.job.id, ["ready", "failed"]);
-  assert.equal(w.jobs.solve(w.deps, w.a, started.job.id, { mode: "hybrid" }).ok, true);
+  assert.equal(w.jobs.solve(w.deps, own(w.a), started.job.id, { mode: "hybrid" }).ok, true);
   const done = await until(w.jobs, w.a, started.job.id, ["done", "failed"]);
   assert.equal(done.state, "done", done.message ?? "");
   const byNumber = Object.fromEntries(done.results.map((r) => [r.number, r]));
@@ -175,9 +177,9 @@ test("a marking job judges what a calculation can, posts the feedback into the c
   assert.equal(byNumber["1"].outcome, "correct");
   assert.equal(byNumber["2"].outcome, "needs_checking");
   assert.equal(done.mode, null);
-  const stored = await w.store.chat.getFile(w.a, done.resultFileId);
+  const stored = await w.store.chat.getFile(own(w.a), done.resultFileId);
   assert.equal(Buffer.from((await w.uploads.read(stored.storagePath)).subarray(0, 5)).toString(), "%PDF-");
-  const summary = (await w.store.chat.listMessages(w.a, w.session.id)).at(-1);
+  const summary = (await w.store.chat.listMessages(own(w.a), w.session.id)).at(-1);
   assert.match(summary.content, /AI estimates, not official marks/);
   assert.match(summary.content, /\*\*Question 1\*\* \(Correct\)/);
   assert.match(summary.content, /\*\*Question 2\*\* \(Needs checking\)/);
@@ -185,14 +187,14 @@ test("a marking job judges what a calculation can, posts the feedback into the c
 
 test("a mark scheme from another chat or another family is refused, and one that cannot be read is said so", async () => {
   const w = await jobWorld();
-  const other = await w.store.chat.createSession(w.a, {}, new Date());
+  const other = await w.store.chat.createSession(own(w.a), {}, new Date());
   await w.uploads.put(`${other.id}/s.pdf`, WORKSHEET, "application/pdf");
-  const foreign = await w.store.chat.addFile(w.a, other.id, { storagePath: `${other.id}/s.pdf`, bytes: 1, contentType: "application/pdf" }, new Date());
-  assert.equal((await w.jobs.start(w.deps, { clientId: w.a, sessionId: w.session.id, fileId: w.file.id, kind: "mark", schemeFileId: foreign.id })).code, "not_found", "another chat's file");
-  assert.equal((await w.jobs.start(w.deps, { clientId: w.b, sessionId: w.session.id, fileId: w.file.id, kind: "mark" })).code, "not_found");
+  const foreign = await w.store.chat.addFile(own(w.a), other.id, { storagePath: `${other.id}/s.pdf`, bytes: 1, contentType: "application/pdf" }, new Date());
+  assert.equal((await w.jobs.start(w.deps, { owner: own(w.a), sessionId: w.session.id, fileId: w.file.id, kind: "mark", schemeFileId: foreign.id })).code, "not_found", "another chat's file");
+  assert.equal((await w.jobs.start(w.deps, { owner: own(w.b), sessionId: w.session.id, fileId: w.file.id, kind: "mark" })).code, "not_found");
   await w.uploads.put(`${w.session.id}/bad.pdf`, new Uint8Array([1, 2, 3]), "application/pdf");
-  const bad = await w.store.chat.addFile(w.a, w.session.id, { storagePath: `${w.session.id}/bad.pdf`, bytes: 3, contentType: "application/pdf" }, new Date());
-  const started = await w.jobs.start(w.deps, { clientId: w.a, sessionId: w.session.id, fileId: w.file.id, kind: "mark", schemeFileId: bad.id });
+  const bad = await w.store.chat.addFile(own(w.a), w.session.id, { storagePath: `${w.session.id}/bad.pdf`, bytes: 3, contentType: "application/pdf" }, new Date());
+  const started = await w.jobs.start(w.deps, { owner: own(w.a), sessionId: w.session.id, fileId: w.file.id, kind: "mark", schemeFileId: bad.id });
   const ready = await until(w.jobs, w.a, started.job.id, ["ready", "failed"]);
   assert.equal(ready.state, "ready");
   assert.match(ready.message, /could not read that mark scheme/);
@@ -205,17 +207,17 @@ test("a mark scheme in the same chat is read by question number and the feedback
   assert.ok(scheme.get("1").includes("Solve 2x + 7 = 19"), "the scheme text for question 1");
   const w = await jobWorld();
   await w.uploads.put(`${w.session.id}/scheme.pdf`, WORKSHEET, "application/pdf");
-  const file = await w.store.chat.addFile(w.a, w.session.id, { storagePath: `${w.session.id}/scheme.pdf`, bytes: WORKSHEET.length, contentType: "application/pdf" }, new Date());
-  const started = await w.jobs.start(w.deps, { clientId: w.a, sessionId: w.session.id, fileId: w.file.id, kind: "mark", schemeFileId: file.id });
+  const file = await w.store.chat.addFile(own(w.a), w.session.id, { storagePath: `${w.session.id}/scheme.pdf`, bytes: WORKSHEET.length, contentType: "application/pdf" }, new Date());
+  const started = await w.jobs.start(w.deps, { owner: own(w.a), sessionId: w.session.id, fileId: w.file.id, kind: "mark", schemeFileId: file.id });
   const ready = await until(w.jobs, w.a, started.job.id, ["ready", "failed"]);
   assert.equal(ready.message, null, "the scheme was read, so there is nothing to apologise for");
-  w.jobs.solve(w.deps, w.a, started.job.id, { mode: "hybrid" });
+  w.jobs.solve(w.deps, own(w.a), started.job.id, { mode: "hybrid" });
   const done = await until(w.jobs, w.a, started.job.id, ["done", "failed"]);
   assert.equal(done.state, "done", done.message ?? "");
   assert.equal(done.results.find((r) => r.number === "2").outcome, "needs_checking", "a scheme does not turn an unconfirmed answer into a verdict");
-  const summary = (await w.store.chat.listMessages(w.a, w.session.id)).at(-1);
+  const summary = (await w.store.chat.listMessages(own(w.a), w.session.id)).at(-1);
   assert.match(summary.content, /mark scheme you gave me as a guide/);
-  assert.equal((await w.store.chat.getFile(w.a, file.id)).messageId, summary.id, "the scheme travels with the feedback for follow-up questions");
+  assert.equal((await w.store.chat.getFile(own(w.a), file.id)).messageId, summary.id, "the scheme travels with the feedback for follow-up questions");
 });
 
 test("marking is opt-in everywhere: on only when exactly switched on, and only where the Paper Tutor is", () => {

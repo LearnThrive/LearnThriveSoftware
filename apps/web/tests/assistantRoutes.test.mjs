@@ -4,6 +4,8 @@ import test from "node:test";
 import { loadTsFrom } from "./_tsLoader.mjs";
 import { environment, quiet } from "./_routeHelpers.mjs";
 
+const own = (clientId, studentId = null) => ({ clientId, studentId });
+
 // Phase F: the Study Buddy routes (gates, streaming, uploads, deletion, export, status) and the retention job.
 
 const h = loadTsFrom(import.meta.url, "../src/lib/assistant/handlers.ts");
@@ -147,7 +149,7 @@ test("uploads: a photo is cleaned and stored privately, files attach to the chat
   assert.equal(w.uploads.objects.size, 1);
   const [path] = [...w.uploads.objects.keys()];
   assert.match(path, new RegExp(`^${body.sessionId}/[0-9a-f-]{36}\\.jpg$`));
-  assert.equal((await w.store.chat.listFiles(p.clientId, body.sessionId)).length, 1);
+  assert.equal((await w.store.chat.listFiles(own(p.clientId), body.sessionId)).length, 1);
 
   for (let i = 0; i < 2; i += 1) assert.equal((await h.handleUpload(multipart(jpeg(), { sessionId: body.sessionId }), w.deps(p.jar))).status, 200);
   const fourth = await h.handleUpload(multipart(jpeg(), { sessionId: body.sessionId }), w.deps(p.jar));
@@ -277,10 +279,10 @@ test("retention: storage first, then rows; a storage failure keeps the rows for 
   const client = await store.accounts.ensureClient(store.seedProfile({}));
   const storage = new MemoryLibraryStorage();
   const t0 = new Date("2026-10-01T00:00:00Z");
-  const s = await store.chat.createSession(client, {}, t0);
-  await store.chat.appendMessage(client, s.id, "user", "old", t0);
+  const s = await store.chat.createSession(own(client), {}, t0);
+  await store.chat.appendMessage(own(client), s.id, "user", "old", t0);
   await storage.put(`${s.id}/a.png`, new Uint8Array([1]), "image/png");
-  await store.chat.addFile(client, s.id, { storagePath: `${s.id}/a.png`, bytes: 1, contentType: "image/png" }, t0);
+  await store.chat.addFile(own(client), s.id, { storagePath: `${s.id}/a.png`, bytes: 1, contentType: "image/png" }, t0);
   const later = new Date("2026-12-01T00:00:00Z");
 
   const flaky = { read: storage.read.bind(storage), put: storage.put.bind(storage), remove: async () => { throw new Error("storage down"); } };

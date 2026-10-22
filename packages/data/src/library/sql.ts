@@ -1,5 +1,6 @@
 import { deriveEntitlement, type AdminGrantRecord, type PlanInterval, type SubscriptionRecord, type SubscriptionStatus } from "./billing";
 import type { ChatExport, ChatFileRecord, ChatMessageRecord, ChatSessionRecord } from "./chat";
+import type { AccessMode, IdentityAuditEntry, IdentityRepository, InvitationRecord, LearnerContext, LinkStatus, StudentRecord } from "./identity";
 import type { AccessRepository, AccountRepository, BillingRepository, ChatRepository, DownloadRepository, LibraryStore, ResourceRepository, SqlExecutor } from "./ports";
 import type { AccessFacts, Account, Facet, FacetScope, Level, Resource, ResourceFacets, ResourceFile, ResourcePage, ResourceQuery, ResourceType } from "./types";
 
@@ -51,6 +52,26 @@ function toSubscription(row: Row): SubscriptionRecord {
   };
 }
 
+function toStudent(row: Row): StudentRecord {
+  return { id: row.id, clientId: row.client_id, displayName: row.display_name, yearGroup: row.year_group, isMinor: row.is_minor === true, accessMode: row.access_mode as AccessMode, active: row.active === true };
+}
+
+function toInvitation(row: Row): InvitationRecord {
+  return { id: row.id, studentId: row.student_id, clientId: row.client_id, email: row.email, expiresAt: new Date(row.expires_at), acceptedAt: date(row.accepted_at), revokedAt: date(row.revoked_at), createdAt: new Date(row.created_at) };
+}
+
+/** A learner's context from a learner_identities row joined to its student: `guardian_link` is whether the owner's link is active. */
+function toLearner(row: Row): LearnerContext {
+  return {
+    studentId: row.student_id, familyClientId: row.family_client_id, status: row.status as LinkStatus, displayName: row.display_name, yearGroup: row.year_group,
+    isMinor: row.is_minor === true, accessMode: row.access_mode as AccessMode, guardianActive: row.active === true && row.guardian_link === true,
+  };
+}
+
+const LEARNER_SELECT = `select l.student_id, l.status, s.client_id as family_client_id, s.display_name, s.year_group, s.is_minor, s.access_mode, s.active,
+         exists (select 1 from public.client_students cs where cs.client_id = s.client_id and cs.student_id = s.id and cs.status = 'active') as guardian_link
+    from public.learner_identities l join public.students s on s.id = l.student_id`;
+
 function toSession(row: Row): ChatSessionRecord {
   return {
     id: row.id, clientId: row.client_id, studentId: row.student_id, title: row.title, createdAt: new Date(row.created_at), lastActivityAt: new Date(row.last_activity_at),
@@ -69,8 +90,12 @@ function toChatFile(row: Row): ChatFileRecord {
   };
 }
 
-/** A session this family owns and has not deleted. The first parameter of every statement using it is the client id. */
-const OWN = "s.client_id = $1 and s.deletion_requested_at is null";
+/**
+ * A session this owner has and has not deleted. $1 is the family's client id and $2 the learner's student id (null for the adult's own
+ * chats): every statement that uses it passes both first. `is not distinct from` makes null match only null, so a guardian's own query
+ * never returns a learner's chat and a learner's never returns a sibling's or the guardian's.
+ */
+const OWN = "s.client_id = $1 and s.student_id is not distinct from $2::uuid and s.deletion_requested_at is null";
 
 function clamp(value: number | undefined, fallback: number, max: number): number {
   if (value === undefined || !Number.isFinite(value)) return fallback;
@@ -99,14 +124,15 @@ export class SqlLibraryStore implements LibraryStore {
       );
       const row = rows[0];
       if (!row) return null;
-      const account: Account = { profileId: row.id, role: row.role, displayName: row.display_name, adultConfirmed: row.adult_confirmed_at !== null, clientId: row.client_id };
+      const learner = row.role === "STUDENT" ? ((await this.db.query<Row>(`${LEARNER_SELECT} where l.profile_id = $1`, [profileId]))[0] ?? null) : null;
+      const account: Account = { profileId: row.id, role: row.role, displayName: row.display_name, adultConfirmed: row.adult_confirmed_at !== null, clientId: row.client_id, learner: learner ? toLearner(learner) : null };
       return account;
     },
     ensureClient: async (profileId) => {
       const rows = await this.db.query<Row>(
         `with ins as (
            insert into public.clients (owner_profile_id)
-           select id from public.profiles where id = $1
+           select id from public.profiles p where p.id = $1 and not exists (select 1 from public.learner_identities l where l.profile_id = p.id)
            on conflict (owner_profile_id) do nothing returning id)
          select id from ins union all select id from public.clients where owner_profile_id = $1 limit 1`,
         [profileId],
@@ -233,7 +259,7 @@ export class SqlLibraryStore implements LibraryStore {
            exists (select 1 from public.client_students cs
                      join public.assignment_students a on a.student_id = cs.student_id
                      join public.tuition_assignments t on t.id = a.assignment_id
-                    where cs.client_id = $1 and t.status = 'ACTIVE') as enrolled,
+                    where cs.client_id = $1 and cs.status = 'active' and t.status = 'ACTIVE') as enrolled,
            exists (select 1 from public.entitlements e where e.client_id = $1 and e.source = 'subscription'
                       and e.starts_at <= $2 and (e.ends_at is null or e.ends_at > $2)) as subscription,
            exists (select 1 from public.entitlements e where e.client_id = $1 and e.source = 'admin_grant'
@@ -243,6 +269,207 @@ export class SqlLibraryStore implements LibraryStore {
       const r = rows[0] ?? {};
       return { enrolled: r.enrolled === true, subscription: r.subscription === true, adminGrant: r.admin_grant === true };
     },
+    learnerFacts: async (studentId, now = new Date()): Promise<AccessFacts> => {
+      const none: AccessFacts = { enrolled: false, subscription: false, adminGrant: false, ownTuition: false };
+      const live = await this.db.query<Row>(
+        `select s.client_id from public.students s
+          where s.id = $1 and s.active
+            and exists (select 1 from public.client_students cs where cs.client_id = s.client_id and cs.student_id = s.id and cs.status = 'active')`,
+        [studentId],
+      );
+      if (!live[0]) return none;
+      const family = await this.access.facts(live[0].client_id, now);
+      const own = await this.db.query<Row>(
+        `select exists (select 1 from public.assignment_students a join public.tuition_assignments t on t.id = a.assignment_id
+                          where a.student_id = $1 and t.status = 'ACTIVE') as own`,
+        [studentId],
+      );
+      return { ...family, ownTuition: own[0]?.own === true };
+    },
+  };
+
+  identity: IdentityRepository = {
+    getFamilyStudent: async (clientId, studentId) => {
+      const rows = await this.db.query<Row>(
+        `select s.* from public.students s join public.client_students cs on cs.student_id = s.id
+          where s.id = $2 and s.active and cs.client_id = $1 and cs.status = 'active'`,
+        [clientId, studentId],
+      );
+      return rows[0] ? toStudent(rows[0]) : null;
+    },
+    listFamilyStudents: async (clientId) => {
+      const rows = await this.db.query<Row>(
+        `select s.*, l.status as learner_status,
+                exists (select 1 from public.learner_invitations i where i.student_id = s.id and i.accepted_at is null and i.revoked_at is null) as invitation_open
+           from public.students s
+           join public.client_students cs on cs.student_id = s.id and cs.client_id = $1 and cs.status = 'active'
+           left join public.learner_identities l on l.student_id = s.id
+          where s.active order by s.created_at, s.id`,
+        [clientId],
+      );
+      return rows.map((r) => ({ ...toStudent(r), learnerStatus: (r.learner_status as LinkStatus | null) ?? null, invitationOpen: r.invitation_open === true }));
+    },
+    createStudent: async (clientId, input) => {
+      const rows = await this.db.query<Row>(
+        `insert into public.students (client_id, display_name, year_group, is_minor) values ($1, $2, $3, $4) returning *`,
+        [clientId, input.displayName.trim(), input.yearGroup, input.isMinor],
+      );
+      return toStudent(rows[0]!);
+    },
+    setAccessMode: async (clientId, studentId, mode, actor, now) => {
+      const rows = await this.db.query<Row>(
+        `with u as (
+           update public.students s set access_mode = $3
+            where s.id = $2 and s.client_id = $1
+              and ($3 <> 'direct' or exists (select 1 from public.learner_identities l where l.student_id = s.id and l.status <> 'revoked'))
+           returning s.id)
+         , a as (insert into public.identity_audit (at, actor_profile_id, action, client_id, student_id) select $5, $4, 'access_mode_' || $3, $1, id from u returning 1)
+         select count(*)::int as n from u`,
+        [clientId, studentId, mode, actor, now],
+      );
+      return (rows[0]?.n ?? 0) > 0;
+    },
+    getLearner: async (profileId) => {
+      const rows = await this.db.query<Row>(`${LEARNER_SELECT} where l.profile_id = $1`, [profileId]);
+      return rows[0] ? toLearner(rows[0]) : null;
+    },
+    getLearnerByStudent: async (studentId) => {
+      const rows = await this.db.query<Row>(`${LEARNER_SELECT} where l.student_id = $1`, [studentId]);
+      return rows[0] ? toLearner(rows[0]) : null;
+    },
+    createInvitation: async (input) => {
+      const rows = await this.db.query<Row>(`select * from public.create_learner_invitation($1, $2, $3, $4, $5, $6, $7, $8)`, [
+        input.clientId, input.studentId, input.invitedBy, input.email, input.tokenHash, input.expiresAt, input.maxPerDay, input.now,
+      ]);
+      const r = rows[0];
+      if (!r || r.result !== "ok") return { ok: false, reason: (r?.result ?? "not_found") as "not_found" | "limit" | "already_learner" };
+      const found = await this.db.query<Row>(`select * from public.learner_invitations where id = $1`, [r.invitation_id]);
+      return { ok: true, invitation: toInvitation(found[0]!) };
+    },
+    listInvitations: async (clientId, studentId) =>
+      (await this.db.query<Row>(`select * from public.learner_invitations where client_id = $1 and student_id = $2 order by created_at desc, id`, [clientId, studentId])).map(toInvitation),
+    revokeInvitation: async (clientId, invitationId, actor, now) => {
+      const rows = await this.db.query<Row>(
+        `with u as (
+           update public.learner_invitations i set revoked_at = $4, revoked_by = $3
+            where i.id = $2 and i.client_id = $1 and i.accepted_at is null and i.revoked_at is null returning i.student_id)
+         , a as (insert into public.identity_audit (at, actor_profile_id, action, client_id, student_id) select $4, $3, 'invitation_revoked', $1, student_id from u returning 1)
+         select count(*)::int as n from u`,
+        [clientId, invitationId, actor, now],
+      );
+      return (rows[0]?.n ?? 0) > 0;
+    },
+    acceptInvitation: async (input) => {
+      const rows = await this.db.query<Row>(`select * from public.accept_learner_invitation($1, $2, $3, $4)`, [input.tokenHash, input.profileId, input.email, input.now]);
+      const r = rows[0];
+      if (r?.result === "ok") return { ok: true, studentId: r.student_id, clientId: r.client_id };
+      return { ok: false, reason: (r?.result ?? "invalid") as "invalid" | "expired" | "used" | "revoked" | "email_mismatch" | "not_eligible" };
+    },
+    setLearnerStatus: async ({ studentId, clientId, status, actor, now }) => {
+      const rows = await this.db.query<Row>(
+        `with u as (
+           update public.learner_identities l set status = $3, status_changed_at = $5, status_changed_by = $4
+             from public.students s
+            where l.student_id = $1 and s.id = l.student_id and ($2::uuid is null or s.client_id = $2::uuid)
+           returning l.student_id, s.client_id)
+         , m as (update public.students s set access_mode = 'none' from u where $3 = 'revoked' and s.id = u.student_id returning 1)
+         , a as (insert into public.identity_audit (at, actor_profile_id, action, client_id, student_id)
+                 select $5, $4, case $3 when 'active' then 'learner_restored' else 'learner_' || $3 end, client_id, student_id from u returning 1)
+         select count(*)::int as n from u`,
+        [studentId, clientId, status, actor, now],
+      );
+      return (rows[0]?.n ?? 0) > 0;
+    },
+    setGuardianLinkStatus: async ({ ownerClientId, studentId, guardianClientId, status, actor, now }) => {
+      const rows = await this.db.query<Row>(
+        `with u as (
+           update public.client_students cs set status = $4, status_changed_at = $6
+             from public.students s
+            where cs.student_id = $2 and cs.client_id = $3 and s.id = cs.student_id and s.client_id = $1 and cs.client_id <> s.client_id
+           returning cs.student_id)
+         , a as (insert into public.identity_audit (at, actor_profile_id, action, client_id, student_id) select $6, $5, 'guardian_' || $4, $1, student_id from u returning 1)
+         select count(*)::int as n from u`,
+        [ownerClientId, studentId, guardianClientId, status, actor, now],
+      );
+      return (rows[0]?.n ?? 0) > 0;
+    },
+    grantLearnerConsent: async ({ studentId, guardianProfileId, version, textSha256, now }) => {
+      const rows = await this.db.query<Row>(
+        `with ok as (
+           select c.id as client_id from public.clients c
+             join public.client_students cs on cs.client_id = c.id and cs.student_id = $1 and cs.status = 'active'
+            where c.owner_profile_id = $2)
+         , ins as (insert into public.consents (profile_id, student_id, kind, version, text_sha256) select $2, $1, 'learner_ai_use', $3, $4 from ok returning 1)
+         , a as (insert into public.identity_audit (at, actor_profile_id, action, client_id, student_id) select $5, $2, 'learner_consent_granted', client_id, $1 from ok returning 1)
+         select count(*)::int as n from ins`,
+        [studentId, guardianProfileId, version, textSha256, now],
+      );
+      return (rows[0]?.n ?? 0) > 0;
+    },
+    withdrawLearnerConsent: async (studentId, now) => {
+      const rows = await this.db.query<Row>(
+        `with u as (update public.consents set withdrawn_at = greatest($2, granted_at) where student_id = $1 and kind = 'learner_ai_use' and withdrawn_at is null returning 1)
+         , a as (insert into public.identity_audit (at, action, client_id, student_id)
+                 select $2, 'learner_consent_withdrawn', (select client_id from public.students where id = $1), $1 where exists (select 1 from u) returning 1)
+         select count(*)::int as n from u`,
+        [studentId, now],
+      );
+      return rows[0]?.n ?? 0;
+    },
+    hasLearnerConsent: async (studentId) => {
+      // Open, and given by a guardian whose link to the student is still active.
+      const rows = await this.db.query<Row>(
+        `select exists (
+           select 1 from public.consents k
+             join public.clients c on c.owner_profile_id = k.profile_id
+             join public.client_students cs on cs.client_id = c.id and cs.student_id = k.student_id and cs.status = 'active'
+            where k.student_id = $1 and k.kind = 'learner_ai_use' and k.withdrawn_at is null) as ok`,
+        [studentId],
+      );
+      return rows[0]?.ok === true;
+    },
+    startSupervised: async ({ clientId, guardianProfileId, studentId, tokenHash, expiresAt, now }) => {
+      const rows = await this.db.query<Row>(
+        `with ok as (
+           select s.id from public.students s
+             join public.clients c on c.id = $1 and c.owner_profile_id = $2
+             join public.client_students cs on cs.client_id = c.id and cs.student_id = s.id and cs.status = 'active'
+            where s.id = $3 and s.active and s.access_mode = 'supervised')
+         , ended as (update public.supervised_contexts x set ended_at = $6 where x.guardian_profile_id = $2 and x.ended_at is null and exists (select 1 from ok) returning 1)
+         , ins as (insert into public.supervised_contexts (token_hash, guardian_profile_id, student_id, expires_at, created_at) select $4, $2, id, $5, $6 from ok returning 1)
+         , a as (insert into public.identity_audit (at, actor_profile_id, action, client_id, student_id) select $6, $2, 'supervised_started', $1, id from ok returning 1)
+         select count(*)::int as n from ins`,
+        [clientId, guardianProfileId, studentId, tokenHash, expiresAt, now],
+      );
+      return (rows[0]?.n ?? 0) > 0;
+    },
+    getSupervised: async (tokenHash, guardianProfileId, now) => {
+      const rows = await this.db.query<Row>(
+        `select s.id as student_id, s.client_id as family_client_id, s.display_name, s.year_group, s.is_minor, s.access_mode, s.active, true as guardian_link, 'active' as status
+           from public.supervised_contexts x
+           join public.students s on s.id = x.student_id
+           join public.clients c on c.owner_profile_id = x.guardian_profile_id
+           join public.client_students cs on cs.client_id = c.id and cs.student_id = s.id and cs.status = 'active'
+          where x.token_hash = $1 and x.guardian_profile_id = $2 and x.ended_at is null and x.expires_at > $3
+            and s.active and s.access_mode = 'supervised'`,
+        [tokenHash, guardianProfileId, now],
+      );
+      return rows[0] ? toLearner(rows[0]) : null;
+    },
+    endSupervised: async (tokenHash, guardianProfileId, now) => {
+      const rows = await this.db.query<Row>(
+        `with u as (update public.supervised_contexts x set ended_at = $3 where x.token_hash = $1 and x.guardian_profile_id = $2 and x.ended_at is null returning x.student_id)
+         , a as (insert into public.identity_audit (at, actor_profile_id, action, client_id, student_id)
+                 select $3, $2, 'supervised_ended', (select id from public.clients where owner_profile_id = $2), student_id from u returning 1)
+         select count(*)::int as n from u`,
+        [tokenHash, guardianProfileId, now],
+      );
+      return (rows[0]?.n ?? 0) > 0;
+    },
+    auditFor: async (studentId, limit = 50) =>
+      (await this.db.query<Row>(`select at, actor_profile_id, action, client_id, student_id from public.identity_audit where student_id = $1 order by id desc limit $2`, [studentId, Math.min(Math.max(limit, 1), 500)])).map(
+        (r): IdentityAuditEntry => ({ at: new Date(r.at), actorProfileId: r.actor_profile_id, action: r.action, clientId: r.client_id, studentId: r.student_id }),
+      ),
   };
 
   billing: BillingRepository = {
@@ -358,106 +585,117 @@ export class SqlLibraryStore implements LibraryStore {
   };
 
   chat: ChatRepository = {
-    createSession: async (clientId, options, now) => {
+    createSession: async (owner, options, now) => {
       const rows = await this.db.query<Row>(
         `insert into public.chat_sessions (client_id, student_id, title, created_at, last_activity_at, delete_after)
          select $1, $2::uuid, $3, $4, $4, $4::timestamptz + interval '30 days'
-          where $2::uuid is null or exists (select 1 from public.students st where st.id = $2::uuid and st.client_id = $1)
+          where $2::uuid is null or exists (select 1 from public.students st join public.client_students cs on cs.student_id = st.id
+                                             where st.id = $2::uuid and cs.client_id = $1 and cs.status = 'active')
          returning *`,
-        [clientId, options.studentId ?? null, options.title ?? "", now],
+        [owner.clientId, owner.studentId, options.title ?? "", now],
       );
       if (!rows[0]) throw new Error("that student is not in this family");
       return toSession(rows[0]);
     },
-    renameSession: async (clientId, sessionId, title) => {
+    renameSession: async (owner, sessionId, title) => {
       const rows = await this.db.query<Row>(
-        `update public.chat_sessions set title = $3 where id = $2 and client_id = $1 and deletion_requested_at is null returning id`,
-        [clientId, sessionId, title.slice(0, 120)],
+        `update public.chat_sessions s set title = $4 where s.id = $3 and ${OWN} returning s.id`,
+        [owner.clientId, owner.studentId, sessionId, title.slice(0, 120)],
       );
       return rows.length === 1;
     },
-    listSessions: async (clientId) => {
-      const rows = await this.db.query<Row>(`select * from public.chat_sessions s where ${OWN} order by s.last_activity_at desc`, [clientId]);
+    listSessions: async (owner) => {
+      const rows = await this.db.query<Row>(`select * from public.chat_sessions s where ${OWN} order by s.last_activity_at desc`, [owner.clientId, owner.studentId]);
       return rows.map(toSession);
     },
-    getSession: async (clientId, sessionId) => {
-      const rows = await this.db.query<Row>(`select * from public.chat_sessions s where ${OWN} and s.id = $2`, [clientId, sessionId]);
+    getSession: async (owner, sessionId) => {
+      const rows = await this.db.query<Row>(`select * from public.chat_sessions s where ${OWN} and s.id = $3`, [owner.clientId, owner.studentId, sessionId]);
       return rows[0] ? toSession(rows[0]) : null;
     },
-    listMessages: async (clientId, sessionId) => {
+    listMessages: async (owner, sessionId) => {
       const rows = await this.db.query<Row>(
-        `select m.* from public.chat_messages m join public.chat_sessions s on s.id = m.session_id where ${OWN} and s.id = $2 order by m.created_at, m.id`,
-        [clientId, sessionId],
+        `select m.* from public.chat_messages m join public.chat_sessions s on s.id = m.session_id where ${OWN} and s.id = $3 order by m.created_at, m.id`,
+        [owner.clientId, owner.studentId, sessionId],
       );
       return rows.map(toMessage);
     },
-    appendMessage: async (clientId, sessionId, role, content, now) => {
+    appendMessage: async (owner, sessionId, role, content, now) => {
       const rows = await this.db.query<Row>(
-        `with s as (select id from public.chat_sessions s where ${OWN} and s.id = $2),
-              t as (select greatest($4::timestamptz, coalesce((select max(created_at) + interval '1 millisecond' from public.chat_messages where session_id = $2), $4::timestamptz)) as ts),
+        `with s as (select id from public.chat_sessions s where ${OWN} and s.id = $3),
+              t as (select greatest($5::timestamptz, coalesce((select max(created_at) + interval '1 millisecond' from public.chat_messages where session_id = $3), $5::timestamptz)) as ts),
               ins as (insert into public.chat_messages (session_id, role, content, created_at, delete_after)
-                      select s.id, $3, $5, t.ts, t.ts + interval '30 days' from s, t returning *),
+                      select s.id, $4, $6, t.ts, t.ts + interval '30 days' from s, t returning *),
               upd as (update public.chat_sessions set last_activity_at = (select ts from t), delete_after = (select ts from t) + interval '30 days'
                        where id in (select id from s))
          select * from ins`,
-        [clientId, sessionId, role, now, content],
+        [owner.clientId, owner.studentId, sessionId, role, now, content],
       );
       if (!rows[0]) throw new Error("no such chat");
       return toMessage(rows[0]);
     },
-    addFile: async (clientId, sessionId, file, now) => {
+    addFile: async (owner, sessionId, file, now) => {
       const rows = await this.db.query<Row>(
         `insert into public.chat_files (session_id, message_id, storage_path, bytes, content_type, created_at, delete_after)
-         select s.id, null, $3, $4, $5, $6, $6::timestamptz + interval '7 days' from public.chat_sessions s where ${OWN} and s.id = $2
+         select s.id, null, $4, $5, $6, $7, $7::timestamptz + interval '7 days' from public.chat_sessions s where ${OWN} and s.id = $3
          returning *`,
-        [clientId, sessionId, file.storagePath, file.bytes, file.contentType, now],
+        [owner.clientId, owner.studentId, sessionId, file.storagePath, file.bytes, file.contentType, now],
       );
       if (!rows[0]) throw new Error("no such chat");
       return toChatFile(rows[0]);
     },
-    attachFiles: async (clientId, sessionId, fileIds, messageId) => {
+    attachFiles: async (owner, sessionId, fileIds, messageId) => {
       if (fileIds.length === 0) return 0;
       const rows = await this.db.query<Row>(
-        `update public.chat_files f set message_id = $4
+        `update public.chat_files f set message_id = $5
            from public.chat_sessions s
-          where f.session_id = s.id and ${OWN} and s.id = $2 and f.id = any($3::uuid[]) and f.message_id is null
-            and exists (select 1 from public.chat_messages m where m.id = $4 and m.session_id = s.id)
+          where f.session_id = s.id and ${OWN} and s.id = $3 and f.id = any($4::uuid[]) and f.message_id is null
+            and exists (select 1 from public.chat_messages m where m.id = $5 and m.session_id = s.id)
          returning f.id`,
-        [clientId, sessionId, fileIds, messageId],
+        [owner.clientId, owner.studentId, sessionId, fileIds, messageId],
       );
       return rows.length;
     },
-    listFiles: async (clientId, sessionId) => {
-      const rows = await this.db.query<Row>(`select f.* from public.chat_files f join public.chat_sessions s on s.id = f.session_id where ${OWN} and s.id = $2 order by f.created_at`, [clientId, sessionId]);
+    listFiles: async (owner, sessionId) => {
+      const rows = await this.db.query<Row>(`select f.* from public.chat_files f join public.chat_sessions s on s.id = f.session_id where ${OWN} and s.id = $3 order by f.created_at`, [owner.clientId, owner.studentId, sessionId]);
       return rows.map(toChatFile);
     },
-    getFile: async (clientId, fileId) => {
-      const rows = await this.db.query<Row>(`select f.* from public.chat_files f join public.chat_sessions s on s.id = f.session_id where ${OWN} and f.id = $2`, [clientId, fileId]);
+    getFile: async (owner, fileId) => {
+      const rows = await this.db.query<Row>(`select f.* from public.chat_files f join public.chat_sessions s on s.id = f.session_id where ${OWN} and f.id = $3`, [owner.clientId, owner.studentId, fileId]);
       return rows[0] ? toChatFile(rows[0]) : null;
     },
-    getUnattachedFiles: async (clientId, sessionId, fileIds) => {
+    getUnattachedFiles: async (owner, sessionId, fileIds) => {
       if (fileIds.length === 0) return [];
       const rows = await this.db.query<Row>(
-        `select f.* from public.chat_files f join public.chat_sessions s on s.id = f.session_id where ${OWN} and s.id = $2 and f.id = any($3::uuid[]) and f.message_id is null order by f.created_at`,
-        [clientId, sessionId, fileIds],
+        `select f.* from public.chat_files f join public.chat_sessions s on s.id = f.session_id where ${OWN} and s.id = $3 and f.id = any($4::uuid[]) and f.message_id is null order by f.created_at`,
+        [owner.clientId, owner.studentId, sessionId, fileIds],
       );
       return rows.map(toChatFile);
     },
-    requestDeletion: async (clientId, sessionId, now) => {
-      const rows = await this.db.query<Row>(`update public.chat_sessions s set deletion_requested_at = $3 where ${OWN} and s.id = $2 returning s.id`, [clientId, sessionId, now]);
+    requestDeletion: async (owner, sessionId, now) => {
+      const rows = await this.db.query<Row>(`update public.chat_sessions s set deletion_requested_at = $4 where ${OWN} and s.id = $3 returning s.id`, [owner.clientId, owner.studentId, sessionId, now]);
       return rows.length > 0;
     },
-    requestDeletionAll: async (clientId, now) => {
-      const rows = await this.db.query<Row>(`update public.chat_sessions s set deletion_requested_at = $2 where ${OWN} returning s.id`, [clientId, now]);
+    requestDeletionAll: async (owner, now) => {
+      const rows = await this.db.query<Row>(`update public.chat_sessions s set deletion_requested_at = $3 where ${OWN} returning s.id`, [owner.clientId, owner.studentId, now]);
       return rows.length;
     },
-    exportAll: async (clientId, now): Promise<ChatExport> => {
-      const sessions = await this.db.query<Row>(`select * from public.chat_sessions s where ${OWN} order by s.created_at`, [clientId]);
+    requestLearnerDeletionAll: async (clientId, studentId, now) => {
+      const rows = await this.db.query<Row>(
+        `update public.chat_sessions s set deletion_requested_at = $3
+          where s.client_id = $1 and s.student_id = $2 and s.deletion_requested_at is null
+            and exists (select 1 from public.client_students cs where cs.client_id = $1 and cs.student_id = $2 and cs.status = 'active')
+         returning s.id`,
+        [clientId, studentId, now],
+      );
+      return rows.length;
+    },
+    exportAll: async (owner, now): Promise<ChatExport> => {
+      const sessions = await this.db.query<Row>(`select * from public.chat_sessions s where ${OWN} order by s.created_at`, [owner.clientId, owner.studentId]);
       const messages = await this.db.query<Row>(
         `select m.* from public.chat_messages m join public.chat_sessions s on s.id = m.session_id where ${OWN} order by m.created_at, m.id`,
-        [clientId],
+        [owner.clientId, owner.studentId],
       );
-      const files = await this.db.query<Row>(`select f.* from public.chat_files f join public.chat_sessions s on s.id = f.session_id where ${OWN} order by f.created_at`, [clientId]);
+      const files = await this.db.query<Row>(`select f.* from public.chat_files f join public.chat_sessions s on s.id = f.session_id where ${OWN} order by f.created_at`, [owner.clientId, owner.studentId]);
       return {
         exportedAt: now.toISOString(),
         sessions: sessions.map((s) => ({
