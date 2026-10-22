@@ -4,6 +4,7 @@ import { annotatePaper, type OutputMode, type Placement, type SolvedQuestion } f
 import { markQuestion, type MarkedQuestion, type Outcome } from "./mark";
 import { markPaper } from "./markPdf";
 import { paperLimits, type PaperLimits } from "./limits";
+import { placeFromLayout, proposeLayout } from "./layout";
 import { classifyPage, findQuestions, refineAnswerSpace, type PageKind, type PaperQuestion } from "./questions";
 import { listQuestionsFromPicture, solveQuestion, type SolveDeps } from "./solve";
 
@@ -56,7 +57,13 @@ export async function extractQuestions(deps: SolveDeps | null, bytes: Uint8Array
       refineAnswerSpace(questions, reading.pages, picture);
       if (!deps || page.textQuality === "good" || kinds.get(page.number) !== "questions") continue;
       const listed = await listQuestionsFromPicture(deps, page.number, b64(picture.jpeg()));
-      for (const q of listed) if (!questions.some((existing) => existing.page === q.page && existing.number === q.number)) questions.push(q);
+      const fresh = listed.filter((q) => !questions.some((existing) => existing.page === q.page && existing.number === q.number));
+      questions.push(...fresh);
+      // Where each scanned question's answer space is: proposed by the vision model, accepted only if the drawing of the page agrees.
+      if (limits.scanLayout && fresh.length) {
+        const proposals = await proposeLayout(deps, b64(picture.jpeg()));
+        if (proposals) placeFromLayout(fresh, proposals, page, picture);
+      }
     }
   }
   // Paper order: by page (a stable sort keeps the order found within a page). The ids are opaque and follow that order; the printed label is `number`.

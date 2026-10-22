@@ -31,6 +31,9 @@ export class MockProvider implements ChatProvider {
     if (options.json && system.startsWith("List the numbered questions")) {
       // The Paper Tutor reading a picture of a page: one question, as a scan of the "3/4 of 24" homework would give.
       script = JSON.stringify({ questions: [{ number: "1", text: "What is 3/4 of 24?", marks: null }] });
+    } else if (options.json && system.startsWith("You are locating questions")) {
+      // The Paper Tutor asking where the question and its answer space are on a scanned page.
+      script = JSON.stringify({ items: [{ number: "1", question: [0.08, 0.1, 0.92, 0.18], answer: [0.08, 0.2, 0.92, 0.32], confidence: 0.9 }] });
     } else if (options.json && system.startsWith("Read the student's handwritten")) {
       // The Paper Tutor marking a completed paper, reading the student's writing: always "6", clearly legible (a question that says
       // [blank] or [illegible] reads as that), so tests see a right answer, and a reference that cannot confirm it.

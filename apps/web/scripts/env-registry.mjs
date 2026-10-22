@@ -95,6 +95,7 @@ export const REGISTRY = [
   e("PAPER_MAX_PAGES", "assistant", "Pages a PDF may have for Study Buddy and the Paper Tutor (one limit for the upload check, the reader and the paper).", { fallback: "60", check: "int:1:200" }),
   e("PAPER_MAX_QUESTIONS", "assistant", "Question parts one paper may list. Beyond it the rest are named in the job's notice, never dropped silently.", { fallback: "150", check: "int:1:500" }),
   e("PAPER_RENDER_BATCH", "assistant", "Pages drawn at a time while measuring answer space (memory stays flat however long the paper is).", { fallback: "6", check: "int:1:20" }),
+  e("PAPER_SCAN_LAYOUT", "assistant", "Whether the vision model is asked where a scanned page's answer spaces are (each is checked against the drawing of the page before use). false: answers go on the worked pages.", { fallback: "on", check: "true-or-false" }),
   e("ASSISTANT_PER_MINUTE", "assistant", "Messages one account may send a minute.", { fallback: "6", check: "int:1:10000" }),
   e("ASSISTANT_DAILY_TOKEN_BUDGET", "assistant", "Hosted providers: completion tokens per account per day (the cost cap).", { fallback: "40000", check: "int:1:100000000" }),
   e("ASSISTANT_CONCURRENCY", "assistant", "Answers generated at once on this server.", { fallback: "1", check: "int:1:64" }),
