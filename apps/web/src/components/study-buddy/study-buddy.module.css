@@ -10,14 +10,9 @@
   position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  height: 100dvh;
+  /* The shell's top bar (and the supervised-view banner, when there is one) sit above; the page owns the rest of the screen. */
+  height: calc(100dvh - var(--app-topbar-height, 3.5rem) - var(--app-banner-height, 0px));
   min-width: 0;
-}
-
-@media (max-width: 63.99rem) {
-  .page {
-    height: calc(100dvh - 3.5rem);
-  }
 }
 
 .bar {

@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Bell, ChevronsLeft, ChevronsRight, LogOut, Menu, UserRound, X } from "lucide-react";
 import { NavIcon } from "@/components/shell/NavIcon";
+import { SidebarContext } from "@/components/shell/SidebarSlot";
 import { Avatar } from "@/components/ui/Avatar";
 import { Toaster } from "@/components/ui/Toaster";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
@@ -24,13 +25,31 @@ const ROLE_LABELS: Record<AuthenticatedUser["role"], string> = {
   ADMIN: "Admin", TUTOR: "Tutor", CLIENT: "Parent", STUDENT: "Student",
 };
 
+/** Pages that are one focused working area (the conversation) and want the whole content column, not a padded, width-limited one. */
+const FLUSH_PREFIXES = ["/library/study-buddy"];
+
+/**
+ * The one authenticated shell (docs/IDENTITY.md, section "One shell"): sidebar, topbar, account menu, mobile drawer, and a secondary slot
+ * a page can render into. It serves tuition families, tutors and administrators, learners, and Library-only members alike; the
+ * navigation it is given (`sections`) is built on the server from what the person may actually use, so nothing here decides access.
+ *
+ *   homeHref / accountHref / roleLabel   where the brand and "Account" go, and the label under the name
+ *   tuition                              the tuition tools (search palette, notifications bell) exist for this person
+ *   banner                               something that must show above everything (the supervised-view banner)
+ */
 export function AppShellClient({
-  user, sections, unreadCount, isDevelopment, children,
+  user, sections, unreadCount, isDevelopment, homeHref = "/dashboard", accountHref = "/dashboard/settings", accountLabel = "Account settings", roleLabel, tuition = true, banner, children,
 }: {
   user: AuthenticatedUser;
   sections: AppNavSection[];
   unreadCount: number;
   isDevelopment: boolean;
+  homeHref?: string;
+  accountHref?: string;
+  accountLabel?: string;
+  roleLabel?: string;
+  tuition?: boolean;
+  banner?: ReactNode;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -42,7 +61,13 @@ export function AppShellClient({
   const menuRef = useRef<HTMLDivElement>(null);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const drawerCloseRef = useRef<HTMLButtonElement>(null);
+  const drawerOpenerRef = useRef<HTMLButtonElement>(null);
   const menuId = useId();
+  // The secondary slot (SidebarSlot.tsx): one element, moved between the desktop sidebar and the open drawer so a page's own state survives.
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  const asideHost = useRef<HTMLDivElement>(null);
+  const drawerHost = useRef<HTMLDivElement>(null);
+  const flush = FLUSH_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
   // Keeps each panel mounted for its own exit animation (app-pop-out / app-drawer-out) instead
   // of it vanishing the instant state flips to closed — see useDelayedUnmount's own comment.
   const menu = useDelayedUnmount(menuOpen, 100);
@@ -82,7 +107,7 @@ export function AppShellClient({
     function onKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
       if (menuOpen) { setMenuOpen(false); menuTriggerRef.current?.focus(); }
-      else if (drawerOpen) setDrawerOpen(false);
+      else if (drawerOpen) { setDrawerOpen(false); drawerOpenerRef.current?.focus(); }
     }
     function onPointerDown(event: PointerEvent) {
       if (!menuOpen) return;
@@ -97,6 +122,18 @@ export function AppShellClient({
       document.removeEventListener("pointerdown", onPointerDown);
     };
   }, [drawerOpen, menuOpen]);
+
+  useEffect(() => {
+    const element = document.createElement("div");
+    element.className = "app-slot";
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- a DOM node can only be made in the browser, after hydration
+    setSlot(element);
+  }, []);
+  useEffect(() => {
+    if (!slot) return;
+    const host = drawer.rendered && drawerHost.current ? drawerHost.current : asideHost.current;
+    if (host && slot.parentElement !== host) host.append(slot);
+  }, [slot, drawer.rendered]);
 
   // Focus the drawer's own close control when it opens, so keyboard users land inside it.
   useEffect(() => { if (drawerOpen) drawerCloseRef.current?.focus(); }, [drawerOpen]);
@@ -146,17 +183,19 @@ export function AppShellClient({
   );
 
   return (
+    <SidebarContext.Provider value={{ slot, collapsed, closeDrawer: () => setDrawerOpen(false) }}>
     <div className={`app-shell ${collapsed ? "app-shell--collapsed" : ""}`}>
       <a className="skip-link" href="#main-content">Skip to main content</a>
 
       <aside className="app-sidebar" aria-label="Product navigation">
         <div className="app-sidebar__brand">
-          <Link href="/dashboard" className="app-brand">
+          <Link href={homeHref} className="app-brand">
             <BrandMark className="app-brand__mark" />
             <span className="app-brand__word">Learn<strong>Thrive</strong></span>
           </Link>
         </div>
         {navigation}
+        <div ref={asideHost} className="app-slot-host" hidden={collapsed || undefined} />
         <button type="button" className="app-sidebar__collapse" onClick={() => setSidebarCollapsed(!collapsed)} aria-pressed={collapsed}>
           {collapsed ? <ChevronsRight size={16} aria-hidden="true" /> : <ChevronsLeft size={16} aria-hidden="true" />}
           <span className="app-nav__label">{collapsed ? "Expand" : "Collapse"}</span>
@@ -167,23 +206,25 @@ export function AppShellClient({
         <div className={`app-drawer ${drawer.closing ? "is-closing" : ""}`} role="dialog" aria-modal="true" aria-label="Navigation">
           <div className="app-drawer__panel">
             <div className="app-drawer__top">
-              <Link href="/dashboard" className="app-brand">
+              <Link href={homeHref} className="app-brand">
                 <BrandMark className="app-brand__mark" />
                 <span className="app-brand__word">Learn<strong>Thrive</strong></span>
               </Link>
-              <button ref={drawerCloseRef} type="button" className="icon-button" onClick={() => setDrawerOpen(false)} aria-label="Close navigation">
+              <button ref={drawerCloseRef} type="button" className="icon-button" onClick={() => { setDrawerOpen(false); drawerOpenerRef.current?.focus(); }} aria-label="Close navigation">
                 <X size={18} aria-hidden="true" />
               </button>
             </div>
             {navigation}
+            <div ref={drawerHost} className="app-slot-host" />
           </div>
-          <button type="button" className="app-drawer__scrim" onClick={() => setDrawerOpen(false)} tabIndex={-1} aria-hidden="true" />
+          <button type="button" className="app-drawer__scrim" onClick={() => { setDrawerOpen(false); drawerOpenerRef.current?.focus(); }} tabIndex={-1} aria-hidden="true" />
         </div>
       )}
 
-      <div className="app-main">
+      <div className="app-main" style={banner ? ({ "--app-banner-height": "2.75rem" } as React.CSSProperties) : undefined}>
+        {banner}
         <header className="app-topbar">
-          <button type="button" className="icon-button app-topbar__menu" onClick={() => setDrawerOpen(true)} aria-label="Open navigation" aria-expanded={drawerOpen}>
+          <button ref={drawerOpenerRef} type="button" className="icon-button app-topbar__menu" onClick={() => setDrawerOpen(true)} aria-label="Open navigation" aria-expanded={drawerOpen}>
             <Menu size={20} aria-hidden="true" />
           </button>
 
@@ -195,9 +236,9 @@ export function AppShellClient({
             </span>
           )}
 
-          <PaletteTrigger className="icon-button app-topbar__search" label="Search" />
+          {tuition && <PaletteTrigger className="icon-button app-topbar__search" label="Search" />}
 
-          <Link
+          {tuition && <Link
             href="/dashboard/notifications"
             className={`icon-button app-topbar__bell ${bellRinging ? "is-ringing" : ""}`}
             aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
@@ -208,7 +249,7 @@ export function AppShellClient({
                 {unreadCount > 9 ? "9+" : <AnimatedNumber value={unreadCount} />}
               </span>
             )}
-          </Link>
+          </Link>}
 
           <div className="app-usermenu">
             <button
@@ -224,7 +265,7 @@ export function AppShellClient({
               <Avatar name={user.name} size="sm" />
               <span className="app-usermenu__who">
                 <span className="app-usermenu__name">{user.name}</span>
-                <span className="app-usermenu__role">{ROLE_LABELS[user.role]}</span>
+                <span className="app-usermenu__role">{roleLabel ?? ROLE_LABELS[user.role]}</span>
               </span>
             </button>
             {menu.rendered && (
@@ -233,14 +274,14 @@ export function AppShellClient({
                   <Avatar name={user.name} size="md" />
                   <div>
                     <p className="app-usermenu__name">{user.name}</p>
-                    <p className="app-usermenu__meta">{ROLE_LABELS[user.role]} · {user.email}</p>
+                    <p className="app-usermenu__meta">{roleLabel ?? ROLE_LABELS[user.role]} · {user.email}</p>
                   </div>
                 </div>
                 <div className="app-usermenu__appearance">
                   <ThemeToggle variant="radio" />
                 </div>
-                <Link href="/dashboard/settings" className="app-usermenu__item" role="menuitem">
-                  <UserRound size={16} aria-hidden="true" />Account settings
+                <Link href={accountHref} className="app-usermenu__item" role="menuitem">
+                  <UserRound size={16} aria-hidden="true" />{accountLabel}
                 </Link>
                 <button type="button" className="app-usermenu__item app-usermenu__item--danger" role="menuitem" onClick={handleLogout} disabled={signingOut}>
                   <LogOut size={16} aria-hidden="true" />{signingOut ? "Signing out…" : "Log out"}
@@ -258,7 +299,7 @@ export function AppShellClient({
             e2e suite the instant it landed. Section 72 is explicit that interaction must never be
             delayed to let a motion effect finish, and this genuinely did — so on that rule alone,
             not just the test failures, it comes back out rather than being patched to "pass". */}
-        <main id="main-content" className="app-content">{children}</main>
+        <main id="main-content" className={`app-content ${flush ? "app-content--flush" : ""}`}>{children}</main>
       </div>
 
       {/* useSearchParams needs a Suspense boundary; the toaster renders nothing until an action
@@ -266,7 +307,8 @@ export function AppShellClient({
       <Suspense fallback={null}><Toaster /></Suspense>
 
       {/* Ctrl/Cmd+K search, `?` shortcuts and "g then a letter" navigation: one host, this shell only. */}
-      <AppPaletteHost role={user.role} onSignOut={handleLogout} />
+      {tuition ? <AppPaletteHost role={user.role} onSignOut={handleLogout} /> : null}
     </div>
+    </SidebarContext.Provider>
   );
 }

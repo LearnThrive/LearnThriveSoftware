@@ -25,7 +25,7 @@ import { PencilLoader } from "@/components/ui/PencilLoader";
 import {
   SidebarSection,
   useMemberSidebar,
-} from "@/components/member/MemberShell";
+} from "@/components/shell/SidebarSlot";
 import { ADULT_ACKNOWLEDGEMENT } from "@/lib/assistant/prompt";
 import { parseMarkdown, plainText } from "@/lib/assistant/markdown";
 import { RenderedAnswer } from "./RenderedAnswer";

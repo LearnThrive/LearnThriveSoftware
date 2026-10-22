@@ -96,3 +96,24 @@ Page: `/learner/accept?token=…`.
 - Orphans: deleting a student removes the login row and invitations but not the learner's `auth.users` / `profiles` row. A retention
   step that reports and removes those orphans, and the learner's stored chat files, is listed in `docs/RETENTION_AND_DELETION.md` work.
 - Real Supabase Auth runs (invitation e-mail confirmation, refresh, the narrow server role) have not been executed yet.
+
+## One shell (workstream 2)
+
+The tuition dashboard and the Library, Study Buddy and account pages now share ONE frame, `PlatformShell` (`components/shell/PlatformShell.tsx`, rendering
+`AppShellClient`): one sidebar, one top bar, one account menu, one mobile drawer, never nested. The old Library `MemberShell` is gone.
+
+- **Capability navigation.** `platformNavigation()` (`lib/navigation/appNavigation.ts`) builds the menu from what the person may use (the `platformAccess`
+  result plus whether Study Buddy and the Library are open), not from a role list. Rows of the target table are unit tests (`platformNavigation.test.mjs`).
+  A person with the whole platform keeps a short sidebar (Library search is in the top-bar palette, the account in the account menu); a Library-only member
+  or linked learner gets Study Buddy, Library, Search and Account; no entitlement gets Account only; inside a supervised view the menu is the learner's and
+  there is no Account link. Hiding a link is never the control: every page and API checks again.
+- **Secondary slot.** A page renders into the sidebar with `<SidebarSection>` (`components/shell/SidebarSlot.tsx`). Study Buddy's conversation history lives
+  there. One slot element is moved between the desktop sidebar and the open drawer, so a page's state (an open search box) survives either.
+- **Focused areas.** `/library/study-buddy` takes the whole content column (`app-content--flush`) and owns its height under the top bar (and the
+  supervised banner), so the box stays above a phone's keyboard and the page has one scroll.
+- **Focus and keyboard.** The drawer returns focus to its button on Escape, the close button and the scrim; the skip link is first; covered by
+  `one-sign-in.spec.ts` ("one shell, by keyboard alone").
+- **Checked in a browser** (desktop and 390 px; guardian, enrolled learner, Library subscriber, linked learner): screenshots were inspected, and the
+  Playwright runs (sign-in, Study Buddy, Paper Tutor, learner, dashboards, accessibility light/dark/zoom/keyboard) pass. Found and fixed on the way: a long
+  name pushed the top bar wider than a 320 px screen; the chat list was squeezed beside a long menu (the slot now has a minimum height and the sidebar scrolls);
+  the flush rule lost to a later media rule (specificity).
