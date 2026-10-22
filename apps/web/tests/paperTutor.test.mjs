@@ -144,9 +144,9 @@ async function jobWorld() {
   return { store, uploads, deps, a, b, session, file, jobs: new PaperJobs() };
 }
 
-async function until(jobs, client, id, states) {
+async function until(w, client, id, states) {
   for (let i = 0; i < 400; i += 1) {
-    const job = jobs.get(own(client), id);
+    const job = await w.jobs.get(w.deps, own(client), id);
     if (states.includes(job?.state)) return job;
     await new Promise((r) => setTimeout(r, 25));
   }
@@ -157,15 +157,15 @@ test("a job reads the paper, solves the chosen questions, stores the PDF and pos
   const w = await jobWorld();
   const started = await w.jobs.start(w.deps, { owner: own(w.a), sessionId: w.session.id, fileId: w.file.id });
   assert.equal(started.ok, true);
-  assert.equal(w.jobs.get(own(w.b), started.job.id), null, "another family cannot see it");
+  assert.equal(await w.jobs.get(w.deps, own(w.b), started.job.id), null, "another family cannot see it");
   assert.equal((await w.jobs.start(w.deps, { owner: own(w.a), sessionId: w.session.id, fileId: w.file.id })).code, "busy", "one at a time");
-  const ready = await until(w.jobs, w.a, started.job.id, ["ready", "failed"]);
+  const ready = await until(w, w.a, started.job.id, ["ready", "failed"]);
   assert.equal(ready.state, "ready");
   assert.deepEqual(ready.questions.map((q) => q.number), ["1", "2"]);
-  assert.equal(w.jobs.solve(w.deps, own(w.b), started.job.id, { mode: "hybrid" }).code, "not_found", "nor solve it");
+  assert.equal((await w.jobs.solve(w.deps, own(w.b), started.job.id, { mode: "hybrid" })).code, "not_found", "nor solve it");
 
-  assert.equal(w.jobs.solve(w.deps, own(w.a), started.job.id, { mode: "hybrid", questionIds: ["q1"] }).ok, true);
-  const done = await until(w.jobs, w.a, started.job.id, ["done", "failed"]);
+  assert.equal((await w.jobs.solve(w.deps, own(w.a), started.job.id, { mode: "hybrid", questionIds: ["q1"] })).ok, true);
+  const done = await until(w, w.a, started.job.id, ["done", "failed"]);
   assert.equal(done.state, "done", done.message ?? "");
   assert.deepEqual(done.progress, [{ questionId: "q1", state: "done", status: "verified" }], "only the chosen question, checked by calculation");
   const stored = await w.store.chat.getFile(own(w.a), done.resultFileId);
@@ -186,15 +186,15 @@ test("jobs can be cancelled, are refused for another family's file, and stop at 
   const w = await jobWorld();
   assert.equal((await w.jobs.start(w.deps, { owner: own(w.b), sessionId: w.session.id, fileId: w.file.id })).code, "not_found");
   const first = await w.jobs.start(w.deps, { owner: own(w.a), sessionId: w.session.id, fileId: w.file.id });
-  assert.equal(w.jobs.cancel(own(w.b), first.job.id), false);
-  assert.equal(w.jobs.cancel(own(w.a), first.job.id), true);
-  assert.equal(w.jobs.get(own(w.a), first.job.id).state, "cancelled");
+  assert.equal(await w.jobs.cancel(w.deps, own(w.b), first.job.id), false);
+  assert.equal(await w.jobs.cancel(w.deps, own(w.a), first.job.id), true);
+  assert.equal((await w.jobs.get(w.deps, own(w.a), first.job.id)).state, "cancelled");
   await new Promise((r) => setTimeout(r, 300));
-  assert.equal(w.jobs.get(own(w.a), first.job.id).state, "cancelled", "the reading finishing later does not revive it");
+  assert.equal((await w.jobs.get(w.deps, own(w.a), first.job.id)).state, "cancelled", "the reading finishing later does not revive it");
   for (let i = 1; i < JOBS_PER_DAY; i += 1) {
     const s = await w.jobs.start(w.deps, { owner: own(w.a), sessionId: w.session.id, fileId: w.file.id });
     assert.equal(s.ok, true, `paper ${i + 1}`);
-    w.jobs.cancel(own(w.a), s.job.id);
+    await w.jobs.cancel(w.deps, own(w.a), s.job.id);
   }
   assert.equal((await w.jobs.start(w.deps, { owner: own(w.a), sessionId: w.session.id, fileId: w.file.id })).code, "limit");
 });

@@ -81,10 +81,10 @@ test("a paper longer than the page limit is refused with the number; more questi
     const jobs = new PaperJobs();
     const deps = { store, uploads, solve: { provider: new MockProvider({ delayMs: 0 }), queue: new GenerationQueue(2, 10), model: "mock" } };
     const started = await jobs.start(deps, { owner, sessionId: session.id, fileId: file.id });
-    let view = jobs.get(owner, started.job.id);
+    let view = await jobs.get(deps, owner, started.job.id);
     for (let i = 0; i < 400 && view.state === "extracting"; i += 1) {
       await new Promise((r) => setTimeout(r, 25));
-      view = jobs.get(owner, started.job.id);
+      view = await jobs.get(deps, owner, started.job.id);
     }
     assert.equal(view.state, "ready");
     assert.equal(view.questions.length, 10);
