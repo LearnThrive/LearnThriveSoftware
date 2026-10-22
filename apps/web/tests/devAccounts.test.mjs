@@ -97,11 +97,14 @@ test("toPlatformUser: the account's id and role, the profile's name first, and t
   const env = { NODE_ENV: "development" };
   const client = byEmail("client@learnthrive.dev");
   assert.deepEqual(
-    toPlatformUser({ email: client.email, displayName: "Signup Name" }, { profileId: client.id, role: "CLIENT", displayName: "Profile Name" }, env),
+    toPlatformUser({ email: client.email, displayName: "Signup Name" }, { profileId: client.id, role: "CLIENT", displayName: "Profile Name" }, null, env),
     { id: client.id, email: client.email, role: "CLIENT", name: "Profile Name", profileId: "client-sarah-ahmed" },
   );
-  assert.equal(toPlatformUser({ email: "a@b.co", displayName: "Signup Name" }, { profileId: "x", role: "ADMIN", displayName: "" }, env).name, "Signup Name", "then the sign-up name");
-  assert.equal(toPlatformUser({ email: "a@b.co", displayName: "" }, { profileId: "x", role: "ADMIN", displayName: "" }, env).name, "a@b.co", "then the address");
-  assert.equal(toPlatformUser({ email: "a@b.co", displayName: "" }, { profileId: "x", role: "TUTOR", displayName: "T" }, env).profileId, undefined, "no invented link for an account the development data does not know");
-  assert.equal(toPlatformUser({ email: client.email, displayName: "" }, { profileId: client.id, role: "CLIENT", displayName: "C" }, { NODE_ENV: "production" }).profileId, undefined);
+  assert.equal(toPlatformUser({ email: "a@b.co", displayName: "Signup Name" }, { profileId: "x", role: "ADMIN", displayName: "" }, null, env).name, "Signup Name", "then the sign-up name");
+  assert.equal(toPlatformUser({ email: "a@b.co", displayName: "" }, { profileId: "x", role: "ADMIN", displayName: "" }, null, env).name, "a@b.co", "then the address");
+  assert.equal(toPlatformUser({ email: "a@b.co", displayName: "" }, { profileId: "x", role: "TUTOR", displayName: "T" }, null, env).profileId, "x", "no invented link for an account the development data does not know: its own id, which matches no record");
+  // Everywhere else the link is the person's real record from the database, and the development mapping never answers in production.
+  const real = "11111111-1111-4111-8111-111111111111";
+  assert.equal(toPlatformUser({ email: client.email, displayName: "" }, { profileId: client.id, role: "CLIENT", displayName: "C" }, real, { NODE_ENV: "production" }).profileId, real);
+  assert.equal(toPlatformUser({ email: client.email, displayName: "" }, { profileId: client.id, role: "CLIENT", displayName: "C" }, null, { NODE_ENV: "production" }).profileId, client.id, "no development record in production, even for a development account's id");
 });

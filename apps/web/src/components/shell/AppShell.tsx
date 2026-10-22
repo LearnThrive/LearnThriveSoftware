@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
+import { getDataProvider } from "@/lib/data/provider";
 import { currentAccess } from "@/lib/access/current";
 import { assistantClosed } from "@/lib/assistant/runtime";
 import { requireSession } from "@/lib/auth/guard";

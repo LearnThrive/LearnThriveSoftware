@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
+import { getDataProvider } from "@/lib/data/provider";
 import { requireSession } from "@/lib/auth/guard";
 import { signClassroomJoinToken } from "@learnthrive/shared/classroomToken";
 import { isWithinJoinWindow } from "@/lib/scheduling/joinWindow";

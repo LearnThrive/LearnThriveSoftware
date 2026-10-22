@@ -140,6 +140,17 @@ export class SqlLibraryStore implements LibraryStore {
       if (!rows[0]) throw new Error("no such profile");
       return rows[0].id;
     },
+    domainRef: async (profileId) => {
+      const rows = await this.db.query<Row>(
+        `select coalesce(
+           (select t.id from public.tutors t where t.profile_id = $1),
+           (select c.id from public.clients c where c.owner_profile_id = $1),
+           (select l.student_id from public.learner_identities l where l.profile_id = $1 and l.status = 'active')
+         )::text as id`,
+        [profileId],
+      );
+      return rows[0]?.id ?? null;
+    },
     getEmail: async (profileId) => {
       // Through a function: the site's database role has no access to the auth schema (migration 0009).
       const rows = await this.db.query<Row>(`select public.auth_email($1) as email`, [profileId]);
@@ -474,6 +485,9 @@ export class SqlLibraryStore implements LibraryStore {
         [tokenHash, guardianProfileId, now],
       );
       return (rows[0]?.n ?? 0) > 0;
+    },
+    recordAudit: async ({ actor, action, clientId, studentId, now }) => {
+      await this.db.query(`insert into public.identity_audit (at, actor_profile_id, action, client_id, student_id) values ($1, $2, $3, $4, $5)`, [now, actor, action, clientId ?? null, studentId ?? null]);
     },
     auditFor: async (studentId, limit = 50) =>
       (await this.db.query<Row>(`select at, actor_profile_id, action, client_id, student_id from public.identity_audit where student_id = $1 order by id desc limit $2`, [studentId, Math.min(Math.max(limit, 1), 500)])).map(

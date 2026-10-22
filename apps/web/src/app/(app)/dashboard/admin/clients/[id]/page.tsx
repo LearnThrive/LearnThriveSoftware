@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth/guard";
 import { createMetadata } from "@/lib/metadata";
-import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
+import { getDataProvider } from "@/lib/data/provider";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Card, CardBody, CardHeader, StatTile } from "@/components/ui/Card";
 import { Badge, StatusBadge } from "@/components/ui/Badge";

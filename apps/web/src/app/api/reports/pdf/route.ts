@@ -1,4 +1,4 @@
-import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
+import { getDataProvider } from "@/lib/data/provider";
 import { requireRoleForApi } from "@/lib/auth/guard";
 import { visibleReportsFor, visibleStudentsFor } from "@/lib/dashboard/queries";
 import { formatDateOnly, formatLongDate } from "@/lib/format";

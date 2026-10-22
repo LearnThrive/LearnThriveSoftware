@@ -25,6 +25,12 @@ export interface AccountRepository {
   getAccount(profileId: string): Promise<Account | null>;
   /** The family account for a profile, created if it does not exist yet. Idempotent. */
   ensureClient(profileId: string): Promise<string>;
+  /**
+   * The tuition-domain record a signed-in person is: their tutor id (a tutor), their client id (an adult account holder with a family) or
+   * their student id (a learner with an active login); null for anyone else (an administrator, a person with no records). This is the id
+   * the dashboard looks a person up by (AuthenticatedUser.profileId), and it replaces the development mapping in production.
+   */
+  domainRef(profileId: string): Promise<string | null>;
   /** The profile that owns a family account, or null if there is no such account. For webhooks, which carry a client id. */
   getOwnerProfileId(clientId: string): Promise<string | null>;
   /** The sign-in email address of a profile, for the billing emails. Server only. null if there is none. */

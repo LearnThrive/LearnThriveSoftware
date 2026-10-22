@@ -33,6 +33,7 @@ class InMemoryTutorRepository implements TutorRepository {
   async list() { return [...this.store.values()]; }
   async get(id: string) { return this.store.get(id) ?? null; }
   async getByUserId(userId: string) { return [...this.store.values()].find((t) => t.userId === userId) ?? null; }
+  async linkLogin() { return "unsupported" as const; } // development tutors are linked by the seed (lib/dev/accounts.ts)
   async create(input: Omit<Tutor, "id" | "createdAt">) {
     const tutor: Tutor = { ...input, id: randomUUID(), createdAt: now() };
     this.store.set(tutor.id, tutor);

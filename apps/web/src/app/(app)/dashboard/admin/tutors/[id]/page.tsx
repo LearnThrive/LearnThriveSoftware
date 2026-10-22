@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { CalendarPlus } from "lucide-react";
 import { requireRole } from "@/lib/auth/guard";
 import { createMetadata } from "@/lib/metadata";
-import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
+import { getDataProvider } from "@/lib/data/provider";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Card, CardBody, CardHeader, StatTile } from "@/components/ui/Card";
 import { Badge, StatusBadge } from "@/components/ui/Badge";
@@ -14,6 +14,8 @@ import { LessonList, LessonRow } from "@/components/lessons/LessonRow";
 import { PersonList, PersonRow } from "@/components/people/PersonRow";
 import { RecordList, RecordRow } from "@/components/records/RecordRow";
 import { formatDateOnly } from "@/lib/format";
+import { Field, FormActions } from "@/components/ui/Field";
+import { linkTutorLoginAction } from "@/lib/actions/enrolment";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -87,6 +89,27 @@ export default async function TutorProfilePage({ params }: { params: Promise<{ i
           </Link>
         </div>
       </div>
+
+      {!tutor.userId ? (
+        <Card>
+          <CardHeader title="Give this tutor a login" />
+          <CardBody>
+            <p className="muted">
+              This tutor has no login yet. Ask them to create an account and confirm their email, then enter that address. Only a plain confirmed account can be linked: never one that
+              belongs to a family or a learner.
+            </p>
+            <form action={linkTutorLoginAction} className="form">
+              <input type="hidden" name="tutorId" value={tutor.id} />
+              <Field label="Their sign-in email address" htmlFor="tutor-login-email" required>
+                <input id="tutor-login-email" name="email" type="email" required autoComplete="off" />
+              </Field>
+              <FormActions>
+                <button type="submit" className="btn btn--secondary">Link login</button>
+              </FormActions>
+            </form>
+          </CardBody>
+        </Card>
+      ) : null}
 
       <div className="stat-grid">
         <StatTile label="Active students" value={studentIds.length} />

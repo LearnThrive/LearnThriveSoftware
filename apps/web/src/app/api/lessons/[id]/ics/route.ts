@@ -1,4 +1,4 @@
-import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
+import { getDataProvider } from "@/lib/data/provider";
 import { requireRoleForApi } from "@/lib/auth/guard";
 import { buildIcs, type IcsLesson } from "@/lib/calendar/ics";
 import { formatLessonDayTime, formatTimeRange } from "@/lib/format";

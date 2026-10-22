@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
+import { getDataProvider } from "@/lib/data/provider";
 import { requireSession } from "@/lib/auth/guard";
 
 export async function markNotificationReadAction(formData: FormData): Promise<void> {

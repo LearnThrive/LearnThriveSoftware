@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { CalendarClock, Plus } from "lucide-react";
 import { requireRole } from "@/lib/auth/guard";
 import { createMetadata } from "@/lib/metadata";
-import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
+import { getDataProvider } from "@/lib/data/provider";
 import { addAvailabilityAction, removeAvailabilityAction } from "@/lib/actions/availability";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Card } from "@/components/ui/Card";

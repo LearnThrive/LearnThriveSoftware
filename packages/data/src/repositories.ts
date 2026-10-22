@@ -14,6 +14,12 @@ export interface TutorRepository {
   getByUserId(userId: string): Promise<Tutor | null>;
   create(input: Omit<Tutor, "id" | "createdAt">): Promise<Tutor>;
   update(id: string, patch: Partial<Omit<Tutor, "id" | "createdAt">>): Promise<Tutor>;
+  /**
+   * Gives a tutor record a login: the person who already has a CONFIRMED account with this email address becomes that tutor (role TUTOR).
+   * Refused for an account that owns a family, is a learner, is already staff, or whose address is not confirmed, and for a tutor who
+   * already has a login: nobody is ever converted by guessing. Audited. 'unsupported' where the provider has no real accounts (development).
+   */
+  linkLogin(tutorId: string, email: string, actor: string): Promise<"ok" | "no_tutor" | "no_account" | "not_eligible" | "unsupported">;
 }
 
 export interface ClientRepository {

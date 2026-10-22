@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
+import { getDataProvider } from "@/lib/data/provider";
 import { requireRole } from "@/lib/auth/guard";
 import { cancelLesson, createLessonOrSeries, detectConflicts, rescheduleLesson, type RescheduleScope } from "@/lib/scheduling/schedulingService";
 import { zonedTimeToUtc } from "@/lib/scheduling/timezone";

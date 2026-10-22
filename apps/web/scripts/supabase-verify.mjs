@@ -20,8 +20,8 @@ import { pathToFileURL } from "node:url";
 /** Every table in public (a test compares this with the migrations, so a new table cannot be forgotten). */
 export const PUBLIC_TABLES = [
   "admin_grants", "assignment_students", "billing_customers", "chat_files", "chat_messages", "chat_sessions", "client_students", "clients",
-  "consents", "download_events", "entitlements", "identity_audit", "learner_identities", "learner_invitations", "profiles", "resource_files", "resources", "students", "stripe_webhook_events",
-  "subscriptions", "supervised_contexts", "tuition_assignments", "tutors", "usage_counters",
+  "consents", "download_events", "entitlements", "identity_audit", "learner_identities", "learner_invitations", "lesson_activity", "lesson_attendance", "lesson_reports", "lesson_students", "lessons", "notifications", "platform_settings", "profiles", "resource_files", "resources", "students", "stripe_webhook_events",
+  "subscriptions", "supervised_contexts", "tuition_assignments", "tutor_availability_blocks", "tutors", "usage_counters",
 ];
 const NOT_EXPOSED_SCHEMAS = ["private", "auth", "storage", "extensions", "pg_catalog", "information_schema", "vault", "supabase_migrations", "graphql_public"];
 const BUCKETS = ["library", "chat-uploads"];

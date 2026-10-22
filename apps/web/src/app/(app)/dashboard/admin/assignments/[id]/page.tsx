@@ -5,7 +5,7 @@ import { CalendarPlus } from "lucide-react";
 import { requireRole } from "@/lib/auth/guard";
 import { effectiveRequireApproval } from "@/lib/reports/reportService";
 import { createMetadata } from "@/lib/metadata";
-import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
+import { getDataProvider } from "@/lib/data/provider";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Card, CardBody, CardHeader, StatTile } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/Badge";
@@ -14,6 +14,8 @@ import { LessonList, LessonRow } from "@/components/lessons/LessonRow";
 import { PersonList, PersonRow } from "@/components/people/PersonRow";
 import { formatDateOnly, formatRelative } from "@/lib/format";
 import { RecordList, RecordRow } from "@/components/records/RecordRow";
+import { Field, FormActions } from "@/components/ui/Field";
+import { addAssignmentStudentAction, removeAssignmentStudentAction, setAssignmentStatusAction, setAssignmentTutorAction } from "@/lib/actions/enrolment";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -36,11 +38,13 @@ export default async function AssignmentDetailPage({ params }: { params: Promise
   // The rule that applies: this assignment's own, else the platform default (Settings).
   const reportApprovalRequired = await effectiveRequireApproval(data, assignment.id);
 
-  const [tutor, students, clients, allLessons] = await Promise.all([
+  const [tutor, students, clients, allLessons, allTutors, allStudents] = await Promise.all([
     data.tutors.get(assignment.tutorId),
     Promise.all(assignment.studentIds.map((studentId) => data.students.get(studentId))),
     Promise.all(assignment.clientIds.map((clientId) => data.clients.get(clientId))),
     data.lessons.list(),
+    data.tutors.list(),
+    data.students.list(),
   ]);
 
   const namedStudents = students.filter((student): student is NonNullable<typeof student> => student !== null);
@@ -129,6 +133,65 @@ export default async function AssignmentDetailPage({ params }: { params: Promise
         </div>
 
         <div className="stack">
+          <Card>
+            <CardHeader title="Enrolment" />
+            <CardBody>
+              <p className="muted">
+                A family is enrolled while one of its students is on an ACTIVE assignment. Ending or pausing this one ends that benefit and nothing else: a
+                separately paid Library subscription is untouched.
+              </p>
+              <form action={setAssignmentStatusAction} className="form">
+                <input type="hidden" name="assignmentId" value={assignment.id} />
+                <Field label="Status" htmlFor="assignment-status">
+                  <select id="assignment-status" name="status" defaultValue={assignment.status}>
+                    <option value="ACTIVE">Active</option>
+                    <option value="PAUSED">Paused</option>
+                    <option value="ENDED">Ended</option>
+                  </select>
+                </Field>
+                <FormActions>
+                  <button type="submit" className="btn btn--secondary">Save status</button>
+                </FormActions>
+              </form>
+              <form action={setAssignmentTutorAction} className="form">
+                <input type="hidden" name="assignmentId" value={assignment.id} />
+                <Field label="Tutor" htmlFor="assignment-tutor-change">
+                  <select id="assignment-tutor-change" name="tutorId" defaultValue={assignment.tutorId}>
+                    {allTutors.filter((t) => t.active || t.id === assignment.tutorId).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </Field>
+                <FormActions>
+                  <button type="submit" className="btn btn--secondary">Change tutor</button>
+                </FormActions>
+              </form>
+              <form action={addAssignmentStudentAction} className="form">
+                <input type="hidden" name="assignmentId" value={assignment.id} />
+                <Field label="Add a student" htmlFor="assignment-add-student">
+                  <select id="assignment-add-student" name="studentId" defaultValue="">
+                    <option value="" disabled>Choose a student</option>
+                    {allStudents.filter((s) => s.active && !assignment.studentIds.includes(s.id)).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </Field>
+                <FormActions>
+                  <button type="submit" className="btn btn--secondary">Add student</button>
+                </FormActions>
+              </form>
+              {namedStudents.length > 1 ? (
+                <ul className="stack">
+                  {namedStudents.map((s) => (
+                    <li key={s.id}>
+                      <form action={removeAssignmentStudentAction} className="form">
+                        <input type="hidden" name="assignmentId" value={assignment.id} />
+                        <input type="hidden" name="studentId" value={s.id} />
+                        <button type="submit" className="btn btn--secondary">Remove {s.name}</button>
+                      </form>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </CardBody>
+          </Card>
+
           <Card>
             <CardHeader title="People" />
             <CardBody className="card__body--flush">

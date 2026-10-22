@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getDataProvider } from "@learnthrive/data/inMemoryProvider";
+import { getDataProvider } from "@/lib/data/provider";
 import { requireRole } from "@/lib/auth/guard";
 import { completeLesson, LessonCompletionError, markAttendance } from "@/lib/attendance/attendanceService";
 import type { AttendanceStatus } from "@learnthrive/data/domain";
