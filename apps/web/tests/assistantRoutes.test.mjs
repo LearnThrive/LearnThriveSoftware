@@ -291,7 +291,7 @@ test("retention: storage first, then rows; a storage failure keeps the rows for 
   assert.equal((await store.chat.dueStoragePaths(later)).length, 1, "the row is still there to try again");
 
   const done = await retention.runRetention({ store, storage, now: () => later });
-  assert.deepEqual(done, { objectsRemoved: 1, failed: 0, purged: { sessions: 1, messages: 1, files: 1 } });
+  assert.deepEqual(done, { objectsRemoved: 1, failed: 0, purged: { sessions: 1, messages: 1, files: 1 }, paperJobs: 0 });
   assert.equal(storage.objects.size, 0);
-  assert.deepEqual(await retention.runRetention({ store, storage, now: () => later }), { objectsRemoved: 0, failed: 0, purged: { sessions: 0, messages: 0, files: 0 } });
+  assert.deepEqual(await retention.runRetention({ store, storage, now: () => later }), { objectsRemoved: 0, failed: 0, purged: { sessions: 0, messages: 0, files: 0 }, paperJobs: 0 });
 });

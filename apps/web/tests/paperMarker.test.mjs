@@ -152,9 +152,9 @@ async function jobWorld() {
   return { store, uploads, a, b, session, file, jobs: new PaperJobs(), deps: { store, uploads, solve, now: () => now } };
 }
 
-async function until(jobs, client, id, states) {
+async function until(w, client, id, states) {
   for (let i = 0; i < 600; i += 1) {
-    const job = jobs.get(own(client), id);
+    const job = await w.jobs.get(w.deps, own(client), id);
     if (states.includes(job?.state)) return job;
     await new Promise((r) => setTimeout(r, 25));
   }
@@ -166,10 +166,10 @@ test("a marking job judges what a calculation can, posts the feedback into the c
   const started = await w.jobs.start(w.deps, { owner: own(w.a), sessionId: w.session.id, fileId: w.file.id, kind: "mark" });
   assert.equal(started.ok, true);
   assert.equal(started.job.kind, "mark");
-  assert.equal(w.jobs.get(own(w.b), started.job.id), null);
-  await until(w.jobs, w.a, started.job.id, ["ready", "failed"]);
-  assert.equal(w.jobs.solve(w.deps, own(w.a), started.job.id, { mode: "hybrid" }).ok, true);
-  const done = await until(w.jobs, w.a, started.job.id, ["done", "failed"]);
+  assert.equal(await w.jobs.get(w.deps, own(w.b), started.job.id), null);
+  await until(w, w.a, started.job.id, ["ready", "failed"]);
+  assert.equal((await w.jobs.solve(w.deps, own(w.a), started.job.id, { mode: "hybrid" })).ok, true);
+  const done = await until(w, w.a, started.job.id, ["done", "failed"]);
   assert.equal(done.state, "done", done.message ?? "");
   const byNumber = Object.fromEntries(done.results.map((r) => [r.number, r]));
   // The mock reads "6" for every student and solves "6" for every question: right for 2x + 7 = 19, and for the expansion the
@@ -195,7 +195,7 @@ test("a mark scheme from another chat or another family is refused, and one that
   await w.uploads.put(`${w.session.id}/bad.pdf`, new Uint8Array([1, 2, 3]), "application/pdf");
   const bad = await w.store.chat.addFile(own(w.a), w.session.id, { storagePath: `${w.session.id}/bad.pdf`, bytes: 3, contentType: "application/pdf" }, new Date());
   const started = await w.jobs.start(w.deps, { owner: own(w.a), sessionId: w.session.id, fileId: w.file.id, kind: "mark", schemeFileId: bad.id });
-  const ready = await until(w.jobs, w.a, started.job.id, ["ready", "failed"]);
+  const ready = await until(w, w.a, started.job.id, ["ready", "failed"]);
   assert.equal(ready.state, "ready");
   assert.match(ready.message, /could not read that mark scheme/);
 });
@@ -209,10 +209,10 @@ test("a mark scheme in the same chat is read by question number and the feedback
   await w.uploads.put(`${w.session.id}/scheme.pdf`, WORKSHEET, "application/pdf");
   const file = await w.store.chat.addFile(own(w.a), w.session.id, { storagePath: `${w.session.id}/scheme.pdf`, bytes: WORKSHEET.length, contentType: "application/pdf" }, new Date());
   const started = await w.jobs.start(w.deps, { owner: own(w.a), sessionId: w.session.id, fileId: w.file.id, kind: "mark", schemeFileId: file.id });
-  const ready = await until(w.jobs, w.a, started.job.id, ["ready", "failed"]);
+  const ready = await until(w, w.a, started.job.id, ["ready", "failed"]);
   assert.equal(ready.message, null, "the scheme was read, so there is nothing to apologise for");
-  w.jobs.solve(w.deps, own(w.a), started.job.id, { mode: "hybrid" });
-  const done = await until(w.jobs, w.a, started.job.id, ["done", "failed"]);
+  await w.jobs.solve(w.deps, own(w.a), started.job.id, { mode: "hybrid" });
+  const done = await until(w, w.a, started.job.id, ["done", "failed"]);
   assert.equal(done.state, "done", done.message ?? "");
   assert.equal(done.results.find((r) => r.number === "2").outcome, "needs_checking", "a scheme does not turn an unconfirmed answer into a verdict");
   const summary = (await w.store.chat.listMessages(own(w.a), w.session.id)).at(-1);

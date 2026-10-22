@@ -76,24 +76,35 @@ export interface PaperResult {
 export async function solvePaper(
   deps: SolveDeps,
   document: PaperDocument,
-  options: { mode: OutputMode; questionIds?: string[]; onProgress?: (progress: Progress[]) => void },
+  options: { mode: OutputMode; questionIds?: string[]; onProgress?: (progress: Progress[]) => void; prior?: ReadonlyMap<string, SolvedQuestion>; onResult?: (result: SolvedQuestion) => void | Promise<void> },
 ): Promise<PaperResult> {
   const chosen = document.questions.filter((q) => !options.questionIds || options.questionIds.includes(q.id));
+  // Questions finished by an earlier run of this job (its checkpoints) are kept, not redone.
+  const prior = options.prior ?? new Map<string, SolvedQuestion>();
+  const todo = chosen.filter((q) => !prior.has(q.id));
   const progress: Progress[] = chosen.map((q) => ({ questionId: q.id, state: "waiting" }));
   const report = () => options.onProgress?.(progress.map((p) => ({ ...p })));
   report();
   // A picture of the page goes with a question when its text cannot be trusted alone: a scan, a diagram, stacked maths.
-  const pictureNeeded = new Set(document.pages.filter((p) => p.textQuality !== "good" || p.hasPictures || p.stackedMaths).map((p) => p.number));
+  const todoPages = new Set(todo.map((q) => q.page));
+  const pictureNeeded = new Set(document.pages.filter((p) => todoPages.has(p.number) && (p.textQuality !== "good" || p.hasPictures || p.stackedMaths)).map((p) => p.number));
   const renders = pictureNeeded.size ? await renderPdfPages(document.bytes, { scale: 1.6, pages: [...pictureNeeded] }) : [];
   const pictures = new Map(renders.map((r) => [r.number, b64(r.jpeg())]));
   const solved: SolvedQuestion[] = [];
   for (const [i, q] of chosen.entries()) {
     if (deps.signal?.aborted) throw Object.assign(new Error("cancelled"), { code: "aborted" });
+    const earlier = prior.get(q.id);
+    if (earlier) {
+      solved.push(earlier);
+      progress[i] = { questionId: q.id, state: "done", status: earlier.status };
+      continue;
+    }
     progress[i]!.state = "solving";
     report();
     const result = await solveQuestion(deps, q, pictures.get(q.page) ?? null);
     solved.push(result);
     progress[i] = { questionId: q.id, state: "done", status: result.status };
+    await options.onResult?.(result);
     report();
   }
   const out = await annotatePaper(document.bytes, solved, options.mode);
@@ -125,17 +136,25 @@ export async function readMarkScheme(bytes: Uint8Array): Promise<Map<string, str
 export async function markCompleted(
   deps: SolveDeps,
   document: PaperDocument,
-  options: { questionIds?: string[]; scheme?: Map<string, string> | null; onProgress?: (progress: Progress[]) => void },
+  options: { questionIds?: string[]; scheme?: Map<string, string> | null; onProgress?: (progress: Progress[]) => void; prior?: ReadonlyMap<string, MarkedQuestion>; onResult?: (result: MarkedQuestion) => void | Promise<void> },
 ): Promise<MarkResult> {
   const chosen = document.questions.filter((q) => !options.questionIds || options.questionIds.includes(q.id));
+  const prior = options.prior ?? new Map<string, MarkedQuestion>();
   const progress: Progress[] = chosen.map((q) => ({ questionId: q.id, state: "waiting" }));
   const report = () => options.onProgress?.(progress.map((p) => ({ ...p })));
   report();
-  const renders = await renderPdfPages(document.bytes, { scale: 1.6, pages: [...new Set(chosen.map((q) => q.page))] });
+  const pages = [...new Set(chosen.filter((q) => !prior.has(q.id)).map((q) => q.page))];
+  const renders = pages.length ? await renderPdfPages(document.bytes, { scale: 1.6, pages }) : [];
   const pictures = new Map(renders.map((r) => [r.number, b64(r.jpeg())]));
   const marked: MarkedQuestion[] = [];
   for (const [i, q] of chosen.entries()) {
     if (deps.signal?.aborted) throw Object.assign(new Error("cancelled"), { code: "aborted" });
+    const earlier = prior.get(q.id);
+    if (earlier) {
+      marked.push(earlier);
+      progress[i] = { questionId: q.id, state: "done", status: earlier.reference.status, outcome: earlier.outcome };
+      continue;
+    }
     progress[i]!.state = "solving";
     report();
     const picture = pictures.get(q.page);
@@ -145,6 +164,7 @@ export async function markCompleted(
       : { ...q, student: { answer: "", working: [], legibility: "low", blank: false }, reference: { finalAnswer: "", steps: [], status: "unsolved", statusNote: "", explanation: "" }, outcome: "needs_checking", reason: "I could not look at this page, so I have not marked it.", feedback: "", estimate: null, outOf: q.marks, usedScheme: false };
     marked.push(result);
     progress[i] = { questionId: q.id, state: "done", status: result.reference.status, outcome: result.outcome };
+    await options.onResult?.(result);
     report();
   }
   const out = await markPaper(document.bytes, marked, { withScheme: Boolean(options.scheme) });

@@ -11,6 +11,8 @@ export interface RetentionReport {
   objectsRemoved: number;
   failed: number;
   purged: PurgeResult | null;
+  /** Finished paper jobs removed once past their seven days (a job also goes with its chat). */
+  paperJobs?: number;
 }
 
 export async function runRetention(deps: { store: LibraryStore; storage: LibraryStorage; now?: () => Date }): Promise<RetentionReport> {
@@ -27,5 +29,6 @@ export async function runRetention(deps: { store: LibraryStore; storage: Library
     }
   }
   if (failed > 0) return { objectsRemoved: removed, failed, purged: null };
-  return { objectsRemoved: removed, failed: 0, purged: await deps.store.chat.purgeDue(now) };
+  const purged = await deps.store.chat.purgeDue(now);
+  return { objectsRemoved: removed, failed: 0, purged, paperJobs: await deps.store.papers.purgeDue(now) };
 }

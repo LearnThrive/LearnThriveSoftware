@@ -37,7 +37,10 @@ async function paperGate(request: Request, deps: PaperDeps, event: string, mutat
     now: deps.now,
     log: (outcome: string, details?: Record<string, string | number | boolean>) => logOutcome("paper-tutor", outcome, details),
   };
-  return { ok: true as const, g, jobs: deps.jobs ?? paperJobs(), jobDeps };
+  const jobs = deps.jobs ?? paperJobs();
+  // A job whose worker has gone (a restart, a crash) is taken over here, on the next request from anyone; cheap and throttled.
+  void jobs.recover(jobDeps).catch(() => undefined);
+  return { ok: true as const, g, jobs, jobDeps };
 }
 
 async function jsonBody(request: Request): Promise<Record<string, unknown> | null> {
@@ -80,9 +83,9 @@ export async function handlePaper(request: Request, deps: PaperDeps, id: string)
   const p = await paperGate(request, deps, "paper-job", request.method !== "GET");
   if (!p.ok) return p.response;
   if (!UUID.test(id)) return refuse("not_found");
-  if (request.method === "DELETE") return p.jobs.cancel(p.g.owner, id) ? jsonResponse(200, { success: true }, NO_STORE) : refuse("not_found");
-  const job = p.jobs.get(p.g.owner, id);
-  return job ? jsonResponse(200, { job }, NO_STORE) : jsonResponse(404, { code: "not_found", error: "That paper is no longer here (jobs last two hours, and do not survive a restart). Please start again." }, NO_STORE);
+  if (request.method === "DELETE") return (await p.jobs.cancel(p.jobDeps, p.g.owner, id)) ? jsonResponse(200, { success: true }, NO_STORE) : refuse("not_found");
+  const job = await p.jobs.get(p.jobDeps, p.g.owner, id);
+  return job ? jsonResponse(200, { job }, NO_STORE) : jsonResponse(404, { code: "not_found", error: "That paper is no longer here (jobs are kept for seven days). Please start again." }, NO_STORE);
 }
 
 export async function handleSolvePaper(request: Request, deps: PaperDeps, id: string): Promise<Response> {
@@ -92,7 +95,7 @@ export async function handleSolvePaper(request: Request, deps: PaperDeps, id: st
   const raw = await jsonBody(request);
   const mode = MODES.find((m) => m === raw?.mode) ?? "hybrid";
   const questionIds = Array.isArray(raw?.questionIds) ? raw.questionIds.filter((q): q is string => typeof q === "string" && /^q\d{1,3}$/.test(q)).slice(0, 30) : undefined;
-  const result = p.jobs.solve(p.jobDeps, p.g.owner, id, { mode, questionIds });
+  const result = await p.jobs.solve(p.jobDeps, p.g.owner, id, { mode, questionIds });
   if (!result.ok) return jsonResponse(result.code === "not_found" ? 404 : 409, { code: result.code, error: MESSAGES[result.code] }, NO_STORE);
   return jsonResponse(202, { job: result.job }, NO_STORE);
 }
@@ -100,7 +103,7 @@ export async function handleSolvePaper(request: Request, deps: PaperDeps, id: st
 export async function handlePaperPreview(request: Request, deps: PaperDeps, id: string): Promise<Response> {
   const p = await paperGate(request, deps, "paper-preview", false);
   if (!p.ok) return p.response;
-  const job = UUID.test(id) ? p.jobs.get(p.g.owner, id) : null;
+  const job = UUID.test(id) ? await p.jobs.get(p.jobDeps, p.g.owner, id) : null;
   if (!job?.resultFileId) return refuse("not_found");
   const file = await p.g.rt.store.chat.getFile(p.g.owner, job.resultFileId);
   const bytes = file ? await p.g.assistant.uploads.read(file.storagePath) : null;
