@@ -17,8 +17,8 @@ state is unverified. Env files exist (`apps/web/.env`); values are never printed
 | --- | --- | --- |
 | 1 | Identity, guardian-linked learners, persistent tuition data and enrolment | **mostly implemented and mock-tested; not service-tested** (see below) |
 | 2 | One authenticated shell | partly: learner-aware navigation and a supervised-view banner exist in the member shell; the AppShell/MemberShell merge is **not started** |
-| 3 | Stripe (plugin-led), Payments, Invoicing, Tax; Supabase deployment preparation | **not started** |
-| 4 | Durable full-paper processing | **not started** (jobs are still in process memory; 20-page and 30-question limits unchanged) |
+| 3 | Stripe (plugin-led), Payments, Invoicing, Tax; Supabase deployment preparation | **step 1 done, then blocked**: `claude plugin install stripe@claude-plugins-official` succeeded (user scope, 2026-10-22). Its tools are not loaded in the running session (needs `/reload-plugins` or a restart) and the Stripe MCP needs interactive OAuth (`/mcp`, choose the LearnThrive sandbox). `stripe_implementation_planner` has therefore **not run**; the `npx skills add` fallback was deliberately not used (the planner is not "genuinely unavailable" yet). Nothing else in workstream 3 is built |
+| 4 | Durable full-paper processing | **one slice done** (commit `d4c1ca4`): one configurable limit chain (`PAPER_MAX_PAGES` 60, `PAPER_MAX_QUESTIONS` 150, `PAPER_RENDER_BATCH` 6), pages drawn in batches (result identical to drawing all), no silent truncation (the job names the questions left out), 3-digit question numbers; a generated 30-page / 120-question paper is read completely. **Not done:** persistent jobs and worker (still process memory), hierarchical `1(a)(i)` structure, scan layout adapter, symbolic verification, benchmarks on real papers |
 | 5 | Handwritten work assessment | an opt-in marker exists from earlier work (`docs/ASSISTANT.md`, flag `PAPER_MARKER_ENABLED`), on the old in-memory job model; the brief's evidence model, scheme matching and human-benchmark gate are **not built** |
 | 6 | Final regression, runbook, handoff | not started |
 
