@@ -27,6 +27,7 @@ const EXPECTED_TABLES = [
   "lesson_students",
   "lessons",
   "notifications",
+  "paper_jobs",
   "platform_settings",
   "profiles",
   "resource_files",
@@ -59,6 +60,7 @@ const FORCED_TABLES = [
   "lesson_students",
   "lessons",
   "notifications",
+  "paper_jobs",
   "platform_settings",
   "resource_files",
   "resources",
@@ -131,6 +133,7 @@ describe("migrations", () => {
       "0009_server_lookups.sql",
       "0010_learner_identity.sql",
       "0011_tuition_domain.sql",
+      "0012_paper_jobs.sql",
     ]);
     assert.deepEqual(
       applied.map((f) => Number(f.slice(0, 4))),

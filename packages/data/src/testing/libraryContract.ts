@@ -3,6 +3,7 @@
  * Postgres store on PGlite (librarySql.test.ts). If the two ever disagree, a test here fails for one of them.
  */
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { describe, test } from "node:test";
 import type { AccountRole, LibraryStore, ResourceInput, SubscriptionInput } from "../library";
 
@@ -565,6 +566,148 @@ export function libraryContract(name: string, make: () => Promise<{ harness: Con
       assert.equal(await store.chat.usageCount(b.clientId, "assistant_message_day", window), 0);
       assert.equal(await store.chat.usageCount(a.clientId, "assistant_message_minute", window), 0);
       assert.equal(await store.chat.usageCount(a.clientId, "assistant_message_day", new Date("2026-10-21T00:00:00Z")), 0);
+    });
+
+    describe("papers: durable jobs", () => {
+      const W1 = { id: "worker-1", leaseMs: 60_000 };
+      const W2 = { id: "worker-2", leaseMs: 60_000 };
+      type Created = { ok: true; job: { id: string } };
+      const start = async (owner: { clientId: string; studentId: string | null }, now: Date, worker = W1, kind: "solve" | "mark" = "solve") => {
+        const session = await store.chat.createSession(owner, {}, now);
+        const result = await store.papers.create(owner, { sessionId: session.id, fileId: randomUUID(), schemeFileId: null, kind }, worker, now);
+        return { session, result };
+      };
+
+      test("one active job per family, whichever learner started it; a finished or waiting job does not block", async () => {
+        const now = new Date();
+        const f = await family();
+        const ava = await h.student(f.profile);
+        const a = await start(own(f), now);
+        assert.equal(a.result.ok, true);
+        const job = (a.result as Created).job;
+        assert.equal((await store.papers.activeForFamily(f.clientId))?.id, job.id);
+        const second = await start(own(f, ava), now);
+        assert.deepEqual(second.result, { ok: false, code: "busy" }, "a sibling or the guardian cannot start another while one is running");
+        assert.equal(await store.papers.finish(job.id, W1.id, { state: "ready" }, now), true);
+        assert.equal(await store.papers.activeForFamily(f.clientId), null, "waiting for a choice is not active");
+        const third = await start(own(f, ava), now);
+        assert.equal(third.result.ok, true);
+        const other = await family();
+        assert.equal((await start(own(other), now)).result.ok, true, "another family is independent");
+      });
+
+      test("only the owner (family and learner) can see, begin or cancel a job; a chat that is not theirs is refused", async () => {
+        const now = new Date();
+        const f = await family();
+        const stranger = await family();
+        const ava = await h.student(f.profile);
+        const ben = await h.student(f.profile);
+        const { session, result } = await start(own(f, ava), now);
+        assert.equal(result.ok, true);
+        const id = (result as Created).job.id;
+        for (const [who, name] of [[own(f, ben), "a sibling"], [own(f), "the guardian"], [own(stranger), "another family"]] as const) {
+          assert.equal(await store.papers.get(who, id), null, `${name}: get`);
+          assert.equal(await store.papers.cancel(who, id, now), false, `${name}: cancel`);
+          assert.deepEqual(await store.papers.begin(who, id, { mode: "inline", selectedIds: null }, W2, now), { ok: false, code: "not_found" }, `${name}: begin`);
+          assert.deepEqual(await store.papers.create(who, { sessionId: session.id, fileId: randomUUID(), schemeFileId: null, kind: "solve" }, W2, now), { ok: false, code: "not_found" }, `${name}: create on Ava's chat`);
+        }
+        assert.equal((await store.papers.get(own(f, ava), id))?.state, "extracting");
+        assert.equal((await store.papers.get(own(f, ava), id))?.studentId, ava);
+      });
+
+      test("a job runs extracting -> ready -> solving -> done, with a checkpoint per question and a lease renewed by each", async () => {
+        const now = new Date("2026-10-22T10:00:00Z");
+        const f = await family();
+        const { result } = await start(own(f), now);
+        const id = (result as Created).job.id;
+        const questions = [{ id: "q1" }, { id: "q2" }];
+        const later = new Date(now.getTime() + 30_000);
+        const saved = await store.papers.save(id, W1.id, { questions, message: "Found 2." }, W1, later);
+        assert.deepEqual(saved?.questions, questions);
+        assert.equal(saved?.leaseExpiresAt?.getTime(), later.getTime() + W1.leaseMs, "saving renews the lease");
+        assert.equal(await store.papers.finish(id, W1.id, { state: "ready" }, later), true);
+        const ready = await store.papers.get(own(f), id);
+        assert.deepEqual([ready?.state, ready?.leaseOwner, ready?.leaseExpiresAt, ready?.message], ["ready", null, null, "Found 2."]);
+        const begun = await store.papers.begin(own(f), id, { mode: "inline", selectedIds: ["q2"] }, W1, later);
+        assert.equal(begun.ok, true);
+        assert.deepEqual(await store.papers.begin(own(f), id, { mode: "inline", selectedIds: null }, W1, later), { ok: false, code: "not_ready" }, "begins once");
+        const solving = await store.papers.get(own(f), id);
+        assert.deepEqual([solving?.state, solving?.mode, solving?.selectedIds, solving?.leaseOwner], ["solving", "inline", ["q2"], W1.id]);
+        await store.papers.save(id, W1.id, { checkpoint: { questionId: "q2", value: { answer: "x = 4", steps: [{ math: "2x = 8" }] } }, progress: [{ questionId: "q2", state: "done" }] }, W1, later);
+        await store.papers.save(id, W1.id, { checkpoint: { questionId: "q1", value: { answer: "7" } } }, W1, later);
+        const mid = await store.papers.get(own(f), id);
+        assert.deepEqual(Object.keys(mid!.checkpoints).sort(), ["q1", "q2"]);
+        assert.deepEqual(mid!.checkpoints.q2, { answer: "x = 4", steps: [{ math: "2x = 8" }] }, "checkpoints keep their structure");
+        assert.deepEqual(mid!.progress, [{ questionId: "q2", state: "done" }]);
+        const file = randomUUID();
+        assert.equal(await store.papers.finish(id, W1.id, { state: "done", resultFileId: file, pageCount: 5, workedPages: [4, 5] }, later), true);
+        const done = await store.papers.get(own(f), id);
+        assert.deepEqual([done?.state, done?.resultFileId, done?.pageCount, done?.workedPages, done?.leaseOwner], ["done", file, 5, [4, 5], null]);
+        assert.equal(await store.papers.save(id, W1.id, { message: "late" }, W1, later), null, "a finished job is not written to");
+      });
+
+      test("fencing: a worker that has lost its lease cannot save or finish, and cancelling stops the worker", async () => {
+        const now = new Date("2026-10-22T10:00:00Z");
+        const f = await family();
+        const { result } = await start(own(f), now);
+        const id = (result as Created).job.id;
+        assert.equal(await store.papers.save(id, W2.id, { message: "intruder" }, W2, now), null, "not the lease holder");
+        assert.equal(await store.papers.finish(id, W2.id, { state: "done" }, now), false);
+        const expired = new Date(now.getTime() + 5 * 60_000);
+        const { claimed } = await store.papers.claimStale(W2, expired);
+        assert.deepEqual(claimed.filter((j) => j.id === id).map((j) => [j.attempts, j.leaseOwner]), [[2, W2.id]]);
+        assert.equal(await store.papers.save(id, W1.id, { message: "zombie" }, W1, expired), null, "the old worker is fenced out");
+        assert.equal(await store.papers.finish(id, W1.id, { state: "done" }, expired), false);
+        assert.ok(await store.papers.save(id, W2.id, { message: "new owner" }, W2, expired));
+        assert.equal(await store.papers.cancel(own(f), id, expired), true);
+        const cancelled = await store.papers.get(own(f), id);
+        assert.deepEqual([cancelled?.state, cancelled?.message, cancelled?.leaseOwner], ["cancelled", "Cancelled.", null]);
+        assert.equal(await store.papers.save(id, W2.id, { message: "still going" }, W2, expired), null, "the worker finds out it was cancelled");
+        assert.equal(await store.papers.cancel(own(f), id, expired), true, "cancelling again is harmless");
+        assert.equal((await store.papers.get(own(f), id))?.state, "cancelled");
+      });
+
+      test("recovery: only jobs whose lease ran out are claimed; one that has run too often is failed, not retried for ever", async () => {
+        const now = new Date("2026-10-22T10:00:00Z");
+        const f = await family();
+        const { result } = await start(own(f), now);
+        const id = (result as Created).job.id;
+        await store.papers.save(id, W1.id, { questions: [{ id: "q1" }], checkpoint: { questionId: "q1", value: { answer: "1" } } }, W1, now);
+        const soon = new Date(now.getTime() + 30_000);
+        assert.deepEqual((await store.papers.claimStale(W2, soon)).claimed.filter((j) => j.id === id), [], "a live lease is left alone");
+        let at = new Date(now.getTime() + 10 * 60_000);
+        const first = (await store.papers.claimStale(W2, at)).claimed.find((j) => j.id === id);
+        assert.deepEqual(first?.checkpoints, { q1: { answer: "1" } }, "the checkpoints come with the claim");
+        assert.equal(first?.attempts, 2);
+        at = new Date(at.getTime() + 10 * 60_000);
+        assert.equal((await store.papers.claimStale(W1, at)).claimed.find((j) => j.id === id)?.attempts, 3);
+        at = new Date(at.getTime() + 10 * 60_000);
+        const last = await store.papers.claimStale(W2, at);
+        assert.ok(last.failed >= 1);
+        assert.equal(last.claimed.some((j) => j.id === id), false);
+        const failed = await store.papers.get(own(f), id);
+        assert.deepEqual([failed?.state, failed?.leaseOwner], ["failed", null]);
+        assert.equal(await store.papers.activeForFamily(f.clientId), null, "a failed job frees the family");
+      });
+
+      test("retention: finished jobs go after seven days, active ones stay, and a deleted chat takes its jobs with it", async () => {
+        const now = new Date("2026-10-22T10:00:00Z");
+        const f = await family();
+        const a = await start(own(f), now);
+        const id = (a.result as Created).job.id;
+        await store.papers.finish(id, W1.id, { state: "failed", message: "x" }, now);
+        const b = await start(own(f), now);
+        const running = (b.result as Created).job.id;
+        const day6 = new Date(now.getTime() + 6 * DAYS);
+        assert.equal(await store.papers.purgeDue(day6), 0);
+        const day8 = new Date(now.getTime() + 8 * DAYS);
+        await store.papers.purgeDue(day8);
+        assert.equal(await store.papers.get(own(f), id), null, "the finished job is gone");
+        assert.equal((await store.papers.get(own(f), running))?.id, running, "a running one is kept");
+        await store.chat.requestDeletion(own(f), b.session.id, now);
+        await store.chat.purgeDue(now);
+        assert.equal(await store.papers.get(own(f), running), null, "it goes with its chat");
+      });
     });
 
     test("teardown", async () => {
