@@ -44,7 +44,7 @@ export default defineConfig({
   },
   {
     command: 'npm run dev -- -p 3101',
-    env: { NEXT_PUBLIC_THEME_TOGGLE: '1', CAREERS_OPEN_FOR_TESTING: '1', LEARNTHRIVE_DOCKER: '0', LIBRARY_PHASE: 'enrolled', NEXT_DIST_DIR: '.next-3101', ASSISTANT_PROVIDER: 'mock', VOICE_PROVIDER: 'mock', ASSISTANT_DAILY_MESSAGES: '200', ASSISTANT_PER_MINUTE: '60' },
+    env: { NEXT_PUBLIC_THEME_TOGGLE: '1', CAREERS_OPEN_FOR_TESTING: '1', LEARNTHRIVE_DOCKER: '0', LIBRARY_PHASE: 'enrolled', NEXT_DIST_DIR: '.next-3101', ASSISTANT_PROVIDER: 'mock', VOICE_PROVIDER: 'mock', PAPER_MARKER_ENABLED: 'true', ASSISTANT_DAILY_MESSAGES: '200', ASSISTANT_PER_MINUTE: '60' },
     url: 'http://localhost:3101',
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,

@@ -1,6 +1,6 @@
 import { jsonResponse, logOutcome, readBodyLimited } from "@/lib/request-guards";
 import { renderPdfPages } from "@/lib/assistant/documents";
-import { paperTutorEnabled } from "@/lib/assistant/config";
+import { paperMarkerEnabled, paperTutorEnabled } from "@/lib/assistant/config";
 import { gate, refuse, type AssistantDeps } from "@/lib/assistant/handlers";
 import type { OutputMode } from "./annotate";
 import { paperJobs, type PaperJobs } from "./jobs";
@@ -10,7 +10,8 @@ import { paperJobs, type PaperJobs } from "./jobs";
  * feature's own switch: PAPER_TUTOR_ENABLED (development: on unless "false"; production: on only if exactly "true", and only where
  * the assistant itself may run). A job and its files are only ever found by the family that owns them.
  *
- *   POST   /api/assistant/papers                { fileId, sessionId }               start reading a paper  -> the job
+ *   POST   /api/assistant/papers                { fileId, sessionId, kind?, schemeFileId? }   start reading a paper  -> the job
+ *                                               kind "mark" (a completed paper, opt-in: PAPER_MARKER_ENABLED) may name a mark scheme uploaded to the same chat
  *   GET    /api/assistant/papers/<id>                                                how it is going
  *   POST   /api/assistant/papers/<id>/solve     { mode, questionIds? }               solve (all, or the chosen questions)
  *   DELETE /api/assistant/papers/<id>                                                cancel
@@ -64,7 +65,12 @@ export async function handleStartPaper(request: Request, deps: PaperDeps): Promi
   const fileId = typeof raw?.fileId === "string" ? raw.fileId : "";
   const sessionId = typeof raw?.sessionId === "string" ? raw.sessionId : "";
   if (!UUID.test(fileId) || !UUID.test(sessionId)) return refuse("bad_request");
-  const started = await p.jobs.start(p.jobDeps, { clientId: p.g.account.clientId, sessionId, fileId });
+  const kind = raw?.kind === "mark" ? "mark" : "solve";
+  // Marking is a separate, opt-in feature: off, it does not exist.
+  if (kind === "mark" && !paperMarkerEnabled(deps.env ?? process.env)) return refuse("not_found");
+  const schemeFileId = typeof raw?.schemeFileId === "string" ? raw.schemeFileId : undefined;
+  if (schemeFileId !== undefined && !UUID.test(schemeFileId)) return refuse("bad_request");
+  const started = await p.jobs.start(p.jobDeps, { clientId: p.g.account.clientId, sessionId, fileId, kind, schemeFileId });
   if (!started.ok) return jsonResponse(started.code === "not_found" ? 404 : started.code === "limit" ? 429 : 409, { code: started.code, error: MESSAGES[started.code] }, NO_STORE);
   logOutcome("paper-start", "started");
   return jsonResponse(202, { job: started.job }, NO_STORE);
@@ -115,7 +121,7 @@ export async function handleFile(request: Request, deps: PaperDeps, id: string):
   const bytes = file ? await g.assistant.uploads.read(file.storagePath) : null;
   if (!file || !bytes) return refuse("not_found");
   const download = new URL(request.url).searchParams.get("download") === "1";
-  const name = file.contentType === "application/pdf" ? "study-buddy-worked-solutions.pdf" : file.contentType === "image/png" ? "upload.png" : "upload.jpg";
+  const name = file.contentType === "application/pdf" ? "study-buddy-paper.pdf" : file.contentType === "image/png" ? "upload.png" : "upload.jpg";
   logOutcome("assistant-file", "sent");
   return new Response(bytes as BodyInit, {
     status: 200,

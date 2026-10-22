@@ -72,6 +72,45 @@ test('a worksheet is solved: questions to choose, progress, honest statuses, a d
   await other.close();
 });
 
+test('a completed paper is checked: estimated marks only, what cannot be confirmed is left for checking, and each question opens', async ({ page }) => {
+  test.setTimeout(90_000);
+  await enrolledAndOpen(page);
+  await page.getByRole('checkbox', { name: /18 or over/ }).check();
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: /add file|file/i }).first().click();
+  await (await chooser).setFiles({ name: 'my-paper.pdf', mimeType: 'application/pdf', buffer: WORKSHEET });
+
+  await page.getByRole('button', { name: 'Check my completed paper' }).click();
+  const panel = page.getByRole('region', { name: 'Check my completed paper' });
+  await expect(panel.getByRole('group', { name: /Questions found \(2\)/ })).toBeVisible({ timeout: 20_000 });
+  // Marking has no "how to write the answers" choice, and says up front that marks are estimates.
+  await expect(panel.getByRole('radio')).toHaveCount(0);
+  await expect(panel).toContainText("AI's estimates, never official marks");
+  await expectAxeClean(page, 'Paper Tutor: choosing questions to check');
+
+  await panel.getByRole('button', { name: 'Check all questions' }).click();
+  await expect(panel.getByRole('link', { name: 'Download the checked paper' })).toBeVisible({ timeout: 45_000 });
+  // The mock reads "6" for both answers: right for 2x + 7 = 19; the expansion has no confirmed answer, so it is not called wrong.
+  const progress = panel.getByRole('list', { name: 'Progress' });
+  await expect(progress.getByRole('listitem').nth(0)).toContainText('Correct');
+  await expect(progress.getByRole('listitem').nth(1)).toContainText('Needs checking');
+
+  const questions = panel.getByLabel('Questions');
+  await questions.getByText('Q2').click();
+  await expect(questions).toContainText('have not marked it');
+  const summary = page.locator('article[aria-label="Study Buddy"]').last();
+  await expect(summary).toContainText('not official marks');
+
+  const href = (await panel.getByRole('link', { name: 'Download the checked paper' }).getAttribute('href'))!;
+  const pdf = await page.request.get(href);
+  expect(pdf.status()).toBe(200);
+  expect((await pdf.body()).subarray(0, 5).toString()).toBe('%PDF-');
+  await panel.getByRole('button', { name: 'Preview' }).click();
+  await panel.getByRole('button', { name: 'Next page' }).click();
+  await expect(panel.getByText(/Page 2 of \d+ \(feedback\)/)).toBeVisible();
+  await expectAxeClean(page, 'Paper Tutor: checked');
+});
+
 test('the Paper Tutor routes refuse a signed-out visitor and nonsense input', async ({ page, request }) => {
   expect((await request.post('/api/assistant/papers', { data: { fileId: 'x', sessionId: 'y' }, headers: { Origin: 'http://localhost:3101' } })).status()).toBe(401);
   expect((await request.get('/api/assistant/files/00000000-0000-4000-8000-000000000000')).status()).toBe(401);

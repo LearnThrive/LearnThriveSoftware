@@ -1,6 +1,8 @@
 import { PDFDocument } from "pdf-lib";
 import { readPdfDocument, renderPdfPages, type PageReading } from "@/lib/assistant/documents";
 import { annotatePaper, type OutputMode, type Placement, type SolvedQuestion } from "./annotate";
+import { markQuestion, type MarkedQuestion, type Outcome } from "./mark";
+import { markPaper } from "./markPdf";
 import { findQuestions, type PaperQuestion } from "./questions";
 import { listQuestionsFromPicture, solveQuestion, type SolveDeps } from "./solve";
 
@@ -54,7 +56,7 @@ export async function extractQuestions(deps: SolveDeps | null, bytes: Uint8Array
   return { bytes, pages: reading.pages, questions: questions.slice(0, MAX_QUESTIONS) };
 }
 
-export type Progress = { questionId: string; state: "waiting" | "solving" | "done"; status?: SolvedQuestion["status"] };
+export type Progress = { questionId: string; state: "waiting" | "solving" | "done"; status?: SolvedQuestion["status"]; outcome?: Outcome };
 
 export interface PaperResult {
   pdf: Uint8Array;
@@ -93,6 +95,56 @@ export async function solvePaper(
   const check = await readPdfDocument(out.pdf, { render: false, maxPages: 60 });
   if (!check.ok) throw new Error("the annotated PDF does not open");
   return { pdf: out.pdf, solved, placements: out.placements, workedPages: out.workedPages, pageCount: check.pageCount };
+}
+
+export interface MarkResult {
+  pdf: Uint8Array;
+  marked: MarkedQuestion[];
+  feedbackPages: number[];
+  pageCount: number;
+}
+
+/** The text of a mark scheme PDF, split by question number (untrusted: it only ever shapes feedback). Null if it cannot be read. */
+export async function readMarkScheme(bytes: Uint8Array): Promise<Map<string, string> | null> {
+  const reading = await readPdfDocument(bytes, { render: false, maxPages: 20 });
+  if (!reading.ok) return null;
+  const parts = findQuestions(reading.pages);
+  return parts.length ? new Map(parts.map((q) => [q.number, q.text])) : null;
+}
+
+/**
+ * Marks the chosen questions of a completed paper. Every page the questions sit on is pictured, because the student's writing is
+ * not in the text layer. Cancellable through deps.signal; progress is reported after each question like solving.
+ */
+export async function markCompleted(
+  deps: SolveDeps,
+  document: PaperDocument,
+  options: { questionIds?: string[]; scheme?: Map<string, string> | null; onProgress?: (progress: Progress[]) => void },
+): Promise<MarkResult> {
+  const chosen = document.questions.filter((q) => !options.questionIds || options.questionIds.includes(q.id));
+  const progress: Progress[] = chosen.map((q) => ({ questionId: q.id, state: "waiting" }));
+  const report = () => options.onProgress?.(progress.map((p) => ({ ...p })));
+  report();
+  const renders = await renderPdfPages(document.bytes, { scale: 1.6, pages: [...new Set(chosen.map((q) => q.page))] });
+  const pictures = new Map(renders.map((r) => [r.number, b64(r.jpeg())]));
+  const marked: MarkedQuestion[] = [];
+  for (const [i, q] of chosen.entries()) {
+    if (deps.signal?.aborted) throw Object.assign(new Error("cancelled"), { code: "aborted" });
+    progress[i]!.state = "solving";
+    report();
+    const picture = pictures.get(q.page);
+    // No picture of the page (rendering failed): nothing to read, so the question is left for the student to check, never marked.
+    const result: MarkedQuestion = picture
+      ? await markQuestion(deps, q, picture, options.scheme?.get(q.number) ?? null)
+      : { ...q, student: { answer: "", working: [], legibility: "low", blank: false }, reference: { finalAnswer: "", steps: [], status: "unsolved", statusNote: "", explanation: "" }, outcome: "needs_checking", reason: "I could not look at this page, so I have not marked it.", feedback: "", estimate: null, outOf: q.marks, usedScheme: false };
+    marked.push(result);
+    progress[i] = { questionId: q.id, state: "done", status: result.reference.status, outcome: result.outcome };
+    report();
+  }
+  const out = await markPaper(document.bytes, marked, { withScheme: Boolean(options.scheme) });
+  const check = await readPdfDocument(out.pdf, { render: false, maxPages: 60 });
+  if (!check.ok) throw new Error("the marked PDF does not open");
+  return { pdf: out.pdf, marked, feedbackPages: out.feedbackPages, pageCount: check.pageCount };
 }
 
 /** The solutions as Markdown for the chat, so the student can ask about any question afterwards without solving the paper again. */

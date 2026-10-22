@@ -31,6 +31,13 @@ export class MockProvider implements ChatProvider {
     if (options.json && system.startsWith("List the numbered questions")) {
       // The Paper Tutor reading a picture of a page: one question, as a scan of the "3/4 of 24" homework would give.
       script = JSON.stringify({ questions: [{ number: "1", text: "What is 3/4 of 24?", marks: null }] });
+    } else if (options.json && system.startsWith("Read the student's handwritten")) {
+      // The Paper Tutor marking a completed paper, reading the student's writing: always "6", clearly legible (a question that says
+      // [blank] or [illegible] reads as that), so tests see a right answer, and a reference that cannot confirm it.
+      const text = /<question>\s*([\s\S]*?)\s*<\/question>/.exec(last)?.[1] ?? "";
+      script = JSON.stringify(text.includes("[blank]") ? { answer: "", working: [], legibility: "high", blank: true } : { answer: "6", working: ["2x = 12", "x = 6"], legibility: text.includes("[illegible]") ? "low" : "high", blank: false });
+    } else if (options.json && system.startsWith("Give feedback on a student's")) {
+      script = JSON.stringify({ mistake: "The last step went wrong.", feedback: "Check each step again. Undo the operations in reverse order.", method_marks: 1 });
     } else if (options.json) {
       // The Paper Tutor's solver: always "6" (right for "Solve 2x + 7 = 19", wrong for anything else), so tests see both a verified
       // and a failed answer from the real checker.
