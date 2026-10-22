@@ -86,7 +86,7 @@ export class SupabaseAccountAuth implements AccountAuth {
     const reply = await this.call("POST", "/signup", {
       email: input.email,
       password: input.password,
-      data: { display_name: input.displayName, adult_confirmed: true },
+      data: { display_name: input.displayName, ...(input.adultConfirmed ? { adult_confirmed: true } : {}) },
     });
     if (!reply || reply.status >= 500 || reply.status === 429) return { ok: false as const, reason: "unavailable" as const };
     if (reply.status >= 200 && reply.status < 300) return { ok: true as const };

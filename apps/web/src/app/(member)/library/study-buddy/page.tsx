@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { platformAccess } from "@learnthrive/data/library";
+import { accessFactsFor, platformAccess } from "@learnthrive/data/library";
 import { StudyBuddyLoader } from "@/components/study-buddy/StudyBuddyLoader";
 import { requireAccountPage } from "@/lib/account/pages";
 import { assistantClosed } from "@/lib/assistant/runtime";
@@ -20,7 +20,7 @@ export default async function StudyBuddyPage() {
     const { notFound } = await import("next/navigation");
     notFound();
   }
-  const facts = account.clientId ? await rt.store.access.facts(account.clientId) : { enrolled: false, subscription: false, adminGrant: false };
+  const facts = await accessFactsFor(rt.store, account);
   if (!platformAccess(account.role, facts).studyBuddy) {
     return (
       <main id="main-content" className={styles.center}>
@@ -36,7 +36,7 @@ export default async function StudyBuddyPage() {
       </main>
     );
   }
-  if (!account.adultConfirmed) {
+  if (!account.adultConfirmed && !account.learner) {
     return (
       <main id="main-content" className={styles.center}>
         <p>Study Buddy is for adult account holders.</p>

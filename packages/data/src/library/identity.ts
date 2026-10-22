@@ -58,6 +58,9 @@ export interface InvitationRecord {
 }
 
 export type InviteFailure = "not_found" | "limit" | "already_learner" | "not_allowed";
+/** What an invitation link says, without spending it. The address is returned so the sign-up form can pre-fill it; nothing else about the student. */
+export type InvitationPeek = { state: "open"; email: string | null } | { state: "used" | "revoked" | "expired" | "invalid" };
+
 export type AcceptFailure = "invalid" | "expired" | "used" | "revoked" | "email_mismatch" | "not_eligible";
 
 export interface CreateInvitationInput {
@@ -110,6 +113,8 @@ export interface IdentityRepository {
   /** Replaces any open invitation for the student with this one. Checks the student is the family's, has no login yet, and the daily limit. */
   createInvitation(input: CreateInvitationInput): Promise<{ ok: true; invitation: InvitationRecord } | { ok: false; reason: InviteFailure }>;
   listInvitations(clientId: string, studentId: string): Promise<InvitationRecord[]>;
+  /** Reads an invitation by token hash without using it. */
+  peekInvitation(tokenHash: string, now: Date): Promise<InvitationPeek>;
   /** False if it is not this family's, or is already accepted or revoked. */
   revokeInvitation(clientId: string, invitationId: string, actor: string, now: Date): Promise<boolean>;
   /**

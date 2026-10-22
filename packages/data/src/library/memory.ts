@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { deriveEntitlement, type AdminGrantRecord, type SubscriptionRecord } from "./billing";
 import { CHAT_TEXT_DAYS, CHAT_UPLOAD_DAYS, DAY_MS, type ChatExport, type ChatFileRecord, type ChatMessageRecord, type ChatSessionRecord } from "./chat";
-import type { AcceptFailure, AccessMode, IdentityAuditEntry, IdentityRepository, InvitationRecord, LearnerContext, LinkStatus, StudentRecord } from "./identity";
+import type { AcceptFailure, AccessMode, InvitationPeek, IdentityAuditEntry, IdentityRepository, InvitationRecord, LearnerContext, LinkStatus, StudentRecord } from "./identity";
 import type { AccessRepository, AccountRepository, BillingRepository, ChatRepository, DownloadRepository, LibraryStore, ResourceRepository } from "./ports";
 import type {
   AccessFacts,
@@ -342,6 +342,14 @@ export class InMemoryLibraryStore implements LibraryStore {
         .filter((i) => i.clientId === clientId && i.studentId === studentId)
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
         .map(({ tokenHash: _hash, invitedBy: _by, acceptedBy: _acc, ...record }) => record),
+    peekInvitation: async (tokenHash, now): Promise<InvitationPeek> => {
+      const inv = [...this.invitations.values()].find((i) => i.tokenHash === tokenHash);
+      if (!inv) return { state: "invalid" };
+      if (inv.acceptedAt) return { state: "used" };
+      if (inv.revokedAt) return { state: "revoked" };
+      if (inv.expiresAt.getTime() <= now.getTime()) return { state: "expired" };
+      return { state: "open", email: inv.email };
+    },
     revokeInvitation: async (clientId, invitationId, actor, now) => {
       const inv = this.invitations.get(invitationId);
       if (!inv || inv.clientId !== clientId || inv.acceptedAt || inv.revokedAt) return false;

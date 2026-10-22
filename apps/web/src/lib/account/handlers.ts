@@ -1,4 +1,4 @@
-import { destinationFor, platformAccess, type AccessFacts } from "@learnthrive/data/library";
+import { accessFactsFor, destinationFor, platformAccess } from "@learnthrive/data/library";
 import { asString } from "@/lib/forms-common";
 import { humanCheckAvailable, verifyHumanCheck } from "@/lib/human-check";
 import { SlidingWindowLimiter, clientAddress } from "@/lib/rate-limit";
@@ -155,7 +155,7 @@ async function destinationAfterSignIn(rt: AccountRuntime, profileId: string, req
   try {
     const account = await rt.store.accounts.getAccount(profileId);
     if (!account) return requested || "/account";
-    const facts: AccessFacts = account.clientId ? await rt.store.access.facts(account.clientId) : { enrolled: false, subscription: false, adminGrant: false };
+    const facts = await accessFactsFor(rt.store, account);
     return destinationFor(platformAccess(account.role, facts), requested, { studyBuddyOpen: deps.studyBuddyOpen ?? false, dashboardOpen: deps.dashboardOpen ?? true });
   } catch {
     return requested || "/account";

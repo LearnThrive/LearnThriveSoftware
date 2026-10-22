@@ -136,6 +136,24 @@ export function identityContract(name: string, make: () => Promise<{ harness: Id
       assert.equal(JSON.stringify(invitations).includes("tokenHash"), false, "a listing never carries the token hash");
     });
 
+    test("peeking at an invitation reads its state without spending it", async () => {
+      const f = await family();
+      const { plain, made } = await invite(f, { email: "peek@example.test" });
+      assert.ok(made.ok);
+      if (!made.ok) return;
+      assert.deepEqual(await store.identity.peekInvitation(sha(plain), now()), { state: "open", email: "peek@example.test" });
+      assert.deepEqual(await store.identity.peekInvitation(sha(plain), now()), { state: "open", email: "peek@example.test" }, "reading it twice changes nothing");
+      assert.deepEqual(await store.identity.peekInvitation(sha(token()), now()), { state: "invalid" });
+      assert.deepEqual(await store.identity.peekInvitation(sha(plain), new Date(Date.now() + 100 * HOUR)), { state: "expired" });
+      await store.identity.revokeInvitation(f.clientId, made.invitation.id, f.guardian, now());
+      assert.deepEqual(await store.identity.peekInvitation(sha(plain), now()), { state: "revoked" });
+      const g = await family();
+      const second = await invite(g);
+      const learner = await h.profile({ adult: false });
+      await accept(second.plain, learner, email());
+      assert.deepEqual(await store.identity.peekInvitation(sha(second.plain), now()), { state: "used" });
+    });
+
     test("an invitation tied to an address is accepted only by that address", async () => {
       const f = await family();
       const { plain } = await invite(f, { email: "right@example.test" });

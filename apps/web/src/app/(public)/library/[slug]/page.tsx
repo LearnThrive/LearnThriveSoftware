@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
-import { canAccess } from "@learnthrive/data/library";
+import { accessFactsFor, canAccess } from "@learnthrive/data/library";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { Container } from "@/components/Container";
 import { DownloadPanel, downloadMessage, type DownloadView } from "@/components/library/DownloadPanel";
@@ -40,8 +40,7 @@ export default async function ResourcePage({ params, searchParams }: Props) {
   if (rt && state.status === "ok") {
     const account = await rt.store.accounts.getAccount(state.user.id);
     if (account) {
-      const clientId = account.clientId;
-      const facts = clientId ? await rt.store.access.facts(clientId) : { enrolled: false, subscription: false, adminGrant: false };
+      const facts = await accessFactsFor(rt.store, account);
       const files = await rt.store.resources.files(resource.id);
       view = { kind: "decided", decision: canAccess(account, resource, facts, new Date()), hasFile: files.length > 0 };
     }

@@ -2,7 +2,10 @@ import type { ReactNode } from "react";
 import type { Viewport } from "next";
 import { MotionRuntime } from "@/components/motion/MotionRuntime";
 import { MemberShell, type MemberNavItem } from "@/components/member/MemberShell";
+import { SupervisedBanner } from "@/components/learner/SupervisedBanner";
 import { currentAccess } from "@/lib/access/current";
+import { nextJar } from "@/lib/account/next";
+import { supervisedLearner } from "@/lib/learner/resolve";
 import { assistantClosed } from "@/lib/assistant/runtime";
 import { PORTAL_ENABLED } from "@/lib/portal";
 
@@ -29,12 +32,15 @@ export default async function MemberLayout({ children }: { children: ReactNode }
   // Staff and enrolled families have the whole platform, so the member area links back to it (the same sign-in, the same account). A
   // Library subscriber has no dashboard, so no such link. `platformAccess` is the one rule, and the dashboard link also needs the signed-in app open.
   const who = await currentAccess();
+  // A guardian viewing as one of their learners sees the learner's menu (no Account page) and a way out that needs their password.
+  const viewing = who ? await supervisedLearner(who.rt, await nextJar(), who.account.profileId) : null;
   const items: MemberNavItem[] = [
-    ...(who?.access.dashboard && PORTAL_ENABLED ? [{ href: "/dashboard", label: "Dashboard", icon: "dashboard" } satisfies MemberNavItem] : []),
-    ...ITEMS.filter((item) => item.href !== "/library/study-buddy" || assistantClosed() === null),
+    ...(who?.access.dashboard && PORTAL_ENABLED && !viewing ? [{ href: "/dashboard", label: "Dashboard", icon: "dashboard" } satisfies MemberNavItem] : []),
+    ...ITEMS.filter((item) => (item.href !== "/library/study-buddy" || assistantClosed() === null) && !(viewing && item.href === "/account")),
   ];
   return (
     <MotionRuntime>
+      {viewing ? <SupervisedBanner name={viewing.displayName} /> : null}
       <MemberShell items={items}>{children}</MemberShell>
     </MotionRuntime>
   );

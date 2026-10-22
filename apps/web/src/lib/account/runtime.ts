@@ -53,7 +53,7 @@ async function create(backend: Exclude<AccountBackend, "off">, env: Env): Promis
     };
   }
   const memory = new InMemoryLibraryStore();
-  const auth = new MemoryAccountAuth({ onUserCreated: (user) => memory.seedProfile({ id: user.id, displayName: user.displayName, adultConfirmed: true, email: user.email }) });
+  const auth = new MemoryAccountAuth({ onUserCreated: (user) => memory.seedProfile({ id: user.id, displayName: user.displayName, adultConfirmed: user.adultConfirmed, email: user.email }) });
   // A local dev server also has the development accounts (lib/dev/accounts.ts) behind this same sign-in, so one login page serves
   // every kind of person. Tests that build their own runtime (NODE_ENV unset) get none: they start empty.
   if (isDevelopmentBuild(env)) await seedDevAccounts(auth, memory);

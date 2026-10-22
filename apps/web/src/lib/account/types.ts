@@ -27,8 +27,12 @@ export interface SignUpInput {
   email: string;
   password: string;
   displayName: string;
-  /** The adult (18 or over) declaration. The caller refuses to get here without it. */
-  adultConfirmed: true;
+  /**
+   * The adult (18 or over) declaration. true for the ordinary sign-up, which refuses to get here without it. false only for a learner's
+   * sign-up from a guardian's invitation: the account is made without the declaration, never marked as an adult, and can do nothing
+   * until the invitation binds it to the student (docs/IDENTITY.md).
+   */
+  adultConfirmed: boolean;
 }
 
 /** The kinds of link an email can carry. Both are one use. */
