@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { ProviderMessage } from "@/lib/assistant/types";
 import type { SolvedQuestion } from "./annotate";
-import { equivalent, readSolutions, sameValue, valueOf } from "./maths";
+import { equivalent, readSolutions, sameValue, valueOf, variables } from "./maths";
 import type { PaperQuestion } from "./questions";
 import { solveQuestion, type SolveDeps } from "./solve";
 
@@ -120,8 +120,10 @@ export async function readStudentAnswer(deps: SolveDeps, q: PaperQuestion, pictu
 
 /** Do two final answers say the same thing? True / false when a calculation can tell, null when it cannot. */
 export function sameAnswer(student: string, reference: string): boolean | null {
-  const a = stripDollars(student);
-  const b = stripDollars(reference);
+  // Handwriting writes "times" as a letter x between numbers (5.2 x 10^-4): that is a multiplication, not a variable.
+  const times = (t: string) => t.replace(/(\d)\s*[xX]\s*(?=\d)/g, "$1 \\times ");
+  const a = times(stripDollars(student));
+  const b = times(stripDollars(reference));
   if (!a || !b) return null;
   // Words are not maths: the parser would read "five" as f x i x v x e and call it unequal to 5. No calculation, no verdict.
   const words = (t: string) => /[a-z]{3,}/i.test(t.replace(/\\[a-z]+/gi, "").replace(/\b(?:or|and)\b/gi, ""));
@@ -144,6 +146,8 @@ export function sameAnswer(student: string, reference: string): boolean | null {
   const va = valueOf(a);
   const vb = valueOf(b);
   if (va !== null && vb !== null) return sameValue(va, vb);
+  // Expressions that use different unknowns are not "different answers", they are answers this cannot compare.
+  if (variables(a).join() !== variables(b).join()) return null;
   return equivalent(a, b);
 }
 

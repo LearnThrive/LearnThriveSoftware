@@ -49,6 +49,9 @@ test("answers are compared by calculation: forms, units, solution sets and the o
   assert.equal(sameAnswer("x = 4, y = 2", "x = 4, y = 3"), false);
   assert.equal(sameAnswer("3x + 12", "3(x + 4)"), true);
   assert.equal(sameAnswer("3x + 13", "3(x + 4)"), false);
+  assert.equal(sameAnswer("5.2 x 10^-4", "5.2 \\times 10^{-4}"), true, "a handwritten x between numbers is times");
+  assert.equal(sameAnswer("5.2 x 10^-3", "5.2 \\times 10^{-4}"), false);
+  assert.equal(sameAnswer("3y + 12", "3x + 12"), null, "different unknowns: no verdict, not wrong");
   assert.equal(sameAnswer("five", "5"), null, "what cannot be calculated has no verdict");
   assert.equal(sameAnswer("", "5"), null);
 });
