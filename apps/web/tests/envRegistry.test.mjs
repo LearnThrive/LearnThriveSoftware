@@ -76,7 +76,7 @@ test("the registry is well formed: unique names, known groups, secrets never pub
   for (const name of ["SUPABASE_SERVICE_ROLE_KEY", "DATABASE_URL", "DATABASE_ADMIN_URL", "LEARNTHRIVE_SERVER_PASSWORD", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "RESEND_API_KEY", "CAPTCHA_SECRET", "ASSISTANT_API_KEY", "VOICE_TOKEN"]) assert.equal(BY_NAME.get(name).secret, true, `${name} is a secret`);
   for (const name of ["SUPABASE_URL", "SUPABASE_ANON_KEY"]) assert.equal(BY_NAME.get(name).secret, false, `${name} identifies the project and grants nothing beyond what anyone has`);
   // The hosted-project switches stay closed unless the owner flips them.
-  for (const name of ["LIBRARY_ENABLED", "NEXT_PUBLIC_APP_PORTAL_ENABLED", "ASSISTANT_ENABLED", "ASSISTANT_PRODUCTION_APPROVED", "PAPER_TUTOR_ENABLED"]) assert.equal(BY_NAME.get(name).held, true, name);
+  for (const name of ["LIBRARY_ENABLED", "NEXT_PUBLIC_APP_PORTAL_ENABLED", "ASSISTANT_ENABLED", "ASSISTANT_PRODUCTION_APPROVED", "PAPER_TUTOR_ENABLED", "PAPER_MARKER_ENABLED"]) assert.equal(BY_NAME.get(name).held, true, name);
 });
 
 test("docs/ENVIRONMENT.md is exactly what the registry generates (run `npm run env:docs` after changing it)", () => {

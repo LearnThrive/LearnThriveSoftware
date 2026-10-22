@@ -113,3 +113,11 @@ export function paperTutorEnabled(env: Env = process.env): boolean {
   const flag = env.PAPER_TUTOR_ENABLED?.trim();
   return env.NODE_ENV === "production" ? flag === "true" : flag !== "false";
 }
+
+/**
+ * Marking a student's own completed paper. Not yet measured on real marked scripts or real handwriting, so it is opt-in everywhere:
+ * on only if PAPER_MARKER_ENABLED is exactly "true" (and only where the Paper Tutor itself is on).
+ */
+export function paperMarkerEnabled(env: Env = process.env): boolean {
+  return paperTutorEnabled(env) && env.PAPER_MARKER_ENABLED?.trim() === "true";
+}

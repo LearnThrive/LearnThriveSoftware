@@ -97,6 +97,7 @@ export const REGISTRY = [
   e("ASSISTANT_NIM_VISION_MODEL", "assistant", "Evaluation only: the vision model when the provider is nim.", { production: "unset", check: "text" }),
   e("NVIDIA_API_KEY", "assistant", "Evaluation only (nim, synthetic prompts only): NVIDIA's hosted catalogue key. Never used in production.", { secret: true, production: "unset", source: "NVIDIA build catalogue", check: "min:16" }),
   e("PAPER_TUTOR_ENABLED", "assistant", "The Paper Tutor switch inside Study Buddy's own. Development: on unless false. Production: on only if exactly true.", { production: "unset until the owner flips it", held: true, fallback: "on in development, off in production", check: "true-or-false" }),
+  e("PAPER_MARKER_ENABLED", "assistant", "Checking a student's own completed paper (the Paper Tutor's marking). Not yet measured on real handwriting or marked scripts, so it is opt-in everywhere: on only if exactly true, and only where the Paper Tutor is on.", { production: "unset until the owner flips it", held: true, fallback: "off", check: "true-or-false" }),
   e("VOICE_ENABLED", "assistant", "false turns voice off. Ignored in production, where voice is closed.", { production: "unset", check: "true-or-false" }),
   e("VOICE_PROVIDER", "assistant", "sidecar or mock (tests).", { production: "unset", fallback: "sidecar", check: "enum:sidecar,mock" }),
   e("VOICE_URL", "assistant", "Where the speech sidecar is.", { production: "unset", fallback: "http://127.0.0.1:8765", check: "url" }),

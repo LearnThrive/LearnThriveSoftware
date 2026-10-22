@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { LibraryStore } from "@learnthrive/data/library";
 import type { LibraryStorage } from "@/lib/library/storage";
 import type { OutputMode } from "./annotate";
-import { extractQuestions, photoToPdf, solutionsMarkdown, solvePaper, type PaperDocument, type Progress } from "./paper";
+import { markingMarkdown, type MarkedQuestion } from "./mark";
+import { extractQuestions, markCompleted, photoToPdf, readMarkScheme, solutionsMarkdown, solvePaper, type PaperDocument, type Progress } from "./paper";
 import type { SolveDeps } from "./solve";
 
 /**
@@ -12,7 +13,11 @@ import type { SolveDeps } from "./solve";
  * model call goes through the same generation queue as the chat, so a paper never starves anyone's question.
  *
  *   extracting -> ready (the questions found, to choose from) -> solving -> done | failed | cancelled
+ *
+ * A job is one of two kinds. "solve" writes worked solutions onto a paper. "mark" checks a student's own completed paper (opt-in:
+ * PAPER_MARKER_ENABLED), optionally with a mark scheme uploaded to the same chat; its steps are the same, "solving" meaning marking.
  */
+export type JobKind = "solve" | "mark";
 export type JobState = "extracting" | "ready" | "solving" | "done" | "failed" | "cancelled";
 
 export interface JobQuestion {
@@ -25,9 +30,27 @@ export interface JobQuestion {
   fromText: boolean;
 }
 
+/** What the panel shows for one finished question: the solution, or the marking of the student's answer. */
+export interface QuestionResult {
+  id: string;
+  number: string;
+  /** How far the answer is checked (solved), and for marking the verdict. */
+  status: string;
+  outcome?: string;
+  answer: string;
+  steps: { say?: string; math?: string }[];
+  note: string;
+  studentAnswer?: string;
+  feedback?: string;
+  estimate?: number | null;
+  outOf?: number | null;
+}
+
 export interface PaperJobView {
   id: string;
+  kind: JobKind;
   state: JobState;
+  results: QuestionResult[];
   questions: JobQuestion[];
   progress: Progress[];
   mode: OutputMode | null;
@@ -41,10 +64,26 @@ interface Job extends PaperJobView {
   clientId: string;
   sessionId: string;
   fileId: string;
+  schemeFileId: string | null;
+  scheme: Map<string, string> | null;
   document: PaperDocument | null;
   controller: AbortController;
   touched: number;
 }
+
+const markedResult = (q: MarkedQuestion): QuestionResult => ({
+  id: q.id,
+  number: q.number,
+  status: q.reference.status,
+  outcome: q.outcome,
+  answer: q.reference.finalAnswer,
+  steps: q.reference.steps,
+  note: q.reason,
+  studentAnswer: q.student.answer,
+  feedback: q.feedback,
+  estimate: q.estimate,
+  outOf: q.outOf,
+});
 
 const TTL_MS = 2 * 60 * 60 * 1000;
 export const JOBS_PER_DAY = 10;
@@ -58,7 +97,7 @@ export interface JobDeps {
   log?: (outcome: string, details?: Record<string, string | number | boolean>) => void;
 }
 
-const view = (job: Job): PaperJobView => ({ id: job.id, state: job.state, questions: job.questions, progress: job.progress, mode: job.mode, resultFileId: job.resultFileId, pageCount: job.pageCount, workedPages: job.workedPages, message: job.message });
+const view = (job: Job): PaperJobView => ({ id: job.id, kind: job.kind, state: job.state, results: job.results, questions: job.questions, progress: job.progress, mode: job.mode, resultFileId: job.resultFileId, pageCount: job.pageCount, workedPages: job.workedPages, message: job.message });
 
 export class PaperJobs {
   constructor(private readonly jobs = new Map<string, Job>()) {}
@@ -80,16 +119,18 @@ export class PaperJobs {
   }
 
   /** Starts reading a paper the family uploaded to this chat. */
-  async start(deps: JobDeps, input: { clientId: string; sessionId: string; fileId: string }): Promise<{ ok: true; job: PaperJobView } | { ok: false; code: "busy" | "limit" | "not_found" }> {
+  async start(deps: JobDeps, input: { clientId: string; sessionId: string; fileId: string; kind?: JobKind; schemeFileId?: string }): Promise<{ ok: true; job: PaperJobView } | { ok: false; code: "busy" | "limit" | "not_found" }> {
     this.sweep();
     if (this.active(input.clientId)) return { ok: false, code: "busy" };
     const file = await deps.store.chat.getFile(input.clientId, input.fileId);
     if (!file || file.sessionId !== input.sessionId) return { ok: false, code: "not_found" };
+    const scheme = input.schemeFileId && input.kind === "mark" ? await deps.store.chat.getFile(input.clientId, input.schemeFileId) : null;
+    if (input.schemeFileId && (!scheme || scheme.sessionId !== input.sessionId)) return { ok: false, code: "not_found" };
     const now = (deps.now ?? (() => new Date()))();
     const day = new Date(Math.floor(now.getTime() / 86_400_000) * 86_400_000);
     if ((await deps.store.chat.usageCount(input.clientId, USAGE_PAPER_DAY, day)) >= JOBS_PER_DAY) return { ok: false, code: "limit" };
     await deps.store.chat.incrementUsage(input.clientId, USAGE_PAPER_DAY, day, 1);
-    const job: Job = { id: randomUUID(), clientId: input.clientId, sessionId: input.sessionId, fileId: input.fileId, state: "extracting", questions: [], progress: [], mode: null, resultFileId: null, pageCount: null, workedPages: [], message: null, document: null, controller: new AbortController(), touched: Date.now() };
+    const job: Job = { id: randomUUID(), kind: input.kind ?? "solve", results: [], clientId: input.clientId, sessionId: input.sessionId, fileId: input.fileId, schemeFileId: scheme?.id ?? null, scheme: null, state: "extracting", questions: [], progress: [], mode: null, resultFileId: null, pageCount: null, workedPages: [], message: null, document: null, controller: new AbortController(), touched: Date.now() };
     this.jobs.set(job.id, job);
     void (async () => {
       try {
@@ -99,10 +140,18 @@ export class PaperJobs {
         const document = await extractQuestions({ ...deps.solve, signal: job.controller.signal }, bytes);
         if (job.state === "cancelled") return;
         if ("problem" in document) throw Object.assign(new Error("unreadable"), { userMessage: document.problem });
+        if (scheme) {
+          const schemeBytes = scheme.contentType === "application/pdf" ? await deps.uploads.read(scheme.storagePath) : null;
+          job.scheme = schemeBytes ? await readMarkScheme(schemeBytes) : null;
+        }
         job.document = document;
         job.questions = document.questions.map((q) => ({ id: q.id, number: q.number, page: q.page, text: q.text.slice(0, 400), marks: q.marks, fromText: q.fromText }));
         job.state = "ready";
-        job.message = document.questions.length ? null : "I could not find any numbered questions in that document. You can still ask me about it in the chat.";
+        job.message = document.questions.length
+          ? scheme && !job.scheme
+            ? "I could not read that mark scheme (it needs to be a PDF with its text in it), so I will mark without it."
+            : null
+          : "I could not find any numbered questions in that document. You can still ask me about it in the chat.";
         deps.log?.("paper_extracted", { questions: document.questions.length });
       } catch (error) {
         if (job.state === "cancelled") return;
@@ -114,7 +163,7 @@ export class PaperJobs {
     return { ok: true, job: view(job) };
   }
 
-  /** Solves the chosen questions of a ready job, then stores the annotated PDF and posts a summary into the chat. */
+  /** Solves (or, for a "mark" job, marks) the chosen questions of a ready job, then stores the PDF and posts a summary into the chat. */
   solve(deps: JobDeps, clientId: string, id: string, options: { mode: OutputMode; questionIds?: string[] }): { ok: true; job: PaperJobView } | { ok: false; code: "not_found" | "not_ready" | "busy" } {
     const job = this.jobs.get(id);
     if (!job || job.clientId !== clientId) return { ok: false, code: "not_found" };
@@ -123,40 +172,58 @@ export class PaperJobs {
     if (others && others.id !== id) return { ok: false, code: "busy" };
     const ids = options.questionIds?.filter((q) => job.questions.some((x) => x.id === q));
     job.state = "solving";
-    job.mode = options.mode;
+    job.mode = job.kind === "solve" ? options.mode : null;
     job.progress = (ids?.length ? ids : job.questions.map((q) => q.id)).map((questionId) => ({ questionId, state: "waiting" }));
     job.touched = Date.now();
     const document = job.document;
+    const onProgress = (progress: Progress[]) => {
+      job.progress = progress;
+      job.touched = Date.now();
+    };
     void (async () => {
       try {
-        const result = await solvePaper({ ...deps.solve, signal: job.controller.signal }, document, {
-          mode: options.mode,
-          questionIds: ids?.length ? ids : undefined,
-          onProgress: (progress) => {
-            job.progress = progress;
-            job.touched = Date.now();
-          },
-        });
-        if (job.state === "cancelled") return;
+        const solveDeps = { ...deps.solve, signal: job.controller.signal };
+        let pdf: Uint8Array;
+        let markdown: string;
+        if (job.kind === "mark") {
+          const result = await markCompleted(solveDeps, document, { questionIds: ids?.length ? ids : undefined, scheme: job.scheme, onProgress });
+          if (job.state === "cancelled") return;
+          ({ pdf } = result);
+          markdown = markingMarkdown(result.marked, Boolean(job.scheme));
+          job.results = result.marked.map(markedResult);
+          job.pageCount = result.pageCount;
+          job.workedPages = result.feedbackPages;
+          deps.log?.("paper_marked", { questions: result.marked.length, correct: result.marked.filter((q) => q.outcome === "correct").length, needsChecking: result.marked.filter((q) => q.outcome === "needs_checking").length, scheme: Boolean(job.scheme) });
+        } else {
+          const result = await solvePaper(solveDeps, document, { mode: options.mode, questionIds: ids?.length ? ids : undefined, onProgress });
+          if (job.state === "cancelled") return;
+          ({ pdf } = result);
+          markdown = solutionsMarkdown(result.solved);
+          job.results = result.solved.map((q) => ({ id: q.id, number: q.number, status: q.status, answer: q.finalAnswer, steps: q.steps, note: q.statusNote || q.explanation }));
+          job.pageCount = result.pageCount;
+          job.workedPages = result.workedPages;
+          deps.log?.("paper_solved", { questions: result.solved.length, verified: result.solved.filter((q) => q.status === "verified").length, unsolved: result.solved.filter((q) => q.status === "unsolved" || q.status === "failed").length });
+        }
         const now = (deps.now ?? (() => new Date()))();
         const path = `${job.sessionId}/${randomUUID()}.pdf`;
-        await deps.uploads.put(path, result.pdf, "application/pdf");
-        const record = await deps.store.chat.addFile(clientId, job.sessionId, { storagePath: path, bytes: result.pdf.length, contentType: "application/pdf" }, now);
-        // The summary goes into the chat as Study Buddy's message, with the paper and its annotated copy attached, so follow-up
-        // questions ("explain question 3") have the solutions and the document without solving anything again.
-        const message = await deps.store.chat.appendMessage(clientId, job.sessionId, "assistant", solutionsMarkdown(result.solved), now);
-        const original = await deps.store.chat.getFile(clientId, job.fileId);
-        await deps.store.chat.attachFiles(clientId, job.sessionId, [record.id, ...(original && original.messageId === null ? [original.id] : [])], message.id);
+        await deps.uploads.put(path, pdf, "application/pdf");
+        const record = await deps.store.chat.addFile(clientId, job.sessionId, { storagePath: path, bytes: pdf.length, contentType: "application/pdf" }, now);
+        // The summary goes into the chat as Study Buddy's message, with the paper and its result attached, so follow-up questions
+        // ("explain question 3", "where did I lose marks?") have the answers and the document without any of it being redone.
+        const message = await deps.store.chat.appendMessage(clientId, job.sessionId, "assistant", markdown, now);
+        const attach = [record.id];
+        for (const fileId of [job.fileId, job.schemeFileId]) {
+          const file = fileId ? await deps.store.chat.getFile(clientId, fileId) : null;
+          if (file && file.messageId === null) attach.push(file.id);
+        }
+        await deps.store.chat.attachFiles(clientId, job.sessionId, attach, message.id);
         job.resultFileId = record.id;
-        job.pageCount = result.pageCount;
-        job.workedPages = result.workedPages;
         job.state = "done";
-        deps.log?.("paper_solved", { questions: result.solved.length, verified: result.solved.filter((q) => q.status === "verified").length, unsolved: result.solved.filter((q) => q.status === "unsolved" || q.status === "failed").length });
       } catch (error) {
         if (job.state === "cancelled") return;
         job.state = "failed";
-        job.message = (error as { code?: string }).code === "aborted" ? "The paper was cancelled." : "Something went wrong solving that paper. Please try again.";
-        deps.log?.("paper_failed", { stage: "solve" });
+        job.message = (error as { code?: string }).code === "aborted" ? "The paper was cancelled." : job.kind === "mark" ? "Something went wrong checking that paper. Please try again." : "Something went wrong solving that paper. Please try again.";
+        deps.log?.("paper_failed", { stage: job.kind === "mark" ? "mark" : "solve" });
       }
     })();
     return { ok: true, job: view(job) };

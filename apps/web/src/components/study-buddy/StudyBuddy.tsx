@@ -50,6 +50,7 @@ interface Status {
   voice?: boolean;
   /** The Paper Tutor is switched on: an attached paper can be solved. */
   paperTutor?: boolean;
+  paperMarker?: boolean;
   minorsApproved?: boolean;
   limits?: {
     dailyMessages: number;
@@ -117,7 +118,11 @@ export function StudyBuddy() {
     file: File;
     fileId: string;
     sessionId: string;
+    kind: "solve" | "mark";
+    scheme?: { file: File; fileId: string };
   } | null>(null);
+  // Marking: whether the second PDF in the box is the mark scheme (it is only used if the student says so).
+  const [useScheme, setUseScheme] = useState(false);
   const abort = useRef<AbortController | null>(null);
   // Kept in refs as well as state: a question sent while a file is still uploading waits for it, and must then use the chat and the
   // files as they are NOW, not as they were when the button was pressed.
@@ -225,8 +230,9 @@ export function StudyBuddy() {
   }
 
   // The Paper Tutor posted its summary into the chat, with the paper attached to it: show it, and take the paper out of the box.
-  async function paperFinished(file: File, sid: string) {
+  async function paperFinished(file: File, sid: string, scheme?: File) {
     if (file && filesRef.current.includes(file)) removeFile(file);
+    if (scheme && filesRef.current.includes(scheme)) removeFile(scheme);
     if (sessionRef.current !== sid) return;
     const response = await fetch(`/api/assistant/sessions/${sid}`, {
       cache: "no-store",
@@ -531,6 +537,13 @@ export function StudyBuddy() {
         (f) => f.type === "application/pdf" || f.type.startsWith("image/"),
       )
     : undefined;
+  // A second PDF in the box: possibly the mark scheme for a paper being checked.
+  const schemeCandidate =
+    solvable && status.paperMarker
+      ? files.find(
+          (f) => f !== solvable && f.type === "application/pdf" && fileIdsRef.current.has(f),
+        )
+      : undefined;
   const shown = query.trim()
     ? sessions.filter((s) =>
         (s.title || "New chat")
@@ -836,8 +849,14 @@ export function StudyBuddy() {
                 fileId={paper.fileId}
                 sessionId={paper.sessionId}
                 fileName={paper.file.name}
+                kind={paper.kind}
+                schemeFileId={paper.scheme?.fileId}
                 onFinished={() =>
-                  void paperFinished(paper.file, paper.sessionId)
+                  void paperFinished(
+                    paper.file,
+                    paper.sessionId,
+                    paper.scheme?.file,
+                  )
                 }
                 onClose={() => setPaper(null)}
               />
@@ -851,13 +870,54 @@ export function StudyBuddy() {
                       file: solvable,
                       fileId: fileIdsRef.current.get(solvable)!,
                       sessionId,
+                      kind: "solve",
                     })
                   }
                 >
                   <FileCheck2 size={16} aria-hidden="true" />
                   Solve this paper
                 </button>
-                <span>Worked answers written onto {solvable.name}</span>
+                {status.paperMarker ? (
+                  <button
+                    type="button"
+                    className={styles.paperButton}
+                    onClick={() =>
+                      setPaper({
+                        file: solvable,
+                        fileId: fileIdsRef.current.get(solvable)!,
+                        sessionId,
+                        kind: "mark",
+                        scheme:
+                          useScheme && schemeCandidate
+                            ? {
+                                file: schemeCandidate,
+                                fileId: fileIdsRef.current.get(schemeCandidate)!,
+                              }
+                            : undefined,
+                      })
+                    }
+                  >
+                    <FileCheck2 size={16} aria-hidden="true" />
+                    Check my completed paper
+                  </button>
+                ) : null}
+                {status.paperMarker && schemeCandidate ? (
+                  <label className={styles.schemeChoice}>
+                    <input
+                      type="checkbox"
+                      checked={useScheme}
+                      onChange={(e) => setUseScheme(e.target.checked)}
+                    />
+                    <span>{schemeCandidate.name} is the mark scheme</span>
+                  </label>
+                ) : (
+                  <span>
+                    Worked answers written onto {solvable.name}
+                    {status.paperMarker
+                      ? ", or your own answers checked (marks are AI estimates)"
+                      : ""}
+                  </span>
+                )}
               </div>
             ) : null}
             {status.voice ? (

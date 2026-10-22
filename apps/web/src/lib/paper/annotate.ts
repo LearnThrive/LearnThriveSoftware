@@ -49,10 +49,10 @@ export interface Placement {
   size: number;
 }
 
-const INK = rgb(0.07, 0.24, 0.62);
-const WARN = rgb(0.62, 0.32, 0.02);
-const GREY = rgb(0.35, 0.39, 0.43);
-const MIN_SIZE = 11;
+export const INK = rgb(0.07, 0.24, 0.62);
+export const WARN = rgb(0.62, 0.32, 0.02);
+export const GREY = rgb(0.35, 0.39, 0.43);
+export const MIN_SIZE = 11;
 const SIZES = [14, 13, 12, MIN_SIZE];
 const LINE_GAP = 1.35;
 
@@ -64,7 +64,7 @@ export const STATUS_TEXT: Record<SolveStatus, string> = {
   unsolved: "Not confidently solved",
 };
 
-function fontBytes(): Uint8Array {
+export function fontBytes(): Uint8Array {
   for (const base of [process.cwd(), join(process.cwd(), "apps", "web")]) {
     const path = join(base, "assets", "fonts", "PatrickHand-Regular.ttf");
     if (existsSync(path)) return new Uint8Array(readFileSync(path));
@@ -80,7 +80,7 @@ function drawable(font: PDFFont, text: string): string {
   return [...text].map((c) => (set.has(c.codePointAt(0)!) ? c : (swaps[c] ?? "?"))).join("");
 }
 
-type Line =
+export type Line =
   | { kind: "text"; text: string; font: PDFFont; size: number; colour: ReturnType<typeof rgb> }
   | { kind: "math"; tex: string; size: number; colour: ReturnType<typeof rgb>; label?: { text: string; font: PDFFont } };
 
@@ -108,7 +108,7 @@ function wrap(text: string, font: PDFFont, size: number, width: number): string[
 }
 
 /** Lays out lines for a width: text wraps, maths that will not fit (or fails to typeset) becomes text. Returns null if a formula is wider than the space. */
-function layOut(lines: Line[], width: number, font: PDFFont): Laid[] | null {
+export function layOut(lines: Line[], width: number, font: PDFFont): Laid[] | null {
   const out: Laid[] = [];
   for (const line of lines) {
     if (line.kind === "math") {
@@ -130,10 +130,10 @@ function layOut(lines: Line[], width: number, font: PDFFont): Laid[] | null {
   return out;
 }
 
-const heightOf = (laid: Laid[]) => laid.reduce((sum, l) => sum + (l.ascent + l.descent) * (LINE_GAP - 0.1) + 2, 0);
+export const heightOf = (laid: Laid[]) => laid.reduce((sum, l) => sum + (l.ascent + l.descent) * (LINE_GAP - 0.1) + 2, 0);
 
 /** Draws laid-out lines from a top-left corner; returns the y below the last line. */
-function draw(page: PDFPage, laid: Laid[], x: number, top: number): number {
+export function draw(page: PDFPage, laid: Laid[], x: number, top: number): number {
   let y = top;
   for (const l of laid) {
     y -= l.ascent * (LINE_GAP - 0.1) + 1;
