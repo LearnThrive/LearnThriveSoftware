@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { deriveEntitlement, type AdminGrantRecord, type SubscriptionRecord } from "./billing";
 import { CHAT_TEXT_DAYS, CHAT_UPLOAD_DAYS, DAY_MS, type ChatExport, type ChatFileRecord, type ChatMessageRecord, type ChatSessionRecord } from "./chat";
+import type { AcceptFailure, AccessMode, IdentityAuditEntry, IdentityRepository, InvitationRecord, LearnerContext, LinkStatus, StudentRecord } from "./identity";
 import type { AccessRepository, AccountRepository, BillingRepository, ChatRepository, DownloadRepository, LibraryStore, ResourceRepository } from "./ports";
 import type {
   AccessFacts,
@@ -64,7 +65,14 @@ function facet(values: Array<string | null>): Facet[] {
 export class InMemoryLibraryStore implements LibraryStore {
   private profiles = new Map<string, Profile>();
   private clients = new Map<string, string>(); // profileId -> clientId
-  private studentLinks: Array<{ clientId: string; studentId: string }> = [];
+  private students = new Map<string, StudentRecord>();
+  /** Guardian links (client_students): the owner's is created with the student; a second guardian's by seedGuardianLink. */
+  private links: Array<{ clientId: string; studentId: string; status: LinkStatus }> = [];
+  private invitations = new Map<string, InvitationRecord & { tokenHash: string; invitedBy: string; acceptedBy: string | null }>();
+  private identities = new Map<string, { id: string; studentId: string; profileId: string; status: LinkStatus }>(); // by student id
+  private auditRows: IdentityAuditEntry[] = [];
+  private supervisedRows: Array<{ tokenHash: string; guardianProfileId: string; studentId: string; expiresAt: Date; endedAt: Date | null }> = [];
+  private learnerConsents: Array<{ studentId: string; profileId: string; withdrawnAt: Date | null }> = [];
   private assignments = new Map<string, { status: "ACTIVE" | "PAUSED" | "ENDED"; studentIds: Set<string> }>();
   private entitlementRows: EntitlementRow[] = [];
   private resourceRows = new Map<string, Resource>();
@@ -86,17 +94,43 @@ export class InMemoryLibraryStore implements LibraryStore {
     return id;
   }
 
-  seedStudent(profileId: string): string {
+  seedStudent(profileId: string, options: { displayName?: string; yearGroup?: string | null; isMinor?: boolean } = {}): string {
     const clientId = this.clientFor(profileId);
     const studentId = randomUUID();
-    this.studentLinks.push({ clientId, studentId });
+    this.students.set(studentId, { id: studentId, clientId, displayName: options.displayName ?? "Student", yearGroup: options.yearGroup ?? null, isMinor: options.isMinor ?? true, accessMode: "none", active: true });
+    this.links.push({ clientId, studentId, status: "active" });
     return studentId;
+  }
+
+  /**
+   * Binds a profile to a student as their own login (what an accepted invitation does): the profile becomes a STUDENT, the student's
+   * way in is "direct". Development and tests only; production goes through the invitation.
+   */
+  seedLearner(studentId: string, profileId: string): void {
+    const student = this.students.get(studentId);
+    const profile = this.profiles.get(profileId);
+    if (!student || !profile) throw new Error("no such student or profile");
+    profile.role = "STUDENT";
+    student.accessMode = "direct";
+    this.identities.set(studentId, { id: randomUUID(), studentId, profileId, status: "active" });
+  }
+
+  /** A second guardian: another family's link to the student (what the server writes after verifying them). */
+  seedGuardianLink(studentId: string, guardianProfileId: string, status: LinkStatus = "active"): void {
+    this.links.push({ clientId: this.clientFor(guardianProfileId), studentId, status });
   }
 
   seedAssignment(studentId: string, status: "ACTIVE" | "PAUSED" | "ENDED" = "ACTIVE"): string {
     const id = randomUUID();
     this.assignments.set(id, { status, studentIds: new Set([studentId]) });
     return id;
+  }
+
+  /** For tests: set an assignment's status (it ends, pauses, resumes). */
+  setAssignmentStatus(assignmentId: string, status: "ACTIVE" | "PAUSED" | "ENDED"): void {
+    const a = this.assignments.get(assignmentId);
+    if (!a) throw new Error("no such assignment");
+    a.status = status;
   }
 
   seedEntitlement(profileId: string, source: "subscription" | "admin_grant", startsAt: Date, endsAt: Date | null): void {
@@ -122,15 +156,44 @@ export class InMemoryLibraryStore implements LibraryStore {
     return id;
   }
 
+  private learnerOf(profileId: string): LearnerContext | null {
+    const identity = [...this.identities.values()].find((i) => i.profileId === profileId);
+    return identity ? this.contextFor(identity) : null;
+  }
+
+  private contextFor(identity: { studentId: string; status: LinkStatus }): LearnerContext | null {
+    const student = this.students.get(identity.studentId);
+    if (!student) return null;
+    return {
+      studentId: student.id, familyClientId: student.clientId, status: identity.status, displayName: student.displayName, yearGroup: student.yearGroup, isMinor: student.isMinor,
+      accessMode: student.accessMode, guardianActive: student.active && this.links.some((l) => l.clientId === student.clientId && l.studentId === student.id && l.status === "active"),
+    };
+  }
+
+  /** A chat session belongs to exactly this owner: the family, and the same learner (or, for the guardian's own, no learner). */
+  private owns(owner: { clientId: string; studentId: string | null }, s: ChatSessionRecord): boolean {
+    return s.clientId === owner.clientId && s.studentId === owner.studentId;
+  }
+
+  private audit(actor: string | null, action: string, clientId: string | null, studentId: string | null, now: Date): void {
+    this.auditRows.push({ at: now, actorProfileId: actor, action, clientId, studentId });
+  }
+
+  private activeLink(clientId: string, studentId: string): boolean {
+    return this.links.some((l) => l.clientId === clientId && l.studentId === studentId && l.status === "active");
+  }
+
   accounts: AccountRepository = {
     getAccount: async (profileId) => {
       const profile = this.profiles.get(profileId);
       if (!profile) return null;
-      const account: Account = { profileId, role: profile.role, displayName: profile.displayName, adultConfirmed: profile.adultConfirmed, clientId: this.clients.get(profileId) ?? null };
+      const account: Account = { profileId, role: profile.role, displayName: profile.displayName, adultConfirmed: profile.adultConfirmed, clientId: this.clients.get(profileId) ?? null, learner: this.learnerOf(profileId) };
       return account;
     },
     ensureClient: async (profileId) => {
       if (!this.profiles.has(profileId)) throw new Error("no such profile");
+      // A learner is never a paying family account (the database refuses it too).
+      if (this.learnerOf(profileId)) throw new Error("a learner cannot own a family account");
       return this.clientFor(profileId);
     },
     getEmail: async (profileId) => this.profiles.get(profileId)?.email ?? null,
@@ -213,12 +276,166 @@ export class InMemoryLibraryStore implements LibraryStore {
 
   access: AccessRepository = {
     facts: async (clientId, now = new Date()): Promise<AccessFacts> => {
-      const studentIds = new Set(this.studentLinks.filter((l) => l.clientId === clientId).map((l) => l.studentId));
+      const studentIds = new Set(this.links.filter((l) => l.clientId === clientId && l.status === "active").map((l) => l.studentId));
       const enrolled = [...this.assignments.values()].some((a) => a.status === "ACTIVE" && [...a.studentIds].some((s) => studentIds.has(s)));
       const open = (source: EntitlementRow["source"]) =>
         this.entitlementRows.some((e) => e.clientId === clientId && e.source === source && e.startsAt <= now && (e.endsAt === null || e.endsAt > now));
       return { enrolled, subscription: open("subscription"), adminGrant: open("admin_grant") };
     },
+    learnerFacts: async (studentId, now = new Date()): Promise<AccessFacts> => {
+      const student = this.students.get(studentId);
+      if (!student || !student.active || !this.activeLink(student.clientId, studentId)) return { enrolled: false, subscription: false, adminGrant: false, ownTuition: false };
+      const family = await this.access.facts(student.clientId, now);
+      const ownTuition = [...this.assignments.values()].some((a) => a.status === "ACTIVE" && a.studentIds.has(studentId));
+      return { ...family, ownTuition };
+    },
+  };
+
+  identity: IdentityRepository = {
+    getFamilyStudent: async (clientId, studentId) => {
+      const student = this.students.get(studentId);
+      return student && student.active && this.activeLink(clientId, studentId) ? { ...student } : null;
+    },
+    listFamilyStudents: async (clientId) =>
+      [...this.students.values()]
+        .filter((st) => st.active && this.activeLink(clientId, st.id))
+        .map((st) => ({
+          ...st,
+          learnerStatus: this.identities.get(st.id)?.status ?? null,
+          invitationOpen: [...this.invitations.values()].some((i) => i.studentId === st.id && !i.acceptedAt && !i.revokedAt),
+        })),
+    createStudent: async (clientId, input) => {
+      const record: StudentRecord = { id: randomUUID(), clientId, displayName: input.displayName.trim(), yearGroup: input.yearGroup, isMinor: input.isMinor, accessMode: "none", active: true };
+      this.students.set(record.id, record);
+      this.links.push({ clientId, studentId: record.id, status: "active" });
+      return { ...record };
+    },
+    setAccessMode: async (clientId, studentId, mode: AccessMode, actor, now) => {
+      const student = this.students.get(studentId);
+      if (!student || student.clientId !== clientId) return false;
+      if (mode === "direct" && !this.identities.has(studentId)) return false;
+      student.accessMode = mode;
+      this.audit(actor, `access_mode_${mode}`, clientId, studentId, now);
+      return true;
+    },
+    getLearner: async (profileId) => this.learnerOf(profileId),
+    getLearnerByStudent: async (studentId) => {
+      const identity = this.identities.get(studentId);
+      return identity ? this.contextFor(identity) : null;
+    },
+    createInvitation: async (input) => {
+      const student = this.students.get(input.studentId);
+      if (!student || !student.active || student.clientId !== input.clientId || !this.activeLink(input.clientId, input.studentId)) return { ok: false, reason: "not_found" };
+      const identity = this.identities.get(input.studentId);
+      if (identity && identity.status !== "revoked") return { ok: false, reason: "already_learner" };
+      const since = input.now.getTime() - 24 * 3_600_000;
+      if ([...this.invitations.values()].filter((i) => i.studentId === input.studentId && i.createdAt.getTime() > since).length >= input.maxPerDay) return { ok: false, reason: "limit" };
+      for (const open of this.invitations.values()) if (open.studentId === input.studentId && !open.acceptedAt && !open.revokedAt) open.revokedAt = input.now;
+      const row = { id: randomUUID(), studentId: input.studentId, clientId: input.clientId, email: input.email ? input.email.toLowerCase() : null, expiresAt: input.expiresAt, acceptedAt: null, revokedAt: null, createdAt: input.now, tokenHash: input.tokenHash, invitedBy: input.invitedBy, acceptedBy: null };
+      this.invitations.set(row.id, row);
+      this.audit(input.invitedBy, "invitation_created", input.clientId, input.studentId, input.now);
+      const { tokenHash: _hash, invitedBy: _by, acceptedBy: _acc, ...record } = row;
+      return { ok: true, invitation: record };
+    },
+    listInvitations: async (clientId, studentId) =>
+      [...this.invitations.values()]
+        .filter((i) => i.clientId === clientId && i.studentId === studentId)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .map(({ tokenHash: _hash, invitedBy: _by, acceptedBy: _acc, ...record }) => record),
+    revokeInvitation: async (clientId, invitationId, actor, now) => {
+      const inv = this.invitations.get(invitationId);
+      if (!inv || inv.clientId !== clientId || inv.acceptedAt || inv.revokedAt) return false;
+      inv.revokedAt = now;
+      this.audit(actor, "invitation_revoked", clientId, inv.studentId, now);
+      return true;
+    },
+    acceptInvitation: async (input) => {
+      const inv = [...this.invitations.values()].find((i) => i.tokenHash === input.tokenHash);
+      const fail = (reason: AcceptFailure) => ({ ok: false as const, reason });
+      if (!inv) return fail("invalid");
+      if (inv.acceptedAt) return fail("used");
+      if (inv.revokedAt) return fail("revoked");
+      if (inv.expiresAt.getTime() <= input.now.getTime()) return fail("expired");
+      if (inv.email !== null && inv.email !== input.email.toLowerCase()) return fail("email_mismatch");
+      const profile = this.profiles.get(input.profileId);
+      const student = this.students.get(inv.studentId);
+      const taken = this.identities.get(inv.studentId);
+      const already = [...this.identities.values()].some((i) => i.profileId === input.profileId);
+      // Only a plain account with no family of its own and no learner login can become a learner; staff never can.
+      if (!profile || profile.role !== "CLIENT" || this.clients.has(input.profileId) || already || !student || !student.active || (taken && taken.status !== "revoked") || !this.activeLink(inv.clientId, inv.studentId)) return fail("not_eligible");
+      inv.acceptedAt = input.now;
+      inv.acceptedBy = input.profileId;
+      this.identities.set(inv.studentId, { id: randomUUID(), studentId: inv.studentId, profileId: input.profileId, status: "active" });
+      profile.role = "STUDENT";
+      student.accessMode = "direct";
+      this.audit(input.profileId, "invitation_accepted", inv.clientId, inv.studentId, input.now);
+      return { ok: true, studentId: inv.studentId, clientId: inv.clientId };
+    },
+    setLearnerStatus: async ({ studentId, clientId, status, actor, now }) => {
+      const identity = this.identities.get(studentId);
+      const student = this.students.get(studentId);
+      if (!identity || !student || (clientId !== null && student.clientId !== clientId)) return false;
+      identity.status = status;
+      if (status === "revoked") student.accessMode = "none";
+      this.audit(actor, status === "active" ? "learner_restored" : `learner_${status}`, student.clientId, studentId, now);
+      return true;
+    },
+    setGuardianLinkStatus: async ({ ownerClientId, studentId, guardianClientId, status, actor, now }) => {
+      const student = this.students.get(studentId);
+      if (!student || student.clientId !== ownerClientId || guardianClientId === ownerClientId) return false;
+      const link = this.links.find((l) => l.clientId === guardianClientId && l.studentId === studentId);
+      if (!link) return false;
+      link.status = status;
+      this.audit(actor, `guardian_${status}`, ownerClientId, studentId, now);
+      return true;
+    },
+    grantLearnerConsent: async ({ studentId, guardianProfileId, now }) => {
+      const clientId = this.clients.get(guardianProfileId);
+      if (!clientId || !this.activeLink(clientId, studentId)) return false;
+      this.learnerConsents.push({ studentId, profileId: guardianProfileId, withdrawnAt: null });
+      this.audit(guardianProfileId, "learner_consent_granted", clientId, studentId, now);
+      return true;
+    },
+    withdrawLearnerConsent: async (studentId, now) => {
+      let n = 0;
+      for (const c of this.learnerConsents) if (c.studentId === studentId && c.withdrawnAt === null) { c.withdrawnAt = now; n += 1; }
+      if (n) this.audit(null, "learner_consent_withdrawn", this.students.get(studentId)?.clientId ?? null, studentId, now);
+      return n;
+    },
+    hasLearnerConsent: async (studentId) =>
+      this.learnerConsents.some((c) => {
+        if (c.studentId !== studentId || c.withdrawnAt !== null) return false;
+        const clientId = this.clients.get(c.profileId);
+        // The consent only counts while the guardian who gave it still has an active link.
+        return Boolean(clientId) && this.activeLink(clientId!, studentId);
+      }),
+    startSupervised: async ({ clientId, guardianProfileId, studentId, tokenHash, expiresAt, now }) => {
+      const student = this.students.get(studentId);
+      if (this.clients.get(guardianProfileId) !== clientId || !student || !student.active || student.accessMode !== "supervised" || !this.activeLink(clientId, studentId)) return false;
+      for (const row of this.supervisedRows) if (row.guardianProfileId === guardianProfileId && !row.endedAt) row.endedAt = now;
+      this.supervisedRows.push({ tokenHash, guardianProfileId, studentId, expiresAt, endedAt: null });
+      this.audit(guardianProfileId, "supervised_started", clientId, studentId, now);
+      return true;
+    },
+    getSupervised: async (tokenHash, guardianProfileId, now) => {
+      const row = this.supervisedRows.find((r) => r.tokenHash === tokenHash);
+      if (!row || row.guardianProfileId !== guardianProfileId || row.endedAt || row.expiresAt.getTime() <= now.getTime()) return null;
+      const student = this.students.get(row.studentId);
+      const clientId = this.clients.get(guardianProfileId);
+      if (!student || !student.active || student.accessMode !== "supervised" || !clientId || !this.activeLink(clientId, row.studentId)) return null;
+      return {
+        studentId: student.id, familyClientId: student.clientId, status: "active", displayName: student.displayName, yearGroup: student.yearGroup, isMinor: student.isMinor,
+        accessMode: student.accessMode, guardianActive: true,
+      };
+    },
+    endSupervised: async (tokenHash, guardianProfileId, now) => {
+      const row = this.supervisedRows.find((r) => r.tokenHash === tokenHash && r.guardianProfileId === guardianProfileId && !r.endedAt);
+      if (!row) return false;
+      row.endedAt = now;
+      this.audit(guardianProfileId, "supervised_ended", this.clients.get(guardianProfileId) ?? null, row.studentId, now);
+      return true;
+    },
+    auditFor: async (studentId, limit = 50) => this.auditRows.filter((a) => a.studentId === studentId).slice().reverse().slice(0, limit),
   };
 
   billing: BillingRepository = {
@@ -296,35 +513,35 @@ export class InMemoryLibraryStore implements LibraryStore {
   };
 
   chat: ChatRepository = {
-    createSession: async (clientId, options, now) => {
-      if (options.studentId && !this.studentLinks.some((l) => l.clientId === clientId && l.studentId === options.studentId)) throw new Error("that student is not in this family");
+    createSession: async (owner, options, now) => {
+      if (owner.studentId && !this.activeLink(owner.clientId, owner.studentId)) throw new Error("that student is not in this family");
       const record: ChatSessionRecord = {
-        id: randomUUID(), clientId, studentId: options.studentId ?? null, title: options.title ?? "", createdAt: now, lastActivityAt: now,
+        id: randomUUID(), clientId: owner.clientId, studentId: owner.studentId, title: options.title ?? "", createdAt: now, lastActivityAt: now,
         deleteAfter: new Date(now.getTime() + CHAT_TEXT_DAYS * DAY_MS), deletionRequestedAt: null,
       };
       this.chatSessions.set(record.id, record);
       return { ...record };
     },
-    renameSession: async (clientId, sessionId, title) => {
+    renameSession: async (owner, sessionId, title) => {
       const s = this.chatSessions.get(sessionId);
-      if (!s || s.clientId !== clientId || s.deletionRequestedAt) return false;
+      if (!s || !this.owns(owner, s) || s.deletionRequestedAt) return false;
       s.title = title.slice(0, 120);
       return true;
     },
-    listSessions: async (clientId) =>
-      [...this.chatSessions.values()].filter((s) => s.clientId === clientId && !s.deletionRequestedAt).sort((a, b) => b.lastActivityAt.getTime() - a.lastActivityAt.getTime()).map((s) => ({ ...s })),
-    getSession: async (clientId, sessionId) => {
+    listSessions: async (owner) =>
+      [...this.chatSessions.values()].filter((s) => this.owns(owner, s) && !s.deletionRequestedAt).sort((a, b) => b.lastActivityAt.getTime() - a.lastActivityAt.getTime()).map((s) => ({ ...s })),
+    getSession: async (owner, sessionId) => {
       const s = this.chatSessions.get(sessionId);
-      return s && s.clientId === clientId && !s.deletionRequestedAt ? { ...s } : null;
+      return s && this.owns(owner, s) && !s.deletionRequestedAt ? { ...s } : null;
     },
-    listMessages: async (clientId, sessionId) => {
+    listMessages: async (owner, sessionId) => {
       const s = this.chatSessions.get(sessionId);
-      if (!s || s.clientId !== clientId || s.deletionRequestedAt) return [];
+      if (!s || !this.owns(owner, s) || s.deletionRequestedAt) return [];
       return this.chatMessages.filter((m) => m.sessionId === sessionId).map((m) => ({ ...m }));
     },
-    appendMessage: async (clientId, sessionId, role, content, now) => {
+    appendMessage: async (owner, sessionId, role, content, now) => {
       const s = this.chatSessions.get(sessionId);
-      if (!s || s.clientId !== clientId || s.deletionRequestedAt) throw new Error("no such chat");
+      if (!s || !this.owns(owner, s) || s.deletionRequestedAt) throw new Error("no such chat");
       const last = this.chatMessages.filter((m) => m.sessionId === sessionId).at(-1);
       const at = last && last.createdAt.getTime() >= now.getTime() ? new Date(last.createdAt.getTime() + 1) : now;
       const message: ChatMessageRecord = { id: randomUUID(), sessionId, role, content, createdAt: at, deleteAfter: new Date(at.getTime() + CHAT_TEXT_DAYS * DAY_MS) };
@@ -333,16 +550,16 @@ export class InMemoryLibraryStore implements LibraryStore {
       s.deleteAfter = message.deleteAfter;
       return { ...message };
     },
-    addFile: async (clientId, sessionId, file, now) => {
+    addFile: async (owner, sessionId, file, now) => {
       const s = this.chatSessions.get(sessionId);
-      if (!s || s.clientId !== clientId || s.deletionRequestedAt) throw new Error("no such chat");
+      if (!s || !this.owns(owner, s) || s.deletionRequestedAt) throw new Error("no such chat");
       const record: ChatFileRecord = { id: randomUUID(), sessionId, messageId: file.messageId ?? null, storagePath: file.storagePath, bytes: file.bytes, contentType: file.contentType, createdAt: now, deleteAfter: new Date(now.getTime() + CHAT_UPLOAD_DAYS * DAY_MS) };
       this.chatFiles.push(record);
       return { ...record };
     },
-    attachFiles: async (clientId, sessionId, fileIds, messageId) => {
+    attachFiles: async (owner, sessionId, fileIds, messageId) => {
       const s = this.chatSessions.get(sessionId);
-      if (!s || s.clientId !== clientId || !this.chatMessages.some((m) => m.id === messageId && m.sessionId === sessionId)) return 0;
+      if (!s || !this.owns(owner, s) || !this.chatMessages.some((m) => m.id === messageId && m.sessionId === sessionId)) return 0;
       let count = 0;
       for (const f of this.chatFiles) {
         if (f.sessionId === sessionId && fileIds.includes(f.id) && f.messageId === null) {
@@ -352,41 +569,52 @@ export class InMemoryLibraryStore implements LibraryStore {
       }
       return count;
     },
-    listFiles: async (clientId, sessionId) => {
+    listFiles: async (owner, sessionId) => {
       const s = this.chatSessions.get(sessionId);
-      if (!s || s.clientId !== clientId || s.deletionRequestedAt) return [];
+      if (!s || !this.owns(owner, s) || s.deletionRequestedAt) return [];
       return this.chatFiles.filter((f) => f.sessionId === sessionId).map((f) => ({ ...f }));
     },
-    getFile: async (clientId, fileId) => {
+    getFile: async (owner, fileId) => {
       const f = this.chatFiles.find((x) => x.id === fileId);
       const s = f ? this.chatSessions.get(f.sessionId) : undefined;
-      return f && s && s.clientId === clientId && !s.deletionRequestedAt ? { ...f } : null;
+      return f && s && this.owns(owner, s) && !s.deletionRequestedAt ? { ...f } : null;
     },
-    getUnattachedFiles: async (clientId, sessionId, fileIds) => {
+    getUnattachedFiles: async (owner, sessionId, fileIds) => {
       const s = this.chatSessions.get(sessionId);
-      if (!s || s.clientId !== clientId || s.deletionRequestedAt) return [];
+      if (!s || !this.owns(owner, s) || s.deletionRequestedAt) return [];
       return this.chatFiles.filter((f) => f.sessionId === sessionId && f.messageId === null && fileIds.includes(f.id)).map((f) => ({ ...f }));
     },
-    requestDeletion: async (clientId, sessionId, now) => {
+    requestDeletion: async (owner, sessionId, now) => {
       const s = this.chatSessions.get(sessionId);
-      if (!s || s.clientId !== clientId || s.deletionRequestedAt) return false;
+      if (!s || !this.owns(owner, s) || s.deletionRequestedAt) return false;
       s.deletionRequestedAt = now;
       return true;
     },
-    requestDeletionAll: async (clientId, now) => {
+    requestLearnerDeletionAll: async (clientId, studentId, now) => {
+      if (!this.activeLink(clientId, studentId)) return 0;
       let count = 0;
       for (const s of this.chatSessions.values()) {
-        if (s.clientId === clientId && !s.deletionRequestedAt) {
+        if (s.clientId === clientId && s.studentId === studentId && !s.deletionRequestedAt) {
           s.deletionRequestedAt = now;
           count += 1;
         }
       }
       return count;
     },
-    exportAll: async (clientId, now): Promise<ChatExport> => ({
+    requestDeletionAll: async (owner, now) => {
+      let count = 0;
+      for (const s of this.chatSessions.values()) {
+        if (this.owns(owner, s) && !s.deletionRequestedAt) {
+          s.deletionRequestedAt = now;
+          count += 1;
+        }
+      }
+      return count;
+    },
+    exportAll: async (owner, now): Promise<ChatExport> => ({
       exportedAt: now.toISOString(),
       sessions: [...this.chatSessions.values()]
-        .filter((s) => s.clientId === clientId && !s.deletionRequestedAt)
+        .filter((s) => this.owns(owner, s) && !s.deletionRequestedAt)
         .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
         .map((s) => ({
           id: s.id,

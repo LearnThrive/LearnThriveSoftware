@@ -1,4 +1,4 @@
-import type { LibraryStore } from "@learnthrive/data/library";
+import type { ChatOwner, LibraryStore } from "@learnthrive/data/library";
 import type { LibraryStorage } from "@/lib/library/storage";
 import type { AssistantConfig } from "./config";
 import { OutputGuard, accountReference, moderateInput, safeguardingExcerpt, type SafeguardingKind } from "./moderation";
@@ -52,14 +52,13 @@ export interface ChatServiceDeps {
 }
 
 export interface ChatInput {
-  clientId: string;
+  /** The family and the learner (if any) whose chat this is: resolved on the server, never taken from a request. */
+  owner: ChatOwner;
   /** null starts a new chat. */
   sessionId: string | null;
   text: string;
   fileIds?: string[];
   signal?: AbortSignal;
-  /** The student profile this chat is for. Only an approved deployment passes one (ASSISTANT_MINORS_APPROVED). */
-  studentId?: string | null;
   /** The answer will be spoken: this turn's system prompt asks for short wording that reads well aloud (the stored answer is unchanged). */
   voice?: boolean;
 }
@@ -96,7 +95,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
   // Caps first, and they count the attempt: a flood of blocked messages is still a flood.
   const minute = windowStart(now, MINUTE_MS);
   const day = windowStart(now, DAY_MS);
-  const [perMinute, perDay] = await Promise.all([store.chat.usageCount(input.clientId, USAGE_MINUTE, minute), store.chat.usageCount(input.clientId, USAGE_DAY, day)]);
+  const [perMinute, perDay] = await Promise.all([store.chat.usageCount(input.owner.clientId, USAGE_MINUTE, minute), store.chat.usageCount(input.owner.clientId, USAGE_DAY, day)]);
   if (perMinute >= config.perMinute) {
     log("rate_limited", { window: "minute" });
     return void (yield { type: "error", code: "rate_limited_minute", retryAfterSeconds: Math.max(1, Math.ceil((minute.getTime() + MINUTE_MS - now.getTime()) / 1000)) });
@@ -105,18 +104,18 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
     log("rate_limited", { window: "day" });
     return void (yield { type: "error", code: "rate_limited_day", retryAfterSeconds: Math.ceil((day.getTime() + DAY_MS - now.getTime()) / 1000) });
   }
-  await store.chat.incrementUsage(input.clientId, USAGE_MINUTE, minute, 1);
-  await store.chat.incrementUsage(input.clientId, USAGE_DAY, day, 1);
+  await store.chat.incrementUsage(input.owner.clientId, USAGE_MINUTE, minute, 1);
+  await store.chat.incrementUsage(input.owner.clientId, USAGE_DAY, day, 1);
 
   const verdict = moderateInput(text);
 
   // The chat.
   let sessionId = input.sessionId;
   if (sessionId) {
-    if (!(await store.chat.getSession(input.clientId, sessionId))) return void (yield { type: "error", code: "no_chat" });
+    if (!(await store.chat.getSession(input.owner, sessionId))) return void (yield { type: "error", code: "no_chat" });
   } else {
     const title = verdict.action === "allow" ? titleFrom(text) : "New chat";
-    sessionId = (await store.chat.createSession(input.clientId, { title, studentId: input.studentId ?? null }, now)).id;
+    sessionId = (await store.chat.createSession(input.owner, { title }, now)).id;
   }
   yield { type: "session", sessionId };
 
@@ -124,13 +123,13 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
   if (verdict.action !== "allow") {
     const reply = verdict.action === "safeguard" ? SAFEGUARDING_REPLY : BLOCKED_REPLIES[verdict.category];
     const kept = verdict.action === "block" && verdict.category === "personal_info" ? "[This message was removed because it contained personal details.]" : text;
-    await store.chat.appendMessage(input.clientId, sessionId, "user", kept, now);
-    const stored = await store.chat.appendMessage(input.clientId, sessionId, "assistant", reply, now);
+    await store.chat.appendMessage(input.owner, sessionId, "user", kept, now);
+    const stored = await store.chat.appendMessage(input.owner, sessionId, "assistant", reply, now);
     if (verdict.action === "safeguard") {
       log("safeguarding", { kind: verdict.kind });
       if (deps.flag) {
         try {
-          await deps.flag({ reference: accountReference(input.clientId), kind: verdict.kind, excerpt: safeguardingExcerpt(text), at: now });
+          await deps.flag({ reference: accountReference(input.owner.clientId), kind: verdict.kind, excerpt: safeguardingExcerpt(text), at: now });
         } catch {
           log("safeguarding_alert_failed");
         }
@@ -145,10 +144,10 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
   // "and question 3?" still sees the paper. Each document is read page by page; pages are pictured within one shared budget.
   const images: string[] = [];
   let uploadedText = "";
-  let attachable = fileIds.length ? await store.chat.getUnattachedFiles(input.clientId, sessionId, fileIds) : [];
+  let attachable = fileIds.length ? await store.chat.getUnattachedFiles(input.owner, sessionId, fileIds) : [];
   const fresh = attachable.length > 0;
   if (!fresh) {
-    const earlier = (await store.chat.listFiles(input.clientId, sessionId)).filter((f) => f.messageId !== null);
+    const earlier = (await store.chat.listFiles(input.owner, sessionId)).filter((f) => f.messageId !== null);
     const last = earlier.at(-1)?.messageId;
     attachable = last ? earlier.filter((f) => f.messageId === last) : [];
   }
@@ -186,7 +185,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
   }
 
   // The history that fits in the context window, newest kept first.
-  const history = await store.chat.listMessages(input.clientId, sessionId);
+  const history = await store.chat.listMessages(input.owner, sessionId);
   const userContent = (text || "Please look at the attached file.") + uploadedText;
   const systemPrompt = input.voice ? `${SYSTEM_PROMPT}\n\n${VOICE_PROMPT_ADDENDUM}` : SYSTEM_PROMPT;
   const budgetChars = Math.max(2000, (config.contextSize - config.maxOutputTokens - approxTokens(systemPrompt) - approxTokens(userContent)) * 3.5);
@@ -201,10 +200,10 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
   const messages: ProviderMessage[] = [{ role: "system", content: systemPrompt }, ...kept, { role: "user", content: userContent, ...(images.length ? { images } : {}) }];
 
   // Stored before the model runs, so a stopped or failed answer still leaves the question in the chat.
-  const userMessage = await store.chat.appendMessage(input.clientId, sessionId, "user", text || "(attached a file)", now);
-  if (fresh) await store.chat.attachFiles(input.clientId, sessionId, attachable.map((f) => f.id), userMessage.id);
+  const userMessage = await store.chat.appendMessage(input.owner, sessionId, "user", text || "(attached a file)", now);
+  if (fresh) await store.chat.attachFiles(input.owner, sessionId, attachable.map((f) => f.id), userMessage.id);
 
-  if (deps.hosted && (await store.chat.usageCount(input.clientId, USAGE_TOKENS_DAY, day)) >= config.dailyTokenBudget) {
+  if (deps.hosted && (await store.chat.usageCount(input.owner.clientId, USAGE_TOKENS_DAY, day)) >= config.dailyTokenBudget) {
     log("budget");
     yield { type: "error", code: "budget" };
     return;
@@ -238,7 +237,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
         } else {
           st.providerId = chunk.provider;
           st.firstTokenMs = chunk.stats.firstTokenMs;
-          if (deps.hosted) await store.chat.incrementUsage(input.clientId, USAGE_TOKENS_DAY, day, chunk.usage.completionTokens);
+          if (deps.hosted) await store.chat.incrementUsage(input.owner.clientId, USAGE_TOKENS_DAY, day, chunk.usage.completionTokens);
           log("answered", { promptTokens: chunk.usage.promptTokens, completionTokens: chunk.usage.completionTokens, firstTokenMs: chunk.stats.firstTokenMs });
         }
       }
@@ -308,7 +307,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
     yield { type: "delta", text: note };
   }
   let messageId: string | null = null;
-  if (shown.trim()) messageId = (await store.chat.appendMessage(input.clientId, sessionId, "assistant", shown, deps.now ? deps.now() : new Date())).id;
+  if (shown.trim()) messageId = (await store.chat.appendMessage(input.owner, sessionId, "assistant", shown, deps.now ? deps.now() : new Date())).id;
   if (st.failure && st.failure !== "aborted") {
     yield { type: "error", code: st.failure };
     return;

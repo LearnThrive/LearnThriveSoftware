@@ -70,7 +70,7 @@ export async function handleStartPaper(request: Request, deps: PaperDeps): Promi
   if (kind === "mark" && !paperMarkerEnabled(deps.env ?? process.env)) return refuse("not_found");
   const schemeFileId = typeof raw?.schemeFileId === "string" ? raw.schemeFileId : undefined;
   if (schemeFileId !== undefined && !UUID.test(schemeFileId)) return refuse("bad_request");
-  const started = await p.jobs.start(p.jobDeps, { clientId: p.g.account.clientId, sessionId, fileId, kind, schemeFileId });
+  const started = await p.jobs.start(p.jobDeps, { owner: p.g.owner, sessionId, fileId, kind, schemeFileId });
   if (!started.ok) return jsonResponse(started.code === "not_found" ? 404 : started.code === "limit" ? 429 : 409, { code: started.code, error: MESSAGES[started.code] }, NO_STORE);
   logOutcome("paper-start", "started");
   return jsonResponse(202, { job: started.job }, NO_STORE);
@@ -80,8 +80,8 @@ export async function handlePaper(request: Request, deps: PaperDeps, id: string)
   const p = await paperGate(request, deps, "paper-job", request.method !== "GET");
   if (!p.ok) return p.response;
   if (!UUID.test(id)) return refuse("not_found");
-  if (request.method === "DELETE") return p.jobs.cancel(p.g.account.clientId, id) ? jsonResponse(200, { success: true }, NO_STORE) : refuse("not_found");
-  const job = p.jobs.get(p.g.account.clientId, id);
+  if (request.method === "DELETE") return p.jobs.cancel(p.g.owner, id) ? jsonResponse(200, { success: true }, NO_STORE) : refuse("not_found");
+  const job = p.jobs.get(p.g.owner, id);
   return job ? jsonResponse(200, { job }, NO_STORE) : jsonResponse(404, { code: "not_found", error: "That paper is no longer here (jobs last two hours, and do not survive a restart). Please start again." }, NO_STORE);
 }
 
@@ -92,7 +92,7 @@ export async function handleSolvePaper(request: Request, deps: PaperDeps, id: st
   const raw = await jsonBody(request);
   const mode = MODES.find((m) => m === raw?.mode) ?? "hybrid";
   const questionIds = Array.isArray(raw?.questionIds) ? raw.questionIds.filter((q): q is string => typeof q === "string" && /^q\d{1,3}$/.test(q)).slice(0, 30) : undefined;
-  const result = p.jobs.solve(p.jobDeps, p.g.account.clientId, id, { mode, questionIds });
+  const result = p.jobs.solve(p.jobDeps, p.g.owner, id, { mode, questionIds });
   if (!result.ok) return jsonResponse(result.code === "not_found" ? 404 : 409, { code: result.code, error: MESSAGES[result.code] }, NO_STORE);
   return jsonResponse(202, { job: result.job }, NO_STORE);
 }
@@ -100,9 +100,9 @@ export async function handleSolvePaper(request: Request, deps: PaperDeps, id: st
 export async function handlePaperPreview(request: Request, deps: PaperDeps, id: string): Promise<Response> {
   const p = await paperGate(request, deps, "paper-preview", false);
   if (!p.ok) return p.response;
-  const job = UUID.test(id) ? p.jobs.get(p.g.account.clientId, id) : null;
+  const job = UUID.test(id) ? p.jobs.get(p.g.owner, id) : null;
   if (!job?.resultFileId) return refuse("not_found");
-  const file = await p.g.rt.store.chat.getFile(p.g.account.clientId, job.resultFileId);
+  const file = await p.g.rt.store.chat.getFile(p.g.owner, job.resultFileId);
   const bytes = file ? await p.g.assistant.uploads.read(file.storagePath) : null;
   if (!bytes) return refuse("not_found");
   const page = Number(new URL(request.url).searchParams.get("page") ?? "1");
@@ -117,7 +117,7 @@ export async function handleFile(request: Request, deps: PaperDeps, id: string):
   const g = await gate(request, deps, "assistant-file", { mutating: false });
   if (!g.ok) return g.response;
   if (!UUID.test(id)) return refuse("not_found");
-  const file = await g.rt.store.chat.getFile(g.account.clientId, id);
+  const file = await g.rt.store.chat.getFile(g.owner, id);
   const bytes = file ? await g.assistant.uploads.read(file.storagePath) : null;
   if (!file || !bytes) return refuse("not_found");
   const download = new URL(request.url).searchParams.get("download") === "1";

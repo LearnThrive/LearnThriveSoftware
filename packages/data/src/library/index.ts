@@ -5,3 +5,5 @@ export * from "./sql";
 export * from "./types";
 export * from "./billing";
 export * from "./chat";
+export * from "./identity";
+export * from "./actor";

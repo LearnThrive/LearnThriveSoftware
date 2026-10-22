@@ -11,6 +11,8 @@ export type ResourceType = (typeof RESOURCE_TYPES)[number];
 export const ACCESS_TIERS = ["free_sample", "members"] as const;
 export type AccessTier = (typeof ACCESS_TIERS)[number];
 
+import type { LearnerContext } from "./identity";
+
 export type AccountRole = "ADMIN" | "TUTOR" | "CLIENT" | "STUDENT";
 
 export interface Resource {
@@ -90,8 +92,10 @@ export interface Account {
   displayName: string;
   /** The adult (18 or over) declaration made at sign-up. Students under 18 never hold an account of their own. */
   adultConfirmed: boolean;
-  /** The family account (clients row), created on first need. null until then. */
+  /** The family account (clients row), created on first need. null until then. Always null for a learner: a learner has no account of their own to pay with. */
   clientId: string | null;
+  /** Set when this profile is a learner (a student's own login). The family they belong to is `learner.familyClientId`. */
+  learner: LearnerContext | null;
 }
 
 /** What the server knows about a family account's rights at one moment. Input to canAccess. */
@@ -102,6 +106,11 @@ export interface AccessFacts {
   subscription: boolean;
   /** An administrator override is open now. */
   adminGrant: boolean;
+  /**
+   * Set only for a learner: THIS learner is on an active tuition assignment themselves (not a sibling). A learner's tuition routes follow
+   * this; `enrolled` (the family has an enrolled student) still gives them the household's Library benefit and nothing else.
+   */
+  ownTuition?: boolean;
 }
 
 export interface DownloadEvent {

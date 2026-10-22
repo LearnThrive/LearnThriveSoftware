@@ -18,12 +18,16 @@ const EXPECTED_TABLES = [
   "consents",
   "download_events",
   "entitlements",
+  "identity_audit",
+  "learner_identities",
+  "learner_invitations",
   "profiles",
   "resource_files",
   "resources",
   "stripe_webhook_events",
   "students",
   "subscriptions",
+  "supervised_contexts",
   "tuition_assignments",
   "tutors",
   "usage_counters",
@@ -39,10 +43,13 @@ const FORCED_TABLES = [
   "consents",
   "download_events",
   "entitlements",
+  "identity_audit",
+  "learner_invitations",
   "resource_files",
   "resources",
   "stripe_webhook_events",
   "subscriptions",
+  "supervised_contexts",
   "usage_counters",
 ];
 
@@ -106,6 +113,7 @@ describe("migrations", () => {
       "0007_storage_buckets.sql",
       "0008_consent_withdrawal_time.sql",
       "0009_server_lookups.sql",
+      "0010_learner_identity.sql",
     ]);
     assert.deepEqual(
       applied.map((f) => Number(f.slice(0, 4))),
@@ -195,7 +203,7 @@ describe("migrations", () => {
       assert.ok(r.policies > 0 || !r.open, `${r.tbl} has no policy yet is reachable by an API role`);
     }
     // and the tables that must be deny-all really are
-    for (const t of ["resource_files", "billing_customers", "admin_grants", "download_events", "stripe_webhook_events"]) {
+    for (const t of ["resource_files", "billing_customers", "admin_grants", "download_events", "stripe_webhook_events", "supervised_contexts"]) {
       const r = rows.find((x) => x.tbl === t)!;
       assert.equal(r.policies, 0, `${t} should have no policy`);
       assert.equal(r.open, false, `${t} must be unreachable for anon and authenticated`);
@@ -694,7 +702,7 @@ describe("profiles and family structure", () => {
     const cols = await db.asOwner((q) =>
       q.query<{ column_name: string }>("select column_name from information_schema.columns where table_name = 'students' order by ordinal_position"),
     );
-    assert.deepEqual(cols.map((c) => c.column_name), ["id", "client_id", "display_name", "year_group", "is_minor", "active", "created_at"]);
+    assert.deepEqual(cols.map((c) => c.column_name), ["id", "client_id", "display_name", "year_group", "is_minor", "active", "created_at", "access_mode"]);
     const f = await createFamily(db, { name: "Link", students: ["Kid"] });
     const links = await db.asOwner((q) => q.query("select client_id, student_id from public.client_students"));
     assert.deepEqual(links.filter((l) => l.student_id === f.studentIds[0]), [{ client_id: f.clientId, student_id: f.studentIds[0] }]);

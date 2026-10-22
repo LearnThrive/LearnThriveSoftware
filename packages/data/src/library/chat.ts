@@ -8,6 +8,16 @@ export const CHAT_TEXT_DAYS = 30;
 export const CHAT_UPLOAD_DAYS = 7;
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Whose conversations a chat call is about. Every session-scoped repository method takes this instead of a bare family id, so the
+ * scope cannot be forgotten: a guardian's own chats have `studentId: null`; a learner's have theirs. A sibling, and the guardian,
+ * never read each other's conversations by guessing a session id, because the id is only ever looked up inside the owner's rows.
+ */
+export interface ChatOwner {
+  clientId: string;
+  studentId: string | null;
+}
+
 export interface ChatSessionRecord {
   id: string;
   clientId: string;

@@ -55,9 +55,13 @@ test("seeding: every account signs in (the disabled one is refused as disabled) 
     const profile = await store.accounts.getAccount(account.id);
     assert.equal(profile.role, account.role, account.email);
     assert.equal(profile.adultConfirmed, true);
-    const facts = profile.clientId ? await store.access.facts(profile.clientId) : { enrolled: false, subscription: false, adminGrant: false };
+    // A learner's facts are their own (their own tuition, the household's Library benefit); everyone else's are the family's.
+    const facts = profile.learner ? await store.access.learnerFacts(profile.learner.studentId) : profile.clientId ? await store.access.facts(profile.clientId) : { enrolled: false, subscription: false, adminGrant: false };
     assert.equal(platformAccess(profile.role, facts).tier, expected[account.email], account.email);
   }
+  const student = await store.accounts.getAccount(byEmail("student@learnthrive.dev").id);
+  assert.equal(student.clientId, null, "the development student is a learner: no family account of their own");
+  assert.equal(student.learner.familyClientId, (await store.accounts.getAccount(byEmail("client@learnthrive.dev").id)).clientId, "of the development client's family");
   const member = await store.accounts.getAccount(byEmail("member@learnthrive.dev").id);
   const memberAccess = platformAccess("CLIENT", await store.access.facts(member.clientId));
   assert.deepEqual(memberAccess, { tier: "library", dashboard: false, library: true, studyBuddy: true }, "a subscriber has Study Buddy and the Library, and no dashboard");

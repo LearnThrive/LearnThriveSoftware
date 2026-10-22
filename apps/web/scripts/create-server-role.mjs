@@ -55,6 +55,8 @@ export function grantStatements(verifier) {
     // The two Auth lookups (migration 0009): the role never touches the auth schema itself. And the one private helper the generated
     // search column of resources calls on every insert and update (a generated column runs with the INSERTING role's privileges).
     `grant execute on function public.auth_email(uuid), public.auth_user_by_email(text) to ${ROLE}`,
+    // The two learner-invitation operations (migration 0010): each is one transaction that locks what it changes.
+    `grant execute on function public.create_learner_invitation(uuid, uuid, uuid, text, text, timestamptz, integer, timestamptz), public.accept_learner_invitation(text, uuid, text, timestamptz) to ${ROLE}`,
     `grant usage on schema private to ${ROLE}`,
     `grant execute on function private.tags_to_text(text[]) to ${ROLE}`,
   ];

@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
 import { renewSession, type CookieJar } from "@/lib/account/session";
 import type { AccountRuntime } from "@/lib/account/runtime";
-import { platformAccess, type Account } from "@learnthrive/data/library";
+import type { Account, Actor, AssistantDenial, ChatOwner } from "@learnthrive/data/library";
+import { resolveRequestActor } from "@/lib/learner/resolve";
 import { jsonResponse, logOutcome, originAllowed, parseMultipart, readBodyLimited } from "@/lib/request-guards";
 import { siteConfig } from "@/lib/site";
 import { assistantAvailability, assistantConfig, paperMarkerEnabled, paperTutorEnabled } from "./config";
@@ -40,11 +41,13 @@ export interface AssistantDeps {
   now?: () => Date;
 }
 
-export type Reason = "unavailable" | "voice_unavailable" | "bad_audio" | "signed_out" | "adult_required" | "no_access" | "adult_confirmation" | "bad_request" | "too_large" | "not_found" | "too_many_files" | "rate_limited";
+export type Reason = "learner_unavailable" | "consent_needed" | "unavailable" | "voice_unavailable" | "bad_audio" | "signed_out" | "adult_required" | "no_access" | "adult_confirmation" | "bad_request" | "too_large" | "not_found" | "too_many_files" | "rate_limited";
 
-const STATUS: Record<Reason, number> = { unavailable: 503, voice_unavailable: 503, bad_audio: 422, signed_out: 401, adult_required: 403, no_access: 403, adult_confirmation: 422, bad_request: 400, too_large: 413, not_found: 404, too_many_files: 422, rate_limited: 429 };
+const STATUS: Record<Reason, number> = { learner_unavailable: 403, consent_needed: 403, unavailable: 503, voice_unavailable: 503, bad_audio: 422, signed_out: 401, adult_required: 403, no_access: 403, adult_confirmation: 422, bad_request: 400, too_large: 413, not_found: 404, too_many_files: 422, rate_limited: 429 };
 
 const MESSAGE: Record<Reason, string> = {
+  learner_unavailable: "Study Buddy is not available for this learner right now. Please ask your parent or guardian.",
+  consent_needed: "A parent or guardian needs to say that Study Buddy may be used before it can open. Please ask them.",
   unavailable: `Study Buddy is not available right now. Please email ${siteConfig.email} if you need help.`,
   voice_unavailable: "Voice is not available right now. You can still type your question.",
   bad_audio: "We could not use that recording. Please try again, or type your question.",
@@ -61,7 +64,25 @@ const MESSAGE: Record<Reason, string> = {
 
 export const refuse = (reason: Reason, extra: Record<string, string> = {}) => jsonResponse(STATUS[reason], { code: reason, error: MESSAGE[reason] }, { "Cache-Control": "no-store", ...extra });
 
-export type Gate = { ok: true; rt: AccountRuntime; assistant: AssistantRuntime; account: Account & { clientId: string }; email: string } | { ok: false; response: Response };
+/**
+ * What every route gets from the gate. `actor` is who is acting (a guardian, a learner, a guardian viewing as a learner, staff) and
+ * `owner` is what every chat, file and paper is scoped by: the family AND the learner. Both are resolved on the server; a client id,
+ * student id or role in a request body is never read.
+ */
+export type Gate = { ok: true; rt: AccountRuntime; assistant: AssistantRuntime; actor: Actor; owner: ChatOwner; account: Account; email: string } | { ok: false; response: Response };
+
+/** Why the assistant is closed to this actor, as the reason the page and the API give. */
+function reasonFor(denial: AssistantDenial | null): Reason {
+  switch (denial) {
+    case "adult_required": return "adult_required";
+    case "consent_needed": return "consent_needed";
+    case "learner_inactive":
+    case "guardian_inactive":
+    case "learner_not_enabled":
+    case "minors_closed": return "learner_unavailable";
+    default: return "no_access";
+  }
+}
 
 export async function gate(request: Request, deps: AssistantDeps, event: string, { mutating = true }: { mutating?: boolean } = {}): Promise<Gate> {
   const env = deps.env ?? process.env;
@@ -76,17 +97,17 @@ export async function gate(request: Request, deps: AssistantDeps, event: string,
   }
   const session = await renewSession(deps.jar, deps.rt);
   if (session.status !== "ok") return { ok: false, response: refuse("signed_out") };
-  const account = await deps.rt.store.accounts.getAccount(session.user.id);
-  if (!account) return { ok: false, response: refuse("signed_out") };
-  if (!account.adultConfirmed) return { ok: false, response: refuse("adult_required") };
-  const clientId = account.clientId ?? (await deps.rt.store.accounts.ensureClient(account.profileId));
-  const facts = await deps.rt.store.access.facts(clientId, (deps.now ?? (() => new Date()))());
-  // The same rule as the sign-in routing and the navigation (platformAccess), so what the menu offers and what the route allows cannot drift.
-  if (!platformAccess(account.role, facts).studyBuddy) {
-    logOutcome(event, "no_access");
-    return { ok: false, response: refuse("no_access") };
+  const now = (deps.now ?? (() => new Date()))();
+  const resolved = await resolveRequestActor(deps.rt, deps.jar, session.user.id, { minorsApproved: deps.assistant.config.minorsApproved, now });
+  if (!resolved) return { ok: false, response: refuse("signed_out") };
+  const { actor, account } = resolved;
+  // The same rule as the sign-in routing and the navigation (platformAccess), now with the learner's own state: a suspended learner, a
+  // revoked guardian link or a withdrawn consent is refused here on the next request, whatever the access token still says.
+  if (!actor.assistant.allowed || !actor.owner) {
+    logOutcome(event, actor.assistant.reason ?? "no_access", { mode: actor.mode });
+    return { ok: false, response: refuse(reasonFor(actor.assistant.reason)) };
   }
-  return { ok: true, rt: deps.rt, assistant: deps.assistant, account: { ...account, clientId }, email: session.user.email };
+  return { ok: true, rt: deps.rt, assistant: deps.assistant, actor, owner: actor.owner, account, email: session.user.email };
 }
 
 const NDJSON = { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store", "X-Accel-Buffering": "no", "X-Content-Type-Options": "nosniff" };
@@ -117,11 +138,10 @@ export async function handleChat(request: Request, deps: AssistantDeps): Promise
     await g.rt.store.billing.recordConsent({ profileId: g.account.profileId, kind: "assistant_adult_use", version: ADULT_ACK_VERSION, textSha256: createHash("sha256").update(`${ADULT_ACK_VERSION}
 ${ADULT_ACKNOWLEDGEMENT}`).digest("hex"), at: (deps.now ?? (() => new Date()))() });
   }
-  const studentId = minors && typeof raw.studentId === "string" && UUID.test(raw.studentId) ? raw.studentId : null;
 
   const events = sendMessage(
     { store: g.rt.store, provider: g.assistant.provider, queue: g.assistant.queue, uploads: g.assistant.uploads, config: g.assistant.config, flag: g.assistant.flag, hosted: g.assistant.hosted, now: deps.now, log: (outcome, details) => logOutcome("assistant-chat", outcome, details) },
-    { clientId: g.account.clientId, sessionId, text, fileIds, signal: request.signal, studentId, voice: raw.voice === true },
+    { owner: g.owner, sessionId, text, fileIds, signal: request.signal, voice: raw.voice === true },
   );
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
@@ -149,7 +169,7 @@ export async function handleUpload(request: Request, deps: AssistantDeps): Promi
   if (!g.ok) return g.response;
   const now = (deps.now ?? (() => new Date()))();
   const hour = new Date(Math.floor(now.getTime() / 3_600_000) * 3_600_000);
-  if ((await g.rt.store.chat.usageCount(g.account.clientId, "assistant_upload_hour", hour)) >= UPLOADS_PER_HOUR) return refuse("rate_limited", { "Retry-After": "600" });
+  if ((await g.rt.store.chat.usageCount(g.owner.clientId, "assistant_upload_hour", hour)) >= UPLOADS_PER_HOUR) return refuse("rate_limited", { "Retry-After": "600" });
   const body = await readBodyLimited(request, UPLOAD_LIMITS.pdfBytes + 64 * 1024);
   if (!body.ok) return refuse("too_large");
   const form = await parseMultipart(body.bytes, request.headers.get("content-type"));
@@ -159,8 +179,8 @@ export async function handleUpload(request: Request, deps: AssistantDeps): Promi
   let sessionId = typeof asked === "string" && asked ? asked : null;
   if (sessionId && !UUID.test(sessionId)) return refuse("bad_request");
   if (sessionId) {
-    if (!(await g.rt.store.chat.getSession(g.account.clientId, sessionId))) return refuse("not_found");
-    if ((await g.rt.store.chat.listFiles(g.account.clientId, sessionId)).filter((f) => f.messageId === null).length >= UPLOAD_LIMITS.filesPerMessage) return refuse("too_many_files");
+    if (!(await g.rt.store.chat.getSession(g.owner, sessionId))) return refuse("not_found");
+    if ((await g.rt.store.chat.listFiles(g.owner, sessionId)).filter((f) => f.messageId === null).length >= UPLOAD_LIMITS.filesPerMessage) return refuse("too_many_files");
   }
 
   const result = await inspectChatUpload(file.name, new Uint8Array(await file.arrayBuffer()));
@@ -168,11 +188,11 @@ export async function handleUpload(request: Request, deps: AssistantDeps): Promi
     logOutcome("assistant-upload", "refused", { code: result.problem.code });
     return jsonResponse(422, { code: "refused", error: result.problem.message }, { "Cache-Control": "no-store" });
   }
-  if (!sessionId) sessionId = (await g.rt.store.chat.createSession(g.account.clientId, { title: "New chat" }, now)).id;
+  if (!sessionId) sessionId = (await g.rt.store.chat.createSession(g.owner, { title: "New chat" }, now)).id;
   const path = `${sessionId}/${randomUUID()}.${result.contentType === "application/pdf" ? "pdf" : result.contentType === "image/png" ? "png" : "jpg"}`;
   await g.assistant.uploads.put(path, result.bytes, result.contentType);
-  const record = await g.rt.store.chat.addFile(g.account.clientId, sessionId, { storagePath: path, bytes: result.bytes.length, contentType: result.contentType }, now);
-  await g.rt.store.chat.incrementUsage(g.account.clientId, "assistant_upload_hour", hour, 1);
+  const record = await g.rt.store.chat.addFile(g.owner, sessionId, { storagePath: path, bytes: result.bytes.length, contentType: result.contentType }, now);
+  await g.rt.store.chat.incrementUsage(g.owner.clientId, "assistant_upload_hour", hour, 1);
   logOutcome("assistant-upload", "stored", { kind: result.kind });
   return jsonResponse(200, { fileId: record.id, sessionId, name: result.name, kind: result.kind, contentType: result.contentType, pages: "pages" in result ? result.pages : null }, { "Cache-Control": "no-store" });
 }
@@ -180,7 +200,7 @@ export async function handleUpload(request: Request, deps: AssistantDeps): Promi
 export async function handleSessions(request: Request, deps: AssistantDeps): Promise<Response> {
   const g = await gate(request, deps, "assistant-sessions", { mutating: false });
   if (!g.ok) return g.response;
-  const sessions = await g.rt.store.chat.listSessions(g.account.clientId);
+  const sessions = await g.rt.store.chat.listSessions(g.owner);
   return jsonResponse(200, { sessions: sessions.map((s) => ({ id: s.id, title: s.title, lastActivityAt: s.lastActivityAt.toISOString() })) }, { "Cache-Control": "no-store" });
 }
 
@@ -203,25 +223,25 @@ export async function handleSession(request: Request, deps: AssistantDeps, sessi
     if (!title || title.length > 120) return refuse("bad_request");
     // A title is shown in the list and kept with the chat, so the same rules apply as to a message: no personal details.
     if (moderateInput(title).action !== "allow") return jsonResponse(422, { code: "title_refused", error: "Please choose a title without personal details." }, { "Cache-Control": "no-store" });
-    const ok = await g.rt.store.chat.renameSession(g.account.clientId, sessionId, title);
+    const ok = await g.rt.store.chat.renameSession(g.owner, sessionId, title);
     logOutcome("assistant-session", ok ? "renamed" : "not_found");
     return ok ? jsonResponse(200, { success: true, title }, { "Cache-Control": "no-store" }) : refuse("not_found");
   }
   if (method === "DELETE") {
-    const ok = await g.rt.store.chat.requestDeletion(g.account.clientId, sessionId, (deps.now ?? (() => new Date()))());
+    const ok = await g.rt.store.chat.requestDeletion(g.owner, sessionId, (deps.now ?? (() => new Date()))());
     logOutcome("assistant-session", ok ? "deleted" : "not_found");
     return ok ? jsonResponse(200, { success: true }, { "Cache-Control": "no-store" }) : refuse("not_found");
   }
-  const session = await g.rt.store.chat.getSession(g.account.clientId, sessionId);
+  const session = await g.rt.store.chat.getSession(g.owner, sessionId);
   if (!session) return refuse("not_found");
-  const messages = await g.rt.store.chat.listMessages(g.account.clientId, sessionId);
+  const messages = await g.rt.store.chat.listMessages(g.owner, sessionId);
   return jsonResponse(200, { id: session.id, title: session.title, messages: messages.map((m) => ({ id: m.id, role: m.role, content: m.content, createdAt: m.createdAt.toISOString() })) }, { "Cache-Control": "no-store" });
 }
 
 export async function handleDeleteAll(request: Request, deps: AssistantDeps): Promise<Response> {
   const g = await gate(request, deps, "assistant-delete-all");
   if (!g.ok) return g.response;
-  const count = await g.rt.store.chat.requestDeletionAll(g.account.clientId, (deps.now ?? (() => new Date()))());
+  const count = await g.rt.store.chat.requestDeletionAll(g.owner, (deps.now ?? (() => new Date()))());
   logOutcome("assistant-delete-all", "deleted", { chats: count });
   return jsonResponse(200, { success: true, deleted: count }, { "Cache-Control": "no-store" });
 }
@@ -229,7 +249,7 @@ export async function handleDeleteAll(request: Request, deps: AssistantDeps): Pr
 export async function handleExport(request: Request, deps: AssistantDeps): Promise<Response> {
   const g = await gate(request, deps, "assistant-export", { mutating: false });
   if (!g.ok) return g.response;
-  const data = await g.rt.store.chat.exportAll(g.account.clientId, (deps.now ?? (() => new Date()))());
+  const data = await g.rt.store.chat.exportAll(g.owner, (deps.now ?? (() => new Date()))());
   logOutcome("assistant-export", "sent", { chats: data.sessions.length });
   return new Response(JSON.stringify(data, null, 2), { status: 200, headers: { "Content-Type": "application/json; charset=utf-8", "Content-Disposition": 'attachment; filename="study-buddy-export.json"', "Cache-Control": "no-store" } });
 }

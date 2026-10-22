@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { loadTsFrom } from "./_tsLoader.mjs";
 
+const own = (clientId, studentId = null) => ({ clientId, studentId });
+
 // The Paper Tutor: finding the questions and their answer spaces, the checker that decides "verified" (never the model's word),
 // the annotated PDF (inside the answer spaces, never over the paper's printing, never tiny, always labelled), and the background
 // jobs (one family's paper is never another's, a daily cap, cancelling). The mock model answers "6" to everything.
@@ -136,15 +138,15 @@ async function jobWorld() {
   const uploads = new MemoryLibraryStorage();
   const now = new Date("2026-10-21T10:00:00Z");
   const deps = { store, uploads, solve: { provider: new MockProvider({ delayMs: 0 }), queue: new GenerationQueue(2, 10), model: "mock" }, now: () => now };
-  const session = await store.chat.createSession(a, {}, now);
+  const session = await store.chat.createSession(own(a), {}, now);
   await uploads.put(`${session.id}/w.pdf`, WORKSHEET, "application/pdf");
-  const file = await store.chat.addFile(a, session.id, { storagePath: `${session.id}/w.pdf`, bytes: WORKSHEET.length, contentType: "application/pdf" }, now);
+  const file = await store.chat.addFile(own(a), session.id, { storagePath: `${session.id}/w.pdf`, bytes: WORKSHEET.length, contentType: "application/pdf" }, now);
   return { store, uploads, deps, a, b, session, file, jobs: new PaperJobs() };
 }
 
 async function until(jobs, client, id, states) {
   for (let i = 0; i < 400; i += 1) {
-    const job = jobs.get(client, id);
+    const job = jobs.get(own(client), id);
     if (states.includes(job?.state)) return job;
     await new Promise((r) => setTimeout(r, 25));
   }
@@ -153,48 +155,48 @@ async function until(jobs, client, id, states) {
 
 test("a job reads the paper, solves the chosen questions, stores the PDF and posts the summary into the chat", async () => {
   const w = await jobWorld();
-  const started = await w.jobs.start(w.deps, { clientId: w.a, sessionId: w.session.id, fileId: w.file.id });
+  const started = await w.jobs.start(w.deps, { owner: own(w.a), sessionId: w.session.id, fileId: w.file.id });
   assert.equal(started.ok, true);
-  assert.equal(w.jobs.get(w.b, started.job.id), null, "another family cannot see it");
-  assert.equal((await w.jobs.start(w.deps, { clientId: w.a, sessionId: w.session.id, fileId: w.file.id })).code, "busy", "one at a time");
+  assert.equal(w.jobs.get(own(w.b), started.job.id), null, "another family cannot see it");
+  assert.equal((await w.jobs.start(w.deps, { owner: own(w.a), sessionId: w.session.id, fileId: w.file.id })).code, "busy", "one at a time");
   const ready = await until(w.jobs, w.a, started.job.id, ["ready", "failed"]);
   assert.equal(ready.state, "ready");
   assert.deepEqual(ready.questions.map((q) => q.number), ["1", "2"]);
-  assert.equal(w.jobs.solve(w.deps, w.b, started.job.id, { mode: "hybrid" }).code, "not_found", "nor solve it");
+  assert.equal(w.jobs.solve(w.deps, own(w.b), started.job.id, { mode: "hybrid" }).code, "not_found", "nor solve it");
 
-  assert.equal(w.jobs.solve(w.deps, w.a, started.job.id, { mode: "hybrid", questionIds: ["q1"] }).ok, true);
+  assert.equal(w.jobs.solve(w.deps, own(w.a), started.job.id, { mode: "hybrid", questionIds: ["q1"] }).ok, true);
   const done = await until(w.jobs, w.a, started.job.id, ["done", "failed"]);
   assert.equal(done.state, "done", done.message ?? "");
   assert.deepEqual(done.progress, [{ questionId: "q1", state: "done", status: "verified" }], "only the chosen question, checked by calculation");
-  const stored = await w.store.chat.getFile(w.a, done.resultFileId);
+  const stored = await w.store.chat.getFile(own(w.a), done.resultFileId);
   assert.equal(stored.contentType, "application/pdf");
-  assert.equal(await w.store.chat.getFile(w.b, done.resultFileId), null);
+  assert.equal(await w.store.chat.getFile(own(w.b), done.resultFileId), null);
   const bytes = await w.uploads.read(stored.storagePath);
   assert.equal(Buffer.from(bytes.subarray(0, 5)).toString(), "%PDF-");
 
-  const messages = await w.store.chat.listMessages(w.a, w.session.id);
+  const messages = await w.store.chat.listMessages(own(w.a), w.session.id);
   const summary = messages.at(-1);
   assert.equal(summary.role, "assistant");
   assert.match(summary.content, /AI-generated/);
   assert.match(summary.content, /\*\*Question 1\*\* \(checked by calculation\): \$6\$/);
-  assert.equal((await w.store.chat.getFile(w.a, w.file.id)).messageId, summary.id, "the paper itself travels with the summary, for follow-up questions");
+  assert.equal((await w.store.chat.getFile(own(w.a), w.file.id)).messageId, summary.id, "the paper itself travels with the summary, for follow-up questions");
 });
 
 test("jobs can be cancelled, are refused for another family's file, and stop at the daily cap", async () => {
   const w = await jobWorld();
-  assert.equal((await w.jobs.start(w.deps, { clientId: w.b, sessionId: w.session.id, fileId: w.file.id })).code, "not_found");
-  const first = await w.jobs.start(w.deps, { clientId: w.a, sessionId: w.session.id, fileId: w.file.id });
-  assert.equal(w.jobs.cancel(w.b, first.job.id), false);
-  assert.equal(w.jobs.cancel(w.a, first.job.id), true);
-  assert.equal(w.jobs.get(w.a, first.job.id).state, "cancelled");
+  assert.equal((await w.jobs.start(w.deps, { owner: own(w.b), sessionId: w.session.id, fileId: w.file.id })).code, "not_found");
+  const first = await w.jobs.start(w.deps, { owner: own(w.a), sessionId: w.session.id, fileId: w.file.id });
+  assert.equal(w.jobs.cancel(own(w.b), first.job.id), false);
+  assert.equal(w.jobs.cancel(own(w.a), first.job.id), true);
+  assert.equal(w.jobs.get(own(w.a), first.job.id).state, "cancelled");
   await new Promise((r) => setTimeout(r, 300));
-  assert.equal(w.jobs.get(w.a, first.job.id).state, "cancelled", "the reading finishing later does not revive it");
+  assert.equal(w.jobs.get(own(w.a), first.job.id).state, "cancelled", "the reading finishing later does not revive it");
   for (let i = 1; i < JOBS_PER_DAY; i += 1) {
-    const s = await w.jobs.start(w.deps, { clientId: w.a, sessionId: w.session.id, fileId: w.file.id });
+    const s = await w.jobs.start(w.deps, { owner: own(w.a), sessionId: w.session.id, fileId: w.file.id });
     assert.equal(s.ok, true, `paper ${i + 1}`);
-    w.jobs.cancel(w.a, s.job.id);
+    w.jobs.cancel(own(w.a), s.job.id);
   }
-  assert.equal((await w.jobs.start(w.deps, { clientId: w.a, sessionId: w.session.id, fileId: w.file.id })).code, "limit");
+  assert.equal((await w.jobs.start(w.deps, { owner: own(w.a), sessionId: w.session.id, fileId: w.file.id })).code, "limit");
 });
 
 test("the Paper Tutor is off in production unless switched on exactly, and on in development unless switched off", () => {

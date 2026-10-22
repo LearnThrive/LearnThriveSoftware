@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { LibraryStore } from "@learnthrive/data/library";
+import type { ChatOwner, LibraryStore } from "@learnthrive/data/library";
 import type { LibraryStorage } from "@/lib/library/storage";
 import type { OutputMode } from "./annotate";
 import { markingMarkdown, type MarkedQuestion } from "./mark";
@@ -61,7 +61,8 @@ export interface PaperJobView {
 }
 
 interface Job extends PaperJobView {
-  clientId: string;
+  /** The family AND the learner this job belongs to: another learner in the same family never finds it. */
+  owner: ChatOwner;
   sessionId: string;
   fileId: string;
   schemeFileId: string | null;
@@ -85,6 +86,8 @@ const markedResult = (q: MarkedQuestion): QuestionResult => ({
   outOf: q.outOf,
 });
 
+const sameOwner = (a: ChatOwner, b: ChatOwner) => a.clientId === b.clientId && a.studentId === b.studentId;
+
 const TTL_MS = 2 * 60 * 60 * 1000;
 export const JOBS_PER_DAY = 10;
 export const USAGE_PAPER_DAY = "paper_job_day";
@@ -107,30 +110,31 @@ export class PaperJobs {
     for (const [id, job] of this.jobs) if (now - job.touched > TTL_MS && job.state !== "solving" && job.state !== "extracting") this.jobs.delete(id);
   }
 
-  get(clientId: string, id: string): PaperJobView | null {
+  get(owner: ChatOwner, id: string): PaperJobView | null {
     const job = this.jobs.get(id);
-    if (!job || job.clientId !== clientId) return null;
+    if (!job || !sameOwner(job.owner, owner)) return null;
     job.touched = Date.now();
     return view(job);
   }
 
+  /** One unfinished job at a time per household (one local model), whichever learner started it. */
   active(clientId: string): Job | null {
-    return [...this.jobs.values()].find((j) => j.clientId === clientId && (j.state === "extracting" || j.state === "solving")) ?? null;
+    return [...this.jobs.values()].find((j) => j.owner.clientId === clientId && (j.state === "extracting" || j.state === "solving")) ?? null;
   }
 
   /** Starts reading a paper the family uploaded to this chat. */
-  async start(deps: JobDeps, input: { clientId: string; sessionId: string; fileId: string; kind?: JobKind; schemeFileId?: string }): Promise<{ ok: true; job: PaperJobView } | { ok: false; code: "busy" | "limit" | "not_found" }> {
+  async start(deps: JobDeps, input: { owner: ChatOwner; sessionId: string; fileId: string; kind?: JobKind; schemeFileId?: string }): Promise<{ ok: true; job: PaperJobView } | { ok: false; code: "busy" | "limit" | "not_found" }> {
     this.sweep();
-    if (this.active(input.clientId)) return { ok: false, code: "busy" };
-    const file = await deps.store.chat.getFile(input.clientId, input.fileId);
+    if (this.active(input.owner.clientId)) return { ok: false, code: "busy" };
+    const file = await deps.store.chat.getFile(input.owner, input.fileId);
     if (!file || file.sessionId !== input.sessionId) return { ok: false, code: "not_found" };
-    const scheme = input.schemeFileId && input.kind === "mark" ? await deps.store.chat.getFile(input.clientId, input.schemeFileId) : null;
+    const scheme = input.schemeFileId && input.kind === "mark" ? await deps.store.chat.getFile(input.owner, input.schemeFileId) : null;
     if (input.schemeFileId && (!scheme || scheme.sessionId !== input.sessionId)) return { ok: false, code: "not_found" };
     const now = (deps.now ?? (() => new Date()))();
     const day = new Date(Math.floor(now.getTime() / 86_400_000) * 86_400_000);
-    if ((await deps.store.chat.usageCount(input.clientId, USAGE_PAPER_DAY, day)) >= JOBS_PER_DAY) return { ok: false, code: "limit" };
-    await deps.store.chat.incrementUsage(input.clientId, USAGE_PAPER_DAY, day, 1);
-    const job: Job = { id: randomUUID(), kind: input.kind ?? "solve", results: [], clientId: input.clientId, sessionId: input.sessionId, fileId: input.fileId, schemeFileId: scheme?.id ?? null, scheme: null, state: "extracting", questions: [], progress: [], mode: null, resultFileId: null, pageCount: null, workedPages: [], message: null, document: null, controller: new AbortController(), touched: Date.now() };
+    if ((await deps.store.chat.usageCount(input.owner.clientId, USAGE_PAPER_DAY, day)) >= JOBS_PER_DAY) return { ok: false, code: "limit" };
+    await deps.store.chat.incrementUsage(input.owner.clientId, USAGE_PAPER_DAY, day, 1);
+    const job: Job = { id: randomUUID(), kind: input.kind ?? "solve", results: [], owner: input.owner, sessionId: input.sessionId, fileId: input.fileId, schemeFileId: scheme?.id ?? null, scheme: null, state: "extracting", questions: [], progress: [], mode: null, resultFileId: null, pageCount: null, workedPages: [], message: null, document: null, controller: new AbortController(), touched: Date.now() };
     this.jobs.set(job.id, job);
     void (async () => {
       try {
@@ -164,11 +168,11 @@ export class PaperJobs {
   }
 
   /** Solves (or, for a "mark" job, marks) the chosen questions of a ready job, then stores the PDF and posts a summary into the chat. */
-  solve(deps: JobDeps, clientId: string, id: string, options: { mode: OutputMode; questionIds?: string[] }): { ok: true; job: PaperJobView } | { ok: false; code: "not_found" | "not_ready" | "busy" } {
+  solve(deps: JobDeps, owner: ChatOwner, id: string, options: { mode: OutputMode; questionIds?: string[] }): { ok: true; job: PaperJobView } | { ok: false; code: "not_found" | "not_ready" | "busy" } {
     const job = this.jobs.get(id);
-    if (!job || job.clientId !== clientId) return { ok: false, code: "not_found" };
+    if (!job || !sameOwner(job.owner, owner)) return { ok: false, code: "not_found" };
     if (job.state !== "ready" || !job.document || job.document.questions.length === 0) return { ok: false, code: "not_ready" };
-    const others = this.active(clientId);
+    const others = this.active(owner.clientId);
     if (others && others.id !== id) return { ok: false, code: "busy" };
     const ids = options.questionIds?.filter((q) => job.questions.some((x) => x.id === q));
     job.state = "solving";
@@ -207,16 +211,16 @@ export class PaperJobs {
         const now = (deps.now ?? (() => new Date()))();
         const path = `${job.sessionId}/${randomUUID()}.pdf`;
         await deps.uploads.put(path, pdf, "application/pdf");
-        const record = await deps.store.chat.addFile(clientId, job.sessionId, { storagePath: path, bytes: pdf.length, contentType: "application/pdf" }, now);
+        const record = await deps.store.chat.addFile(owner, job.sessionId, { storagePath: path, bytes: pdf.length, contentType: "application/pdf" }, now);
         // The summary goes into the chat as Study Buddy's message, with the paper and its result attached, so follow-up questions
         // ("explain question 3", "where did I lose marks?") have the answers and the document without any of it being redone.
-        const message = await deps.store.chat.appendMessage(clientId, job.sessionId, "assistant", markdown, now);
+        const message = await deps.store.chat.appendMessage(owner, job.sessionId, "assistant", markdown, now);
         const attach = [record.id];
         for (const fileId of [job.fileId, job.schemeFileId]) {
-          const file = fileId ? await deps.store.chat.getFile(clientId, fileId) : null;
+          const file = fileId ? await deps.store.chat.getFile(owner, fileId) : null;
           if (file && file.messageId === null) attach.push(file.id);
         }
-        await deps.store.chat.attachFiles(clientId, job.sessionId, attach, message.id);
+        await deps.store.chat.attachFiles(owner, job.sessionId, attach, message.id);
         job.resultFileId = record.id;
         job.state = "done";
       } catch (error) {
@@ -229,9 +233,9 @@ export class PaperJobs {
     return { ok: true, job: view(job) };
   }
 
-  cancel(clientId: string, id: string): boolean {
+  cancel(owner: ChatOwner, id: string): boolean {
     const job = this.jobs.get(id);
-    if (!job || job.clientId !== clientId) return false;
+    if (!job || !sameOwner(job.owner, owner)) return false;
     if (job.state === "extracting" || job.state === "solving" || job.state === "ready") {
       job.state = "cancelled";
       job.message = "Cancelled.";
