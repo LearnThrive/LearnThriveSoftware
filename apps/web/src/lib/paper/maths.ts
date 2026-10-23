@@ -300,6 +300,18 @@ export function sameValue(a: number, b: number): boolean {
   return close(a, b);
 }
 
+/**
+ * Does a written answer state this exact value, rounded to the decimal places it is written with ("6.18" for 68/11)? A whole number is not a
+ * rounding (6 is not 68/11), so only an answer with a decimal part can be one.
+ */
+export function statesValue(exact: number, written: string): boolean {
+  // The unit after the number ("6.18 litres", "6.18\\text{ litres}") is not part of the value.
+  const cleaned = written.replace(/\\(?:text|mathrm)\s*\{[^{}]*\}(?:\^\s*\{?\d\}?)?|\\[,;! ]/g, " ").replace(/(?<=\d)\s*[a-zA-Z]+(?:\^\s*\{?\d\}?)?\s*$/, "").trim();
+  const shown = valueOf(cleaned);
+  const places = /\.(\d+)$/.exec(cleaned)?.[1]?.length ?? 0;
+  return shown !== null && places > 0 && Math.abs(exact - shown) <= 0.5 * 10 ** -places + 1e-9;
+}
+
 /** Squeezes text for a "does this appear in the document" comparison: no spaces, one kind of minus and times sign, lower case. */
 export function squeeze(text: string): string {
   return normaliseMaths(text).toLowerCase().replace(/\s+/g, "").replace(/\*/g, "x");

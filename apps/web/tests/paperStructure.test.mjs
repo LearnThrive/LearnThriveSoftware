@@ -69,10 +69,12 @@ test("parts are only taken in sequence: (b) before (a), an algebraic bracket, or
       ["(i) is not an option here yet", 620],
     ]),
   ]);
-  // (b) first and the bracket are plain lines of the stem; (a) is the first part; a "(i)" after (a) is the first numeral of (a).
-  assert.deepEqual(found.map((q) => q.number), ["1(a)(i)"]);
-  assert.match(found[0].text, /out of order/);
-  assert.match(found[0].text, /two solutions/);
+  // (b) first and the bracket are plain lines of the stem; (a) is the first part; a "(i)" after (a) is the first numeral of (a). "Solve it. (2)" carries
+  // its own marks, so (a) is a task of its own as well as the stem of its numeral; "Factorise fully." is only the shared instruction.
+  assert.deepEqual(found.map((q) => q.number), ["1(a)", "1(a)(i)"]);
+  assert.match(found[1].text, /out of order/);
+  assert.match(found[1].text, /two solutions/);
+  assert.doesNotMatch(found[0].text, /not an option/, "the parent keeps only its own words");
 });
 
 test("(i) after (h) is the ninth letter, not a numeral", () => {

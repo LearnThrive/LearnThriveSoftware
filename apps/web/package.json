@@ -42,7 +42,8 @@
     "ollama:local": "node ../../scripts/ollama-local.mjs",
     "ollama:photo-check": "node --import tsx scripts/ollama-photo-check.mjs",
     "ollama:lifecycle": "node --import tsx scripts/ollama-lifecycle-check.mjs",
-    "ollama:browser-check": "node scripts/ollama-browser-check.mjs"
+    "ollama:browser-check": "node scripts/ollama-browser-check.mjs",
+    "paper:live": "node --import tsx scripts/paper-live-check.mjs"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.1",

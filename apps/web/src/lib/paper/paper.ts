@@ -6,9 +6,11 @@ import { markQuestion, pageMissing, type MarkedQuestion, type Outcome } from "./
 import { markPaper } from "./markPdf";
 import { paperLimits, type PaperLimits } from "./limits";
 import { placeFromLayout, proposeLayout } from "./layout";
+import { assignMarks, listQuestionsFromPicture, marksStrip, readMarks } from "./listing";
 import { classifyPage, findQuestions, refineAnswerSpace, type PageKind, type PaperQuestion } from "./questions";
+import { normaliseQuestions, parseLabel } from "./questionTree";
 import { identityOf, matchScheme, readScheme, type Scheme, type SchemeVerdict } from "./scheme";
-import { listQuestionsFromPicture, solveQuestion, type SolveDeps } from "./solve";
+import { solveQuestion, type SolveDeps } from "./solve";
 
 /**
  * The Paper Tutor pipeline, start to finish: read the document (the same reader Study Buddy uses), find the questions and their
@@ -58,8 +60,17 @@ export async function extractQuestions(deps: SolveDeps | null, bytes: Uint8Array
       const page = reading.pages.find((p) => p.number === picture.number)!;
       refineAnswerSpace(questions, reading.pages, picture);
       if (!deps || page.textQuality === "good" || kinds.get(page.number) !== "questions") continue;
-      const listed = await listQuestionsFromPicture(deps, page.number, b64(picture.jpeg()));
-      const fresh = listed.filter((q) => !questions.some((existing) => existing.page === q.page && existing.number === q.number));
+      // The question number last seen before this page, so a page that shows only a later part ("(b)") is still read as 3(b).
+      const before = [...questions].filter((q) => q.page < page.number).sort((a, b) => a.page - b.page).at(-1);
+      const listed = await listQuestionsFromPicture(deps, page.number, b64(picture.jpeg()), before ? (parseLabel(before.number)?.number ?? null) : null);
+      // One rule for every source: a question with parts is its parts' shared context, not a task of its own. Done per page here so the
+      // marks and the answer space below belong to the tasks; the whole list is normalised again at the end, across pages.
+      const fresh = normaliseQuestions(listed).filter((q) => !questions.some((existing) => existing.page === q.page && existing.number === q.number));
+      // The printed marks are read in their own look at a larger drawing, and kept only if there are exactly as many as tasks.
+      if (fresh.length) {
+        const [large] = await renderPdfPages(bytes, { scale: 2.5, pages: [page.number] });
+        if (large) assignMarks(fresh, await readMarks(deps, marksStrip(large)));
+      }
       questions.push(...fresh);
       // Where each scanned question's answer space is: proposed by the vision model, accepted only if the drawing of the page agrees.
       if (limits.scanLayout && fresh.length) {
@@ -68,8 +79,12 @@ export async function extractQuestions(deps: SolveDeps | null, bytes: Uint8Array
       }
     }
   }
-  // Paper order: by page (a stable sort keeps the order found within a page). The ids are opaque and follow that order; the printed label is `number`.
+  // Paper order: by page (a stable sort keeps the order found within a page). The same normalisation for a text layer and a vision reading, over
+  // the whole paper, before anything is offered, laid out or solved: parents with parts fold into them, repeated numbering stays separate.
   questions.sort((a, b) => a.page - b.page);
+  const normalised = normaliseQuestions(questions);
+  questions.splice(0, questions.length, ...normalised);
+  // The ids are opaque and follow paper order; the printed label is `number`.
   questions.forEach((q, i) => {
     q.id = `q${i + 1}`;
   });
@@ -96,7 +111,7 @@ export interface PaperResult {
 export async function solvePaper(
   deps: SolveDeps,
   document: PaperDocument,
-  options: { mode: OutputMode; questionIds?: string[]; onProgress?: (progress: Progress[]) => void; prior?: ReadonlyMap<string, SolvedQuestion>; onResult?: (result: SolvedQuestion) => void | Promise<void> },
+  options: { mode: OutputMode; questionIds?: string[]; onProgress?: (progress: Progress[]) => void; prior?: ReadonlyMap<string, SolvedQuestion>; onResult?: (result: SolvedQuestion) => void | Promise<void>; contextPictures?: ReadonlyMap<string, readonly string[]> },
 ): Promise<PaperResult> {
   const chosen = document.questions.filter((q) => !options.questionIds || options.questionIds.includes(q.id));
   // Questions finished by an earlier run of this job (its checkpoints) are kept, not redone.
@@ -121,7 +136,7 @@ export async function solvePaper(
     }
     progress[i]!.state = "solving";
     report();
-    const result = await solveQuestion(deps, q, pictures.get(q.page) ?? null);
+    const result = await solveQuestion(deps, q, pictures.get(q.page) ?? null, { pictures: options.contextPictures?.get(q.id) });
     solved.push(result);
     progress[i] = { questionId: q.id, state: "done", status: result.status };
     await options.onResult?.(result);
@@ -256,12 +271,14 @@ export function solutionsMarkdown(solved: SolvedQuestion[]): string {
     checked_reading: "checked by calculation, against my reading of the question",
     unchecked: "not checked by calculation",
     failed: "not confidently solved: the check did not agree",
+    partial: "partly worked: not finished or not consistent",
     unsolved: "not confidently solved",
   };
   const lines = ["I have worked through the paper. The annotated PDF has the working; here is a summary. These are AI-generated and may contain mistakes, so check any marked as not confidently solved.", ""];
   for (const q of solved) {
     lines.push(`**Question ${q.number}** (${label[q.status]})${q.finalAnswer ? `: $${q.finalAnswer}$` : ""}`);
-    for (const step of q.steps.slice(0, 6)) lines.push(`- ${step.say ?? ""}${step.math ? ` $${step.math}$` : ""}`.trim());
+    if (q.conclusion) lines.push(q.conclusion);
+    for (const step of q.steps.slice(0, 12)) lines.push(`- ${step.say ?? ""}${step.math ? ` $${step.math}$` : ""}`.trim());
     lines.push("");
   }
   lines.push("Ask me about any question for a hint, a different method or a similar one to practise.");

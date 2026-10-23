@@ -9,7 +9,7 @@ import styles from "./PaperTutor.module.css";
 
 const KatexMath = dynamic(() => import("./KatexMath"), { ssr: false, loading: () => <span>…</span> });
 
-type SolveStatus = "verified" | "checked_reading" | "unchecked" | "failed" | "unsolved";
+type SolveStatus = "verified" | "checked_reading" | "unchecked" | "failed" | "partial" | "unsolved";
 type Outcome = "correct" | "partly" | "incorrect" | "needs_checking" | "no_answer";
 type Mode = "hybrid" | "filled" | "worked";
 export type PaperKind = "solve" | "mark";
@@ -75,6 +75,7 @@ const STATUS: Record<SolveStatus, string> = {
   checked_reading: "Checked against the AI's reading",
   unchecked: "Not checked: look over it",
   failed: "Not confidently solved",
+  partial: "Partly worked: look it over",
   unsolved: "Not confidently solved",
 };
 

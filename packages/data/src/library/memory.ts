@@ -782,6 +782,12 @@ export class InMemoryLibraryStore implements LibraryStore {
       if (!this.paperIn(scope, jobId)) return [];
       return this.paperVersions.filter((v) => v.jobId === jobId && v.questionId === questionId).sort((a, b) => a.version - b.version).map((v) => structuredClone(v));
     },
+    listForSession: async (owner, sessionId) => {
+      return [...this.paperJobs.values()]
+        .filter((j) => j.sessionId === sessionId && this.paperOwns(owner, j))
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+        .map((j) => structuredClone(j));
+    },
     activeForFamily: async (clientId) => {
       const job = this.paperActive(clientId);
       return job ? structuredClone(job) : null;

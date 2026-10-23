@@ -1,4 +1,5 @@
 import type { LineBox, PageReading, RenderedPage } from "@/lib/assistant/documents";
+import { isIndependentTask } from "./questionTree";
 
 /**
  * Finds the questions on a paper and the empty space each one leaves for its answer, from the text layer's positioned lines.
@@ -47,6 +48,14 @@ export interface PaperQuestion {
   stem?: string;
   /** This part on its own, without the stem, for display. */
   ownText?: string;
+  /** The words the whole question (3) shares with all its parts, kept so a later part listed without them can still be given them. */
+  groupStem?: string;
+  /** Earlier uploads in the same chat that this question was found to belong to (see context.ts): their words, picture and checked result. */
+  context?: QuestionContext;
+  /** A part that arrived without its shared question and nothing earlier in the chat supplies it: solved only from what is shown, never guessed. */
+  contextMissing?: boolean;
+  /** More than one earlier question in the chat could be its parent: nothing was merged, and the student is asked which. */
+  contextAmbiguous?: boolean;
   /** Where the answer space on a scanned page came from, and how sure the model was (it was checked against the drawing of the page before use). */
   layout?: { source: "vision"; confidence: number };
   /** The question runs on over a page; the text includes the part that carried over. */
@@ -284,7 +293,10 @@ export function findQuestions(pages: readonly PageReading[], renders: readonly R
     return text.trim();
   };
 
-  const leaves = nodes.filter((n) => n.children.length === 0);
+  // Every part, and a parent that asks something itself: a stem-only parent stays the context of its parts and is not listed.
+  /** The words of a question without its printed number ("3 Work out 2 + 3." -> "Work out 2 + 3."). */
+  const unnumbered = (text: string): string => text.replace(/^\s*(?:question\s*|q\.?\s*)?\d{1,3}\s*[.):]?\s+/i, "").trim();
+  const leaves = nodes.filter((n) => n.children.length === 0 || (content(n.lines).length > 0 && isIndependentTask(unnumbered(own(n)))));
   const made: PaperQuestion[] = [];
   for (const leaf of leaves) {
     const lines = leaf.lines;
@@ -293,7 +305,8 @@ export function findQuestions(pages: readonly PageReading[], renders: readonly R
     for (let at: Node | null = leaf; at; at = at.parent) chain.unshift(at);
     const body = content(lines);
     if (body.length === 0) continue;
-    const mine = own(leaf);
+    // A parent that is a task keeps its words without the number that opens them (a part's label is already dropped).
+    const mine = leaf.children.length > 0 ? unnumbered(own(leaf)) : own(leaf);
     const stem = chain.slice(0, -1).map(own).filter(Boolean).join("\n");
     const joined = [stem, mine].filter(Boolean).join("\n");
     const q: PaperQuestion = {
@@ -344,4 +357,35 @@ export function findQuestions(pages: readonly PageReading[], renders: readonly R
     made.push(q);
   }
   return made;
+}
+
+/**
+ * What an upload shares with an earlier one in the same chat: the facts of the shared question, where its picture is, and what the
+ * earlier attempt concluded. Source-linked (the earlier file and job), scoped to the owner's chat, never trusted as fact: a result
+ * here is a claim to re-check, not an answer to copy.
+ */
+export interface QuestionContext {
+  /** The earlier job and the file it read, so the link can be followed and survives a reload or a recovery. */
+  fromJobId: string;
+  fromFileId: string;
+  /** The page of that file that holds the shared diagram and words. */
+  page: number;
+  /** "3": the group the new question was linked to. */
+  group: string;
+  /** The shared words (the stem) of that group, as read. */
+  stem: string;
+  /** Earlier parts of the group and how they came out: label, final answer and how far it was checked. */
+  earlier: Array<{
+    number: string;
+    answer: string;
+    status: string;
+    steps: string[];
+    /** What it compared (available against needed), if it was a "is there enough" question. */
+    comparison?: { have: string; need: string };
+    /** Which upload and question this answer is, and which revision of that part it is (1 = the first time it was solved): kept together, never one without the other. */
+    version: number;
+    source: { jobId: string; questionId: string };
+  }>;
+  /** Earlier answers to the same parts that a later revision replaced. Kept as history; never part of the active context or of any check. */
+  history: Array<{ number: string; version: number; answer: string; status: string; source: { jobId: string; questionId: string } }>;
 }

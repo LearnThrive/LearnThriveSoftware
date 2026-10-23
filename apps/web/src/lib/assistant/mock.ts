@@ -28,7 +28,13 @@ export class MockProvider implements ChatProvider {
     const started = Date.now();
     let script: string;
     const system = messages.find((m) => m.role === "system")?.content ?? "";
-    if (options.json && system.startsWith("List the numbered questions")) {
+    if (options.json && system.startsWith("List the questions on this exam")) {
+      // The same page as a tree, as the paper listing asks for it: one question, no parts.
+      script = JSON.stringify({ questions: [{ number: "1", text: "What is 3/4 of 24?", parts: [] }] });
+    } else if (options.json && system.startsWith("This is an exam page, or part of one")) {
+      // The narrow look for printed marks: none can be read on the mock's scan.
+      script = JSON.stringify({ marks: [] });
+    } else if (options.json && system.startsWith("List the numbered questions")) {
       // The Paper Tutor reading a picture of a page: one question, as a scan of the "3/4 of 24" homework would give.
       script = JSON.stringify({ questions: [{ number: "1", text: "What is 3/4 of 24?", marks: null }] });
     } else if (options.json && system.startsWith("You are locating questions")) {

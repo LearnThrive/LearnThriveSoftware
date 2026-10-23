@@ -1,0 +1,86 @@
+{
+  "checkedAt": "2026-10-23T19:49:23.698Z",
+  "model": "bonsai-2:9b",
+  "context": 8192,
+  "modes": {
+    "filled": {
+      "tasks": [
+        {
+          "number": "3(a)",
+          "marks": 4
+        }
+      ],
+      "state": "done",
+      "status": "unchecked",
+      "answer": "Yes",
+      "steps": 9,
+      "pages": 2,
+      "workedPages": [
+        2
+      ],
+      "ms": 175385
+    },
+    "hybrid": {
+      "tasks": [
+        {
+          "number": "3(a)",
+          "marks": 4
+        }
+      ],
+      "state": "done",
+      "status": "unchecked",
+      "answer": "Yes",
+      "steps": 7,
+      "pages": 2,
+      "workedPages": [
+        2
+      ],
+      "ms": 177955
+    },
+    "worked": {
+      "tasks": [
+        {
+          "number": "3(a)",
+          "marks": 4
+        }
+      ],
+      "state": "done",
+      "status": "partial",
+      "answer": "",
+      "steps": 7,
+      "pages": 2,
+      "workedPages": [
+        2
+      ],
+      "ms": 258384
+    }
+  },
+  "partB": {
+    "tasks": [
+      {
+        "number": "3(b)",
+        "marks": 3,
+        "contextState": "linked"
+      }
+    ],
+    "notice": "Question 3(b) is a part of question 3: I am using its shared words and its page from your earlier upload.",
+    "status": "unchecked",
+    "answer": "No",
+    "steps": 5,
+    "ms": 207389
+  },
+  "checks": {
+    "oneTaskThreeA": true,
+    "fourMarks": true,
+    "area68": true,
+    "paint75": true,
+    "coverage75": true,
+    "conclusionYes": true,
+    "notContradictory": true,
+    "partBLinked": true,
+    "partB825": true,
+    "partBStillEnough": true,
+    "partBReason": true
+  },
+  "passed": true
+}

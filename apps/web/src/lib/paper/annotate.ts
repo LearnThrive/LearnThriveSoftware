@@ -1,7 +1,6 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { fontBytes } from "./handwriting";
 import { mathShapes } from "./mathsvg";
 import type { PaperQuestion, Rect } from "./questions";
 
@@ -28,7 +27,7 @@ export interface WorkedStep {
   math?: string;
 }
 
-export type SolveStatus = "verified" | "checked_reading" | "unchecked" | "failed" | "unsolved";
+export type SolveStatus = "verified" | "checked_reading" | "unchecked" | "failed" | "partial" | "unsolved";
 
 export interface SolvedQuestion extends PaperQuestion {
   transcription: string;
@@ -36,10 +35,16 @@ export interface SolvedQuestion extends PaperQuestion {
   finalAnswer: string;
   steps: WorkedStep[];
   explanation: string;
+  /** The answer to the question in one sentence, with the reason (a yes/no or "show that" question). */
+  conclusion?: string;
+  /** What the solution compared, when the question asked whether something is enough: kept so a later part of the question can be checked against it. */
+  comparison?: { have: string; need: string };
   status: SolveStatus;
   statusNote: string;
   /** What the checks established, in words a reviewer (and the benchmark) can read: kept apart from the status. */
   evidence?: string[];
+  /** The earlier answers (upload, part, revision) this was solved on, so a result checkpointed before a correction is not restored over it. */
+  contextKey?: string;
 }
 
 export interface Placement {
@@ -63,16 +68,11 @@ export const STATUS_TEXT: Record<SolveStatus, string> = {
   checked_reading: "Checked by calculation (against the AI's reading of the question)",
   unchecked: "Not checked by calculation: look over this one",
   failed: "Not confidently solved: the check did not agree",
+  partial: "Partly worked: not finished or not consistent, so look it over",
   unsolved: "Not confidently solved",
 };
 
-export function fontBytes(): Uint8Array {
-  for (const base of [process.cwd(), join(process.cwd(), "apps", "web")]) {
-    const path = join(base, "assets", "fonts", "PatrickHand-Regular.ttf");
-    if (existsSync(path)) return new Uint8Array(readFileSync(path));
-  }
-  throw new Error("the handwriting font is missing (apps/web/assets/fonts/PatrickHand-Regular.ttf)");
-}
+export { fontBytes };
 
 /** Characters a font cannot draw are replaced, so pdf-lib never throws on an unusual symbol in an explanation. */
 function drawable(font: PDFFont, text: string): string {
@@ -165,6 +165,45 @@ export function splitCurrency(tex: string): { sign: string; tex: string } {
   return { sign, tex: tex.slice(m[0].length).trim() || "0" };
 }
 
+/** The conclusion in words and the method, once each: the conclusion is already the start of the explanation when the solver wrote both. */
+function wordsOf(q: SolvedQuestion): string {
+  const conclusion = q.conclusion?.trim() ?? "";
+  return conclusion && !q.explanation.includes(conclusion) ? `${conclusion} ${q.explanation}`.trim() : q.explanation;
+}
+
+/**
+ * Words the model put in a sentence with the maths symbols of LaTeX in them ("5 \\text{ m}", "75 m^2", "\\times") written as the pen would: units and
+ * powers as plain characters, the symbols as the font draws them. Only prose passes through this; a formula stays LaTeX.
+ */
+export function prose(text: string): string {
+  return text
+    .replace(/\\(?:text|mathrm)\s*\{([^{}]*)\}/g, (_, inner: string) => inner)
+    .replace(/\\times/g, "×")
+    .replace(/\\div/g, "÷")
+    .replace(/\\approx/g, "≈")
+    .replace(/\\geq?\b/g, "≥")
+    .replace(/\\leq?\b/g, "≤")
+    .replace(/\\pi\b/g, "π")
+    .replace(/\\[,;!]/g, " ")
+    .replace(/\\%/g, "%")
+    .replace(/(?<=[A-Za-z0-9)])\^\{?2\}?/g, "²")
+    .replace(/(?<=[A-Za-z0-9)])\^\{?3\}?/g, "³")
+    .replace(/[{}]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** A worked line that opens with words ("Area of left rectangle = 8 x 6 = 48"): the words are written as words, not as a product of letters run together. */
+function labelAsText(tex: string): string {
+  return tex.replace(/^\s*([A-Za-z]{3,}(?:\s+[A-Za-z]+)*|[A-Za-z]+(?:\s+[A-Za-z]+)+)\s*=\s*(?=[\d(\\-])/, (_, label: string) => `\\text{${label}} = `);
+}
+
+/** A line with a fraction is typeset at full size (display style), as a pen writes it, not squeezed into the height of the text beside it. */
+export function penStyle(input: string): string {
+  const tex = labelAsText(input);
+  return /\\[dt]?frac/.test(tex) && !/\\displaystyle/.test(tex) ? `\\displaystyle ${tex}` : tex;
+}
+
 function answerLine(tex: string, size: number, font: PDFFont): Line {
   const { sign, tex: rest } = splitCurrency(tex);
   // Display style, so a fraction in the answer is full size rather than squeezed onto one line.
@@ -175,12 +214,14 @@ function answerLines(q: SolvedQuestion, font: PDFFont, size: number, withSteps: 
   const lines: Line[] = [];
   if (withSteps) {
     for (const step of q.steps) {
-      if (step.say) lines.push({ kind: "text", text: step.say, font, size: size * 0.92, colour: INK });
-      if (step.math) lines.push({ kind: "math", tex: step.math, size, colour: INK });
+      if (step.say) lines.push({ kind: "text", text: prose(step.say), font, size: size * 0.92, colour: INK });
+      if (step.math) lines.push({ kind: "math", tex: penStyle(step.math), size, colour: INK });
     }
   }
   if (q.finalAnswer) lines.push(answerLine(q.finalAnswer, size * 1.05, font));
-  if (q.status === "failed" || q.status === "unsolved" || q.status === "unchecked") lines.push({ kind: "text", text: `(${STATUS_TEXT[q.status]})`, font, size: Math.max(MIN_SIZE, size * 0.85), colour: WARN });
+  // The conclusion, with its reason, where the question asked for one: "Yes" alone does not say why.
+  if (q.finalAnswer && q.conclusion && withSteps) lines.push({ kind: "text", text: prose(q.conclusion), font, size: size * 0.95, colour: INK });
+  if (q.status === "failed" || q.status === "unsolved" || q.status === "unchecked" || q.status === "partial") lines.push({ kind: "text", text: `(${STATUS_TEXT[q.status]})`, font, size: Math.max(MIN_SIZE, size * 0.85), colour: WARN });
   return lines;
 }
 
@@ -283,9 +324,9 @@ export async function annotatePaper(original: Uint8Array, questions: SolvedQuest
         // The model's reading (a stacked fraction's text layer is scrambled), without a "Question 3 (2 marks)" the heading already says.
         [{ kind: "text", text: q.transcription.replace(/^\s*(?:question|q\.?)\s*\d{1,2}\s*(?:[([]\d{1,2}\s*marks?[)\]])?[\s.:)]*/i, "").trim() || q.text, font: sans, size: 9.5, colour: GREY }],
         [{ kind: "text", text: STATUS_TEXT[q.status] + (q.statusNote ? `. ${q.statusNote}` : ""), font: sans, size: 9, colour: q.status === "verified" || q.status === "checked_reading" ? rgb(0.07, 0.42, 0.26) : WARN }],
-        ...q.steps.map((step): Line[] => [...(step.say ? [{ kind: "text" as const, text: step.say, font: hand, size: 13, colour: INK }] : []), ...(step.math ? [{ kind: "math" as const, tex: step.math, size: 13, colour: INK }] : [])]),
+        ...q.steps.map((step): Line[] => [...(step.say ? [{ kind: "text" as const, text: prose(step.say), font: hand, size: 13, colour: INK }] : []), ...(step.math ? [{ kind: "math" as const, tex: penStyle(step.math), size: 13, colour: INK }] : [])]),
         ...(q.finalAnswer ? [[answerLine(q.finalAnswer, 14, hand)]] : [[{ kind: "text" as const, text: "No answer: this question was not confidently solved.", font: hand, size: 13, colour: WARN }]]),
-        ...(q.explanation ? [[{ kind: "text" as const, text: q.explanation, font: hand, size: 12, colour: INK }]] : []),
+        ...(wordsOf(q) ? [[{ kind: "text" as const, text: prose(wordsOf(q)), font: hand, size: 12, colour: INK }]] : []),
       ];
       for (const [i, block] of blocks.entries()) {
         const laid = layOut(block, usable, hand) ?? layOut(block.map((l) => (l.kind === "math" ? { kind: "math" as const, tex: l.tex, size: 10, colour: l.colour } : l)), usable, hand) ?? layOut(block.map((l) => (l.kind === "math" ? { kind: "text" as const, text: l.tex, font: sans, size: 9, colour: l.colour } : l)), usable, sans)!;

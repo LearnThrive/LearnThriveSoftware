@@ -1,0 +1,151 @@
+{
+  "startedAt": "2026-10-23T20:19:10.564Z",
+  "base": "http://localhost:3111",
+  "server": {
+    "launch": "launch.json study-buddy-ollama (npm run dev -- -p 3111)",
+    "storage": "in-memory library store, chat store, job store and upload storage (no LEARNTHRIVE_SUPABASE_USE): nothing here is written to a database",
+    "assistantStatus": {
+      "open": true,
+      "paperTutor": true
+    }
+  },
+  "before": {
+    "at": "2026-10-23T20:19:07.726Z",
+    "ollama": {
+      "server": "0.40.9",
+      "model": "bonsai-2:9b",
+      "digest": "c8b5462f8688",
+      "quantisation": "Q2_0",
+      "running": []
+    },
+    "chatRequests": 904
+  },
+  "rounds": {
+    "filled": {
+      "mode": "filled",
+      "found": "Questions found (1)",
+      "selection": [
+        "Q3(a)Assuming Petra is correct, does she have enough paint to cover the floor? You must show all your working.4 marksread from a picture"
+      ],
+      "notes": [
+        "The answers are AI-generated and may contain mistakes. Each one is checked by calculation where it can be, and says when it is not.",
+        "Answers are AI-generated and may be wrong: Study Buddy is an AI, not a tutor or a person. Never share your full name, school or address. Privacy"
+      ],
+      "solvedMs": 40525,
+      "pdf": "C:\\Users\\alvi9\\AppData\\Local\\Temp\\claude\\D--LearnThriveSoftware\\debf001c-0cb5-4bb2-b111-1872522d975e\\scratchpad\\browser\\q3a-filled.pdf",
+      "pdfOpens": true,
+      "pdfPages": 2,
+      "pageImages": [
+        "C:\\Users\\alvi9\\AppData\\Local\\Temp\\claude\\D--LearnThriveSoftware\\debf001c-0cb5-4bb2-b111-1872522d975e\\scratchpad\\browser\\q3a-filled-page1.jpg",
+        "C:\\Users\\alvi9\\AppData\\Local\\Temp\\claude\\D--LearnThriveSoftware\\debf001c-0cb5-4bb2-b111-1872522d975e\\scratchpad\\browser\\q3a-filled-page2.jpg"
+      ],
+      "summary": "1267 characters (not stored)",
+      "finishedAt": "2026-10-23T20:19:53.315Z"
+    },
+    "worked": {
+      "mode": "worked",
+      "found": "Questions found (1)",
+      "selection": [
+        "Q3(a)Assuming Petra is correct, does she have enough paint to cover the floor? You must show all your working.4 marksread from a picture"
+      ],
+      "notes": [
+        "The answers are AI-generated and may contain mistakes. Each one is checked by calculation where it can be, and says when it is not.",
+        "Answers are AI-generated and may be wrong: Study Buddy is an AI, not a tutor or a person. Never share your full name, school or address. Privacy"
+      ],
+      "solvedMs": 118149,
+      "pdf": "C:\\Users\\alvi9\\AppData\\Local\\Temp\\claude\\D--LearnThriveSoftware\\debf001c-0cb5-4bb2-b111-1872522d975e\\scratchpad\\browser\\q3a-worked.pdf",
+      "pdfOpens": true,
+      "pdfPages": 2,
+      "pageImages": [
+        "C:\\Users\\alvi9\\AppData\\Local\\Temp\\claude\\D--LearnThriveSoftware\\debf001c-0cb5-4bb2-b111-1872522d975e\\scratchpad\\browser\\q3a-worked-page1.jpg",
+        "C:\\Users\\alvi9\\AppData\\Local\\Temp\\claude\\D--LearnThriveSoftware\\debf001c-0cb5-4bb2-b111-1872522d975e\\scratchpad\\browser\\q3a-worked-page2.jpg"
+      ],
+      "summary": "1235 characters (not stored)",
+      "finishedAt": "2026-10-23T20:21:51.900Z"
+    },
+    "hybrid": {
+      "mode": "hybrid",
+      "found": "Questions found (1)",
+      "selection": [
+        "Q3(a)Assuming Petra is correct, does she have enough paint to cover the floor? You must show all your working.4 marksread from a picture"
+      ],
+      "notes": [
+        "The answers are AI-generated and may contain mistakes. Each one is checked by calculation where it can be, and says when it is not.",
+        "Answers are AI-generated and may be wrong: Study Buddy is an AI, not a tutor or a person. Never share your full name, school or address. Privacy"
+      ],
+      "solvedMs": 122830,
+      "pdf": "C:\\Users\\alvi9\\AppData\\Local\\Temp\\claude\\D--LearnThriveSoftware\\debf001c-0cb5-4bb2-b111-1872522d975e\\scratchpad\\browser\\q3a-hybrid.pdf",
+      "pdfOpens": true,
+      "pdfPages": 2,
+      "pageImages": [
+        "C:\\Users\\alvi9\\AppData\\Local\\Temp\\claude\\D--LearnThriveSoftware\\debf001c-0cb5-4bb2-b111-1872522d975e\\scratchpad\\browser\\q3a-hybrid-page1.jpg",
+        "C:\\Users\\alvi9\\AppData\\Local\\Temp\\claude\\D--LearnThriveSoftware\\debf001c-0cb5-4bb2-b111-1872522d975e\\scratchpad\\browser\\q3a-hybrid-page2.jpg"
+      ],
+      "summary": "1309 characters (not stored)",
+      "finishedAt": "2026-10-23T20:23:55.167Z"
+    },
+    "partB": {
+      "mode": "worked",
+      "found": "Questions found (1)",
+      "selection": [
+        "Q3(b)Petra finds that 1 litre of paint covers 11 m² of floor, not 10 m². Does this change your answer to part (a)? You must show your working.3 marksread from a picture"
+      ],
+      "notes": [
+        "Question 3(b) is a part of question 3: I am using its shared words and its page from your earlier upload.",
+        "The answers are AI-generated and may contain mistakes. Each one is checked by calculation where it can be, and says when it is not.",
+        "Answers are AI-generated and may be wrong: Study Buddy is an AI, not a tutor or a person. Never share your full name, school or address. Privacy"
+      ],
+      "solvedMs": 308641,
+      "pdf": "C:\\Users\\alvi9\\AppData\\Local\\Temp\\claude\\D--LearnThriveSoftware\\debf001c-0cb5-4bb2-b111-1872522d975e\\scratchpad\\browser\\q3b.pdf",
+      "pdfOpens": true,
+      "pdfPages": 5,
+      "pageImages": [
+        "C:\\Users\\alvi9\\AppData\\Local\\Temp\\claude\\D--LearnThriveSoftware\\debf001c-0cb5-4bb2-b111-1872522d975e\\scratchpad\\browser\\q3b-page1.jpg",
+        "C:\\Users\\alvi9\\AppData\\Local\\Temp\\claude\\D--LearnThriveSoftware\\debf001c-0cb5-4bb2-b111-1872522d975e\\scratchpad\\browser\\q3b-page2.jpg",
+        "C:\\Users\\alvi9\\AppData\\Local\\Temp\\claude\\D--LearnThriveSoftware\\debf001c-0cb5-4bb2-b111-1872522d975e\\scratchpad\\browser\\q3b-page3.jpg",
+        "C:\\Users\\alvi9\\AppData\\Local\\Temp\\claude\\D--LearnThriveSoftware\\debf001c-0cb5-4bb2-b111-1872522d975e\\scratchpad\\browser\\q3b-page4.jpg",
+        "C:\\Users\\alvi9\\AppData\\Local\\Temp\\claude\\D--LearnThriveSoftware\\debf001c-0cb5-4bb2-b111-1872522d975e\\scratchpad\\browser\\q3b-page5.jpg"
+      ],
+      "summary": "674 characters (not stored)",
+      "finishedAt": "2026-10-23T20:29:07.629Z"
+    }
+  },
+  "checks": {
+    "selectionIsOneTask": true,
+    "fourMarksOffered": true,
+    "pdfsReopen": true,
+    "extraPagesWhereAsked": true,
+    "area68": false,
+    "paint7_5": true,
+    "coverage75": true,
+    "supportedYes": false,
+    "partBLinkedAfterReload": true,
+    "partB82_5": true,
+    "partBStillEnough": false,
+    "noInternalWords": true
+  },
+  "afterReload": {
+    "chatsListed": 5
+  },
+  "passed": false,
+  "after": {
+    "at": "2026-10-23T20:29:07.630Z",
+    "ollama": {
+      "server": "0.40.9",
+      "model": "bonsai-2:9b",
+      "digest": "c8b5462f8688",
+      "quantisation": "Q2_0",
+      "running": [
+        {
+          "name": "bonsai-2:9b",
+          "digest": "c8b5462f8688",
+          "contextLength": 8192,
+          "sizeVramMiB": 2933,
+          "expiresAt": "2026-10-23T21:59:05.709389+01:00"
+        }
+      ]
+    },
+    "chatRequests": 946
+  },
+  "finishedAt": "2026-10-23T20:29:07.718Z"
+}
