@@ -223,8 +223,9 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
         temperature: 0.4,
         contextSize: config.contextSize,
         signal: input.signal,
-        firstTokenTimeoutMs: config.firstTokenTimeoutMs,
-        totalTimeoutMs: config.totalTimeoutMs,
+        // A photo gets longer: the vision model may be loading, and it reads the picture before the first word.
+        firstTokenTimeoutMs: images.length ? config.pictureFirstTokenTimeoutMs : config.firstTokenTimeoutMs,
+        totalTimeoutMs: images.length ? config.pictureTotalTimeoutMs : config.totalTimeoutMs,
         ...(images.length && config.visionModel ? { model: config.visionModel } : {}),
       })) {
         if (chunk.type === "text") {

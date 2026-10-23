@@ -12,7 +12,7 @@
  *   test helpers (the "tester" account) exist only on the in-memory backend.
  * - Skipped with LEARNTHRIVE_DOCKER=0 (the Playwright servers set it), in CI, and when both providers are the mock.
  */
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -62,6 +62,14 @@ if (tags && !tags.models?.some((m) => m.name === model || m.name === `${model}:l
   if (pull.status !== 0) say(`Could not download ${model}. Study Buddy needs it: run \`ollama pull ${model}\`.`);
 }
 for (const s of services) say(`${s.label}: ${(await answers(s.url)) ? `ready on ${new URL(s.url).origin}` : "NOT answering"}`);
+
+// Load the model into the GPU now, in the background, so the first question (especially one with a photo) does not have to wait for it: loading
+// takes minutes when the model files are on a Windows drive mounted into Docker. A detached process, so neither the site nor this script waits.
+if ((await answers("http://127.0.0.1:11434/api/version")) && tags?.models?.some((m) => m.name === model || m.name === `${model}:latest`)) {
+  const warm = `fetch("http://127.0.0.1:11434/api/generate",{method:"POST",body:JSON.stringify({model:${JSON.stringify(model)},prompt:"",stream:false,keep_alive:"30m"}),signal:AbortSignal.timeout(900000)}).catch(()=>{})`;
+  spawn(process.execPath, ["-e", warm], { detached: true, stdio: "ignore" }).unref();
+  say(`Loading ${model} in the background (the first answer is slow until it has loaded).`);
+}
 
 // The local Supabase stack. `supabase start` returns once every service is healthy; the images are cached after the first run.
 if (env.LEARNTHRIVE_SUPABASE !== "0") {
