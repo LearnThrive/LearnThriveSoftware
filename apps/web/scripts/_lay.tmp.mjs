@@ -1,0 +1,14 @@
+import { readFileSync } from "node:fs";
+import { assistantConfig } from "../src/lib/assistant/config.ts";
+import { OllamaProvider } from "../src/lib/assistant/ollama.ts";
+import { GenerationQueue } from "../src/lib/assistant/queue.ts";
+import { photoToPdf } from "../src/lib/paper/paper.ts";
+import { proposeLayout } from "../src/lib/paper/layout.ts";
+import { renderPdfPages } from "../src/lib/assistant/documents.ts";
+const config = assistantConfig({ ...process.env, ASSISTANT_PROVIDER: "ollama" });
+const provider = new OllamaProvider({ baseUrl: "http://127.0.0.1:11434", model: config.model, visionModel: config.visionModel ?? undefined, contextSize: config.contextSize, keepAlive: config.keepAlive });
+const deps = { provider, queue: new GenerationQueue(1, 4), model: config.model, visionModel: config.visionModel ?? config.model };
+const pdf = await photoToPdf(new Uint8Array(readFileSync(process.argv[2])), "image/png");
+const [r] = await renderPdfPages(pdf, { scale: 1.5 });
+console.log(r.width, r.height);
+console.log(JSON.stringify(await proposeLayout(deps, Buffer.from(r.jpeg()).toString("base64"))));
