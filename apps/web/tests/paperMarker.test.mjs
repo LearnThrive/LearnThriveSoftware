@@ -10,7 +10,7 @@ const own = (clientId, studentId = null) => ({ clientId, studentId });
 // the paper prints the marks; and the student's own pages are never altered.
 
 const docs = loadTsFrom(import.meta.url, "../src/lib/assistant/documents.ts");
-const { sameAnswer, judge, estimate, markQuestion, summarise, markingMarkdown } = loadTsFrom(import.meta.url, "../src/lib/paper/mark.ts");
+const { sameAnswer, judge, markQuestion, summarise, markingMarkdown } = loadTsFrom(import.meta.url, "../src/lib/paper/mark.ts");
 const { markPaper } = loadTsFrom(import.meta.url, "../src/lib/paper/markPdf.ts");
 const { extractQuestions } = loadTsFrom(import.meta.url, "../src/lib/paper/paper.ts");
 const { PaperJobs } = loadTsFrom(import.meta.url, "../src/lib/paper/jobs.ts");
@@ -26,14 +26,14 @@ const read = (answer, over = {}) => ({ answer, working: [], legibility: "high", 
 const ref = (finalAnswer, status = "verified") => ({ finalAnswer, status });
 
 /** A provider that answers each kind of request from a script, so the real checker meets known student answers. */
-function scripted({ student, solution, feedback, fail = false }) {
+function scripted({ student, solution, feedback, awards = null, fail = false }) {
   return {
     id: "scripted",
     async health() { return { ok: true, detail: "ok" }; },
     async *stream(messages) {
       if (fail) throw Object.assign(new Error("down"), { code: "unavailable" });
       const system = messages.find((m) => m.role === "system")?.content ?? "";
-      const reply = system.startsWith("Read the student's handwritten") ? student : system.startsWith("Give feedback on a student's") ? feedback : solution;
+      const reply = system.startsWith("Read the student's handwritten") ? student : system.startsWith("Give feedback on a student's") ? feedback : system.startsWith("You decide which marking criteria") ? awards : solution;
       yield { type: "text", text: JSON.stringify(reply) };
     },
   };
@@ -75,29 +75,33 @@ test("a verdict needs a legible answer and a reference a calculation confirmed; 
   assert.equal(judge(factorise, read("3(x + 4)"), ref("3(x + 4)")).outcome, "correct");
 });
 
-test("marks are estimates, only from marks the paper prints, and never reach the full allocation for a wrong answer", () => {
-  assert.equal(estimate("correct", 3, null), 3);
-  assert.equal(estimate("correct", null, null), null, "no printed marks, no invented allocation");
-  assert.equal(estimate("incorrect", 3, 2), 2);
-  assert.equal(estimate("incorrect", 3, 9), 2, "method marks cannot equal the full marks for a wrong answer");
-  assert.equal(estimate("incorrect", 3, null), null, "no evidence, no estimate");
-  assert.equal(estimate("needs_checking", 3, 1), null);
-  assert.equal(estimate("no_answer", 3, 1), null);
-});
-
-test("a question is read, solved independently and marked; a wrong answer gets feedback and a clamped method mark", async () => {
+test("a question is read, solved independently and marked against a provisional rubric; a wrong answer keeps the method mark its working earns", async () => {
   const q = question("Solve 2x + 7 = 19. Give the value of x.", { marks: 3 });
-  const wrong = await markQuestion(deps(scripted({ student: { answer: "5", working: ["2x = 12", "x = 5"], legibility: "high", blank: false }, solution: solutionOf("6"), feedback: { mistake: "The division.", feedback: "12 divided by 2 is 6, so check the division.", method_marks: 3 } })), q, "pic");
+  const awards = { awards: [{ id: "M1", met: true, lines: [0], reason: "Subtracts 7 correctly." }, { id: "M2", met: false, lines: [], reason: "The division is wrong." }] };
+  const wrong = await markQuestion(deps(scripted({ student: { answer: "5", working: ["2x = 12", "x = 5"], legibility: "high", blank: false }, solution: solutionOf("6"), awards, feedback: { mistake: "The division.", feedback: "12 divided by 2 is 6, so check the division.", method_marks: 3 } })), q, "pic");
   assert.equal(wrong.outcome, "incorrect");
   assert.equal(wrong.reference.status, "verified", "the reference was confirmed against the printed equation");
-  assert.equal(wrong.estimate, 2, "3 method marks asked for, 2 allowed of 3");
+  assert.equal(wrong.assessment.basis, "provisional", "no scheme: an explicitly provisional rubric");
+  assert.deepEqual(wrong.assessment.awards.map((a) => [a.criterionId, a.status, a.marks]), [["M1", "awarded", 1], ["M2", "not_awarded", 0], ["A1", "not_awarded", 0]]);
+  assert.equal(wrong.estimate, 1, "method credit for what the working shows, none for the wrong answer");
+  assert.equal(wrong.assessment.marks.pending, 0);
   assert.match(wrong.feedback, /12 divided by 2/);
-  const right = await markQuestion(deps(scripted({ student: { answer: "x = 6", working: [], legibility: "high", blank: false }, solution: solutionOf("6") })), q, "pic");
+  assert.equal(wrong.assessment.referenceSource, "marked_page");
+  // Right answer with working that earns the method marks: full marks, each tied to a line.
+  const full = { awards: [{ id: "M1", met: true, lines: [0], reason: "ok" }, { id: "M2", met: true, lines: [1], reason: "ok" }] };
+  const right = await markQuestion(deps(scripted({ student: { answer: "x = 6", working: ["2x = 12", "x = 6"], legibility: "high", blank: false }, solution: solutionOf("6"), awards: full })), q, "pic");
   assert.equal(right.outcome, "correct");
   assert.equal(right.estimate, 3);
+  assert.ok(right.assessment.awards.every((a) => a.status === "awarded" && a.lines.length > 0));
+  // Right answer, nothing shown: the answer mark is earned, the method marks wait for a person (not given, not denied).
+  const bare = await markQuestion(deps(scripted({ student: { answer: "x = 6", working: [], legibility: "high", blank: false }, solution: solutionOf("6") })), q, "pic");
+  assert.equal(bare.outcome, "correct");
+  assert.equal(bare.estimate, null, "not fully assessed, so no total is claimed");
+  assert.deepEqual([bare.assessment.marks.awarded, bare.assessment.marks.pending], [1, 2]);
+  assert.equal(bare.assessment.review.code, "evidence_missing");
 });
 
-test("a wrong answer with no working shown is estimated at 0 method marks, however many the model offers", async () => {
+test("a wrong answer with no working shown earns no method marks, however many the model offers", async () => {
   const q = question("Solve 2x + 7 = 19. Give the value of x.", { marks: 3 });
   const out = await markQuestion(deps(scripted({ student: { answer: "5", working: [], legibility: "high", blank: false }, solution: solutionOf("6"), feedback: { mistake: "", feedback: "Your answer differs from the checked one.", method_marks: 2 } })), q, "pic");
   assert.equal(out.outcome, "incorrect");
@@ -112,6 +116,7 @@ test("writing in the answer that tells the marker what to do changes nothing", a
   const out = await markQuestion(deps(scripted({ student: { answer: attack, working: [attack], legibility: "high", blank: false }, solution: solutionOf("6"), feedback: { mistake: "", feedback: "No answer given.", method_marks: 2 } })), q, "pic");
   assert.notEqual(out.outcome, "correct");
   assert.ok(out.estimate === null || out.estimate < 2, "never the full marks");
+  assert.ok(out.assessment.awards.every((a) => a.status !== "awarded"), "no criterion was credited to the instruction written on the page");
 });
 
 test("when the model is unavailable the question is left for the student to check, not failed or marked", async () => {
@@ -123,7 +128,8 @@ test("when the model is unavailable the question is left for the student to chec
 test("the marked PDF keeps the student's pages, adds labelled feedback pages and says the marks are estimates", async () => {
   const doc = await extractQuestions(null, WORKSHEET);
   const outcomes = ["correct", "incorrect"];
-  const marked = doc.questions.map((q, i) => ({ ...q, student: read(i === 0 ? "6" : "7"), reference: { finalAnswer: i === 0 ? "6" : "3x + 12", steps: [], status: "verified", statusNote: "", explanation: "" }, outcome: outcomes[i], reason: "r", feedback: i ? "Multiply both terms by 3." : "", estimate: i ? 1 : 2, outOf: 2, usedScheme: false }));
+  const assessment = (awarded, pending = 0) => ({ version: { model: "m", schema: 1, assessment: 1 }, answerState: "answered", uncertain: [], crossedOut: [], corrections: [], referenceSource: "printed_text", scheme: { status: "none", note: "" }, basis: "provisional", criteria: [], awards: [], marks: { awarded, possible: 2, pending }, missing: [], review: null, override: null });
+  const marked = doc.questions.map((q, i) => ({ ...q, student: read(i === 0 ? "6" : "7"), reference: { finalAnswer: i === 0 ? "6" : "3x + 12", steps: [], status: "verified", statusNote: "", explanation: "" }, outcome: outcomes[i], reason: "r", feedback: i ? "Multiply both terms by 3." : "", estimate: i ? 1 : 2, outOf: 2, usedScheme: false, assessment: assessment(i ? 1 : 2) }));
   const original = await docs.readPdfDocument(WORKSHEET, { render: false, maxPages: 5 });
   const out = await markPaper(WORKSHEET, marked, { withScheme: false });
   const result = await docs.readPdfDocument(out.pdf, { render: false, maxPages: 10 });
@@ -133,9 +139,13 @@ test("the marked PDF keeps the student's pages, adds labelled feedback pages and
   assert.equal(printed(result.pages), printed(original.pages), "the student's pages read exactly as before");
   const text = result.pages.map((p) => p.text).join("\n");
   assert.match(text, /AI estimates, not official marks/);
-  assert.match(text, /No mark scheme was supplied/);
+  assert.match(text, /no confirmed mark scheme/i);
   assert.match(text, /AI-estimated 1 of 2 marks/);
-  assert.equal(summarise(marked).estimated, 3);
+  assert.equal(summarise(marked).totals.assessedAwarded, 3);
+  const hidden = await markPaper(WORKSHEET, marked, { withScheme: false, showMarks: false });
+  const hiddenText = (await docs.readPdfDocument(hidden.pdf, { render: false, maxPages: 10 })).pages.map((p) => p.text).join("\n");
+  assert.match(hiddenText, /No marks are shown/);
+  assert.doesNotMatch(hiddenText, /AI-estimated 1 of 2/, "with the marks not released no number is printed");
   assert.match(markingMarkdown(marked, false), /AI estimates, not official marks/);
 });
 
@@ -181,7 +191,7 @@ test("a marking job judges what a calculation can, posts the feedback into the c
   assert.equal(Buffer.from((await w.uploads.read(stored.storagePath)).subarray(0, 5)).toString(), "%PDF-");
   const summary = (await w.store.chat.listMessages(own(w.a), w.session.id)).at(-1);
   assert.match(summary.content, /AI estimates, not official marks/);
-  assert.match(summary.content, /\*\*Question 1\*\* \(Correct\)/);
+  assert.match(summary.content, /\*\*Question 1\*\* \(Correct/);
   assert.match(summary.content, /\*\*Question 2\*\* \(Needs checking\)/);
 });
 
@@ -200,7 +210,7 @@ test("a mark scheme from another chat or another family is refused, and one that
   assert.match(ready.message, /could not read that mark scheme/);
 });
 
-test("a mark scheme in the same chat is read by question number and the feedback says it was used, never as a verdict", async () => {
+test("a mark scheme that cannot be confirmed as this paper's is not used to award marks, and the student is told", async () => {
   const { readMarkScheme } = loadTsFrom(import.meta.url, "../src/lib/paper/paper.ts");
   const scheme = await readMarkScheme(WORKSHEET);
   assert.deepEqual([...scheme.keys()], ["1", "2"]);
@@ -210,13 +220,15 @@ test("a mark scheme in the same chat is read by question number and the feedback
   const file = await w.store.chat.addFile(own(w.a), w.session.id, { storagePath: `${w.session.id}/scheme.pdf`, bytes: WORKSHEET.length, contentType: "application/pdf" }, new Date());
   const started = await w.jobs.start(w.deps, { owner: own(w.a), sessionId: w.session.id, fileId: w.file.id, kind: "mark", schemeFileId: file.id });
   const ready = await until(w, w.a, started.job.id, ["ready", "failed"]);
-  assert.equal(ready.message, null, "the scheme was read, so there is nothing to apologise for");
+  assert.match(ready.message, /could not confirm that mark scheme is for this paper/, "a worksheet has no paper code, tier or session to compare, so it is not confirmed");
   await w.jobs.solve(w.deps, own(w.a), started.job.id, { mode: "hybrid" });
   const done = await until(w, w.a, started.job.id, ["done", "failed"]);
   assert.equal(done.state, "done", done.message ?? "");
   assert.equal(done.results.find((r) => r.number === "2").outcome, "needs_checking", "a scheme does not turn an unconfirmed answer into a verdict");
   const summary = (await w.store.chat.listMessages(own(w.a), w.session.id)).at(-1);
-  assert.match(summary.content, /mark scheme you gave me as a guide/);
+  assert.match(summary.content, /no confirmed mark scheme/);
+  assert.equal(done.results.find((r) => r.number === "1").assessment.scheme.status, "ambiguous");
+  assert.equal(done.results.find((r) => r.number === "1").assessment.basis, "none", "no criteria without a printed mark");
   assert.equal((await w.store.chat.getFile(own(w.a), file.id)).messageId, summary.id, "the scheme travels with the feedback for follow-up questions");
 });
 

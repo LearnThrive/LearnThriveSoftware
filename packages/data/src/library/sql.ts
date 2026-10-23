@@ -834,6 +834,18 @@ export class SqlLibraryStore implements LibraryStore {
       if (!job[0]) return { ok: false, code: "not_found" };
       return { ok: false, code: job[0].state !== "done" ? "not_done" : "no_question" };
     },
+    setResult: async (scope, id, result, now) => {
+      const staff = scope.kind === "staff";
+      const owner = scope.kind === "owner" ? scope.owner : { clientId: null, studentId: null };
+      const rows = await this.db.query<Row>(
+        `update public.paper_jobs set result_file_id = $6::uuid,
+           page_count = case when $7::boolean then $8::integer else page_count end,
+           worked_pages = coalesce($9::integer[], worked_pages), updated_at = $10
+          where id = $1 and state = 'done' and ($2::boolean or (client_id = $3 and student_id is not distinct from $4::uuid)) returning id`,
+        [id, staff, owner.clientId, owner.studentId, null, result.resultFileId, result.pageCount !== undefined, result.pageCount ?? null, result.workedPages ?? null, now],
+      );
+      return rows.length === 1;
+    },
     versions: async (scope, jobId, questionId) => {
       const staff = scope.kind === "staff";
       const owner = scope.kind === "owner" ? scope.owner : { clientId: null, studentId: null };

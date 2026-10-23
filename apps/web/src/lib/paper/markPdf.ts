@@ -1,7 +1,7 @@
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, StandardFonts, rgb, type PDFPage } from "pdf-lib";
 import { draw, fontBytes, GREY, heightOf, layOut, type Line } from "./annotate";
-import { OUTCOME_TEXT, summarise, type MarkedQuestion, type Outcome } from "./mark";
+import { OUTCOME_TEXT, summarise, totalsLine, type MarkedQuestion, type Outcome } from "./mark";
 
 /**
  * The marked copy: the student's own pages exactly as uploaded (copied, never re-drawn), a small symbol in the left margin beside
@@ -34,7 +34,8 @@ function symbol(page: PDFPage, outcome: Outcome, x: number, y: number) {
   }
 }
 
-export async function markPaper(original: Uint8Array, marked: MarkedQuestion[], options: { withScheme: boolean }): Promise<{ pdf: Uint8Array; feedbackPages: number[] }> {
+export async function markPaper(original: Uint8Array, marked: MarkedQuestion[], options: { withScheme: boolean; showMarks?: boolean }): Promise<{ pdf: Uint8Array; feedbackPages: number[] }> {
+  const showMarks = options.showMarks ?? true;
   const source = await PDFDocument.load(original, { ignoreEncryption: true, updateMetadata: false });
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
@@ -54,7 +55,7 @@ export async function markPaper(original: Uint8Array, marked: MarkedQuestion[], 
   }
   for (const page of copied) {
     const { width } = page.getSize();
-    const label = "AI-estimated feedback - not an official mark";
+    const label = showMarks ? "AI-estimated feedback - not an official mark" : "AI feedback - no marks shown";
     page.drawText(label, { x: width / 2 - sans.widthOfTextAtSize(label, 7) / 2, y: 10, size: 7, font: sans, color: GREY });
   }
 
@@ -80,15 +81,17 @@ export async function markPaper(original: Uint8Array, marked: MarkedQuestion[], 
   page.drawText("Feedback on your paper", { x: margin, y: y - 18, size: 18, font: bold, color: NAVY });
   y -= 30;
   const s = summarise(marked);
-  text([{ kind: "text", text: `These marks are AI estimates, not official marks.${options.withScheme ? " The mark scheme you supplied was used as a guide, but this is not an examiner's decision." : " No mark scheme was supplied, so the AI worked out its own answers and checked them by calculation."} A question the AI could not read or check is marked "needs checking", not wrong.`, font: sans, size: 9.5, colour: GREY }], margin, 8);
+  text([{ kind: "text", text: `${showMarks ? "These marks are AI estimates, not official marks." : "No marks are shown: this checker has not yet been validated against work marked by a qualified person, so it gives feedback only."}${options.withScheme ? " The mark scheme you supplied was confirmed as this paper's and used, but this is not an examiner's decision." : " There was no confirmed mark scheme, so the AI worked out its own answers, checked them by calculation, and used a provisional rubric."} A question the AI could not read or check is marked "needs checking", not wrong.`, font: sans, size: 9.5, colour: GREY }], margin, 8);
   text([{ kind: "text", text: `${s.correct} correct, ${s.partly} partly right, ${s.incorrect} not right, ${s.needsChecking} needing checking, ${s.noAnswer} with no answer found.`, font: bold, size: 11, colour: NAVY }], margin, 4);
-  if (s.estimatedOutOf) text([{ kind: "text", text: `AI-estimated marks on the questions the AI could judge: ${s.estimated} out of ${s.estimatedOutOf}${s.unestimated ? ` (not counting ${s.unestimated} other question${s.unestimated === 1 ? "" : "s"} it could not judge, or that print no marks)` : ""}.`, font: sans, size: 10, colour: NAVY }], margin, 12);
+  if (showMarks) text([{ kind: "text", text: totalsLine(s.totals), font: sans, size: 10, colour: NAVY }], margin, 12);
 
   for (const q of marked) {
-    text([{ kind: "text", text: `Question ${q.number}: ${OUTCOME_TEXT[q.outcome]}${q.estimate !== null && q.outOf !== null ? ` - AI-estimated ${q.estimate} of ${q.outOf} marks` : q.outOf ? ` - ${q.outOf} marks on the paper, not estimated` : ""}`, font: bold, size: 12, colour: COLOUR[q.outcome] }], margin, 3);
+    const marks = !showMarks ? "" : q.estimate !== null && q.outOf !== null ? ` - AI-estimated ${q.estimate} of ${q.outOf} marks (${q.assessment.basis === "scheme" ? "official scheme" : "provisional rubric"})` : q.assessment.marks.pending > 0 ? ` - ${q.assessment.marks.pending} mark${q.assessment.marks.pending === 1 ? "" : "s"} waiting for a person` : q.outOf ? ` - ${q.outOf} marks on the paper, not estimated` : "";
+    text([{ kind: "text", text: `Question ${q.number}: ${OUTCOME_TEXT[q.outcome]}${marks}`, font: bold, size: 12, colour: COLOUR[q.outcome] }], margin, 3);
     if (q.student.answer) text([{ kind: "text", text: "You wrote:", font: sans, size: 9, colour: GREY }, { kind: "math", tex: q.student.answer, size: 12, colour: GREY }], margin + 10, 3);
     if (q.reference.finalAnswer && q.outcome !== "needs_checking") text([{ kind: "text", text: "Checked answer:", font: sans, size: 9, colour: GREY }, { kind: "math", tex: q.reference.finalAnswer, size: 12, colour: INK }], margin + 10, 3);
-    text([{ kind: "text", text: q.feedback || q.reason, font: hand, size: 12.5, colour: INK }], margin + 10, 12);
+    text([{ kind: "text", text: q.feedback || q.reason, font: hand, size: 12.5, colour: INK }], margin + 10, q.assessment.review ? 3 : 12);
+    if (q.assessment.review) text([{ kind: "text", text: `Needs a person: ${q.assessment.review.why}`, font: sans, size: 9, colour: GREY }], margin + 10, 12);
   }
   return { pdf: await doc.save(), feedbackPages };
 }

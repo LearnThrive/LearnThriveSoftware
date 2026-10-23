@@ -719,6 +719,15 @@ export class InMemoryLibraryStore implements LibraryStore {
       job.updatedAt = now;
       return { ok: true, version };
     },
+    setResult: async (scope, id, result, now) => {
+      const job = this.paperIn(scope, id);
+      if (!job || job.state !== "done") return false;
+      job.resultFileId = result.resultFileId;
+      if (result.pageCount !== undefined) job.pageCount = result.pageCount;
+      if (result.workedPages !== undefined) job.workedPages = [...result.workedPages];
+      job.updatedAt = now;
+      return true;
+    },
     versions: async (scope, jobId, questionId) => {
       if (!this.paperIn(scope, jobId)) return [];
       return this.paperVersions.filter((v) => v.jobId === jobId && v.questionId === questionId).sort((a, b) => a.version - b.version).map((v) => structuredClone(v));

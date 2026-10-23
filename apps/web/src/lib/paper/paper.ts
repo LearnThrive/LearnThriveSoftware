@@ -1,11 +1,13 @@
 import { PDFDocument } from "pdf-lib";
 import { readPdfDocument, renderPdfPages, type PageReading } from "@/lib/assistant/documents";
 import { annotatePaper, type OutputMode, type Placement, type SolvedQuestion } from "./annotate";
-import { markQuestion, type MarkedQuestion, type Outcome } from "./mark";
+import type { Assessment } from "./assess";
+import { markQuestion, pageMissing, type MarkedQuestion, type Outcome } from "./mark";
 import { markPaper } from "./markPdf";
 import { paperLimits, type PaperLimits } from "./limits";
 import { placeFromLayout, proposeLayout } from "./layout";
 import { classifyPage, findQuestions, refineAnswerSpace, type PageKind, type PaperQuestion } from "./questions";
+import { identityOf, matchScheme, readScheme, type Scheme, type SchemeVerdict } from "./scheme";
 import { listQuestionsFromPicture, solveQuestion, type SolveDeps } from "./solve";
 
 /**
@@ -147,23 +149,68 @@ export async function readMarkScheme(bytes: Uint8Array): Promise<Map<string, str
   return parts.length ? new Map(parts.map((q) => [q.number, q.text])) : null;
 }
 
+/** The mark scheme the student gave, read, and what the check of it concluded: only a confirmed match is applied to award marks. */
+export interface OfficialScheme {
+  scheme: Scheme;
+  verdict: SchemeVerdict;
+}
+
+/** Reads a mark scheme PDF and checks it against the paper's identity and question parts. `paper` is the blank question paper when one was given, else the completed one. */
+export async function checkScheme(schemeBytes: Uint8Array, paper: { pages: readonly PageReading[]; questions: readonly PaperQuestion[] }): Promise<OfficialScheme | null> {
+  const scheme = await readScheme(schemeBytes);
+  if (!scheme) return null;
+  return { scheme, verdict: matchScheme({ identity: identityOf(paper.pages), questions: paper.questions }, scheme) };
+}
+
+const schemeInfo = (official: OfficialScheme | null | undefined, unreadable: boolean): Assessment["scheme"] => {
+  if (!official) return unreadable ? { status: "unreadable", note: "The mark scheme could not be read (it needs to be a PDF with its text in it), so it was not used." } : { status: "none", note: "" };
+  const v = official.verdict;
+  if (v.status === "match") return { status: "match", note: `Confirmed as this paper's scheme (${v.checked.join(", ")}).` };
+  if (v.status === "mismatch") return { status: "mismatch", note: `This does not look like the scheme for this paper (${v.reasons.join("; ")}), so it was not used.` };
+  return { status: "ambiguous", note: `I could not confirm this is the scheme for this paper (${v.reasons.join("; ")}), so I did not award marks from it. It was used as a guide for feedback only.` };
+};
+
+/** Does the page hold the question as clean text, so it can be solved without looking at the picture (and so without seeing the student's writing)? */
+const textOnly = (page: PageReading | undefined, q: PaperQuestion) => Boolean(page && q.fromText && page.textQuality === "good" && !page.hasPictures && !page.stackedMaths);
+
 /**
- * Marks the chosen questions of a completed paper. Every page the questions sit on is pictured, because the student's writing is
- * not in the text layer. Cancellable through deps.signal; progress is reported after each question like solving.
+ * Marks the chosen questions of a completed paper. Every page the questions sit on is pictured, because the student's writing is not in the text layer.
+ * The reference solution comes from the question alone where it can: the blank paper if the student gave one, else the printed text, else the picture of
+ * the student's page with the handwriting to be ignored. Cancellable through deps.signal; progress is reported after each question like solving.
  */
 export async function markCompleted(
   deps: SolveDeps,
   document: PaperDocument,
-  options: { questionIds?: string[]; scheme?: Map<string, string> | null; onProgress?: (progress: Progress[]) => void; prior?: ReadonlyMap<string, MarkedQuestion>; onResult?: (result: MarkedQuestion) => void | Promise<void> },
+  options: {
+    questionIds?: string[];
+    /** The scheme's text per question number (feedback context only). */
+    scheme?: Map<string, string> | null;
+    /** A scheme read and checked against this paper: applied only if it matched. */
+    official?: OfficialScheme | null;
+    /** The blank question paper, if given. */
+    blank?: PaperDocument | null;
+    /** Marks are shown to the student (the release flag): only changes the feedback pages, not what is recorded. */
+    showMarks?: boolean;
+    onProgress?: (progress: Progress[]) => void;
+    prior?: ReadonlyMap<string, MarkedQuestion>;
+    onResult?: (result: MarkedQuestion) => void | Promise<void>;
+  },
 ): Promise<MarkResult> {
   const chosen = document.questions.filter((q) => !options.questionIds || options.questionIds.includes(q.id));
   const prior = options.prior ?? new Map<string, MarkedQuestion>();
   const progress: Progress[] = chosen.map((q) => ({ questionId: q.id, state: "waiting" }));
   const report = () => options.onProgress?.(progress.map((p) => ({ ...p })));
   report();
-  const pages = [...new Set(chosen.filter((q) => !prior.has(q.id)).map((q) => q.page))];
+  const todo = chosen.filter((q) => !prior.has(q.id));
+  const pages = [...new Set(todo.map((q) => q.page))];
   const renders = pages.length ? await renderPdfPages(document.bytes, { scale: 1.6, pages }) : [];
   const pictures = new Map(renders.map((r) => [r.number, b64(r.jpeg())]));
+  // The blank paper's pages that a reference needs a picture of (its question is not clean text), drawn once.
+  const blankFor = (q: PaperQuestion) => options.blank?.questions.find((b) => b.number === q.number);
+  const blankPages = [...new Set(todo.flatMap((q) => { const b = blankFor(q); const p = b && options.blank?.pages.find((x) => x.number === b.page); return b && !textOnly(p, b) ? [b.page] : []; }))];
+  const blankPictures = new Map((options.blank && blankPages.length ? await renderPdfPages(options.blank.bytes, { scale: 1.6, pages: blankPages }) : []).map((r) => [r.number, b64(r.jpeg())]));
+  const official = options.official ?? null;
+  const info = schemeInfo(official, Boolean(options.scheme === null && !official));
   const marked: MarkedQuestion[] = [];
   for (const [i, q] of chosen.entries()) {
     if (deps.signal?.aborted) throw Object.assign(new Error("cancelled"), { code: "aborted" });
@@ -177,15 +224,26 @@ export async function markCompleted(
     report();
     const picture = pictures.get(q.page);
     // No picture of the page (rendering failed): nothing to read, so the question is left for the student to check, never marked.
-    const result: MarkedQuestion = picture
-      ? await markQuestion(deps, q, picture, options.scheme?.get(q.number) ?? null)
-      : { ...q, student: { answer: "", working: [], legibility: "low", blank: false }, reference: { finalAnswer: "", steps: [], status: "unsolved", statusNote: "", explanation: "" }, outcome: "needs_checking", reason: "I could not look at this page, so I have not marked it.", feedback: "", estimate: null, outOf: q.marks, usedScheme: false };
+    let result: MarkedQuestion;
+    if (!picture) result = pageMissing(q, deps.model);
+    else {
+      const blank = blankFor(q);
+      const page = document.pages.find((p) => p.number === q.page);
+      const reference: NonNullable<Parameters<typeof markQuestion>[4]>["reference"] = blank
+        ? { question: { ...blank, id: q.id, marks: q.marks ?? blank.marks }, picture: textOnly(options.blank?.pages.find((p) => p.number === blank.page), blank) ? null : (blankPictures.get(blank.page) ?? null), source: "blank_paper" }
+        : textOnly(page, q)
+          ? { picture: null, source: "printed_text" }
+          : { picture, source: "marked_page" };
+      const part = official?.verdict.status === "match" ? (official.scheme.parts.get(q.number.toLowerCase()) ?? null) : null;
+      const guide = official?.scheme.parts.get(q.number.toLowerCase())?.text ?? options.scheme?.get(q.number) ?? null;
+      result = await markQuestion(deps, q, picture, guide, { part, scheme: info, reference, model: deps.model });
+    }
     marked.push(result);
     progress[i] = { questionId: q.id, state: "done", status: result.reference.status, outcome: result.outcome };
     await options.onResult?.(result);
     report();
   }
-  const out = await markPaper(document.bytes, marked, { withScheme: Boolean(options.scheme) });
+  const out = await markPaper(document.bytes, marked, { withScheme: official?.verdict.status === "match", showMarks: options.showMarks ?? true });
   const check = await readPdfDocument(out.pdf, { render: false, maxPages: 60 });
   if (!check.ok) throw new Error("the marked PDF does not open");
   return { pdf: out.pdf, marked, feedbackPages: out.feedbackPages, pageCount: check.pageCount };
