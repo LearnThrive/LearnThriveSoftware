@@ -636,6 +636,19 @@ export function libraryContract(name: string, make: () => Promise<{ harness: Con
         return { session, result };
       };
 
+      test("a chat's jobs are listed for their owner only, oldest first", async () => {
+        const now = new Date();
+        const f = await family();
+        const other = await family();
+        const a = await start(own(f), now);
+        const first = (a.result as Created).job;
+        assert.equal(await store.papers.finish(first.id, W1.id, { state: "ready" }, now), true);
+        const listed = await store.papers.listForSession(own(f), a.session.id);
+        assert.deepEqual(listed.map((j) => j.id), [first.id]);
+        assert.deepEqual(await store.papers.listForSession(own(other), a.session.id), [], "another family sees nothing");
+        assert.deepEqual(await store.papers.listForSession(own(f), "00000000-0000-4000-8000-000000000000"), [], "nor a chat that is not there");
+      });
+
       test("one active job per family, whichever learner started it; a finished or waiting job does not block", async () => {
         const now = new Date();
         const f = await family();

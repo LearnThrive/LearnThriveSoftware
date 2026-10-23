@@ -1,5 +1,6 @@
 import { jsonResponse, logOutcome, readBodyLimited } from "@/lib/request-guards";
 import { renderPdfPages } from "@/lib/assistant/documents";
+import { paperLimits } from "./limits";
 import { paperMarkerEnabled, paperMarksReleased, paperTutorEnabled } from "@/lib/assistant/config";
 import { gate, refuse, type AssistantDeps } from "@/lib/assistant/handlers";
 import type { OutputMode } from "./annotate";
@@ -32,10 +33,11 @@ async function paperGate(request: Request, deps: PaperDeps, event: string, mutat
   const g = await gate(request, deps, event, { mutating });
   if (!g.ok) return g;
   if (!paperTutorEnabled(deps.env ?? process.env)) return { ok: false as const, response: jsonResponse(404, { error: "Not found." }, NO_STORE) };
+  const limits = paperLimits(deps.env ?? process.env);
   const jobDeps = {
     store: g.rt.store,
     uploads: g.assistant.uploads,
-    solve: { provider: g.assistant.provider, queue: g.assistant.queue, model: g.assistant.config.model, visionModel: g.assistant.config.visionModel ?? g.assistant.config.model },
+    solve: { provider: g.assistant.provider, queue: g.assistant.queue, model: g.assistant.config.model, visionModel: g.assistant.config.visionModel ?? g.assistant.config.model, contextSize: limits.context, maxTokens: limits.maxTokens, reasoningTokens: limits.reasoningTokens, crossCheck: limits.crossCheck },
     now: deps.now,
     marksReleased: paperMarksReleased(deps.env ?? process.env),
     log: (outcome: string, details?: Record<string, string | number | boolean>) => logOutcome("paper-tutor", outcome, details),

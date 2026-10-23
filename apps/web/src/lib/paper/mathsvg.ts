@@ -4,6 +4,7 @@ import { SVG } from "mathjax-full/js/output/svg.js";
 import { liteAdaptor, type LiteAdaptor } from "mathjax-full/js/adaptors/liteAdaptor.js";
 import { RegisterHTMLHandler } from "mathjax-full/js/handlers/html.js";
 import type { LiteElement } from "mathjax-full/js/adaptors/lite/Element.js";
+import { boxOfPath, handGlyph } from "./handwriting";
 // The TeX packages must be imported to be registered: without these, \implies, \text and friends are silently unknown.
 import "mathjax-full/js/input/tex/ams/AmsConfiguration.js";
 import "mathjax-full/js/input/tex/newcommand/NewcommandConfiguration.js";
@@ -177,8 +178,8 @@ const round = (v: number) => Math.round(v * 100) / 100;
 const cache = new Map<string, MathShapes | null>();
 
 /** The shapes of one formula, or null if MathJax could not typeset it (an unknown command, a character it has no outline for). */
-export function mathShapes(tex: string, display = false): MathShapes | null {
-  const key = `${display ? "D" : "I"}${tex}`;
+export function mathShapes(tex: string, display = false, hand = true): MathShapes | null {
+  const key = `${display ? "D" : "I"}${hand ? "H" : "P"}${tex}`;
   if (cache.has(key)) return cache.get(key)!;
   let result: MathShapes | null = null;
   try {
@@ -198,7 +199,13 @@ export function mathShapes(tex: string, display = false): MathShapes | null {
         const here = multiply(m, parseTransform(adaptor.getAttribute(node, "transform")));
         if (kind === "path") {
           const d = adaptor.getAttribute(node, "d");
-          if (d) paths.push(transformPath(d, here));
+          if (d) {
+            // The glyph MathJax placed here, written in the handwriting font instead (same place, same size); MathJax's outline if the font has none.
+            const code = Number.parseInt(adaptor.getAttribute(node, "data-c") ?? "", 16);
+            const box = hand && Number.isFinite(code) ? boxOfPath(transformPath(d, IDENTITY)) : null;
+            const written = box ? handGlyph(code, box, transformPath) : null;
+            paths.push(transformPath(written ?? d, here));
+          }
         } else if (kind === "rect") {
           const rx = Number(adaptor.getAttribute(node, "x") ?? 0);
           const ry = Number(adaptor.getAttribute(node, "y") ?? 0);

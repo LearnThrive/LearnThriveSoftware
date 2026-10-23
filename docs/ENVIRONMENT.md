@@ -165,6 +165,10 @@ Set these in Render's environment, as secrets where the table says so, and nowhe
 | `PAPER_MAX_PAGES` | Pages a PDF may have for Study Buddy and the Paper Tutor (one limit for the upload check, the reader and the paper). | optional | optional | no | n/a | 60 |
 | `PAPER_MAX_QUESTIONS` | Question parts one paper may list. Beyond it the rest are named in the job's notice, never dropped silently. | optional | optional | no | n/a | 150 |
 | `PAPER_RENDER_BATCH` | Pages drawn at a time while measuring answer space (memory stays flat however long the paper is). | optional | optional | no | n/a | 6 |
+| `PAPER_CONTEXT` | The model's context (tokens) for solving a paper: a page picture, the written-out working and a reasoning retry do not fit 4096. A value different from ASSISTANT_CONTEXT reloads the model once when the work changes between chat and paper. | optional | optional | no | n/a | 8192 |
+| `PAPER_MAX_TOKENS` | Tokens for one worked solution (every calculation written out). The old 900 truncated valid four-mark solutions. | optional | optional | no | n/a | 1800 |
+| `PAPER_REASONING_TOKENS` | Tokens for a reasoning retry of a solution that was incomplete or inconsistent (thinking and answer together). | optional | optional | no | n/a | 3600 |
+| `PAPER_CROSS_CHECK` | Whether a task read from a picture is solved a second, independent time and the two must agree. It is the only check on how a diagram was read (a wrong side of a shape gives tidy, wrong working). false: one attempt, as before. | optional | optional | no | n/a | on |
 | `PAPER_SCAN_LAYOUT` | Whether the vision model is asked where a scanned page's answer spaces are (each is checked against the drawing of the page before use). false: answers go on the worked pages. | optional | optional | no | n/a | on |
 | `ASSISTANT_PER_MINUTE` | Messages one account may send a minute. | optional | optional | no | n/a | 6 |
 | `ASSISTANT_DAILY_TOKEN_BUDGET` | Hosted providers: completion tokens per account per day (the cost cap). | optional | optional | no | n/a | 40000 |

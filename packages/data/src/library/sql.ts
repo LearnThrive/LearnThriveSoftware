@@ -936,6 +936,13 @@ export class SqlLibraryStore implements LibraryStore {
       );
       return rows.map((r): AssessmentVersion => ({ jobId: r.job_id, questionId: r.question_id, version: Number(r.version), kind: r.kind, actorKind: r.actor_kind, actorId: r.actor_id, value: json<unknown>(r.value, null), note: r.note, createdAt: new Date(r.created_at) }));
     },
+    listForSession: async (owner, sessionId) => {
+      const rows = await this.db.query<Row>(
+        `select * from public.paper_jobs where client_id = $1 and student_id is not distinct from $2::uuid and session_id = $3 order by created_at`,
+        [owner.clientId, owner.studentId, sessionId],
+      );
+      return rows.map(toPaperJob);
+    },
     activeForFamily: async (clientId) => {
       const rows = await this.db.query<Row>(`select * from public.paper_jobs where client_id = $1 and state in ('extracting', 'solving')`, [clientId]);
       return rows[0] ? toPaperJob(rows[0]) : null;

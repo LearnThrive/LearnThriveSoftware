@@ -124,6 +124,8 @@ export interface PaperJobRepository {
   setResult(scope: PaperScope, id: string, result: { resultFileId: string | null; pageCount?: number | null; workedPages?: number[] }, now: Date): Promise<boolean>;
   /** Every version of a question's assessment, oldest first. */
   versions(scope: PaperScope, jobId: string, questionId: string): Promise<AssessmentVersion[]>;
+  /** The owner's jobs in one chat, oldest first: what an upload there can be linked to (never another family's or learner's). */
+  listForSession(owner: ChatOwner, sessionId: string): Promise<PaperJobRecord[]>;
   /** The family's extracting or solving job, whichever learner started it (one local model, one job at a time). */
   activeForFamily(clientId: string): Promise<PaperJobRecord | null>;
   /** ready -> solving with the lease. */

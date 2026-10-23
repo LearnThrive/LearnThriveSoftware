@@ -4,7 +4,10 @@ import type { LibraryStorage } from "@/lib/library/storage";
 import type { OutputMode, SolvedQuestion } from "./annotate";
 import { totalsOf, type AnswerState, type AssessmentTotals, type AwardStatus, type Basis, type ReferenceSource } from "./assess";
 import { markingMarkdown, overrideMarks, reassess, type MarkedQuestion } from "./mark";
+import { renderPdfPages } from "@/lib/assistant/documents";
+import { contextKey, linkContext, refreshContext, type EarlierJob } from "./context";
 import { checkScheme, extractQuestions, markCompleted, photoToPdf, solutionsMarkdown, solvePaper, type OfficialScheme, type PaperDocument, type Progress } from "./paper";
+import type { QuestionContext } from "./questions";
 import { markPaper } from "./markPdf";
 import type { SolveDeps } from "./solve";
 
@@ -41,6 +44,11 @@ export interface JobQuestion {
   partLabel?: string;
   /** Read from the page's text, or from a picture of it by the AI (the student can tell which to double-check). */
   fromText: boolean;
+  /** The words its parts share, kept so a later upload of another part can be linked to this one (and survive a reload or a recovery). */
+  stem?: string;
+  /** What this part was found to share with an earlier upload in this chat, or why nothing was linked. Saved with the job, so a recovery solves it the same way. */
+  context?: QuestionContext;
+  contextState?: "linked" | "missing" | "ambiguous";
 }
 
 /** What the panel shows for one finished question: the solution, or the marking of the student's answer. */
@@ -145,7 +153,13 @@ const markedResult = (q: MarkedQuestion, released: boolean): QuestionResult => (
   studentWorking: q.student.working,
 });
 
-const solvedResult = (q: SolvedQuestion): QuestionResult => ({ id: q.id, number: q.number, status: q.status, answer: q.finalAnswer, steps: q.steps, note: q.statusNote || q.explanation });
+/** What the panel says under a question: a warning first when there is one (not finished, did not check), otherwise the conclusion and method, then how far it was checked. */
+const solvedNote = (q: SolvedQuestion): string => {
+  const warn = q.status === "failed" || q.status === "partial" || q.status === "unsolved";
+  return (warn ? [q.statusNote, q.explanation] : [q.explanation, q.statusNote]).filter(Boolean).join(" ");
+};
+
+const solvedResult = (q: SolvedQuestion): QuestionResult => ({ id: q.id, number: q.number, status: q.status, answer: q.finalAnswer, steps: q.steps, note: solvedNote(q) });
 
 export const JOBS_PER_DAY = 10;
 export const USAGE_PAPER_DAY = "paper_job_day";
@@ -194,6 +208,8 @@ const asChecked = <T extends { id: string }>(checkpoints: Record<string, unknown
   for (const [id, value] of Object.entries(checkpoints)) if (value && typeof value === "object" && (value as { id?: unknown }).id === id) out.set(id, value as T);
   return out;
 };
+
+const parseBase = (number: string): string => /^\d+/.exec(number)?.[0] ?? number;
 
 const owner = (job: PaperJobRecord): ChatOwner => ({ clientId: job.clientId, studentId: job.studentId });
 
@@ -297,6 +313,70 @@ export class PaperJobs {
     return checked;
   }
 
+  /** The owner's earlier jobs in this chat, as the linker reads them: what they found and what they concluded. Never another chat, family or learner. */
+  private async earlierJobs(deps: JobDeps, job: PaperJobRecord): Promise<EarlierJob[]> {
+    const jobs = await deps.store.papers.listForSession(owner(job), job.sessionId);
+    return jobs
+      .filter((j) => j.id !== job.id && j.kind === "solve" && Array.isArray(j.questions) && j.questions.length > 0)
+      .map((j) => ({ id: j.id, fileId: j.fileId, questions: (j.questions as JobQuestion[]).map((q) => ({ id: q.id, number: q.number, page: q.page, stem: q.stem })), checkpoints: j.checkpoints }));
+  }
+
+  /** Puts the saved links back on a paper read again (a recovery re-reads the upload): the solve must go the way the student was told it would. */
+  private restoreContext(document: PaperDocument, saved: readonly JobQuestion[]): void {
+    for (const q of document.questions) {
+      const was = saved.find((s) => s.number === q.number && s.page === q.page);
+      if (!was) continue;
+      if (was.context) q.context = was.context;
+      if (was.contextState === "missing") q.contextMissing = true;
+      if (was.contextState === "ambiguous") q.contextAmbiguous = true;
+    }
+  }
+
+  /**
+   * Brings every saved link up to date with the answers as they stand now (a correction may have been made since the part was read, or while it waited,
+   * or in the process that is taking it over), and saves the refreshed link so a later recovery solves on it too.
+   */
+  private async refreshContexts(deps: JobDeps, job: PaperJobRecord, document: PaperDocument): Promise<void> {
+    const linked = document.questions.filter((q) => q.context);
+    if (linked.length === 0) return;
+    const earlier = await this.earlierJobs(deps, job);
+    let changed = false;
+    for (const q of linked) {
+      const fresh = refreshContext(q.context!, earlier);
+      if (contextKey(fresh) !== contextKey(q.context!)) changed = true;
+      q.context = fresh;
+    }
+    if (!changed) return;
+    const questions = (job.questions as JobQuestion[]).map((jq) => {
+      const q = document.questions.find((x) => x.number === jq.number && x.page === jq.page);
+      return q?.context ? { ...jq, context: q.context } : jq;
+    });
+    await deps.store.papers.save(job.id, this.workerId, { questions }, this.worker, this.now(deps));
+  }
+
+  /** The earlier page (its picture) behind each linked question, drawn once per page: the original diagram, selectively, not the whole history. */
+  private async contextPictures(deps: JobDeps, job: PaperJobRecord, document: PaperDocument): Promise<Map<string, string[]>> {
+    const made = new Map<string, string>();
+    const byQuestion = new Map<string, string[]>();
+    for (const q of document.questions) {
+      const c = q.context;
+      if (!c) continue;
+      const key = `${c.fromFileId}:${c.page}`;
+      if (!made.has(key)) {
+        const file = await deps.store.chat.getFile(owner(job), c.fromFileId);
+        const stored = file ? await deps.uploads.read(file.storagePath) : null;
+        if (file && stored) {
+          const bytes = file.contentType === "application/pdf" ? stored : await photoToPdf(stored, file.contentType);
+          const [drawn] = await renderPdfPages(bytes, { scale: 1.6, pages: [c.page] });
+          if (drawn) made.set(key, Buffer.from(drawn.jpeg()).toString("base64"));
+        }
+      }
+      const picture = made.get(key);
+      if (picture) byQuestion.set(q.id, [picture]);
+    }
+    return byQuestion;
+  }
+
   /** The paper for a job: as this process already has it, or read again from the stored upload. */
   private async document(deps: JobDeps, job: PaperJobRecord, signal: AbortSignal): Promise<PaperDocument | { problem: string }> {
     const cached = this.documents.get(job.id);
@@ -315,9 +395,30 @@ export class PaperJobs {
         if ("problem" in document) throw Object.assign(new Error("unreadable"), { userMessage: document.problem });
         const official = job.kind === "mark" ? await this.official(deps, job, document, signal) : null;
         if (job.kind === "mark" && job.blankFileId && !(await this.blankPaper(deps, job, signal))) throw Object.assign(new Error("blank"), { userMessage: "I could not read the blank question paper (it needs to be a PDF). Please check it, or leave it out." });
-        const questions: JobQuestion[] = document.questions.map((q) => ({ id: q.id, number: q.number, page: q.page, text: (q.ownText ?? q.text).slice(0, 400), marks: q.marks, group: q.group, partLabel: q.partLabel, fromText: q.fromText }));
+        // Parts that arrive without their question's shared words are linked to earlier uploads of this chat where that is certain, and said so otherwise.
+        const links = job.kind === "solve" ? linkContext(document.questions, await this.earlierJobs(deps, job)) : new Map();
+        const contextNotes: string[] = [];
+        for (const q of document.questions) {
+          const link = links.get(q.id);
+          if (link?.kind === "linked") {
+            q.context = link.context;
+            contextNotes.push(`Question ${q.number} is a part of question ${link.context.group}: I am using its shared words and its page from your earlier upload.`);
+          } else if (link?.kind === "ambiguous") {
+            q.contextAmbiguous = true;
+            contextNotes.push(`Question ${q.number} could belong to more than one earlier question ${parseBase(q.number)} in this chat, so I have not linked it to any. Tell me which one, or upload the page with its diagram.`);
+          } else if (link?.kind === "missing") {
+            q.contextMissing = true;
+            contextNotes.push(`Question ${q.number} is a part of a longer question, but I have not seen the rest of it (its shared words and diagram) in this upload or earlier in this chat. I will only use what is on this page; upload the page with the rest if the answer needs it.`);
+          }
+        }
+        const questions: JobQuestion[] = document.questions.map((q) => {
+          const link = links.get(q.id);
+          const stem = (q.stem ?? q.groupStem ?? "").slice(0, 1500);
+          return { id: q.id, number: q.number, page: q.page, text: (q.ownText ?? q.text).slice(0, 400), marks: q.marks, group: q.group, partLabel: q.partLabel, fromText: q.fromText, ...(stem ? { stem } : {}), ...(link?.kind === "linked" ? { context: link.context, contextState: "linked" as const } : link?.kind === "missing" ? { contextState: "missing" as const } : link?.kind === "ambiguous" ? { contextState: "ambiguous" as const } : {}) };
+        });
         const skipped = document.skipped?.length ? `Not searched for questions: ${document.skipped.map((s) => `page ${s.page} (${s.kind === "formulae" ? "formulae sheet" : s.kind})`).join(", ")}.` : null;
         const notices = [
+          ...contextNotes,
           document.omitted ? `This paper has ${document.questions.length + document.omitted.questions} questions. Only the first ${document.omitted.limit} are listed (the limit is set by PAPER_MAX_PAGES / PAPER_MAX_QUESTIONS); question ${document.omitted.firstOmitted} onwards are NOT included, so this will not be a complete paper. Send the rest as a second document to cover them.` : null,
           skipped,
           job.schemeFileId && !official ? "I could not read that mark scheme (it needs to be a PDF with its text in it), so I will mark without it." : null,
@@ -386,7 +487,17 @@ export class PaperJobs {
           workedPages = result.feedbackPages;
           deps.log?.("paper_marked", { questions: result.marked.length, correct: result.marked.filter((q) => q.outcome === "correct").length, needsChecking: result.marked.filter((q) => q.outcome === "needs_checking").length, scheme: official?.verdict.status ?? "none", blank: Boolean(blank) });
         } else {
-          const result = await solvePaper(solveDeps, document, { mode: (job.mode as OutputMode | null) ?? "hybrid", questionIds: ids, onProgress, prior: asChecked<SolvedQuestion>(job.checkpoints), onResult: checkpoint });
+          this.restoreContext(document, job.questions as JobQuestion[]);
+          await this.refreshContexts(deps, job, document);
+          const contextPictures = await this.contextPictures(deps, job, document);
+          // A question already solved by an earlier run of this job keeps its result only if it was solved on the answers that stand now.
+          const prior = new Map<string, SolvedQuestion>();
+          for (const [id, value] of asChecked<SolvedQuestion>(job.checkpoints)) {
+            const q = document.questions.find((x) => x.id === id);
+            if (q?.context && value.contextKey !== contextKey(q.context)) continue;
+            prior.set(id, value);
+          }
+          const result = await solvePaper(solveDeps, document, { mode: (job.mode as OutputMode | null) ?? "hybrid", questionIds: ids, onProgress, prior, onResult: checkpoint, contextPictures });
           if (signal.aborted) return;
           pdf = result.pdf;
           markdown = solutionsMarkdown(result.solved);

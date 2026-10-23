@@ -333,7 +333,7 @@ export async function markQuestion(deps: SolveDeps, q: PaperQuestion, picture: s
   const refQuestion = options.reference?.question ?? q;
   const refPicture = options.reference ? options.reference.picture : picture;
   const note = source === "marked_page" ? "\nNote: this page also shows handwriting by the pupil. Ignore all handwriting and solve the printed question yourself." : "";
-  const solved = await solveQuestion(deps, note ? { ...refQuestion, text: refQuestion.text + note } : refQuestion, refPicture);
+  const solved = await solveQuestion(deps, note ? { ...refQuestion, text: refQuestion.text + note } : refQuestion, refPicture, { reference: true });
   const reference = { finalAnswer: solved.finalAnswer, steps: solved.steps, status: solved.status, statusNote: solved.statusNote, explanation: solved.explanation };
   const done = await judgeAndAward(deps, q, student, reference, { part: options.part, scheme: options.scheme, guide: scheme, source, model: options.model ?? deps.model ?? "unknown" });
   const blank: StudentRead = { answer: "", working: [], legibility: "low", blank: false };

@@ -33,10 +33,12 @@ async function longPaper(pages, perPage) {
 }
 
 test("the limits come from the environment, with defaults beyond the old 20 pages and 30 questions, and nonsense falls back", () => {
-  assert.deepEqual(paperLimits({}), { maxPages: 60, maxQuestions: 150, renderBatch: 6, scanLayout: true });
+  assert.deepEqual(paperLimits({}), { maxPages: 60, maxQuestions: 150, renderBatch: 6, scanLayout: true, context: 8192, maxTokens: 1800, reasoningTokens: 3600, crossCheck: true });
   assert.equal(paperLimits({ PAPER_SCAN_LAYOUT: "false" }).scanLayout, false);
-  assert.deepEqual(paperLimits({ PAPER_MAX_PAGES: "100", PAPER_MAX_QUESTIONS: "300", PAPER_RENDER_BATCH: "2" }), { maxPages: 100, maxQuestions: 300, renderBatch: 2, scanLayout: true });
-  assert.deepEqual(paperLimits({ PAPER_MAX_PAGES: "0", PAPER_MAX_QUESTIONS: "many", PAPER_RENDER_BATCH: "-1" }), { maxPages: 60, maxQuestions: 150, renderBatch: 6, scanLayout: true });
+  assert.deepEqual(paperLimits({ PAPER_CONTEXT: "6144", PAPER_MAX_TOKENS: "2400", PAPER_REASONING_TOKENS: "4800" }), { maxPages: 60, maxQuestions: 150, renderBatch: 6, scanLayout: true, context: 6144, maxTokens: 2400, reasoningTokens: 4800, crossCheck: true });
+  assert.equal(paperLimits({ PAPER_CONTEXT: "100" }).context, 8192, "a context too small to hold a page falls back");
+  assert.deepEqual(paperLimits({ PAPER_MAX_PAGES: "100", PAPER_MAX_QUESTIONS: "300", PAPER_RENDER_BATCH: "2" }), { maxPages: 100, maxQuestions: 300, renderBatch: 2, scanLayout: true, context: 8192, maxTokens: 1800, reasoningTokens: 3600, crossCheck: true });
+  assert.deepEqual(paperLimits({ PAPER_MAX_PAGES: "0", PAPER_MAX_QUESTIONS: "many", PAPER_RENDER_BATCH: "-1" }), { maxPages: 60, maxQuestions: 150, renderBatch: 6, scanLayout: true, context: 8192, maxTokens: 1800, reasoningTokens: 3600, crossCheck: true });
   assert.equal(paperLimits({ PAPER_MAX_PAGES: "9999" }).maxPages, 60, "out of range falls back rather than being clamped to something unintended");
 });
 
