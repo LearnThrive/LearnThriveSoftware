@@ -39,6 +39,10 @@ export class MockProvider implements ChatProvider {
       // [blank] or [illegible] reads as that), so tests see a right answer, and a reference that cannot confirm it.
       const text = /<question>\s*([\s\S]*?)\s*<\/question>/.exec(last)?.[1] ?? "";
       script = JSON.stringify(text.includes("[blank]") ? { answer: "", working: [], legibility: "high", blank: true } : { answer: "6", working: ["2x = 12", "x = 6"], legibility: text.includes("[illegible]") ? "low" : "high", blank: false });
+    } else if (options.json && system.startsWith("You decide which marking criteria")) {
+      // The Paper Tutor deciding which criteria a student's working earns: every method criterion is met by the first line.
+      const ids = [...last.matchAll(/^([A-Z]\d(?:#\d+)?): /gm)].map((m) => m[1]!);
+      script = JSON.stringify({ awards: ids.map((id) => ({ id, met: true, lines: [0], reason: "The first line shows the method." })) });
     } else if (options.json && system.startsWith("Give feedback on a student's")) {
       script = JSON.stringify({ mistake: "The last step went wrong.", feedback: "Check each step again. Undo the operations in reverse order.", method_marks: 1 });
     } else if (options.json) {

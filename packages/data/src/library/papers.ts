@@ -120,6 +120,8 @@ export interface PaperJobRepository {
    * first change also keeps the AI's own value as version 1, so nothing is lost. Only a finished job, and only a question that was assessed.
    */
   amend(scope: PaperScope, jobId: string, questionId: string, change: AssessmentChange, now: Date): Promise<{ ok: true; version: number } | { ok: false; code: "not_found" | "not_done" | "no_question" | "conflict" }>;
+  /** Points a FINISHED job at a newer result file (the marked PDF rebuilt after a correction or a review). False if it is not this scope's, or not finished. */
+  setResult(scope: PaperScope, id: string, result: { resultFileId: string | null; pageCount?: number | null; workedPages?: number[] }, now: Date): Promise<boolean>;
   /** Every version of a question's assessment, oldest first. */
   versions(scope: PaperScope, jobId: string, questionId: string): Promise<AssessmentVersion[]>;
   /** The family's extracting or solving job, whichever learner started it (one local model, one job at a time). */

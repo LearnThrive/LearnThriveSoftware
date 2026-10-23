@@ -56,7 +56,9 @@ export interface PaperQuestion {
 }
 
 const START = /^(?:question\s*|q\.?\s*)?(\d{1,3})(?:\s*[.):]\s*|\s+(?=\(?[a-z(])|\s*$)/i;
-const WRITABLE = /^[\s.…_\-–]*$|^\s*answer\b[\s.…_:]*(?:\S{0,4})\s*$|\.{6,}|_{6,}|…{3,}/i;
+/** A mark scheme's question rows: "2 12 M1 ..." (the number, then the answer, which may itself be a number). Taken only for exactly the next number. */
+const START_ROW = /^(?:question\s*|q\.?\s*)?(\d{1,3})(?:\s*[.):]\s*|\s+|\s*$)/i;
+const WRITABLE =/^[\s.…_\-–]*$|^\s*answer\b[\s.…_:]*(?:\S{0,4})\s*$|\.{6,}|_{6,}|…{3,}/i;
 const MARKS = /\((\d{1,2})\s*marks?\)|\[(\d{1,2})\s*marks?\]|\((\d{1,2})\)\s*$/i;
 const MARGIN = 36;
 const MIN_ANSWER_HEIGHT = 18;
@@ -204,7 +206,7 @@ interface Node {
 const content = (lines: readonly LineBox[]) => lines.filter((l) => !WRITABLE.test(l.text));
 
 /** The questions on the paper, in order. With renders of the pages, answer space avoids diagrams and pictures as well as text. */
-export function findQuestions(pages: readonly PageReading[], renders: readonly RenderedPage[] = []): PaperQuestion[] {
+export function findQuestions(pages: readonly PageReading[], renders: readonly RenderedPage[] = [], options: { rows?: boolean } = {}): PaperQuestion[] {
   const nodes: Node[] = [];
   let expect = 1;
   let top: Node | null = null;
@@ -241,10 +243,10 @@ export function findQuestions(pages: readonly PageReading[], renders: readonly R
     if (page.textQuality !== "good" || classifyPage(page, page === pages[0]) !== "questions") continue;
     const lines = [...page.lines].sort((a, b) => b.y - a.y || a.x - b.x);
     for (const line of lines) {
-      const m = START.exec(line.text);
+      const m = (options.rows ? START_ROW : START).exec(line.text);
       const n = m ? Number(m[1]) : NaN;
-      // A new question: the next number (or a jump forward of a few, for a paper that starts mid-way), never backwards.
-      if (m && n >= expect && n <= expect + 3 && !WRITABLE.test(line.text)) {
+      // A new question: the next number (or a jump forward of a few, for a paper that starts mid-way), never backwards. A scheme's rows must be exactly the next.
+      if (m && (options.rows ? n === expect : n >= expect && n <= expect + 3) && !WRITABLE.test(line.text)) {
         expect = n + 1;
         top = { label: String(n), partLabel: "", depth: 0, parent: null, children: [], lines: [line], page: page.number, continued: [], group: String(n) };
         nodes.push(top);
