@@ -16,6 +16,8 @@
   },
   "scripts": {
     "dev": "npm run dev --workspace=apps/web",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "start": "npm run dev",
     "services:up": "node scripts/dev-services.mjs",
     "services:down": "docker compose -f config/compose.yaml down && supabase stop",
     "services:logs": "docker compose -f config/compose.yaml logs -f",
