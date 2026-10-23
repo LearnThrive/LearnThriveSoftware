@@ -338,8 +338,9 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
   const stage: StageBudgets = stageBudgetsFor(config, images.length > 0);
   const guard = new OutputGuard();
   let shown = "";
-  const st: { firstTokenMs: number | null; providerId: string | null; failure: ChatErrorCode | null; timings: TurnTimings } = {
+  const st: { firstTokenMs: number | null; providerId: string | null; failure: ChatErrorCode | null; cutOff: boolean; timings: TurnTimings } = {
     firstTokenMs: null,
+    cutOff: false,
     providerId: null,
     failure: null,
     timings: { queueMs: 0, prepareMs: 0, firstActivityMs: null, firstAnswerMs: null, totalMs: 0, rounds: 0, tools: 0, metrics: null },
@@ -383,7 +384,9 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
       for await (const chunk of deps.provider.stream(messages, {
         model,
         // Thinking spends output tokens: give it its own budget so the final answer is not cut off (measured in the benchmark).
-        maxTokens: config.maxOutputTokens + (thinking.reasoning ? config.thinkingTokens : 0),
+        // The answer's limit plus, when the model may think, its own allowance (thinking and answer share one count), but never more than
+        // the context window leaves once the prompt is in it, so the window is not overrun.
+        maxTokens: Math.max(256, Math.min(config.maxOutputTokens + (thinking.reasoning ? config.thinkingTokens : 0), config.contextSize - messages.reduce((n, m) => n + approxTokens(m.content), 0) - 64)),
         temperature: 0.4,
         contextSize: config.contextSize,
         signal: input.signal,
@@ -418,6 +421,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
         }
         st.providerId = chunk.provider;
         st.firstTokenMs = chunk.stats.firstTokenMs;
+        st.cutOff = chunk.cutOff === true;
         st.timings.metrics = chunk.metrics ?? null;
         if (deps.hosted) await store.chat.incrementUsage(input.owner.clientId, USAGE_TOKENS_DAY, day, chunk.usage.completionTokens);
       }
@@ -448,6 +452,12 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
     if (rest) {
       shown += rest;
       yield { type: "delta", text: rest };
+    }
+    // An answer that hit the length limit says so, instead of stopping mid-sentence as if it had finished. "Continue" carries on from it.
+    if (st.cutOff && shown.trim() && !guard.stoppedFor) {
+      const note = `\n\n(This answer reached its length limit, so it stops here. Say "continue" and I will carry on from where it stopped.)`;
+      shown += note;
+      yield { type: "delta", text: note };
     }
     // The server's own look at the finished reply: marks the evidence lowers, mistakes it can prove, and the sources that were read.
     if (study && shown.trim() && !guard.stoppedFor) {
@@ -532,6 +542,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
     prepareMs: st.timings.prepareMs,
     firstActivityMs: st.timings.firstActivityMs ?? -1,
     firstAnswerMs: st.timings.firstAnswerMs ?? -1,
+    cutOff: st.cutOff ? 1 : 0,
     turnMs: st.timings.totalMs,
     toolRounds: st.timings.rounds,
     tools: st.timings.tools,

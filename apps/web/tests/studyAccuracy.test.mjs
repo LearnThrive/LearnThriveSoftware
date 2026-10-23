@@ -42,6 +42,8 @@ function research({ results = [], web = {}, status = "ok", limits = LIMITS } = {
 class Scripted {
   id = "mock";
   requests = [];
+  streamOptions = [];
+  cutOff = false;
   constructor(reply) {
     this.reply = reply;
   }
@@ -51,20 +53,22 @@ class Scripted {
   async health() {
     return { ok: true, detail: "ok" };
   }
-  async *stream(messages) {
+  async *stream(messages, options) {
     this.requests.push(messages.map((m) => ({ ...m })));
+    this.streamOptions.push(options);
     yield { type: "text", text: typeof this.reply === "function" ? this.reply(messages) : this.reply };
-    yield { type: "done", provider: "mock", model: "mock", usage: { promptTokens: 1, completionTokens: 1 }, stats: { firstTokenMs: 1, totalMs: 1 } };
+    yield { type: "done", provider: "mock", model: "mock", usage: { promptTokens: 1, completionTokens: 1 }, stats: { firstTokenMs: 1, totalMs: 1 }, ...(this.cutOff ? { cutOff: true } : {}) };
   }
 }
 
-async function turn(t, { reply, researchService = null, text, history = [] }) {
+async function turn(t, { reply, researchService = null, text, history = [], cutOff = false }) {
   environment(t, {});
   quiet(t);
   const store = new InMemoryLibraryStore();
   const profile = store.seedProfile({ email: "p@example.com" });
   const clientId = await store.accounts.ensureClient(profile);
   const provider = new Scripted(reply);
+  provider.cutOff = cutOff;
   const config = cfgLib.assistantConfig({ NODE_ENV: "development", ASSISTANT_PROVIDER: "mock" });
   const deps = { store, provider, queue: new GenerationQueue(config.concurrency, config.queueMax), uploads: new MemoryLibraryStorage(), config, research: researchService, now: () => new Date("2026-10-21T10:30:15Z") };
   let sessionId = null;
@@ -396,4 +400,18 @@ test("the turn's instructions follow the student's choice in every subject, and 
   const promptLib = loadTsFrom(import.meta.url, "../src/lib/assistant/prompt.ts");
   assert.doesNotMatch(promptLib.SYSTEM_PROMPT, /Teach, do not just tell/);
   assert.match(promptLib.SYSTEM_PROMPT, /Never make a student work through something they only asked you to answer/);
+});
+
+/* extra ------------------------------------------------------------------- long answers */
+
+test("an answer may run to 2000+ words, and one that still hits the limit says so instead of stopping silently", async (t) => {
+  const config = cfgLib.assistantConfig({ NODE_ENV: "development" });
+  assert.ok(config.maxOutputTokens >= 4096, "room for 2000+ words even with LaTeX maths");
+  assert.ok(config.thinkingTokens >= 1000, "thinking has its own allowance so it cannot eat the answer");
+  const normal = await turn(t, { reply: "A complete answer.", text: "Explain osmosis in full" });
+  assert.ok(normal.provider.streamOptions[0].maxTokens >= 4096, "the model is asked for the full allowance");
+  assert.doesNotMatch(normal.answer, /length limit/);
+  const cut = await turn(t, { reply: "The first half of a long answer that", text: "Explain osmosis in full", cutOff: true });
+  assert.match(cut.answer, /reached its length limit/);
+  assert.match(cut.answer, /Say "continue"/);
 });

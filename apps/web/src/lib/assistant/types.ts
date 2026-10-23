@@ -113,6 +113,8 @@ export type StreamChunk =
       stats: StreamStats;
       /** What the server reported about this request (`null` where the backend does not report it). */
       metrics?: StreamMetrics;
+      /** True when the reply stopped because it reached the token limit, not because it was finished. */
+      cutOff?: boolean;
     };
 
 export type ProviderErrorCode = "unavailable" | "timeout" | "rate_limited" | "bad_request" | "aborted" | "protocol";
