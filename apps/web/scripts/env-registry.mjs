@@ -99,6 +99,8 @@ export const REGISTRY = [
   e("ASSISTANT_PER_MINUTE", "assistant", "Messages one account may send a minute.", { fallback: "6", check: "int:1:10000" }),
   e("ASSISTANT_DAILY_TOKEN_BUDGET", "assistant", "Hosted providers: completion tokens per account per day (the cost cap).", { fallback: "40000", check: "int:1:100000000" }),
   e("ASSISTANT_CONCURRENCY", "assistant", "Answers generated at once on this server.", { fallback: "1", check: "int:1:64" }),
+  e("ASSISTANT_PICTURE_FIRST_TOKEN_MS", "assistant", "How long a message with a photo may wait for the first word (a local vision model may be loading).", { fallback: "240000", check: "int:5000:900000" }),
+  e("ASSISTANT_PICTURE_TOTAL_MS", "assistant", "How long a message with a photo may take in all.", { fallback: "360000", check: "int:10000:1800000" }),
   e("ASSISTANT_SAFEGUARDING_EMAIL", "assistant", "The safeguarding lead's mailbox for flags (an opaque reference and a category, never the pupil's name). Needed before Study Buddy opens.", { source: "the safeguarding lead", check: "email" }),
   e("ASSISTANT_NIM_MODEL", "assistant", "Evaluation only: the model when the provider is nim.", { production: "unset", fallback: "meta/llama-3.2-11b-vision-instruct", check: "text" }),
   e("ASSISTANT_NIM_VISION_MODEL", "assistant", "Evaluation only: the vision model when the provider is nim.", { production: "unset", check: "text" }),

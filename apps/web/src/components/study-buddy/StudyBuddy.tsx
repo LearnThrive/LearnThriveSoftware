@@ -71,7 +71,7 @@ const ERROR_TEXT: Record<string, string> = {
   busy: "Study Buddy is busy right now. Please try again in a moment.",
   unavailable:
     "Study Buddy could not answer just now. Please try again shortly.",
-  timeout: "That took too long. Please try a shorter question.",
+  timeout: "That took too long. Study Buddy may still have been warming up, so please try again. A photo can take a minute or two the first time.",
   budget: "Study Buddy has reached its limit for today.",
   vision_unavailable:
     "Study Buddy cannot look at photos right now. You can type the question instead.",

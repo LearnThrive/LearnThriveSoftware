@@ -13,6 +13,7 @@ type Env = Record<string, string | undefined>;
  *   ASSISTANT_DAILY_MESSAGES        messages per account per day (default 40)     ASSISTANT_PER_MINUTE   per minute (default 6)
  *   ASSISTANT_DAILY_TOKEN_BUDGET    hosted providers only: completion tokens per account per day (default 40000); the cost cap
  *   ASSISTANT_CONCURRENCY           answers generated at once on this server (default 1: one local GPU)
+ *   ASSISTANT_PICTURE_FIRST_TOKEN_MS / ASSISTANT_PICTURE_TOTAL_MS   how long a message with a photo may wait for the first word / take in all (defaults 240000 / 360000)
  *   ASSISTANT_PRODUCTION_APPROVED   "true" only after plan19 section 6 is complete and recorded. Required in production
  *   ASSISTANT_MINORS_APPROVED       "true" only after the safeguarding lead has approved in writing. Until then it is for adults
  *   ASSISTANT_SAFEGUARDING_EMAIL    where a safeguarding flag goes (the lead's mailbox). Unset: the static reply is still given
@@ -29,6 +30,9 @@ export const ASSISTANT_DEFAULTS = {
   maxInputChars: 4000,
   firstTokenTimeoutMs: 45_000,
   totalTimeoutMs: 120_000,
+  // A question with a photo: a local vision model may have to load first (minutes on a laptop GPU) and then read the picture before it says a word.
+  pictureFirstTokenTimeoutMs: 240_000,
+  pictureTotalTimeoutMs: 360_000,
 } as const;
 
 export type ProviderId = "ollama" | "nim" | "custom" | "mock";
@@ -50,6 +54,9 @@ export interface AssistantConfig {
   queueMax: number;
   firstTokenTimeoutMs: number;
   totalTimeoutMs: number;
+  /** The same two limits for a message that carries a photo or PDF page. */
+  pictureFirstTokenTimeoutMs: number;
+  pictureTotalTimeoutMs: number;
   productionApproved: boolean;
   minorsApproved: boolean;
   safeguardingEmail: string | null;
@@ -84,6 +91,8 @@ export function assistantConfig(env: Env = process.env): AssistantConfig {
     queueMax: ASSISTANT_DEFAULTS.queueMax,
     firstTokenTimeoutMs: ASSISTANT_DEFAULTS.firstTokenTimeoutMs,
     totalTimeoutMs: ASSISTANT_DEFAULTS.totalTimeoutMs,
+    pictureFirstTokenTimeoutMs: whole(env.ASSISTANT_PICTURE_FIRST_TOKEN_MS, ASSISTANT_DEFAULTS.pictureFirstTokenTimeoutMs, 5_000, 900_000),
+    pictureTotalTimeoutMs: whole(env.ASSISTANT_PICTURE_TOTAL_MS, ASSISTANT_DEFAULTS.pictureTotalTimeoutMs, 10_000, 1_800_000),
     productionApproved: pick(env.ASSISTANT_PRODUCTION_APPROVED) === "true",
     minorsApproved: pick(env.ASSISTANT_MINORS_APPROVED) === "true",
     safeguardingEmail: pick(env.ASSISTANT_SAFEGUARDING_EMAIL) ?? null,

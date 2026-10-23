@@ -136,6 +136,8 @@ Set these in Render's environment, as secrets where the table says so, and nowhe
 | `ASSISTANT_PER_MINUTE` | Messages one account may send a minute. | optional | optional | no | n/a | 6 |
 | `ASSISTANT_DAILY_TOKEN_BUDGET` | Hosted providers: completion tokens per account per day (the cost cap). | optional | optional | no | n/a | 40000 |
 | `ASSISTANT_CONCURRENCY` | Answers generated at once on this server. | optional | optional | no | n/a | 1 |
+| `ASSISTANT_PICTURE_FIRST_TOKEN_MS` | How long a message with a photo may wait for the first word (a local vision model may be loading). | optional | optional | no | n/a | 240000 |
+| `ASSISTANT_PICTURE_TOTAL_MS` | How long a message with a photo may take in all. | optional | optional | no | n/a | 360000 |
 | `ASSISTANT_SAFEGUARDING_EMAIL` | The safeguarding lead's mailbox for flags (an opaque reference and a category, never the pupil's name). Needed before Study Buddy opens. | optional | optional | no | the safeguarding lead | unset |
 | `ASSISTANT_NIM_MODEL` | Evaluation only: the model when the provider is nim. | optional | unset | no | n/a | meta/llama-3.2-11b-vision-instruct |
 | `ASSISTANT_NIM_VISION_MODEL` | Evaluation only: the vision model when the provider is nim. | optional | unset | no | n/a | unset |
