@@ -1,7 +1,7 @@
 "use client";
 
-import { ArrowUp, AudioLines, Camera, CircleAlert, FolderOpen, Image as ImageIcon, X } from "lucide-react";
-import { useCallback, useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
+import { ArrowUp, AudioLines, Camera, CircleAlert, ExternalLink, FileText, FolderOpen, Image as ImageIcon, X } from "lucide-react";
+import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, type ChangeEvent, type FormEvent, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 import { useMotionCapabilities } from "@/lib/motion/capabilities";
 import { useInView, VoiceOrb, type VoiceState } from "./VoiceOrb";
 import styles from "./AiInput.module.css";
@@ -74,6 +74,94 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+const isImage = (file: File): boolean => file.type.startsWith("image/") || /\.(jpe?g|png|gif|webp)$/i.test(file.name);
+
+const previewUrlCache = new WeakMap<File, string>();
+const subscribeNever = () => () => {};
+
+/**
+ * A blob: URL for each attached file, so the student can look at what they are about to send. Made on first use (the same file
+ * always gets the same URL, so a re-render never changes it) and revoked as soon as the file leaves the list.
+ */
+function usePreviewUrls(files: readonly File[]): Map<File, string> {
+  const urls = new Map<File, string>();
+  // False while the server renders and while the browser hydrates, so the first markup is the same on both sides.
+  const inBrowser = useSyncExternalStore(subscribeNever, () => true, () => false);
+  for (const file of inBrowser ? files : []) {
+    let url = previewUrlCache.get(file);
+    if (!url) { url = URL.createObjectURL(file); previewUrlCache.set(file, url); }
+    urls.set(file, url);
+  }
+  const known = useRef<Set<File>>(new Set());
+  useEffect(() => {
+    const now = new Set(files);
+    for (const file of known.current) {
+      if (now.has(file)) continue;
+      const url = previewUrlCache.get(file);
+      if (url) URL.revokeObjectURL(url);
+      previewUrlCache.delete(file);
+    }
+    known.current = now;
+  }, [files]);
+  return urls;
+}
+
+/**
+ * The larger look at one attachment: the picture itself, or, for a document, what it is and a way to open it. Escape, the close
+ * button and a click outside all close it; focus is held inside while it is open.
+ */
+function FilePreview({ file, url, onClose }: { file: File; url: string | null; onClose: () => void }) {
+  const panel = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const close = useRef(onClose);
+  useEffect(() => { close.current = onClose; });
+  useEffect(() => {
+    const root = panel.current;
+    root?.querySelector<HTMLElement>("button")?.focus();
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); close.current(); return; }
+      if (event.key !== "Tab" || !root) return;
+      const items = Array.from(root.querySelectorAll<HTMLElement>("a[href], button:not([disabled])"));
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+  return (
+    <div className={styles.backdrop} onClick={onClose}>
+      <div ref={panel} className={styles.previewPanel} role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(event) => event.stopPropagation()}>
+        <div className={styles.previewHead}>
+          <div className={styles.previewTitle}>
+            <strong id={titleId}>{file.name}</strong>
+            <span>{formatBytes(file.size)}</span>
+          </div>
+          <button type="button" className={styles.remove} aria-label="Close preview" onClick={onClose}>
+            <X size={18} aria-hidden="true" />
+          </button>
+        </div>
+        {isImage(file) && url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img className={styles.previewImage} src={url} alt={`Preview of ${file.name}, the file you are about to send`} />
+        ) : (
+          <div className={styles.previewDocument}>
+            <FileText size={40} aria-hidden="true" />
+            <p>{file.type === "application/pdf" || /\.pdf$/i.test(file.name) ? "A PDF document" : file.type || "A file"}</p>
+            {url ? (
+              <a className={styles.previewOpen} href={url} target="_blank" rel="noopener noreferrer">
+                <ExternalLink size={16} aria-hidden="true" /> Open it to check it
+              </a>
+            ) : null}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function matchesAccept(file: File, accept: string): boolean {
   const rules = accept.split(",").map((rule) => rule.trim().toLowerCase()).filter(Boolean);
   if (rules.length === 0) return true;
@@ -130,6 +218,10 @@ export function AiInput({
   const text = value ?? innerText;
   const [innerFiles, setInnerFiles] = useState<File[]>([]);
   const attached = files ?? innerFiles;
+  const previewUrls = usePreviewUrls(attached);
+  const [previewOpen, setPreviewing] = useState<File | null>(null);
+  // A file removed while its preview is open (or sent) closes the preview with it.
+  const previewing = previewOpen && attached.includes(previewOpen) ? previewOpen : null;
   const [localError, setLocalError] = useState("");
   const shownError = error || localError;
   const [voiceOpen, setVoiceOpen] = useState(defaultVoiceOpen);
@@ -293,14 +385,27 @@ export function AiInput({
         <ul className={styles.files} aria-label="Attached files">
           {attached.map((file, index) => (
             <li key={`${file.name}-${file.size}-${index}`} className={styles.file}>
-              <span className={styles.fileName}>{file.name}</span>
-              <span className={styles.fileSize}>{formatBytes(file.size)}</span>
+              <button type="button" className={styles.preview} aria-label={`Preview ${file.name}`} aria-haspopup="dialog" onClick={() => setPreviewing(file)}>
+                {isImage(file) && previewUrls.get(file) ? (
+                  // A blob: URL of the student's own file, shown only to them: next/image cannot optimise it.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img className={styles.thumb} src={previewUrls.get(file)} alt="" />
+                ) : (
+                  <span className={styles.thumb} data-kind="document"><FileText size={20} aria-hidden="true" /></span>
+                )}
+                <span className={styles.fileName}>{file.name}</span>
+                <span className={styles.fileSize}>{formatBytes(file.size)}</span>
+              </button>
               <button type="button" className={styles.remove} aria-label={`Remove ${file.name}`} disabled={disabled} onClick={() => remove(index)}>
                 <X size={16} aria-hidden="true" />
               </button>
             </li>
           ))}
         </ul>
+      )}
+
+      {previewing && (
+        <FilePreview file={previewing} url={previewUrls.get(previewing) ?? null} onClose={() => { setPreviewing(null); textRef.current?.focus(); }} />
       )}
 
       {nearLimit && <p id={counterId} className={styles.counter}>{text.length} of {maxLength} characters</p>}
