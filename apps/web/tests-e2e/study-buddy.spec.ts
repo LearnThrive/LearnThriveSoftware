@@ -125,10 +125,16 @@ test('a photo is attached, uploaded and seen by the model; a bad file says why',
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /add file|file/i }).first().click();
   await (await chooser).setFiles({ name: 'working.jpg', mimeType: 'image/jpeg', buffer: JPEG });
-  await expect(page.getByText('working.jpg')).toBeVisible();
+  await expect(page.getByText('working.jpg', { exact: true })).toBeVisible();
   await page.getByLabel('Your message').fill('Is this right?');
   await page.getByRole('button', { name: /send/i }).click();
   await expect(page.locator('article[aria-label="Study Buddy"]').first()).toContainText('I can see your photo.');
+  // What was sent stays in the message, above the words, and opens larger.
+  const sent = page.locator('article[aria-label="You"]').first();
+  await expect(sent.getByRole('list', { name: 'What you sent' }).locator('img')).toBeVisible();
+  await sent.getByRole('button', { name: 'Look at working.jpg' }).click();
+  await expect(page.getByRole('dialog', { name: 'working.jpg' }).getByRole('img')).toBeVisible();
+  await page.keyboard.press('Escape');
 
   const bad = await page.request.post('/api/assistant/files', { multipart: { file: { name: 'run.exe', mimeType: 'application/octet-stream', buffer: Buffer.from('MZ not an image') } } });
   expect(bad.status()).toBe(422);

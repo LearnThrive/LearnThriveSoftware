@@ -112,7 +112,7 @@ function usePreviewUrls(files: readonly File[]): Map<File, string> {
  * The larger look at one attachment: the picture itself, or, for a document, what it is and a way to open it. Escape, the close
  * button and a click outside all close it; focus is held inside while it is open.
  */
-function FilePreview({ file, url, onClose }: { file: File; url: string | null; onClose: () => void }) {
+export function FilePreview({ name, size, image, pdf, url, onClose }: { name: string; size?: number; image: boolean; pdf: boolean; url: string | null; onClose: () => void }) {
   const panel = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const close = useRef(onClose);
@@ -138,20 +138,20 @@ function FilePreview({ file, url, onClose }: { file: File; url: string | null; o
       <div ref={panel} className={styles.previewPanel} role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(event) => event.stopPropagation()}>
         <div className={styles.previewHead}>
           <div className={styles.previewTitle}>
-            <strong id={titleId}>{file.name}</strong>
-            <span>{formatBytes(file.size)}</span>
+            <strong id={titleId}>{name}</strong>
+            {size !== undefined && <span>{formatBytes(size)}</span>}
           </div>
           <button type="button" className={styles.remove} aria-label="Close preview" onClick={onClose}>
             <X size={18} aria-hidden="true" />
           </button>
         </div>
-        {isImage(file) && url ? (
+        {image && url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img className={styles.previewImage} src={url} alt={`Preview of ${file.name}, the file you are about to send`} />
+          <img className={styles.previewImage} src={url} alt={`Preview of ${name}`} />
         ) : (
           <div className={styles.previewDocument}>
             <FileText size={40} aria-hidden="true" />
-            <p>{file.type === "application/pdf" || /\.pdf$/i.test(file.name) ? "A PDF document" : file.type || "A file"}</p>
+            <p>{pdf ? "A PDF document" : "A file"}</p>
             {url ? (
               <a className={styles.previewOpen} href={url} target="_blank" rel="noopener noreferrer">
                 <ExternalLink size={16} aria-hidden="true" /> Open it to check it
@@ -415,7 +415,7 @@ export function AiInput({
       </form>
 
       {previewing && (
-        <FilePreview file={previewing} url={previewUrls.get(previewing) ?? null} onClose={() => { setPreviewing(null); textRef.current?.focus(); }} />
+        <FilePreview name={previewing.name} size={previewing.size} image={isImage(previewing)} pdf={previewing.type === "application/pdf" || /\.pdf$/i.test(previewing.name)} url={previewUrls.get(previewing) ?? null} onClose={() => { setPreviewing(null); textRef.current?.focus(); }} />
       )}
 
       {nearLimit && <p id={counterId} className={styles.counter}>{text.length} of {maxLength} characters</p>}
