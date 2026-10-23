@@ -42,7 +42,11 @@
     ".next-3102/types/**/*.ts",
     ".next-3102/dev/types/**/*.ts",
     ".next-3103/types/**/*.ts",
-    ".next-3103/dev/types/**/*.ts"
+    ".next-3103/dev/types/**/*.ts",
+    ".next-3110/types/**/*.ts",
+    ".next-3110/dev/types/**/*.ts",
+    ".next-3111/types/**/*.ts",
+    ".next-3111/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"
