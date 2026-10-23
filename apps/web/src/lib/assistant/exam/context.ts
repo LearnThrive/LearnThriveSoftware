@@ -10,6 +10,12 @@ export type Board = "AQA" | "Edexcel" | "OCR" | "Eduqas" | "WJEC" | "CCEA";
 export type Qualification = "GCSE" | "A-level" | "AS-level" | "KS3" | "IGCSE";
 export type Activity = "mark_essay" | "exam_answer" | "quote_check" | "solve" | "revise" | "explain";
 
+/**
+ * How the student wants help with a question: "answer" (give it to me in full, a model answer, a worked solution), "guided" (work through it with me,
+ * a hint, let me try) or "unspecified" (they did not say, so answer directly and offer to work through it; never assume they want to be guided).
+ */
+export type HelpMode = "answer" | "guided" | "unspecified";
+
 export interface StudyContext {
   subject: SubjectId | null;
   subjectLabel: string | null;
@@ -19,6 +25,7 @@ export interface StudyContext {
   marks: number | null;
   commandWord: string | null;
   activity: Activity;
+  mode: HelpMode;
   /** The set text, when it is one the tutor holds reviewed material for. */
   work: string | null;
   confidence: "high" | "medium" | "low";
@@ -72,6 +79,20 @@ function activityOf(text: string, subject: SubjectId | null): Activity {
   if (/\b(?:exam|past paper|model answer|mark scheme|marks?\b|command word|how many points|full marks)\b/i.test(text)) return "exam_answer";
   if (subject === "maths" || subject === "physics" || subject === "chemistry") if (/\b(?:solve|calculate|find|work out|factoris\w*|simplif\w*|expand|prove|show that)\b/i.test(text) || /\d\s*[+\-×x*/÷^=]\s*\d/.test(text)) return "solve";
   return "explain";
+}
+
+// Refusing the answer, or asking for a hint or a turn at it, is the clearest sign of all.
+const GUIDED = /\b(?:work(?:ing)? (?:it |this |that )?through|walk (?:me )?through|talk (?:me )?through|guide me|(?:give me|just) a hint|hints?\b|(?:do ?n['’]?t|do not|without)\s+(?:give|tell|giving|telling|show|showing)\b[^.\n]{0,25}\b(?:answer|solution)|let me (?:try|have a go|work)|i (?:want|would like|'d like) to (?:try|work (?:it|this|that) out|figure)|(?:help|teach) me (?:to )?(?:work|figure|understand|learn|do)\b|one step at a time|quiz me|test me)\b/i;
+const ANSWER = /\b(?:model answers?|sample answers?|example answers?|exemplar|worked (?:solution|answer|example)s?|(?:full|complete|whole) (?:answer|solution|working|response)|(?:top|full)[- ]marks? (?:answer|response)|(?:level|grade) \d+ (?:answer|response)|(?:just |please )?(?:give|tell|show|send|write) me (?:the |an? )?(?:model |full |complete |final |correct |worked )?(?:answer|solution|working|response|paragraph)s?|what(?:'s| is| are) the (?:correct |final )?answers?|(?:answer|solve|do|write) (?:this|that|it)(?: for me| please|\b)|i just (?:want|need) the answer|how would (?:you|a student) answer)\b/i;
+
+export function helpModeOf(text: string, history: readonly HistoryItem[] = []): HelpMode {
+  // "No hints" and "without a hint" ask for the opposite of a hint.
+  const asked = text.replace(/\b(?:no|without|skip(?: the)?|not|do(?:n['’]?t| not) (?:need|want)(?: any)?)\s+(?:a\s+)?hints?\b/gi, " ");
+  if (GUIDED.test(asked)) return "guided";
+  if (ANSWER.test(text)) return "answer";
+  // A student already being guided who replies with an attempt is still being guided; being given an answer is a one-off.
+  const earlier = history.filter((m) => m.role === "user").slice(-2);
+  return earlier.length && earlier.some((m) => GUIDED.test(m.content)) && !earlier.some((m) => ANSWER.test(m.content)) ? "guided" : "unspecified";
 }
 
 function detectSubject(text: string): { id: SubjectId; score: number; margin: number } | null {
@@ -134,6 +155,7 @@ export function detectStudyContext(text: string, options: { history?: readonly H
     marks: marksIn(text),
     commandWord,
     activity,
+    mode: helpModeOf(text, recent),
     work,
     confidence,
     switched,
