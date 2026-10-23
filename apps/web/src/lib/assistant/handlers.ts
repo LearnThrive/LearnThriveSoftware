@@ -247,7 +247,10 @@ export async function handleSession(request: Request, deps: AssistantDeps, sessi
   const session = await g.rt.store.chat.getSession(g.owner, sessionId);
   if (!session) return refuse("not_found");
   const messages = await g.rt.store.chat.listMessages(g.owner, sessionId);
-  return jsonResponse(200, { id: session.id, title: session.title, messages: messages.map((m) => ({ id: m.id, role: m.role, content: m.content, createdAt: m.createdAt.toISOString() })) }, { "Cache-Control": "no-store" });
+  const files = await g.rt.store.chat.listFiles(g.owner, sessionId);
+  // What each message carried, so a reopened chat still shows the photos and documents (fetched from /api/assistant/files/:id).
+  const carried = (messageId: string) => files.filter((f) => f.messageId === messageId).map((f) => ({ id: f.id, contentType: f.contentType, bytes: f.bytes }));
+  return jsonResponse(200, { id: session.id, title: session.title, messages: messages.map((m) => ({ id: m.id, role: m.role, content: m.content, createdAt: m.createdAt.toISOString(), ...(m.role === "user" && carried(m.id).length > 0 ? { files: carried(m.id) } : {}) })) }, { "Cache-Control": "no-store" });
 }
 
 export async function handleDeleteAll(request: Request, deps: AssistantDeps): Promise<Response> {

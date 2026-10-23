@@ -24,7 +24,7 @@ import {
   WifiOff,
   X,
 } from "lucide-react";
-import { AiInput } from "@/components/ui/AiInput";
+import { AiInput, FilePreview } from "@/components/ui/AiInput";
 import { PencilLoader } from "@/components/ui/PencilLoader";
 import {
   SidebarSection,
@@ -38,11 +38,25 @@ import { VoicePanel } from "./VoicePanel";
 import { PaperTutor } from "./PaperTutor";
 import styles from "./study-buddy.module.css";
 
+/** A photo or document that went with a message. It is fetched from /api/assistant/files/:id; a reopened chat does not know its name. */
+interface MsgFile {
+  id: string;
+  name?: string;
+  contentType: string;
+  bytes?: number;
+}
 interface Msg {
   id: string;
   role: "user" | "assistant";
   content: string;
+  files?: MsgFile[];
 }
+
+const fileUrl = (file: MsgFile) => `/api/assistant/files/${file.id}`;
+const isPicture = (file: MsgFile) => file.contentType.startsWith("image/");
+const fileLabel = (file: MsgFile) => file.name ?? (isPicture(file) ? "Photo" : "PDF document");
+/** The words the server stores for a message with only files in it: not something the student wrote, so it is not shown. */
+const FILE_ONLY_TEXT = /^\(attached (a file|\d+ files)\)$/;
 interface SessionItem {
   id: string;
   title: string;
@@ -111,6 +125,8 @@ export function StudyBuddy() {
   const [announce, setAnnounce] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
   const [reading, setReading] = useState("");
+  // The photo or document being looked at, from a message already sent.
+  const [lookingAt, setLookingAt] = useState<MsgFile | null>(null);
   // Files picked and still being added (uploaded and read), shown in the box as they go so nothing sent is ever unseen.
   const [adding, setAdding] = useState<string[]>([]);
   const [query, setQuery] = useState("");
@@ -418,14 +434,15 @@ export function StudyBuddy() {
     setError("");
     setBusy(true);
     setWaiting("");
+    const carried: MsgFile[] = filesRef.current.flatMap((f) => {
+      const id = fileIdsRef.current.get(f);
+      return id ? [{ id, name: f.name, contentType: f.type || "application/octet-stream", bytes: f.size }] : [];
+    });
     const mine: Msg = {
       id: nextId(),
       role: "user",
-      content:
-        text ||
-        (attached.length === 1
-          ? "(attached a file)"
-          : `(attached ${attached.length} files)`),
+      content: text,
+      files: carried.length > 0 ? carried : undefined,
     };
     const reply: Msg = { id: nextId(), role: "assistant", content: "" };
     setMessages((m) => [...m, mine, reply]);
@@ -864,7 +881,33 @@ export function StudyBuddy() {
                 return m.role === "user" ? (
                   <article key={m.id} className={styles.mine} aria-label="You">
                     <h2 className="sr-only">You</h2>
-                    <p className={styles.plain}>{m.content}</p>
+                    {m.files && m.files.length > 0 ? (
+                      <ul className={styles.sent} aria-label="What you sent">
+                        {m.files.map((file) => (
+                          <li key={file.id}>
+                            <button
+                              type="button"
+                              className={styles.sentTile}
+                              aria-label={`Look at ${fileLabel(file)}`}
+                              aria-haspopup="dialog"
+                              onClick={() => setLookingAt(file)}
+                            >
+                              {isPicture(file) ? (
+                                // The student's own upload, from this site, behind their sign-in: next/image cannot optimise it.
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={fileUrl(file)} alt="" loading="lazy" />
+                              ) : (
+                                <span className={styles.sentDocument}>
+                                  <FileText size={26} aria-hidden="true" />
+                                  <span>{fileLabel(file)}</span>
+                                </span>
+                              )}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {m.content && !(m.files?.length && FILE_ONLY_TEXT.test(m.content)) ? <p className={styles.plain}>{m.content}</p> : null}
                   </article>
                 ) : (
                   <article
@@ -1068,6 +1111,16 @@ export function StudyBuddy() {
                   abort.current?.abort();
                   voice.listen();
                 }}
+              />
+            ) : null}
+            {lookingAt ? (
+              <FilePreview
+                name={fileLabel(lookingAt)}
+                size={lookingAt.bytes}
+                image={isPicture(lookingAt)}
+                pdf={lookingAt.contentType === "application/pdf"}
+                url={fileUrl(lookingAt)}
+                onClose={() => setLookingAt(null)}
               />
             ) : null}
             <AiInput

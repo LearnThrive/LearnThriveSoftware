@@ -298,6 +298,51 @@
   color: var(--fg-strong);
 }
 
+/* What a message carried: pictures and documents, above the words, as in other chat apps. */
+.sent {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  list-style: none;
+}
+
+.sentTile {
+  display: block;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.75rem;
+  background: var(--surface-1);
+  color: var(--fg-strong);
+  cursor: pointer;
+}
+
+.sentTile img {
+  display: block;
+  max-inline-size: min(100%, 14rem);
+  max-block-size: 12rem;
+  min-inline-size: 5rem;
+  min-block-size: 5rem;
+  object-fit: cover;
+}
+
+.sentTile:focus-visible {
+  outline: 2px solid var(--focus-ring, currentColor);
+  outline-offset: 2px;
+}
+
+.sentDocument {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  inline-size: 7rem;
+  padding: var(--space-3) var(--space-2);
+  font-size: 0.75rem;
+}
+
 .theirs {
   display: grid;
   gap: var(--space-2);

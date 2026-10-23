@@ -201,6 +201,15 @@ test("uploads: a photo is cleaned and stored privately, files attach to the chat
   const used = await w.chat(p, { text: "Check this", sessionId: body.sessionId, fileIds: [body.fileId] });
   assert.equal(used.events.at(-1).type, "done");
   assert.equal(w.assistant.provider.requests.at(-1).at(-1).images.length, 1);
+
+  // A reopened chat knows what each message carried, so the page can show it again; only the family's own chat says so.
+  const read = (jar) => h.handleSession(new Request(`http://localhost:3100/api/assistant/sessions/${body.sessionId}`), w.deps(jar), body.sessionId);
+  const reopened = await (await read(p.jar)).json();
+  const mine = reopened.messages.find((m) => m.role === "user");
+  assert.deepEqual(mine.files.map((f) => f.id), [body.fileId]);
+  assert.equal(mine.files[0].contentType, "image/jpeg");
+  assert.equal(reopened.messages.find((m) => m.role === "assistant").files, undefined);
+  assert.equal((await read(other.jar)).status, 404);
 });
 
 test("uploads are rate limited per family per hour", async (t) => {
