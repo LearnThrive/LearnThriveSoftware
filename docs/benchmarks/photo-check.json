@@ -1,0 +1,46 @@
+{
+  "checkedAt": "2026-10-23T12:03:49.380Z",
+  "model": "bonsai-2:9b",
+  "baseUrl": "http://127.0.0.1:11434",
+  "context": 4096,
+  "photo": {
+    "bytes": 72834,
+    "kind": "image"
+  },
+  "budgets": {
+    "firstAnswerMs": 90000,
+    "turnMs": 240000
+  },
+  "cold": {
+    "label": "cold photo",
+    "wallMs": 10281,
+    "firstStatus": {
+      "state": "preparing",
+      "ms": 114
+    },
+    "firstDelta": {
+      "ms": 8728,
+      "chars": 44
+    },
+    "done": {
+      "firstTokenMs": 1615
+    },
+    "error": null,
+    "events": 11
+  },
+  "warm": {
+    "label": "warm photo",
+    "wallMs": 2914,
+    "firstStatus": null,
+    "firstDelta": {
+      "ms": 269,
+      "chars": 37
+    },
+    "done": {
+      "firstTokenMs": 90
+    },
+    "error": null,
+    "events": 13
+  },
+  "passed": true
+}

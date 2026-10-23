@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { deriveEntitlement, type AdminGrantRecord, type SubscriptionRecord } from "./billing";
-import { CHAT_TEXT_DAYS, CHAT_UPLOAD_DAYS, DAY_MS, type ChatExport, type ChatFileRecord, type ChatMessageRecord, type ChatSessionRecord } from "./chat";
+import { CHAT_TEXT_DAYS, CHAT_UPLOAD_DAYS, DAY_MS, type ChatExport, type ChatFileChunkRecord, type ChatFileRecord, type ChatMessageRecord, type ChatSessionRecord } from "./chat";
 import type { AcceptFailure, AccessMode, InvitationPeek, IdentityAuditEntry, IdentityRepository, InvitationRecord, LearnerContext, LinkStatus, StudentRecord } from "./identity";
 import { PAPER_JOB_DAYS, PAPER_JOB_MAX_ATTEMPTS, type AssessmentVersion, type PaperJobRecord, type PaperJobRepository, type PaperScope } from "./papers";
 import type { AccessRepository, AccountRepository, BillingRepository, ChatRepository, DownloadRepository, LibraryStore, ResourceRepository } from "./ports";
@@ -86,6 +86,7 @@ export class InMemoryLibraryStore implements LibraryStore {
   private chatSessions = new Map<string, ChatSessionRecord>();
   private chatMessages: ChatMessageRecord[] = [];
   private chatFiles: ChatFileRecord[] = [];
+  private chatChunks: ChatFileChunkRecord[] = [];
   private usage = new Map<string, number>();
   private consentRows: Array<{ profileId: string; kind: string; version: string; textSha256: string; at: Date }> = [];
 
@@ -565,7 +566,7 @@ export class InMemoryLibraryStore implements LibraryStore {
     addFile: async (owner, sessionId, file, now) => {
       const s = this.chatSessions.get(sessionId);
       if (!s || !this.owns(owner, s) || s.deletionRequestedAt) throw new Error("no such chat");
-      const record: ChatFileRecord = { id: randomUUID(), sessionId, messageId: file.messageId ?? null, storagePath: file.storagePath, bytes: file.bytes, contentType: file.contentType, createdAt: now, deleteAfter: new Date(now.getTime() + CHAT_UPLOAD_DAYS * DAY_MS) };
+      const record: ChatFileRecord = { id: randomUUID(), sessionId, messageId: file.messageId ?? null, storagePath: file.storagePath, bytes: file.bytes, contentType: file.contentType, extractedText: null, pages: null, createdAt: now, deleteAfter: new Date(now.getTime() + CHAT_UPLOAD_DAYS * DAY_MS) };
       this.chatFiles.push(record);
       return { ...record };
     },
@@ -595,6 +596,45 @@ export class InMemoryLibraryStore implements LibraryStore {
       const s = this.chatSessions.get(sessionId);
       if (!s || !this.owns(owner, s) || s.deletionRequestedAt) return [];
       return this.chatFiles.filter((f) => f.sessionId === sessionId && f.messageId === null && fileIds.includes(f.id)).map((f) => ({ ...f }));
+    },
+    setFileReading: async (owner, fileId, reading) => {
+      const f = this.chatFiles.find((x) => x.id === fileId);
+      const s = f ? this.chatSessions.get(f.sessionId) : undefined;
+      if (!f || !s || !this.owns(owner, s) || s.deletionRequestedAt) return false;
+      f.extractedText = reading.extractedText.slice(0, 32_000);
+      f.pages = reading.pages;
+      return true;
+    },
+    replaceFileChunks: async (owner, sessionId, fileId, chunks, now) => {
+      const s = this.chatSessions.get(sessionId);
+      const f = this.chatFiles.find((x) => x.id === fileId);
+      if (!s || !this.owns(owner, s) || s.deletionRequestedAt || !f || f.sessionId !== sessionId) return 0;
+      this.chatChunks = this.chatChunks.filter((c) => c.fileId !== fileId);
+      const stored = chunks.map((c) => ({
+        id: randomUUID(), fileId, sessionId, page: c.page, label: c.label, ordinal: c.ordinal, text: c.text.slice(0, 4000),
+        model: c.model, digest: c.digest, dimension: c.embedding.length, chunkConfigVersion: c.chunkConfigVersion,
+        embedding: [...c.embedding], createdAt: now,
+      }));
+      this.chatChunks.push(...stored);
+      return stored.length;
+    },
+    listFileChunks: async (owner, sessionId, options = {}) => {
+      const s = this.chatSessions.get(sessionId);
+      if (!s || !this.owns(owner, s) || s.deletionRequestedAt) return [];
+      const order = new Map(this.chatFiles.filter((f) => f.sessionId === sessionId).map((f) => [f.id, f.createdAt.getTime()]));
+      return this.chatChunks
+        .filter((c) => c.sessionId === sessionId && (!options.fileId || c.fileId === options.fileId) && order.has(c.fileId))
+        .sort((a, b) => (order.get(a.fileId)! - order.get(b.fileId)!) || a.ordinal - b.ordinal)
+        .slice(0, options.limit ?? 200)
+        .map((c) => ({ ...c, embedding: [...c.embedding] }));
+    },
+    deleteFileChunks: async (owner, sessionId, fileId) => {
+      const s = this.chatSessions.get(sessionId);
+      const f = this.chatFiles.find((x) => x.id === fileId);
+      if (!s || !this.owns(owner, s) || s.deletionRequestedAt || !f || f.sessionId !== sessionId) return 0;
+      const before = this.chatChunks.length;
+      this.chatChunks = this.chatChunks.filter((c) => c.fileId !== fileId);
+      return before - this.chatChunks.length;
     },
     requestDeletion: async (owner, sessionId, now) => {
       const s = this.chatSessions.get(sessionId);
@@ -646,6 +686,8 @@ export class InMemoryLibraryStore implements LibraryStore {
       const filesBefore = this.chatFiles.length;
       const messagesBefore = this.chatMessages.length;
       this.chatFiles = this.chatFiles.filter((f) => !(f.deleteAfter <= now || gone.has(f.sessionId)));
+      const liveFiles = new Set(this.chatFiles.map((f) => f.id));
+      this.chatChunks = this.chatChunks.filter((c) => liveFiles.has(c.fileId) && !gone.has(c.sessionId));
       this.chatMessages = this.chatMessages.filter((m) => !(m.deleteAfter <= now || gone.has(m.sessionId)));
       for (const id of gone) this.chatSessions.delete(id);
       for (const [jobId, job] of this.paperJobs) if (gone.has(job.sessionId)) this.paperJobs.delete(jobId);

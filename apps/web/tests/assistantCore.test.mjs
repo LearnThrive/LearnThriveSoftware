@@ -176,7 +176,7 @@ test("ollama: the vision model for photos, refused for a model that cannot see, 
   const calls = [];
   const fetchImpl = ollamaFetch({ calls, show: { capabilities: ["completion", "vision", "tools"], model_info: { "qwen3.context_length": 32768 } }, chat: () => ndjson([{ message: { content: "ok" } }, { done: true }]) });
   const provider = new OllamaProvider({ baseUrl: "http://x", model: "m1", visionModel: "v1", fetch: fetchImpl });
-  assert.deepEqual(await provider.capabilities("v1"), { vision: true, jsonMode: true, toolUse: true, maxContext: 32768 });
+  assert.deepEqual(await provider.capabilities("v1"), { vision: true, jsonMode: true, toolUse: true, maxContext: 32768, thinking: null, thinkingValues: [] }, "the server did not report thinking for this model");
   const photo = [{ role: "user", content: "what is this", images: ["AAAA"] }];
   const out = await collect(provider.stream(photo, OPTS));
   assert.equal(out.done.model, "v1");

@@ -5,6 +5,9 @@
  *
  * - Never blocks the website: without Docker, or if a service fails, it says so and the site starts anyway (Study Buddy then
  *   says it is unavailable, as before).
+ * - The model server is the NATIVE Ollama runtime when it is installed (`scripts/ollama-local.mjs`: the GPU tutor on 11434, a
+ *   CPU-only helper on 11435). Docker's Ollama is only the fallback: its bind mount of D:\OllamaModels through WSL made a cold
+ *   load take 215-251 s (docs/OLLAMA_THREE_MODEL.md), which is the timeout the owner actually saw.
  * - A service already running on this machine outside Docker (the Ollama app, `npm run voice:dev`) is used, not duplicated.
  * - Fetches the language model the first time, if it is missing.
  * - Also starts the LOCAL SUPABASE stack (supabase/config.toml), unless LEARNTHRIVE_SUPABASE=0. Whether the site USES it is separate: the
@@ -30,20 +33,28 @@ const answers = async (url) => {
   }
 };
 
-if (docker(["info", "--format", "{{.ServerVersion}}"]).status !== 0) {
-  say("Docker is not running, so Study Buddy's model and voice are not started. Start Docker Desktop, then run `npm run services:up`.");
-  process.exit(0);
+// The native runtime first: one process for the GPU tutor, one CPU-only process for the helpers. It reuses the model directory
+// Ollama already uses, so nothing is downloaded twice, and it refuses to start a second listener on a port that answers.
+const nativeScript = join(dirname(fileURLToPath(import.meta.url)), "ollama-local.mjs");
+const native = spawnSync(process.execPath, [nativeScript, "start"], { encoding: "utf8", timeout: 120_000 });
+const nativeOk = native.status === 0 && (await answers("http://127.0.0.1:11434/api/version"));
+if (native.status === 0) for (const line of (native.stdout ?? "").trim().split(/\r?\n/).filter(Boolean)) say(line.replace(/^\[ollama-local\] /, ""));
+else say(`The native Ollama runtime did not start (${(native.stderr ?? "").trim().split(/\r?\n/).at(-1) ?? "see above"}).`);
+
+const dockerUp = docker(["info", "--format", "{{.ServerVersion}}"]).status === 0;
+if (!nativeOk && !dockerUp) {
+  say("No native Ollama runtime answered and Docker is not running, so Study Buddy's model is not started. Install the runtime (docs/OLLAMA_THREE_MODEL.md) or start Docker Desktop, then run `npm run services:up`.");
 }
 
-const running = new Set(docker([...compose, "ps", "--status", "running", "--services"]).stdout?.split(/\s+/).filter(Boolean) ?? []);
+const running = dockerUp ? new Set(docker([...compose, "ps", "--status", "running", "--services"]).stdout?.split(/\s+/).filter(Boolean) ?? []) : new Set();
 const services = [
   { name: "ollama", url: "http://127.0.0.1:11434/api/version", label: "Ollama" },
   { name: "voice", url: "http://127.0.0.1:8765/health", label: "the speech sidecar" },
 ];
 const wanted = [];
 for (const s of services) {
-  if (!running.has(s.name) && (await answers(s.url))) say(`Using ${s.label} already running on this machine (outside Docker).`);
-  else wanted.push(s.name);
+  if (await answers(s.url)) say(`Using ${s.label} already running on this machine (${s.name === "ollama" ? "native runtime or another app" : "outside Docker"}).`);
+  else if (dockerUp) wanted.push(s.name);
 }
 
 if (wanted.length) {
@@ -53,22 +64,24 @@ if (wanted.length) {
   if (up.status !== 0) say("A service did not start (see above). The website starts anyway; `npm run services:logs` shows why.");
 }
 
-// The language model, fetched once if it is missing (about 6.6 GB for the default).
-const model = env.ASSISTANT_MODEL || "qwen3.5:9b";
+// The models: three roles. Each is fetched once if missing. The tutor is the only GPU model; the helpers live on 11435.
+const models = [env.ASSISTANT_MODEL || "bonsai-2:9b", env.ASSISTANT_EMBED_MODEL || "embeddinggemma-2:270m-q8_0-text", env.ASSISTANT_DECISION_MODEL || "laya:421m-typed-decisions-bf16"];
 const tags = await fetch("http://127.0.0.1:11434/api/tags", { signal: AbortSignal.timeout(5000) }).then((r) => r.json()).catch(() => null);
-if (tags && !tags.models?.some((m) => m.name === model || m.name === `${model}:latest`)) {
-  say(`Downloading the model ${model} (once)…`);
-  const pull = wanted.includes("ollama") ? docker([...compose, "exec", "ollama", "ollama", "pull", model], { stdio: "inherit" }) : spawnSync("ollama", ["pull", model], { stdio: "inherit" });
-  if (pull.status !== 0) say(`Could not download ${model}. Study Buddy needs it: run \`ollama pull ${model}\`.`);
+const have = new Set((tags?.models ?? []).map((m) => m.name));
+for (const model of [...new Set(models)]) {
+  if (!tags || have.has(model) || have.has(`${model}:latest`)) continue;
+  say(`Downloading ${model} (once)…`);
+  const pull = wanted.includes("ollama") ? docker([...compose, "exec", "ollama", "ollama", "pull", model], { stdio: "inherit" }) : spawnSync(process.execPath, [nativeScript, "pull", model], { stdio: "inherit" });
+  if (pull.status !== 0) say(`Could not download ${model}. Study Buddy needs it: run \`node scripts/ollama-local.mjs pull ${model}\`.`);
 }
 for (const s of services) say(`${s.label}: ${(await answers(s.url)) ? `ready on ${new URL(s.url).origin}` : "NOT answering"}`);
 
-// Load the model into the GPU now, in the background, so the first question (especially one with a photo) does not have to wait for it: loading
-// takes minutes when the model files are on a Windows drive mounted into Docker. A detached process, so neither the site nor this script waits.
-if ((await answers("http://127.0.0.1:11434/api/version")) && tags?.models?.some((m) => m.name === model || m.name === `${model}:latest`)) {
-  const warm = `fetch("http://127.0.0.1:11434/api/generate",{method:"POST",body:JSON.stringify({model:${JSON.stringify(model)},prompt:"",stream:false,keep_alive:"30m"}),signal:AbortSignal.timeout(900000)}).catch(()=>{})`;
-  spawn(process.execPath, ["-e", warm], { detached: true, stdio: "ignore" }).unref();
-  say(`Loading ${model} in the background (the first answer is slow until it has loaded).`);
+// Prepare the models in the background, with EXACTLY the options a turn uses. The previous warm-up sent keep_alive but not
+// num_ctx, so the model was "loaded" at the default context and the first real request reloaded it (251 s, measured). This runs
+// detached: neither the site nor this script waits, and next dev reloads cannot start a second load (warmup.ts deduplicates too).
+if (await answers("http://127.0.0.1:11434/api/version")) {
+  spawn(process.execPath, [nativeScript, "warm"], { detached: true, stdio: "ignore" }).unref();
+  say(`Preparing ${env.ASSISTANT_MODEL || "bonsai-2:9b"} at the app's context in the background (it answers "preparing" until it is resident).`);
 }
 
 // The local Supabase stack. `supabase start` returns once every service is healthy; the images are cached after the first run.

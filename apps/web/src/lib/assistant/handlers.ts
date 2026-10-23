@@ -140,7 +140,19 @@ ${ADULT_ACKNOWLEDGEMENT}`).digest("hex"), at: (deps.now ?? (() => new Date()))()
   }
 
   const events = sendMessage(
-    { store: g.rt.store, provider: g.assistant.provider, queue: g.assistant.queue, uploads: g.assistant.uploads, config: g.assistant.config, flag: g.assistant.flag, hosted: g.assistant.hosted, now: deps.now, log: (outcome, details) => logOutcome("assistant-chat", outcome, details) },
+    {
+      store: g.rt.store,
+      provider: g.assistant.provider,
+      queue: g.assistant.queue,
+      uploads: g.assistant.uploads,
+      config: g.assistant.config,
+      embeddings: g.assistant.embeddings,
+      decision: g.assistant.decision,
+      flag: g.assistant.flag,
+      hosted: g.assistant.hosted,
+      now: deps.now,
+      log: (outcome, details) => logOutcome("assistant-chat", outcome, details),
+    },
     { owner: g.owner, sessionId, text, fileIds, signal: request.signal, voice: raw.voice === true },
   );
   const encoder = new TextEncoder();
@@ -263,6 +275,29 @@ export async function handleStatus(request: Request, deps: AssistantDeps): Promi
   const g = await gate(request, deps, "assistant-status", { mutating: false });
   if (!g.ok) return g.response;
   const health = await g.assistant.provider.health(AbortSignal.timeout(4000)).catch(() => ({ ok: false, detail: "unreachable" }));
+  // The helper roles are probed, not inferred from configuration: a model listed by the server is not proof that its endpoint
+  // answers (brief section 4). A helper that is down only turns that role off; the chat still works.
+  const helper = async (h: { health(signal?: AbortSignal): Promise<{ ok: boolean }> } | null) =>
+    h ? h.health(AbortSignal.timeout(1500)).then((r) => r.ok).catch(() => false) : false;
+  const [retrievalReady, decisionReady] = await Promise.all([
+    config.retrieval.enabled ? helper(g.assistant.embeddings) : false,
+    config.decision.enabled ? helper(g.assistant.decision) : false,
+  ]);
   const voice = deps.voice && !voiceClosed(env, true) ? await deps.voice.health().catch(() => false) : false;
-  return jsonResponse(200, { open: health.ok, reason: health.ok ? null : health.detail, voice, paperTutor: paperTutorEnabled(env), paperMarker: paperMarkerEnabled(env), minorsApproved: config.minorsApproved, limits: { dailyMessages: config.dailyMessages, perMinute: config.perMinute, maxInputChars: config.maxInputChars, files: UPLOAD_LIMITS.filesPerMessage } }, { "Cache-Control": "no-store" });
+  return jsonResponse(
+    200,
+    {
+      open: health.ok,
+      reason: health.ok ? null : health.detail,
+      voice,
+      paperTutor: paperTutorEnabled(env),
+      paperMarker: paperMarkerEnabled(env),
+      minorsApproved: config.minorsApproved,
+      // The helper roles, as the page shows them: retrieval and routing are extra, and a missing helper does not close the chat.
+      retrieval: retrievalReady,
+      decision: decisionReady,
+      limits: { dailyMessages: config.dailyMessages, perMinute: config.perMinute, maxInputChars: config.maxInputChars, files: UPLOAD_LIMITS.filesPerMessage },
+    },
+    { "Cache-Control": "no-store" },
+  );
 }

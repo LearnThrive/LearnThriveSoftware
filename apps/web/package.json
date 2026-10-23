@@ -37,7 +37,12 @@
     "db:create-server-role": "node scripts/create-server-role.mjs",
     "db:promote-admin": "node scripts/promote-admin.mjs",
     "supabase:smoke": "node --import tsx scripts/supabase-smoke.mjs",
-    "env:template": "node scripts/env-docs.mjs --template"
+    "env:template": "node scripts/env-docs.mjs --template",
+    "ollama:bench": "node --import tsx scripts/ollama-bench.mjs",
+    "ollama:local": "node ../../scripts/ollama-local.mjs",
+    "ollama:photo-check": "node --import tsx scripts/ollama-photo-check.mjs",
+    "ollama:lifecycle": "node --import tsx scripts/ollama-lifecycle-check.mjs",
+    "ollama:browser-check": "node scripts/ollama-browser-check.mjs"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.1",

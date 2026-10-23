@@ -94,6 +94,36 @@ Workstream 2 is described in `docs/IDENTITY.md`. Workstreams 4 and 5 are describ
 | Real model (`qwen3.5:9b`) through the benchmark | not run |
 | Real exam papers, real mark schemes, real handwriting | none available |
 
+## Three local Ollama roles (owner brief, 2026-10-23)
+
+Brief: `LearnThrive_Ollama_Three_Model_Claude_Code_Prompt.md` (untracked, not committed). Runbook:
+[docs/OLLAMA_THREE_MODEL.md](OLLAMA_THREE_MODEL.md). Measured numbers: [docs/OLLAMA_BENCHMARK.md](OLLAMA_BENCHMARK.md),
+`docs/benchmarks/ollama-results.json`, `docs/benchmarks/photo-check.json`.
+
+- **Implemented and mock-tested:** native Windows runtime (`scripts/ollama-local.mjs`, two loopback servers: GPU tutor on 11434, CPU helpers
+  on 11435), `dev-services.mjs` preferring it over Docker, tutor adapter (thinking, native tool calls, metrics, `keep_alive`, correct
+  capability cache), shared warm-up manager with the exact `num_ctx`, staged deadlines and one absolute turn deadline, read-only tools
+  (`search_authorised_material`, `get_question_region`, `check_calculation`), embeddings adapter (validated batches, EmbeddingGemma prefixes),
+  typed-decision adapter with probability + margin floors and deterministic fallback, retrieval index (migration `0014_chat_retrieval.sql`,
+  owner-scoped chunks, question-aware chunking, background indexing, exact label lookup first), stored document readings reused on follow-ups,
+  and image budgets in config. `apps/web/tests/assistantRoles.test.mjs`; the data contract tests cover the new repository surface.
+- **Service-tested on the real machine:** benchmark runner `npm run ollama:bench` (three models, cold and warm, GPU sampling) and the
+  end-to-end photo check `npm run ollama:photo-check` against the real provider, document reader and deadlines. The original picture
+  timeout's cause is reproduced and fixed: Docker/WSL model mount (215-251 s cold load) versus native (8.5 s, `qwen3.5:9b`), the 45 s timer
+  spanning the load, a warm-up at a different context forcing a reload, and re-sent pages on follow-ups.
+- **Selected by measurement** (`docs/OLLAMA_BENCHMARK.md`): `bonsai-2:9b` (18/18 exact answers, photo first answer 0.94 s, 2.7 GiB VRAM
+  free), `embeddinggemma-2:270m-q8_0-text` and `laya:421m-typed-decisions-bf16` on a CPU helper process. `qwen3.5:9b` stays as the
+  rollback and `bonsai-2:4b` as the speed profile. One fault was found by measuring rather than trusting configuration: this build uses
+  Vulkan, so `CUDA_VISIBLE_DEVICES=-1` did not keep the helper off the GPU (~800 MiB); `OLLAMA_VULKAN=0` does, and the helper now reports
+  `size_vram: 0`.
+- **Also run on the real machine:** the photo path through the real site (`npm run ollama:browser-check`: cold first words 8.5 s, warm
+  0.67 s, "Reading the picture" then "Preparing the model" shown, no timeout), idle expiry, helpers beside the tutor (no eviction, 0 VRAM),
+  a PDF follow-up that does not re-read the file, two students at once, and a backend restart (`npm run ollama:lifecycle`); six cold
+  starts per model (5.2-5.7 s for the 9B). Evidence: `docs/benchmarks/{lifecycle-check,browser-check-cold,browser-check-warm,cold-starts}.json`.
+- **Not done:** no real student handwriting, scanned exam PDF or real exam-board paper in the benchmark; routing accuracy on real
+  families' messages (the router abstained on 9 of 12 held-out examples); background indexing timed beside a queued Paper Tutor job;
+  voice on the GPU during a photo turn; production use is not authorised (Ollama is still development-only).
+
 ## Owner decisions / inputs still needed (grouped)
 
 1. Production age rule for own logins (default Year 9 is a staging value) and the wording/version of the guardian consent (`LEARNER_CONSENT_TEXT`).

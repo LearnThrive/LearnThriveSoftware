@@ -16,6 +16,13 @@ export class QueueAborted extends Error {
   }
 }
 
+/** The caller waited as long as its own queue budget allows: the honest answer is "busy", not a silent wait. */
+export class QueueTimeout extends Error {
+  constructor() {
+    super("queue_timeout");
+  }
+}
+
 export class GenerationQueue {
   private active = 0;
   private readonly waiting: Array<{ go: () => void; cancelled: boolean }> = [];
@@ -31,7 +38,7 @@ export class GenerationQueue {
   }
 
   /** Waits for a slot, runs `work`, and always gives the slot back. `onWait` is told the place in line (1 = next). */
-  async run<T>(work: () => Promise<T>, options: { signal?: AbortSignal; onWait?: (position: number) => void } = {}): Promise<T> {
+  async run<T>(work: () => Promise<T>, options: { signal?: AbortSignal; onWait?: (position: number) => void; maxWaitMs?: number } = {}): Promise<T> {
     if (options.signal?.aborted) throw new QueueAborted();
     if (this.active < this.concurrency) {
       this.active += 1;
@@ -39,12 +46,28 @@ export class GenerationQueue {
       if (this.depth.waiting >= this.maxWaiting) throw new QueueFull();
       // When a slot frees up it is handed straight to the first waiter (active stays as it is), so nobody can slip in between.
       await new Promise<void>((resolve, reject) => {
-        const entry = { cancelled: false, go: () => resolve() };
+        const entry: { cancelled: boolean; go: () => void } = { cancelled: false, go: () => {} };
+        let timer: ReturnType<typeof setTimeout> | null = null;
+        const done = () => {
+          if (timer) clearTimeout(timer);
+          timer = null;
+        };
+        entry.go = () => {
+          done();
+          resolve();
+        };
+        if (options.maxWaitMs && options.maxWaitMs > 0) {
+          timer = setTimeout(() => {
+            entry.cancelled = true;
+            reject(new QueueTimeout());
+          }, options.maxWaitMs);
+        }
         this.waiting.push(entry);
         options.onWait?.(this.depth.waiting);
         options.signal?.addEventListener(
           "abort",
           () => {
+            done();
             entry.cancelled = true;
             reject(new QueueAborted());
           },

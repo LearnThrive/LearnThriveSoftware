@@ -231,7 +231,7 @@ async function decodePhoto(bytes: Uint8Array, kind: "jpeg" | "png"): Promise<{ w
 }
 
 /** A photo, upright (its orientation applied), at most `photoLongSide` on its long side, re-encoded: no metadata survives. */
-export async function preparePhoto(bytes: Uint8Array, kind: "jpeg" | "png"): Promise<{ ok: true; bytes: Uint8Array; width: number; height: number } | { ok: false; problem: FileProblem }> {
+export async function preparePhoto(bytes: Uint8Array, kind: "jpeg" | "png", options: { longSide?: number } = {}): Promise<{ ok: true; bytes: Uint8Array; width: number; height: number } | { ok: false; problem: FileProblem }> {
   const pixels = await decodePhoto(bytes, kind);
   if (!pixels || !pixels.width || !pixels.height) return problem("unreadable", DOCUMENT_MESSAGES.photo);
   const source = createCanvas(pixels.width, pixels.height);
@@ -241,7 +241,8 @@ export async function preparePhoto(bytes: Uint8Array, kind: "jpeg" | "png"): Pro
   const sideways = orientation >= 5; // 5 to 8 swap width and height
   const fullW = sideways ? pixels.height : pixels.width;
   const fullH = sideways ? pixels.width : pixels.height;
-  const scale = Math.min(1, DOCUMENT_LIMITS.photoLongSide / Math.max(fullW, fullH));
+  const longSide = options.longSide && options.longSide > 0 ? options.longSide : DOCUMENT_LIMITS.photoLongSide;
+  const scale = Math.min(1, longSide / Math.max(fullW, fullH));
   const width = Math.max(1, Math.round(fullW * scale));
   const height = Math.max(1, Math.round(fullH * scale));
   const canvas = createCanvas(width, height);
@@ -290,6 +291,8 @@ export interface ReadOptions {
   render?: boolean;
   /** Most pages allowed. */
   maxPages?: number;
+  /** Long side of a rendered page in pixels. The measured profile passes ASSISTANT_PAGE_LONG_SIDE (brief section 11). */
+  renderLongSide?: number;
 }
 
 /**
@@ -359,7 +362,7 @@ export async function readPdfDocument(bytes: Uint8Array, options: ReadOptions = 
         if (Date.now() - started > DOCUMENT_LIMITS.totalMs) return problem("unreadable", DOCUMENT_MESSAGES.slow);
         const page = await doc.getPage(p.number);
         const base = page.getViewport({ scale: 1 });
-        const scale = DOCUMENT_LIMITS.renderLongSide / Math.max(base.width, base.height);
+        const scale = (options.renderLongSide ?? DOCUMENT_LIMITS.renderLongSide) / Math.max(base.width, base.height);
         const viewport = page.getViewport({ scale });
         const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
         const ctx = canvas.getContext("2d");

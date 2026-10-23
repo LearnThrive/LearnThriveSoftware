@@ -32,25 +32,28 @@ Open **`http://localhost:3000`** — that one origin serves the public site, the
 
 Under the hood, `npm run dev` runs `apps/web`'s own `dev` script, `tsx server.ts` — a custom Node HTTP server that hosts Next.js's request handler and an attached Socket.IO server side by side (see `docs/ARCHITECTURE.md`). There is no second process, no second port, and nothing else to start manually: the classroom's real-time signalling logic (`apps/realtime/server/signalling.ts`, unchanged) is imported as a library and wired to that same server, and its React UI (`apps/web/src/features/classroom/`, ported from the original `apps/classroom`) is lazy-loaded only when a Lesson's classroom route is actually opened.
 
-### Study Buddy's model and voice (Docker)
+### Study Buddy's three models and voice
 
-`npm run dev` also starts, before the site, the two services Study Buddy needs, in Docker ([config/compose.yaml](config/compose.yaml), started by [scripts/dev-services.mjs](scripts/dev-services.mjs)):
+`npm run dev` starts, before the site, the local Ollama runtime natively ([scripts/ollama-local.mjs](scripts/ollama-local.mjs)) and the speech sidecar in Docker ([config/compose.yaml](config/compose.yaml), started by [scripts/dev-services.mjs](scripts/dev-services.mjs)):
 
 | Service | Address | What it is |
 | --- | --- | --- |
-| `ollama` | `http://127.0.0.1:11434` | the local language model (`ollama/ollama:0.35.0`, on the GPU). It uses the models already downloaded on this machine (`OLLAMA_MODELS`, here `D:\OllamaModels`); the default model is fetched once if missing |
-| `voice` | `http://127.0.0.1:8765` | the speech sidecar (`services/voice/Dockerfile`: Whisper `small.en` on the GPU, Piper voices from `services/voice/models`) |
+| tutor (native) | `http://127.0.0.1:11434` | the GPU model with vision, tools and thinking (`D:\OllamaRuntime\0.40.9`, models in `OLLAMA_MODELS`, here `D:\OllamaModels`) |
+| helpers (native, CPU only) | `http://127.0.0.1:11435` | the embedding model and the typed-decision model, in a second process with the GPU hidden (`CUDA_VISIBLE_DEVICES=-1`, and `OLLAMA_VULKAN=0` because this build reaches the card through Vulkan) so they cannot evict the tutor |
+| `voice` (Docker) | `http://127.0.0.1:8765` | the speech sidecar (`services/voice/Dockerfile`: Whisper `small.en` on the GPU, Piper voices from `services/voice/models`) |
 
-It needs Docker Desktop running with GPU support (WSL 2 and an NVIDIA driver), and the Piper voices downloaded once ([docs/VOICE.md](docs/VOICE.md)). Without Docker, or if a service fails, the site still starts and Study Buddy says it is unavailable. A service already running outside Docker (the Ollama app, `npm run voice:dev`) is used instead of starting a second one. The services keep running when the site stops:
+The native runtime replaced Docker's Ollama because the Windows-folder bind mount made a cold load take 215-251 s; the same model now loads in about 8.5 s (measured: [docs/OLLAMA_THREE_MODEL.md](docs/OLLAMA_THREE_MODEL.md), [docs/OLLAMA_BENCHMARK.md](docs/OLLAMA_BENCHMARK.md)). Docker's `ollama/0.35.0` service is kept as the rollback, not as the default. It needs the Piper voices downloaded once ([docs/VOICE.md](docs/VOICE.md)); without Docker the site still starts and voice says it is unavailable. The services keep running when the site stops:
 
 ```bash
-npm run services:up        # start or check them without the site
-npm run services:logs      # follow their logs
-npm run services:down      # stop them
-npm run services:rebuild   # after changing services/voice
+npm run ollama:local -- start      # the two native servers (or: status / warm / stop / pull)
+npm run services:up                # start or check them without the site
+npm run services:logs              # follow the Docker sidecar's logs
+npm run services:down              # stop the Docker services
+npm run services:rebuild           # after changing services/voice
+npm run ollama:bench               # the three-model benchmark (needs the servers running)
 ```
 
-Loading the model through the Windows folder mount takes about 85 s the first time; it then stays loaded for 30 minutes. `LEARNTHRIVE_DOCKER=0` skips all of this (the Playwright servers set it), and so do `ASSISTANT_PROVIDER=mock` with `VOICE_PROVIDER=mock`.
+`LEARNTHRIVE_DOCKER=0` skips the Docker services (the Playwright servers set it), and so do `ASSISTANT_PROVIDER=mock` with `VOICE_PROVIDER=mock`.
 
 ### Supabase on your machine (accounts, Library, storage)
 

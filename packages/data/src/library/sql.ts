@@ -1,5 +1,5 @@
 import { deriveEntitlement, type AdminGrantRecord, type PlanInterval, type SubscriptionRecord, type SubscriptionStatus } from "./billing";
-import type { ChatExport, ChatFileRecord, ChatMessageRecord, ChatSessionRecord } from "./chat";
+import type { ChatExport, ChatFileChunkRecord, ChatFileRecord, ChatMessageRecord, ChatSessionRecord } from "./chat";
 import type { AccessMode, IdentityAuditEntry, InvitationPeek, IdentityRepository, InvitationRecord, LearnerContext, LinkStatus, StudentRecord } from "./identity";
 import { PAPER_JOB_DAYS, PAPER_JOB_MAX_ATTEMPTS, type AssessmentVersion, type PaperJobKind, type PaperJobRecord, type PaperJobRepository, type PaperJobState } from "./papers";
 import type { AccessRepository, AccountRepository, BillingRepository, ChatRepository, DownloadRepository, LibraryStore, ResourceRepository, SqlExecutor } from "./ports";
@@ -99,7 +99,23 @@ function toMessage(row: Row): ChatMessageRecord {
 function toChatFile(row: Row): ChatFileRecord {
   return {
     id: row.id, sessionId: row.session_id, messageId: row.message_id, storagePath: row.storage_path, bytes: Number(row.bytes), contentType: row.content_type,
+    extractedText: row.extracted_text ?? null, pages: row.pages === null || row.pages === undefined ? null : Number(row.pages),
     createdAt: new Date(row.created_at), deleteAfter: new Date(row.delete_after),
+  };
+}
+
+/** `real[]` arrives as a JS array from PGlite and as a `{1,2}` literal string from some drivers: both become numbers. */
+function toVector(value: unknown): number[] {
+  if (Array.isArray(value)) return value.map(Number).filter((n) => Number.isFinite(n));
+  if (typeof value === "string") return value.replace(/^\{|\}$/g, "").split(",").filter(Boolean).map(Number).filter((n) => Number.isFinite(n));
+  return [];
+}
+
+function toChatChunk(row: Row): ChatFileChunkRecord {
+  return {
+    id: row.id, fileId: row.file_id, sessionId: row.session_id, page: row.page === null ? null : Number(row.page), label: row.label ?? null,
+    ordinal: Number(row.ordinal), text: row.text, model: row.model, digest: row.digest ?? null, dimension: Number(row.dimension),
+    chunkConfigVersion: row.chunk_config_version, embedding: toVector(row.embedding), createdAt: new Date(row.created_at),
   };
 }
 
@@ -706,6 +722,60 @@ export class SqlLibraryStore implements LibraryStore {
         [owner.clientId, owner.studentId, sessionId, fileIds],
       );
       return rows.map(toChatFile);
+    },
+    setFileReading: async (owner, fileId, reading) => {
+      const rows = await this.db.query<Row>(
+        `update public.chat_files f set extracted_text = $4, pages = $5
+           from public.chat_sessions s
+          where f.session_id = s.id and ${OWN} and f.id = $3
+         returning f.id`,
+        [owner.clientId, owner.studentId, fileId, reading.extractedText.slice(0, 32_000), reading.pages],
+      );
+      return rows.length === 1;
+    },
+    replaceFileChunks: async (owner, sessionId, fileId, chunks, now) => {
+      if (chunks.length === 0) return 0;
+      const allowed = await this.db.query<Row>(
+        `select f.id from public.chat_files f join public.chat_sessions s on s.id = f.session_id where ${OWN} and s.id = $3 and f.id = $4`,
+        [owner.clientId, owner.studentId, sessionId, fileId],
+      );
+      if (allowed.length === 0) return 0;
+      // Replace: the file's previous chunks go first, then this set. A failed insert leaves nothing behind for a retry to duplicate.
+      await this.db.query(`delete from public.chat_file_chunks where file_id = $1`, [fileId]);
+      const rows = await this.db.query<Row>(
+        `insert into public.chat_file_chunks (file_id, session_id, page, label, ordinal, text, model, digest, dimension, chunk_config_version, embedding, created_at)
+         select $1, $2, v.page, v.label, v.ordinal, v.text, v.model, v.digest, v.dimension, v.version, v.embedding::real[], $3
+           from unnest($4::int[], $5::text[], $6::int[], $7::text[], $8::text[], $9::text[], $10::int[], $11::text[], $12::text[]) as v(page, label, ordinal, text, model, digest, dimension, version, embedding)
+         returning id`,
+        [
+          fileId, sessionId, now,
+          chunks.map((c) => c.page), chunks.map((c) => c.label), chunks.map((c) => c.ordinal), chunks.map((c) => c.text.slice(0, 4000)),
+          chunks.map((c) => c.model), chunks.map((c) => c.digest), chunks.map((c) => c.embedding.length), chunks.map((c) => c.chunkConfigVersion),
+          chunks.map((c) => `{${c.embedding.map((n) => (Number.isFinite(n) ? n : 0)).join(",")}}`),
+        ],
+      );
+      return rows.length;
+    },
+    listFileChunks: async (owner, sessionId, options = {}) => {
+      const limit = Math.min(Math.max(options.limit ?? 200, 1), 500);
+      const rows = await this.db.query<Row>(
+        `select c.* from public.chat_file_chunks c
+           join public.chat_sessions s on s.id = c.session_id
+           join public.chat_files f on f.id = c.file_id
+          where ${OWN} and s.id = $3 and ($4::uuid is null or c.file_id = $4)
+          order by f.created_at, c.ordinal limit $5`,
+        [owner.clientId, owner.studentId, sessionId, options.fileId ?? null, limit],
+      );
+      return rows.map(toChatChunk);
+    },
+    deleteFileChunks: async (owner, sessionId, fileId) => {
+      const rows = await this.db.query<Row>(
+        `delete from public.chat_file_chunks c using public.chat_sessions s, public.chat_files f
+          where c.session_id = s.id and c.file_id = f.id and ${OWN} and s.id = $3 and c.file_id = $4
+          returning c.id`,
+        [owner.clientId, owner.studentId, sessionId, fileId],
+      );
+      return rows.length;
     },
     requestDeletion: async (owner, sessionId, now) => {
       const rows = await this.db.query<Row>(`update public.chat_sessions s set deletion_requested_at = $4 where ${OWN} and s.id = $3 returning s.id`, [owner.clientId, owner.studentId, sessionId, now]);
