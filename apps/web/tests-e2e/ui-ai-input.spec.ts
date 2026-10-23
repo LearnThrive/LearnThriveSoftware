@@ -373,6 +373,26 @@ test.describe('AiInput: files', () => {
     await expect(list).toHaveCount(0);
   });
 
+  test('an attachment can be looked at before it is sent: a thumbnail, a larger preview, Escape and removal close it', async ({ page }) => {
+    await openBench(page);
+    const box = interactive(page);
+    await box.getByTestId('ai-input-file').setInputFiles([png('wrong-page.png'), pdf('b.pdf')]);
+
+    await expect(box.getByRole('button', { name: 'Preview wrong-page.png' }).locator('img')).toBeVisible();
+    await box.getByRole('button', { name: 'Preview wrong-page.png' }).click();
+    const dialog = page.getByRole('dialog', { name: 'wrong-page.png' });
+    await expect(dialog.getByRole('img')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(box.getByRole('textbox', { name: 'Your message' })).toBeFocused();
+
+    // A document says what it is and offers to open it.
+    await box.getByRole('button', { name: 'Preview b.pdf' }).click();
+    await expect(page.getByRole('dialog', { name: 'b.pdf' }).getByRole('link', { name: /Open it to check it/ })).toBeVisible();
+    await page.getByRole('button', { name: 'Close preview' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+
   test('the bench\'s controlled list removes by callback', async ({ page }) => {
     await openBench(page);
     const box = page.locator('#bench-attachments');

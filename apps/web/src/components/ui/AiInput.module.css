@@ -178,16 +178,126 @@
   gap: 0.5rem;
   min-inline-size: 0;
   max-inline-size: 100%;
-  padding: 0.25rem 0.25rem 0.25rem 0.75rem;
+  padding: 0.375rem 0.375rem 0.375rem 0.375rem;
   border: 1px solid var(--border-strong);
-  border-radius: 999px;
+  border-radius: 1rem;
   background: var(--surface-1);
   color: var(--fg-strong);
   font-size: 0.875rem;
 }
 
+/* The picture (or document icon), name and size are one button: pressing it opens the larger preview. */
+.preview {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 0.5rem;
+  min-inline-size: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  border-radius: 0.75rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.preview:focus-visible {
+  outline: 2px solid var(--focus-ring, currentColor);
+  outline-offset: 2px;
+}
+
+.thumb {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  inline-size: 4rem;
+  block-size: 4rem;
+  border-radius: 0.625rem;
+  object-fit: cover;
+  background: var(--surface-2, var(--surface-1));
+  color: var(--fg-body);
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(0 0 0 / 0.6);
+}
+
+.previewPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  inline-size: min(100%, 52rem);
+  max-block-size: 100%;
+  padding: 1rem;
+  border-radius: 1rem;
+  background: var(--surface-1);
+  color: var(--fg-strong);
+  box-shadow: 0 1rem 3rem rgb(0 0 0 / 0.35);
+}
+
+.previewHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.previewTitle {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+}
+
+.previewTitle strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.previewTitle span {
+  color: var(--fg-muted);
+  font-size: 0.875rem;
+}
+
+.previewImage {
+  min-block-size: 0;
+  max-inline-size: 100%;
+  max-block-size: 75vh;
+  margin-inline: auto;
+  object-fit: contain;
+  border-radius: 0.5rem;
+  background: var(--surface-2, var(--surface-1));
+}
+
+.previewDocument {
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+  padding: 2rem 1rem;
+  color: var(--fg-body);
+}
+
+.previewOpen {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--fg-strong);
+  font-weight: 600;
+}
+
 .fileName {
   overflow: hidden;
+  /* A long name is cut with an ellipsis; the cap also keeps the chip's minimum width inside a 320px screen. */
+  max-inline-size: clamp(5rem, 30vw, 14rem);
   min-inline-size: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
