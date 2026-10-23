@@ -23,7 +23,7 @@ as a pass. A threshold nobody measured is `unmeasured`, never `met`.
 ## Release thresholds (`RELEASE_THRESHOLDS` in `bench.ts`)
 
 Extraction recall and precision at least 95%, transcription at least 90%, false "verified" 0, bad placements 0. They were set before any real
-paper was run and are not to be changed after seeing a held-out result. Marking has its own thresholds (see `docs/ASSISTANT.md`, Paper marker).
+paper was run and are not to be changed after seeing a held-out result. Marking has its own thresholds, below.
 
 ## Two kinds of case
 
@@ -59,6 +59,16 @@ a question (`(2)`) were read as part of the maths, so `Solve x² = 4 (2)` was ch
 the part's own expression; `12 x 7` was not read as a multiplication; and a working line that listed the solutions (`x = 3 or x = 2`) was judged
 as a chain of equal expressions.
 
+## Marking a student's completed paper
+
+Scoring is `src/lib/paper/benchMark.ts` (unit-tested in `tests/paperMarkingBench.test.mjs`); the harness section is the end of `npm run paper:bench`. It compares the marker with **work marked by a qualified person** and reports, apart from each other: transcription accuracy; exact mark agreement and the distribution of the mark error (on the questions the marker fully assessed); false positives and false negatives of the correct/incorrect decision, and so **the rate at which correct student work is marked wrong**; method-mark and follow-through agreement (follow-through should reach a person, not be guessed); blank, unreadable and answered told apart (a blank or unreadable answer called wrong is counted); and the **review rate**, the share sent to a person, which is also the coverage **excluded** from the agreement figures.
+
+Thresholds (`MARKING_THRESHOLDS`, fixed before any held-out set is looked at): transcription at least 90%; exact agreement at least 85%; within one mark at least 97%; correct work marked wrong at most 2%; wrong work marked correct at most 2%; blank or unreadable called wrong: 0; sent to a person at most 35%. **No gate can be called met** on fewer than 300 human-marked questions from 10 students; a set with no wrong answers cannot measure the false-positive gate; synthetic responses never count towards a gate. The model's own confidence is not used anywhere as a measure of reliability. The sample sizes are the owner's to adjust, before the held-out run.
+
+What the human-marked set must contain: a permissioned, anonymised set of **handwritten** responses independently marked by a qualified person, with valid alternative methods, partial credit, crossed-out working, poor scans and deliberately ambiguous handwriting. Describe it in `benchmarks/paper/marking-manifest.json` (same shape as the paper manifest: `file`, `sha256`, `split`, `provenance` saying who marked it and under what permission, `students`, and per question the `label`, `state`, the student's `answer` and `working`, `answerCorrect`, `marks`, `outOf`, `methodMarks`, `followThrough`, `conditions`). Run with `--provider ollama`.
+
+**Status: UNVALIDATED.** No human-marked handwriting exists in this repository, so nothing here says how reliable automatic marking is on real work. The synthetic typed case (8 questions: right, wrong with method credit, answer only, blank, unreadable, crossed-out, doubted, alternative method) shows the pipeline behaves as designed: blank is a real zero, unreadable and doubted answers are sent to a person and not called wrong, 0 correct answers marked wrong, 3 of 8 sent to a person (which would exceed the 35% review threshold if it were real data). The release flag `PAPER_MARKS_RELEASED` keeps numeric marks off in production until the owner decides, informed by this validation.
+
 ## Status
 
 - Harness, scoring, synthetic cases, manifest format and the held-out discipline: **implemented and tested**. Synthetic results: 4 cases run,
@@ -66,3 +76,4 @@ as a chain of equal expressions.
 - **Real papers: none have been run.** No external case is in the manifest, so the benchmark has measured nothing about real papers, and the
   release gate for the Paper Tutor on real papers is `unmeasured`. This needs the owner to supply and annotate papers.
 - The real model (`qwen3.5:9b`) has not been run through the harness in this session.
+- Marking: harness, thresholds and synthetic pipeline case implemented and tested; **validation on real human-marked handwriting: none**.

@@ -24,6 +24,7 @@ import { OllamaProvider } from "../src/lib/assistant/ollama.ts";
 import { GenerationQueue } from "../src/lib/assistant/queue.ts";
 import { RELEASE_THRESHOLDS, summarise } from "../src/lib/paper/bench.ts";
 import { runCase, standInModel, syntheticCases } from "../src/lib/paper/benchRun.ts";
+import { markingStandIn, MARKING_THRESHOLDS, runMarkingCase, summariseMarking, syntheticMarkingCase } from "../src/lib/paper/benchMark.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..", "benchmarks", "paper");
@@ -89,6 +90,28 @@ if (existsSync(manifestPath)) {
   }
 }
 
+// Marking: synthetic typed responses test the pipeline; human-marked handwritten work (permissioned, anonymised) is what validates it.
+const markingRuns = [];
+{
+  const syn = await syntheticMarkingCase();
+  markingRuns.push({ case: syn.case, score: await runMarkingCase(syn.case, syn.bytes, { provider: markingStandIn(syn.scripts), queue, model: "stand-in", visionModel: "stand-in" }) });
+  const markingManifest = join(root, "marking-manifest.json");
+  if (existsSync(markingManifest)) {
+    for (const c of JSON.parse(readFileSync(markingManifest, "utf8")).cases ?? []) {
+      if (c.example || (split !== "all" && c.split !== split)) continue;
+      const file = c.file ? join(dirname(markingManifest), c.file) : null;
+      const bytes = file && existsSync(file) ? new Uint8Array(readFileSync(file)) : null;
+      const deps = realDeps();
+      if (!bytes || !deps || !c.sha256 || createHash("sha256").update(bytes).digest("hex") !== c.sha256) {
+        reports.push({ id: c.id, split: c.split, status: "not_run", reason: !bytes ? "the human-marked scan is not in benchmarks/paper/data/" : !deps ? "marking real handwriting needs a real model: --provider ollama" : "the file's SHA-256 is not the manifest's" });
+        continue;
+      }
+      markingRuns.push({ case: c, score: await runMarkingCase(c, bytes, deps), students: c.students ?? 1 });
+    }
+  }
+}
+const marking = summariseMarking(markingRuns);
+
 // Held-out discipline: say how many times they have been looked at.
 const runsFile = join(root, "heldout-runs.json");
 let heldoutRuns = 0;
@@ -125,10 +148,24 @@ if (failures.length) {
   lines.push("", '## False "verified" answers', "");
   for (const r of failures) for (const f of r.answers.falseVerified) lines.push(`- ${r.id} question ${f.label}: shown \`${f.shown}\`, expected \`${f.expected}\``);
 }
+{
+  const s = marking.score;
+  const T = MARKING_THRESHOLDS;
+  lines.push("", "## Marking a student's completed paper", "", `**Validation: ${marking.validation.toUpperCase()}.** ${marking.reasons.join(" ")}`, "", `Questions scored: ${marking.questions} (handwritten, human-marked: ${marking.handwrittenQuestions}). Synthetic typed responses test the pipeline only and never count towards a gate.`, "");
+  lines.push("| Measure | Result | Threshold | Gate |", "| --- | --- | --- | --- |");
+  lines.push(`| Transcription | ${pct(s.transcription.scored ? s.transcription.mean : null)} | >= ${pct(T.transcription)} | ${marking.gates.transcription} |`);
+  lines.push(`| Exact mark agreement (fully assessed questions) | ${pct(s.exactAgreement.rate)} | >= ${pct(T.exactAgreement)} | ${marking.gates.exactAgreement} |`);
+  lines.push(`| Within one mark | ${pct(s.withinOneMark)} | >= ${pct(T.withinOneMark)} | ${marking.gates.withinOneMark} |`);
+  lines.push(`| Correct work marked wrong | ${pct(s.correctness.correctMarkedWrong)} | <= ${pct(T.correctMarkedWrong)} | ${marking.gates.correctMarkedWrong} |`);
+  lines.push(`| Wrong work marked correct | ${pct(s.correctness.wrongMarkedCorrect)} | <= ${pct(T.wrongMarkedCorrect)} | ${marking.gates.wrongMarkedCorrect} |`);
+  lines.push(`| Blank or unreadable called wrong | ${s.states.blankMarkedWrong + s.states.unreadableMarkedWrong} | ${T.statesWrong} | ${marking.gates.statesWrong} |`);
+  lines.push(`| Sent to a person (excluded from the agreement figures) | ${pct(s.review.rate)} | <= ${pct(T.reviewRate)} | ${marking.gates.reviewRate} |`);
+  lines.push("", `Mark error (marker minus human), in marks: ${JSON.stringify(s.errorDistribution)}. Method-mark agreement: ${pct(s.methodMarks.rate)} over ${s.methodMarks.compared}. Follow-through cases: ${s.followThrough.cases} (sent to a person: ${s.followThrough.sentToPerson}, matched: ${s.followThrough.matched}).`);
+}
 if (heldoutRuns > 1) lines.push("", `> The held-out cases have now been run ${heldoutRuns} times. Results from them must not be used to change the code.`);
 mkdirSync(dirname(rawFile), { recursive: true });
 writeFileSync(outFile, lines.join("\n") + "\n");
-writeFileSync(rawFile, JSON.stringify({ provider: providerName, solve, summaries: { dev: summarise(reports, "dev"), heldout: summarise(reports, "heldout"), all: summarise(reports, "all") }, reports }, null, 2) + "\n");
+writeFileSync(rawFile, JSON.stringify({ provider: providerName, solve, marking, summaries: { dev: summarise(reports, "dev"), heldout: summarise(reports, "heldout"), all: summarise(reports, "all") }, reports }, null, 2) + "\n");
 console.log(lines.join("\n"));
 const all = summarise(reports, "all");
 process.exit(Object.values(all.gates).includes("failed") ? 1 : 0);

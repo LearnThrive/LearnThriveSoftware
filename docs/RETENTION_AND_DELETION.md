@@ -54,6 +54,7 @@ These live in the database and in a private storage bucket, not in the mailbox, 
 | --- | --- | --- |
 | Study Buddy chat text | 30 days after the chat's last message | `npm run assistant:retention` (run daily) |
 | Pictures and PDFs sent to Study Buddy (`chat-uploads` bucket) | 7 days, or when the chat is deleted | the same job, **storage objects first**, then the rows (if any object fails to delete, nothing is purged and the next run retries) |
+| Paper Tutor jobs (`paper_jobs`: the questions found, one checkpoint per finished question, the marking assessments) and every version of a marked question (`paper_assessment_versions`, append-only: the AI's, each correction, each tutor review) | 7 days from the start of the job (the uploads' retention), or with the chat when it is deleted (cascade) | `purgeDue` in the same retention run; the marked PDF is a chat file and follows the uploads. **Owner decision:** a tutor's review is removed with the job after 7 days; if it should be kept longer, that is a new retention rule |
 | A chat a family deleted | hidden at once | the same job |
 | Download records (who downloaded which resource, when) | counts and timestamps for abuse limits and entitlement checks | as the Library rules in [LIBRARY.md](LIBRARY.md) |
 | Billing mirror (subscription status and Stripe ids; never card details) | while the subscription exists and as long as the accounts law requires the invoice records, which Stripe holds | as [BILLING.md](BILLING.md) |

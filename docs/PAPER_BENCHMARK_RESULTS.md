@@ -48,7 +48,25 @@ Cases: 4 (run 4, NOT RUN 0). Mean run time 0.4 s.
 
 | Case | Kind | Split | Status | Recall | Precision | Transcription | Accuracy | False verified | Bad placements | Seconds |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| syn-worksheet | synthetic | dev | run | 100.0% | 100.0% | 100.0% | 100.0% | 0 | 0 | 0.9 |
+| syn-worksheet | synthetic | dev | run | 100.0% | 100.0% | 100.0% | 100.0% | 0 | 0 | 0.8 |
 | syn-gcse-parts | synthetic | dev | run | 100.0% | 100.0% | 100.0% | 100.0% | 0 | 0 | 0.1 |
 | syn-long-120 | synthetic | dev | run | 100.0% | 100.0% | 100.0% | 100.0% | 0 | 0 | 0.6 |
 | syn-pitfalls | synthetic | heldout | run | 100.0% | 100.0% | 100.0% | 0.0% | 0 | 0 | 0.1 |
+
+## Marking a student's completed paper
+
+**Validation: UNVALIDATED.** No human-marked handwritten responses have been supplied: nothing here says how reliable automatic marking is on real work.
+
+Questions scored: 8 (handwritten, human-marked: 0). Synthetic typed responses test the pipeline only and never count towards a gate.
+
+| Measure | Result | Threshold | Gate |
+| --- | --- | --- | --- |
+| Transcription | 94.4% | >= 90.0% | unmeasured |
+| Exact mark agreement (fully assessed questions) | 100.0% | >= 85.0% | unmeasured |
+| Within one mark | 100.0% | >= 97.0% | unmeasured |
+| Correct work marked wrong | 0.0% | <= 2.0% | unmeasured |
+| Wrong work marked correct | 0.0% | <= 2.0% | unmeasured |
+| Blank or unreadable called wrong | 0 | 0 | unmeasured |
+| Sent to a person (excluded from the agreement figures) | 37.5% | <= 35.0% | unmeasured |
+
+Mark error (marker minus human), in marks: {"0":5}. Method-mark agreement: 100.0% over 4. Follow-through cases: 0 (sent to a person: 0, matched: 0).

@@ -120,9 +120,10 @@ export function StudyBuddy() {
     sessionId: string;
     kind: "solve" | "mark";
     scheme?: { file: File; fileId: string };
+    blank?: { file: File; fileId: string };
   } | null>(null);
-  // Marking: whether the second PDF in the box is the mark scheme (it is only used if the student says so).
-  const [useScheme, setUseScheme] = useState(false);
+  // Marking: what each other PDF in the box is (a mark scheme, or the blank question paper). Nothing is assumed: it is used only if the student says so.
+  const [roles, setRoles] = useState<Record<string, "scheme" | "blank">>({});
   const abort = useRef<AbortController | null>(null);
   // Kept in refs as well as state: a question sent while a file is still uploading waits for it, and must then use the chat and the
   // files as they are NOW, not as they were when the button was pressed.
@@ -230,9 +231,9 @@ export function StudyBuddy() {
   }
 
   // The Paper Tutor posted its summary into the chat, with the paper attached to it: show it, and take the paper out of the box.
-  async function paperFinished(file: File, sid: string, scheme?: File) {
+  async function paperFinished(file: File, sid: string, extras: File[] = []) {
     if (file && filesRef.current.includes(file)) removeFile(file);
-    if (scheme && filesRef.current.includes(scheme)) removeFile(scheme);
+    for (const extra of extras) if (filesRef.current.includes(extra)) removeFile(extra);
     if (sessionRef.current !== sid) return;
     const response = await fetch(`/api/assistant/sessions/${sid}`, {
       cache: "no-store",
@@ -537,13 +538,15 @@ export function StudyBuddy() {
         (f) => f.type === "application/pdf" || f.type.startsWith("image/"),
       )
     : undefined;
-  // A second PDF in the box: possibly the mark scheme for a paper being checked.
-  const schemeCandidate =
+  // Other PDFs in the box: possibly the mark scheme, or the blank question paper, for a paper being checked.
+  const extraPdfs =
     solvable && status.paperMarker
-      ? files.find(
+      ? files.filter(
           (f) => f !== solvable && f.type === "application/pdf" && fileIdsRef.current.has(f),
         )
-      : undefined;
+      : [];
+  const roleKey = (f: File) => `${f.name}:${f.size}`;
+  const withRole = (role: "scheme" | "blank") => extraPdfs.find((f) => roles[roleKey(f)] === role);
   const shown = query.trim()
     ? sessions.filter((s) =>
         (s.title || "New chat")
@@ -851,11 +854,12 @@ export function StudyBuddy() {
                 fileName={paper.file.name}
                 kind={paper.kind}
                 schemeFileId={paper.scheme?.fileId}
+                blankFileId={paper.blank?.fileId}
                 onFinished={() =>
                   void paperFinished(
                     paper.file,
                     paper.sessionId,
-                    paper.scheme?.file,
+                    [paper.scheme?.file, paper.blank?.file].filter((x): x is File => Boolean(x)),
                   )
                 }
                 onClose={() => setPaper(null)}
@@ -887,13 +891,18 @@ export function StudyBuddy() {
                         fileId: fileIdsRef.current.get(solvable)!,
                         sessionId,
                         kind: "mark",
-                        scheme:
-                          useScheme && schemeCandidate
-                            ? {
-                                file: schemeCandidate,
-                                fileId: fileIdsRef.current.get(schemeCandidate)!,
-                              }
-                            : undefined,
+                        scheme: withRole("scheme")
+                          ? {
+                              file: withRole("scheme")!,
+                              fileId: fileIdsRef.current.get(withRole("scheme")!)!,
+                            }
+                          : undefined,
+                        blank: withRole("blank")
+                          ? {
+                              file: withRole("blank")!,
+                              fileId: fileIdsRef.current.get(withRole("blank")!)!,
+                            }
+                          : undefined,
                       })
                     }
                   >
@@ -901,15 +910,32 @@ export function StudyBuddy() {
                     Check my completed paper
                   </button>
                 ) : null}
-                {status.paperMarker && schemeCandidate ? (
-                  <label className={styles.schemeChoice}>
-                    <input
-                      type="checkbox"
-                      checked={useScheme}
-                      onChange={(e) => setUseScheme(e.target.checked)}
-                    />
-                    <span>{schemeCandidate.name} is the mark scheme</span>
-                  </label>
+                {status.paperMarker && extraPdfs.length > 0 ? (
+                  <span className={styles.schemeChoice}>
+                    {extraPdfs.map((pdf) => (
+                      <label key={roleKey(pdf)}>
+                        <span>{pdf.name} is </span>
+                        <select
+                          value={roles[roleKey(pdf)] ?? ""}
+                          onChange={(e) =>
+                            setRoles((r) => {
+                              const next = { ...r };
+                              // One mark scheme and one blank paper at most: choosing a role moves it off any other file.
+                              if (e.target.value === "scheme" || e.target.value === "blank") {
+                                for (const other of extraPdfs) if (next[roleKey(other)] === e.target.value) delete next[roleKey(other)];
+                                next[roleKey(pdf)] = e.target.value;
+                              } else delete next[roleKey(pdf)];
+                              return next;
+                            })
+                          }
+                        >
+                          <option value="">not used</option>
+                          <option value="scheme">the mark scheme</option>
+                          <option value="blank">the blank question paper</option>
+                        </select>
+                      </label>
+                    ))}
+                  </span>
                 ) : (
                   <span>
                     Worked answers written onto {solvable.name}

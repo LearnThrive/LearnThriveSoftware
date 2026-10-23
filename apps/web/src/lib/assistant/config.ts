@@ -121,3 +121,13 @@ export function paperTutorEnabled(env: Env = process.env): boolean {
 export function paperMarkerEnabled(env: Env = process.env): boolean {
   return paperTutorEnabled(env) && env.PAPER_MARKER_ENABLED?.trim() === "true";
 }
+
+/**
+ * Whether marking shows numeric marks (per-criterion awards, estimates and totals). Automatic marking has not been validated against work marked by a
+ * qualified person, so the marks are behind their own release flag: development on unless PAPER_MARKS_RELEASED=false, production only if exactly "true".
+ * Off, the work is still read, checked and given feedback; no mark is shown.
+ */
+export function paperMarksReleased(env: Env = process.env): boolean {
+  const flag = env.PAPER_MARKS_RELEASED?.trim();
+  return env.NODE_ENV === "production" ? flag === "true" : flag !== "false";
+}
