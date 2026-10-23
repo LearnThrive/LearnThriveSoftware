@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { Download, FileCheck2, X } from "lucide-react";
 import { PencilLoader } from "@/components/ui/PencilLoader";
+import { MarkedResult, type MarkedAssessment } from "./MarkedResult";
 import styles from "./PaperTutor.module.css";
 
 const KatexMath = dynamic(() => import("./KatexMath"), { ssr: false, loading: () => <span>…</span> });
@@ -24,6 +25,18 @@ interface Result {
   feedback?: string;
   estimate?: number | null;
   outOf?: number | null;
+  studentWorking?: string[];
+  assessment?: MarkedAssessment;
+}
+interface Totals {
+  assessedAwarded: number;
+  assessedPossible: number;
+  pendingPossible: number;
+  totalPossible: number;
+  withoutMarks: number;
+  questions: number;
+  assessed: number;
+  pending: number;
 }
 interface Job {
   id: string;
@@ -36,6 +49,19 @@ interface Job {
   pageCount: number | null;
   workedPages: number[];
   message: string | null;
+  /** Marking: assessed, pending and possible marks, kept apart (null while the marks are not released). */
+  totals?: Totals | null;
+  marksReleased?: boolean;
+  scheme?: { status: string; note: string } | null;
+}
+
+/** The three numbers, never one total that hides what was not assessed. */
+function totalsText(t: Totals): string {
+  if (t.totalPossible === 0) return "No marks are printed on these questions, so there are no marks to add up.";
+  const parts = [`AI-estimated: ${t.assessedAwarded} out of ${t.assessedPossible} on the ${t.assessed} question${t.assessed === 1 ? "" : "s"} I could fully assess`];
+  if (t.pending) parts.push(`${t.pendingPossible} mark${t.pendingPossible === 1 ? "" : "s"} on ${t.pending} question${t.pending === 1 ? "" : "s"} still need a person to look (not counted as zero)`);
+  parts.push(`${t.totalPossible} possible in all`);
+  return `${parts.join("; ")}.`;
 }
 
 const MODES: { mode: Mode; label: string; hint: string }[] = [
@@ -72,6 +98,7 @@ export function PaperTutor({
   fileName,
   kind = "solve",
   schemeFileId,
+  blankFileId,
   onFinished,
   onClose,
 }: {
@@ -81,6 +108,8 @@ export function PaperTutor({
   kind?: PaperKind;
   /** A mark scheme uploaded to the same chat (marking only). */
   schemeFileId?: string;
+  /** The blank question paper uploaded to the same chat (marking only): the reference answers are made from it, not from the student's own page. */
+  blankFileId?: string;
   /** The summary has been posted into the chat: reload it. */
   onFinished: () => void;
   onClose: () => void;
@@ -108,13 +137,13 @@ export function PaperTutor({
       const response = await fetch("/api/assistant/papers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileId, sessionId, kind, ...(schemeFileId ? { schemeFileId } : {}) }),
+        body: JSON.stringify({ fileId, sessionId, kind, ...(schemeFileId ? { schemeFileId } : {}), ...(blankFileId ? { blankFileId } : {}) }),
       }).catch(() => null);
       const data = (await response?.json().catch(() => null)) as { job?: Job; error?: string } | null;
       if (!response?.ok || !data?.job) return setError(data?.error ?? "We could not start on that paper. Please try again.");
       setJob(data.job);
     })();
-  }, [fileId, sessionId, kind, schemeFileId]);
+  }, [fileId, sessionId, kind, schemeFileId, blankFileId]);
 
   const id = job?.id;
   const state = job?.state;
@@ -195,8 +224,15 @@ export function PaperTutor({
         ) : null}
         {state === "failed" || state === "cancelled" ? <p className={styles.error}>{job?.message}</p> : null}
         {state === "done" ? (
-          <p className={styles.line}>{marking ? "Done. The feedback is in the chat, and the checked paper is ready to download. The marks are the AI's estimates, not official marks." : "Done. The summary is in the chat, and the worked paper is ready to download."}</p>
+          <p className={styles.line}>
+            {marking
+              ? job?.marksReleased === false
+                ? "Done. The feedback is in the chat, and the checked paper is ready to download. No marks are shown: this checker has not been validated against work marked by a qualified person."
+                : "Done. The feedback is in the chat, and the checked paper is ready to download. The marks are the AI's estimates, not official marks."
+              : "Done. The summary is in the chat, and the worked paper is ready to download."}
+          </p>
         ) : null}
+        {state === "done" && marking && job?.totals ? <p className={styles.line}>{totalsText(job.totals)}</p> : null}
       </div>
 
       {state === "ready" && job ? (
@@ -205,6 +241,7 @@ export function PaperTutor({
         ) : (
           <div className={styles.choose}>
             {job.message ? <p className={styles.note}>{job.message}</p> : null}
+            {marking && blankFileId ? <p className={styles.note}>The blank question paper you gave will be used to work out the correct answers, so your handwriting cannot influence them.</p> : null}
             <fieldset className={styles.questions}>
               <legend>Questions found ({job.questions.length})</legend>
               <ul>
@@ -241,7 +278,7 @@ export function PaperTutor({
               </button>
               <p className={styles.note}>
                 {marking
-                  ? "Marks are the AI's estimates, never official marks, and only where the paper prints them. If your writing cannot be read or an answer cannot be checked by calculation, it is marked \"needs checking\", not wrong."
+                  ? "Marks are the AI's estimates, never official marks. If your writing cannot be read or an answer cannot be checked by calculation, it is marked \"needs checking\", not wrong, and its marks are shown as waiting, not as zero. You can correct how I read any question afterwards."
                   : "The answers are AI-generated and may contain mistakes. Each one is checked by calculation where it can be, and says when it is not."}
               </p>
             </div>
@@ -267,32 +304,31 @@ export function PaperTutor({
               <summary>
                 <span className={styles.qNumber}>Q{r.number}</span>
                 <span>{r.outcome ? OUTCOME[r.outcome] : STATUS[r.status]}</span>
-                {r.estimate !== null && r.estimate !== undefined && r.outOf ? <span className={styles.tag}>AI-estimated {r.estimate}/{r.outOf}</span> : null}
+                {r.estimate !== null && r.estimate !== undefined && r.outOf ? <span className={styles.tag}>{r.assessment?.override ? "Tutor-reviewed" : r.assessment?.provisional ? "AI-estimated, provisional" : "AI-estimated"} {r.estimate}/{r.outOf}</span> : null}
+                {r.assessment?.review ? <span className={styles.tag}>needs a person</span> : null}
               </summary>
-              <div className={styles.detail}>
-                {r.studentAnswer ? (
-                  <p>
-                    You wrote: <KatexMath tex={r.studentAnswer} display={false} />
-                  </p>
-                ) : null}
-                {r.answer && r.outcome !== "needs_checking" ? (
-                  <p>
-                    {marking ? "Checked answer" : "Answer"}: <KatexMath tex={r.answer} display={false} />
-                  </p>
-                ) : null}
-                {r.feedback ? <p>{r.feedback}</p> : null}
-                {!marking && r.steps.length ? (
-                  <ol>
-                    {r.steps.map((s, i) => (
-                      <li key={i}>
-                        {s.say ? <span>{s.say} </span> : null}
-                        {s.math ? <KatexMath tex={s.math} display={false} /> : null}
-                      </li>
-                    ))}
-                  </ol>
-                ) : null}
-                {r.note ? <p className={styles.note}>{r.note}</p> : null}
-              </div>
+              {marking ? (
+                <MarkedResult item={r} jobId={job.id} released={job.marksReleased !== false} onUpdated={(next) => setJob(next as Job)} />
+              ) : (
+                <div className={styles.detail}>
+                  {r.answer ? (
+                    <p>
+                      Answer: <KatexMath tex={r.answer} display={false} />
+                    </p>
+                  ) : null}
+                  {r.steps.length ? (
+                    <ol>
+                      {r.steps.map((s, i) => (
+                        <li key={i}>
+                          {s.say ? <span>{s.say} </span> : null}
+                          {s.math ? <KatexMath tex={s.math} display={false} /> : null}
+                        </li>
+                      ))}
+                    </ol>
+                  ) : null}
+                  {r.note ? <p className={styles.note}>{r.note}</p> : null}
+                </div>
+              )}
             </details>
           ))}
         </div>

@@ -1,6 +1,6 @@
 import { jsonResponse, logOutcome, readBodyLimited } from "@/lib/request-guards";
 import { renderPdfPages } from "@/lib/assistant/documents";
-import { paperMarkerEnabled, paperTutorEnabled } from "@/lib/assistant/config";
+import { paperMarkerEnabled, paperMarksReleased, paperTutorEnabled } from "@/lib/assistant/config";
 import { gate, refuse, type AssistantDeps } from "@/lib/assistant/handlers";
 import type { OutputMode } from "./annotate";
 import { paperJobs, type PaperJobs } from "./jobs";
@@ -10,8 +10,10 @@ import { paperJobs, type PaperJobs } from "./jobs";
  * feature's own switch: PAPER_TUTOR_ENABLED (development: on unless "false"; production: on only if exactly "true", and only where
  * the assistant itself may run). A job and its files are only ever found by the family that owns them.
  *
- *   POST   /api/assistant/papers                { fileId, sessionId, kind?, schemeFileId? }   start reading a paper  -> the job
- *                                               kind "mark" (a completed paper, opt-in: PAPER_MARKER_ENABLED) may name a mark scheme uploaded to the same chat
+ *   POST   /api/assistant/papers                { fileId, sessionId, kind?, schemeFileId?, blankFileId? }   start reading a paper  -> the job
+ *                                               kind "mark" (a completed paper, opt-in: PAPER_MARKER_ENABLED) may name a mark scheme and a blank question paper uploaded to the same chat
+ *   POST   /api/assistant/papers/<id>/correct   { questionId, answer?, working?, note? }  a person corrects how a question was read; it is assessed again
+ *   GET    /api/assistant/papers/<id>/history?questionId=q1                          every version of one question's assessment (marking)
  *   GET    /api/assistant/papers/<id>                                                how it is going
  *   POST   /api/assistant/papers/<id>/solve     { mode, questionIds? }               solve (all, or the chosen questions)
  *   DELETE /api/assistant/papers/<id>                                                cancel
@@ -35,6 +37,7 @@ async function paperGate(request: Request, deps: PaperDeps, event: string, mutat
     uploads: g.assistant.uploads,
     solve: { provider: g.assistant.provider, queue: g.assistant.queue, model: g.assistant.config.model, visionModel: g.assistant.config.visionModel ?? g.assistant.config.model },
     now: deps.now,
+    marksReleased: paperMarksReleased(deps.env ?? process.env),
     log: (outcome: string, details?: Record<string, string | number | boolean>) => logOutcome("paper-tutor", outcome, details),
   };
   const jobs = deps.jobs ?? paperJobs();
@@ -73,7 +76,9 @@ export async function handleStartPaper(request: Request, deps: PaperDeps): Promi
   if (kind === "mark" && !paperMarkerEnabled(deps.env ?? process.env)) return refuse("not_found");
   const schemeFileId = typeof raw?.schemeFileId === "string" ? raw.schemeFileId : undefined;
   if (schemeFileId !== undefined && !UUID.test(schemeFileId)) return refuse("bad_request");
-  const started = await p.jobs.start(p.jobDeps, { owner: p.g.owner, sessionId, fileId, kind, schemeFileId });
+  const blankFileId = typeof raw?.blankFileId === "string" ? raw.blankFileId : undefined;
+  if (blankFileId !== undefined && !UUID.test(blankFileId)) return refuse("bad_request");
+  const started = await p.jobs.start(p.jobDeps, { owner: p.g.owner, sessionId, fileId, kind, schemeFileId, blankFileId });
   if (!started.ok) return jsonResponse(started.code === "not_found" ? 404 : started.code === "limit" ? 429 : 409, { code: started.code, error: MESSAGES[started.code] }, NO_STORE);
   logOutcome("paper-start", "started");
   return jsonResponse(202, { job: started.job }, NO_STORE);
@@ -98,6 +103,43 @@ export async function handleSolvePaper(request: Request, deps: PaperDeps, id: st
   const result = await p.jobs.solve(p.jobDeps, p.g.owner, id, { mode, questionIds });
   if (!result.ok) return jsonResponse(result.code === "not_found" ? 404 : 409, { code: result.code, error: MESSAGES[result.code] }, NO_STORE);
   return jsonResponse(202, { job: result.job }, NO_STORE);
+}
+
+const CORRECTION_MESSAGES = {
+  not_found: "We could not find that.",
+  not_done: "That paper has not finished being checked yet.",
+  limit: "You have used today's corrections. Please try again tomorrow.",
+  unavailable: "That question was changed at the same moment. Please look at it again and retry.",
+} as const;
+
+/** A person corrects how one question was read. The marker is off unless marking is on; the body is small and every field is bounded. */
+export async function handleCorrectPaper(request: Request, deps: PaperDeps, id: string): Promise<Response> {
+  const p = await paperGate(request, deps, "paper-correct", true);
+  if (!p.ok) return p.response;
+  if (!UUID.test(id) || !paperMarkerEnabled(deps.env ?? process.env)) return refuse("not_found");
+  const raw = await jsonBody(request);
+  const questionId = typeof raw?.questionId === "string" && /^q\d{1,4}$/.test(raw.questionId) ? raw.questionId : "";
+  if (!questionId) return refuse("bad_request");
+  const text = (v: unknown, max: number) => (typeof v === "string" ? v.replace(/[\u0000-\u001f]/g, " ").slice(0, max) : undefined);
+  const answer = text(raw?.answer, 300);
+  const working = Array.isArray(raw?.working) ? raw.working.slice(0, 10).map((l) => text(l, 300) ?? "").filter((l) => l.trim() !== "") : undefined;
+  if (answer === undefined && working === undefined) return refuse("bad_request");
+  const result = await p.jobs.correct(p.jobDeps, p.g.owner, id, questionId, { answer, working, note: text(raw?.note, 500) });
+  if (!result.ok) return jsonResponse(result.code === "not_found" ? 404 : result.code === "limit" ? 429 : 409, { code: result.code, error: CORRECTION_MESSAGES[result.code] }, NO_STORE);
+  logOutcome("paper-correct", "corrected");
+  return jsonResponse(200, { job: result.job }, NO_STORE);
+}
+
+/** Every version of one question's assessment, for the family's own job: the AI's, each correction, each tutor review. */
+export async function handlePaperHistory(request: Request, deps: PaperDeps, id: string): Promise<Response> {
+  const p = await paperGate(request, deps, "paper-history", false);
+  if (!p.ok) return p.response;
+  const questionId = new URL(request.url).searchParams.get("questionId") ?? "";
+  if (!UUID.test(id) || !/^q\d{1,4}$/.test(questionId)) return refuse("not_found");
+  const versions = await p.g.rt.store.papers.versions({ kind: "owner", owner: p.g.owner }, id, questionId);
+  if (versions.length === 0) return refuse("not_found");
+  // What was decided, by whom and when. The whole assessed value is what the panel's own result already holds, so only the summary is sent.
+  return jsonResponse(200, { versions: versions.map((v) => ({ version: v.version, kind: v.kind, by: v.actorKind, at: v.createdAt.toISOString(), note: v.note })) }, NO_STORE);
 }
 
 export async function handlePaperPreview(request: Request, deps: PaperDeps, id: string): Promise<Response> {

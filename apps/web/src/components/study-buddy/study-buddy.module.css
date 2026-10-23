@@ -766,8 +766,22 @@
   cursor: pointer;
 }
 
-.schemeChoice input {
-  width: 1.125rem;
-  height: 1.125rem;
-  accent-color: var(--accent);
+.schemeChoice {
+  flex-wrap: wrap;
+}
+
+.schemeChoice label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.schemeChoice select {
+  min-height: 2.25rem;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--fg-body);
+  font: inherit;
 }

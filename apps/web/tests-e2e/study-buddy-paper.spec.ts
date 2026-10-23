@@ -98,6 +98,17 @@ test('a completed paper is checked: estimated marks only, what cannot be confirm
   const questions = panel.getByLabel('Questions');
   await questions.getByText('Q2').click();
   await expect(questions).toContainText('have not marked it');
+  // Nothing is shown as zero that was not assessed; a worksheet that prints no marks has feedback, not an invented total.
+  await expect(questions).toContainText('Needs a person to look');
+  await questions.getByText('Q1').click();
+  await expect(questions).toContainText('the paper prints no marks for this question');
+  // A wrong reading can be corrected: the question is checked again and the change is kept.
+  await questions.getByRole('button', { name: 'Correct how I read this' }).first().click();
+  await questions.getByLabel('Your final answer').fill('5');
+  await questions.getByLabel(/Your working/).fill('2x = 12\nx = 5');
+  await questions.getByRole('button', { name: 'Save and check again' }).click();
+  await expect(questions.getByText('Not right').first()).toBeVisible({ timeout: 30_000 });
+  await expect(questions).toContainText('You corrected how I read this');
   const summary = page.locator('article[aria-label="Study Buddy"]').last();
   await expect(summary).toContainText('not official marks');
 

@@ -1,6 +1,90 @@
 {
   "provider": "stand-in",
   "solve": true,
+  "marking": {
+    "questions": 8,
+    "students": 0,
+    "handwrittenQuestions": 0,
+    "score": {
+      "questions": 8,
+      "transcription": {
+        "scored": 6,
+        "mean": 0.9444444444444445
+      },
+      "assessed": 5,
+      "review": {
+        "count": 3,
+        "rate": 0.375
+      },
+      "exactAgreement": {
+        "compared": 5,
+        "exact": 5,
+        "rate": 1
+      },
+      "errorDistribution": {
+        "0": 5
+      },
+      "withinOneMark": 1,
+      "correctness": {
+        "humanCorrect": 5,
+        "humanWrong": 1,
+        "falsePositives": 0,
+        "falseNegatives": 0,
+        "correctMarkedWrong": 0,
+        "wrongMarkedCorrect": 0
+      },
+      "methodMarks": {
+        "compared": 4,
+        "agree": 4,
+        "rate": 1
+      },
+      "followThrough": {
+        "cases": 0,
+        "sentToPerson": 0,
+        "matched": 0
+      },
+      "states": {
+        "blankMarkedWrong": 0,
+        "unreadableMarkedWrong": 0,
+        "stateErrors": 0
+      },
+      "conditions": {
+        "partial_credit": {
+          "questions": 1,
+          "falseNegatives": 0
+        },
+        "crossed_out": {
+          "questions": 1,
+          "falseNegatives": 0
+        },
+        "ambiguous": {
+          "questions": 1,
+          "falseNegatives": 0
+        },
+        "poor_scan": {
+          "questions": 1,
+          "falseNegatives": 0
+        },
+        "alternative_method": {
+          "questions": 1,
+          "falseNegatives": 0
+        }
+      }
+    },
+    "gates": {
+      "transcription": "unmeasured",
+      "exactAgreement": "unmeasured",
+      "withinOneMark": "unmeasured",
+      "correctMarkedWrong": "unmeasured",
+      "wrongMarkedCorrect": "unmeasured",
+      "statesWrong": "unmeasured",
+      "reviewRate": "unmeasured"
+    },
+    "validation": "unvalidated",
+    "reasons": [
+      "No human-marked handwritten responses have been supplied: nothing here says how reliable automatic marking is on real work."
+    ]
+  },
   "summaries": {
     "dev": {
       "split": "dev",
@@ -14,7 +98,7 @@
       "verifiedCoverage": 0.9772727272727273,
       "falseVerified": 0,
       "placementBad": 0,
-      "seconds": 0.5113333333333333,
+      "seconds": 0.49499999999999994,
       "gates": {
         "extractionRecall": "met",
         "extractionPrecision": "met",
@@ -35,7 +119,7 @@
       "verifiedCoverage": null,
       "falseVerified": 0,
       "placementBad": 0,
-      "seconds": 0.082,
+      "seconds": 0.081,
       "gates": {
         "extractionRecall": "met",
         "extractionPrecision": "met",
@@ -56,7 +140,7 @@
       "verifiedCoverage": 0.9772727272727273,
       "falseVerified": 0,
       "placementBad": 0,
-      "seconds": 0.40399999999999997,
+      "seconds": 0.39149999999999996,
       "gates": {
         "extractionRecall": "met",
         "extractionPrecision": "met",
@@ -124,7 +208,7 @@
         "bad": [],
         "ok": 6
       },
-      "seconds": 0.86
+      "seconds": 0.818
     },
     {
       "id": "syn-gcse-parts",
@@ -183,7 +267,7 @@
         "bad": [],
         "ok": 6
       },
-      "seconds": 0.101
+      "seconds": 0.1
     },
     {
       "id": "syn-long-120",
@@ -241,7 +325,7 @@
         "bad": [],
         "ok": 120
       },
-      "seconds": 0.573
+      "seconds": 0.567
     },
     {
       "id": "syn-pitfalls",
@@ -300,7 +384,7 @@
         "bad": [],
         "ok": 7
       },
-      "seconds": 0.082
+      "seconds": 0.081
     }
   ]
 }
