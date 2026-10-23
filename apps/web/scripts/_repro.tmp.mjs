@@ -1,0 +1,15 @@
+import { readFileSync } from "node:fs";
+import { assistantConfig } from "../src/lib/assistant/config.ts";
+import { OllamaProvider } from "../src/lib/assistant/ollama.ts";
+import { GenerationQueue } from "../src/lib/assistant/queue.ts";
+import { extractQuestions, photoToPdf } from "../src/lib/paper/paper.ts";
+const config = assistantConfig({ ...process.env, ASSISTANT_PROVIDER: "ollama" });
+const provider = new OllamaProvider({ baseUrl: "http://127.0.0.1:11434", model: config.model, visionModel: config.visionModel ?? undefined, contextSize: config.contextSize, keepAlive: config.keepAlive });
+const deps = { provider, queue: new GenerationQueue(1, 4), model: config.model, visionModel: config.visionModel ?? config.model };
+const png = new Uint8Array(readFileSync(process.argv[2]));
+const pdf = await photoToPdf(png, "image/png");
+const t = Date.now();
+const doc = await extractQuestions(deps, pdf);
+console.log("ms", Date.now() - t, "model", config.model, "ctx", config.contextSize);
+if ("problem" in doc) console.log(doc.problem);
+else for (const q of doc.questions) console.log(JSON.stringify({ id: q.id, number: q.number, marks: q.marks, group: q.group, text: q.text.slice(0, 300) }));

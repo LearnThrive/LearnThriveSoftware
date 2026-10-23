@@ -1,0 +1,10 @@
+import { mathjax } from "mathjax-full/js/mathjax.js";
+import { TeX } from "mathjax-full/js/input/tex.js";
+import { SVG } from "mathjax-full/js/output/svg.js";
+import { liteAdaptor } from "mathjax-full/js/adaptors/liteAdaptor.js";
+import { RegisterHTMLHandler } from "mathjax-full/js/handlers/html.js";
+import "mathjax-full/js/input/tex/ams/AmsConfiguration.js";
+const adaptor = liteAdaptor(); RegisterHTMLHandler(adaptor);
+const doc = mathjax.document("", { InputJax: new TeX({ packages: ["base", "ams"] }), OutputJax: new SVG({ fontCache: "none" }) });
+const html = adaptor.outerHTML(doc.convert(process.argv[2], { display: false }));
+console.log(html.replace(/ d="[^"]{40,}"/g, ' d="…"').slice(0, 2500));
