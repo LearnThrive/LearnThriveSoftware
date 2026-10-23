@@ -21,6 +21,7 @@
     "library:grant": "node --import tsx scripts/library-grant.mjs",
     "billing:reconcile": "node --import tsx scripts/billing-reconcile.mjs",
     "assistant:retention": "node --import tsx scripts/assistant-retention.mjs",
+    "research:check": "node scripts/research-check.mjs",
     "assistant:bench": "node --import tsx scripts/assistant-bench.mjs",
     "paper:bench": "node --import tsx scripts/paper-bench.mjs",
     "documents:check": "node --import tsx scripts/document-check.mjs",

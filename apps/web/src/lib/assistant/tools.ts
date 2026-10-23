@@ -2,6 +2,8 @@ import type { ChatOwner, LibraryStore } from "@learnthrive/data/library";
 import { evaluate, sameValue, satisfies, valueOf } from "@/lib/paper/maths";
 import type { ToolDefinition } from "./types";
 import { describeHits, type RetrievalHit } from "./retrieval";
+import { RESEARCH_NAMES, RESEARCH_TOOLS, runResearchTool } from "./research/tools";
+import type { ResearchSession } from "./research/verify";
 
 /**
  * Real tool calling (brief section 8): a SMALL, read-only allowlist, executed by the server after validating the arguments.
@@ -18,6 +20,8 @@ export interface ToolContext {
   fileNames: ReadonlyMap<string, string>;
   search: (query: string) => Promise<RetrievalHit[]>;
   maxChars?: number;
+  /** This turn's web research, when it is switched on. Without it the research tools answer that they are unavailable. */
+  research?: ResearchSession | null;
 }
 
 export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
@@ -60,7 +64,10 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   },
 ] as const;
 
-const ALLOWED_NAMES = new Set(TOOL_DEFINITIONS.map((t) => t.name));
+const ALLOWED_NAMES = new Set([...TOOL_DEFINITIONS.map((t) => t.name), ...RESEARCH_NAMES]);
+
+/** The tools offered on a turn: the three read-only ones always, and the research ones only when this turn has a research session. */
+export const toolsFor = (research: ResearchSession | null | undefined): readonly ToolDefinition[] => (research ? [...TOOL_DEFINITIONS, ...RESEARCH_TOOLS] : TOOL_DEFINITIONS);
 const MAX_CHARS = 300;
 const RESULT_CHARS = 4000;
 
@@ -99,6 +106,10 @@ export async function runTool(name: unknown, args: unknown, ctx: ToolContext, si
       if (!region.length) return { ok: true, content: `No page or question matching "${reference}" is in the uploaded files of this chat. Say so rather than guessing.` };
       const text = region.map((h) => `[${[h.page ? `page ${h.page}` : null, h.label].filter(Boolean).join(", ")}]\n${h.text}`).join("\n\n");
       return { ok: true, content: defuse(text).slice(0, RESULT_CHARS) };
+    }
+    if (RESEARCH_NAMES.has(name)) {
+      const result = await runResearchTool(name, input, ctx.research);
+      return result.ok ? { ok: true, content: result.content } : { ok: false, code: "unavailable", content: result.content };
     }
     // check_calculation
     const expression = typeof input.expression === "string" ? input.expression.replace(/\s+/g, " ").trim().slice(0, 200) : "";

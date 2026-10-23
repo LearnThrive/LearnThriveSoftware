@@ -44,7 +44,7 @@ const MODELS = {
   embed: env.ASSISTANT_EMBED_MODEL?.trim() || "embeddinggemma-2:270m-q8_0-text",
   decision: env.ASSISTANT_DECISION_MODEL?.trim() || "laya:421m-typed-decisions-bf16",
 };
-const CONTEXT = Number(env.ASSISTANT_CONTEXT ?? 4096);
+const CONTEXT = Number(env.ASSISTANT_CONTEXT ?? 8192);
 const KEEP_ALIVE = env.ASSISTANT_KEEP_ALIVE?.trim() || "30m";
 const HELPER_KEEP_ALIVE = env.ASSISTANT_EMBED_KEEP_ALIVE?.trim() || "10m";
 

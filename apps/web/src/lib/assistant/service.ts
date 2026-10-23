@@ -10,7 +10,9 @@ import { defuse, describeDocument, preparePhoto, readPdfDocument } from "./docum
 import { warmOnce } from "./warmup";
 import { deterministicRoute, needsDecision, type RouteDecision, type SystemOneClient } from "./decision";
 import { enqueueIndex, drainIndexQueue, describeHits, indexFile, searchUploads, type RetrievalDeps, type RetrievalHit } from "./retrieval";
-import { TOOL_DEFINITIONS, runTool } from "./tools";
+import { runTool, toolsFor } from "./tools";
+import { finishStudy, prepareStudy, type StudyPrep } from "./study";
+import type { ResearchService } from "./research/verify";
 import type { EmbeddingProvider } from "./embeddings";
 
 /**
@@ -66,6 +68,8 @@ export interface ChatServiceDeps {
   log?: (outcome: string, details?: Record<string, string | number>) => void;
   /** Whether the provider is a hosted one, which the token budget protects (a local model costs nothing per token). */
   hosted?: boolean;
+  /** Web research through SearXNG. Absent (tests): nothing is looked up and quotations are reported as unchecked. */
+  research?: ResearchService | null;
 }
 
 export interface ChatInput {
@@ -295,9 +299,20 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
   }
   const fileNames = new Map(attachable.map((f, i) => [f.id, `upload ${i + 1}`]));
 
+  // What the server can check before the model answers (quotations, an exam board's documents), and the subject-aware instructions for this turn.
+  // A failure here costs the extra checks, never the answer. Spoken turns skip it to stay quick.
+  let study: StudyPrep | null = null;
+  if (!input.voice) {
+    try {
+      study = await prepareStudy({ text, material: text + uploadedText, history, research: deps.research ?? null, owner: input.owner.clientId, signal: input.signal });
+    } catch {
+      study = null;
+    }
+  }
+
   // The history that fits in the context window, newest kept first.
-  const userContent = (text || "Please look at the attached file.") + uploadedText + (retrieved.length ? describeHits(retrieved, fileNames) : "");
-  const systemPrompt = input.voice ? `${SYSTEM_PROMPT}\n\n${VOICE_PROMPT_ADDENDUM}` : SYSTEM_PROMPT;
+  const userContent = (text || "Please look at the attached file.") + uploadedText + (retrieved.length ? describeHits(retrieved, fileNames) : "") + (study?.evidence ?? "");
+  const systemPrompt = input.voice ? `${SYSTEM_PROMPT}\n\n${VOICE_PROMPT_ADDENDUM}` : SYSTEM_PROMPT + (study?.system ?? "");
   const budgetChars = Math.max(2000, (config.contextSize - config.maxOutputTokens - approxTokens(systemPrompt) - approxTokens(userContent)) * 3.5);
   const kept: ProviderMessage[] = [];
   let used = 0;
@@ -348,7 +363,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
       }
     }
 
-    const tools = caps.toolUse && config.maxToolRounds > 0 ? TOOL_DEFINITIONS : [];
+    const tools = caps.toolUse && config.maxToolRounds > 0 ? toolsFor(study?.session) : [];
     const thinking = thinkingFor(config.thinking, text, images.length > 0);
     const turnStartedAt = Date.now();
     const turnDeadline = turnStartedAt + stage.turnMs;
@@ -358,6 +373,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
       sessionId,
       fileNames,
       search: (query: string) => searchUploads(retrievalDeps, { owner: input.owner, sessionId, query, topK: config.retrieval.topK, minScore: config.retrieval.minScore, signal: input.signal }),
+      research: study?.session ?? null,
     };
 
     let rounds = 0;
@@ -418,7 +434,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
           new Promise<{ ok: false; content: string; code: "unavailable" }>((resolve) => setTimeout(() => resolve({ ok: false, content: "That tool took too long. Answer without it.", code: "unavailable" }), Math.min(stage.toolRoundMs, remaining(turnDeadline)))),
         ]);
         st.timings.tools += 1;
-        log("tool", { ok: outcome.ok ? 1 : 0, name: TOOL_DEFINITIONS.some((t) => t.name === call.name) ? 1 : 0 });
+        log("tool", { ok: outcome.ok ? 1 : 0, name: tools.some((t) => t.name === call.name) ? 1 : 0 });
         retryMessages.push({ role: "tool", toolName: call.name, content: outcome.content });
       }
       messages.push({ role: "assistant", content: "", toolCalls: used }, ...retryMessages);
@@ -432,6 +448,19 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
     if (rest) {
       shown += rest;
       yield { type: "delta", text: rest };
+    }
+    // The server's own look at the finished reply: marks the evidence lowers, mistakes it can prove, and the sources that were read.
+    if (study && shown.trim() && !guard.stoppedFor) {
+      let extra = "";
+      try {
+        extra = finishStudy(study, shown);
+      } catch {
+        extra = "";
+      }
+      if (extra) {
+        shown += extra;
+        yield { type: "delta", text: extra };
+      }
     }
     st.timings.totalMs = Date.now() - turnStartedAt;
   };
@@ -493,6 +522,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
     // Whatever was shown is stored, even if the person stopped it or the model failed halfway.
   }
 
+  if (study) log("study", { subject: study.ctx.subject ? 1 : 0, activity: study.ctx.activity === "mark_essay" ? 1 : study.ctx.activity === "quote_check" ? 2 : 0, searches: study.session?.searches ?? 0, fetches: study.session?.fetches ?? 0, skipped: study.session?.skipped ?? 0 });
   log("turn", {
     intent: intent === "search_material" ? 1 : intent === "explain_question" ? 2 : intent === "solve_paper" ? 3 : intent === "clarify" ? 4 : 0,
     routedByModel: route?.source === "model" ? 1 : 0,

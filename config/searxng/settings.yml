@@ -1,0 +1,28 @@
+# SearXNG settings for Study Buddy's web research (docs/RESEARCH.md). Used by the optional `searxng` service in config/compose.yaml.
+# The ONE setting the website needs is `search.formats` containing `json`: without it SearXNG answers every API request with HTTP 403.
+use_default_settings: true
+
+general:
+  instance_name: "LearnThrive research"
+  debug: false
+
+search:
+  # 1 = moderate filtering. Study Buddy is used by children.
+  safe_search: 1
+  formats:
+    - html
+    - json
+
+server:
+  # Inside the container. The compose file publishes it on 127.0.0.1 only. The secret key is NOT written here: SearXNG reads the
+  # SEARXNG_SECRET environment variable, which compose passes in from your own environment.
+  bind_address: "0.0.0.0"
+  port: 8080
+  # The public rate limiter needs a Valkey/Redis service. This instance is private to the website on this machine, which does its own
+  # per-answer and per-account limiting (RESEARCH_MAX_SEARCHES, RESEARCH_PER_MINUTE). Turn it on, with Valkey, if you ever expose the instance.
+  limiter: false
+  image_proxy: false
+
+outgoing:
+  request_timeout: 6.0
+  max_request_timeout: 10.0
