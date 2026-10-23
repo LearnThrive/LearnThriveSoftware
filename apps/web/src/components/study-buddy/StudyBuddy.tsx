@@ -858,9 +858,9 @@ export function StudyBuddy() {
                 <div className={styles.empty}>
                   <h2>What are you working on?</h2>
                   <p>
-                    Ask a question, or add a photo or PDF of your work. Study
-                    Buddy gives you a hint first, then works through it with
-                    you.
+                    Ask a question, or add a photo or PDF of your work. Ask for
+                    the answer or a model answer and Study Buddy gives it; ask
+                    to work through it and it goes step by step with you.
                   </p>
                   <ul
                     className={styles.suggestions}

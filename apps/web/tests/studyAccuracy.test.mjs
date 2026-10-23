@@ -355,3 +355,45 @@ test("plain arithmetic in a reply is checked, and only when it is plainly wrong"
   assert.equal(note.length, 1);
   assert.match(note[0], /arithmetic is wrong/);
 });
+
+/* extra ------------------------------------------------------------------- the student decides: the answer, or working through it */
+
+test("a student who asks for the answer gets it, one who asks to work through it is guided, and one who says nothing is not assumed to want either", () => {
+  const mode = (text, history = []) => ctxLib.detectStudyContext(text, { history }).mode;
+  for (const text of [
+    "Can I have a model answer for this Macbeth essay question?",
+    "Just give me the answer to 3x + 4 = 19",
+    "Give me a worked solution for this physics calculation",
+    "What is the answer to question 4b?",
+    "Show me a full marks answer for this 6 mark history question",
+    "Solve this quadratic please",
+    "I just need the answer, no hints",
+  ]) assert.equal(mode(text), "answer", text);
+  for (const text of ["Can you walk me through question 4?", "Help me work through this equation", "Give me a hint for part b", "Don't give me the answer, let me try", "Guide me step by step so I can learn it", "quiz me on cell biology"]) assert.equal(mode(text), "guided", text);
+  for (const text of ["Explain osmosis", "How does Priestley present Mr Birling?", "Solve 2x + 7 = 19", "hello"]) assert.equal(mode(text), "unspecified", text);
+  // A student who is being guided and replies with an attempt stays guided; asking for the answer ends it.
+  const guided = [{ role: "user", content: "Walk me through this equation" }, { role: "assistant", content: "What is the first step?" }];
+  assert.equal(mode("I think I subtract 7 from both sides?", guided), "guided");
+  assert.equal(mode("just give me the answer now", guided), "answer");
+});
+
+test("the turn's instructions follow the student's choice in every subject, and the base prompt no longer forces guiding", () => {
+  const block = (text) => strategies.strategyBlock(ctxLib.detectStudyContext(text));
+  for (const text of ["Give me a model answer: how does Lady Macbeth show guilt?", "Give me a worked solution for 3x + 4 = 19", "Give me the answer to this biology 6 marker on osmosis", "Model answer please: why did the Treaty of Versailles cause resentment?"]) {
+    const b = block(text);
+    assert.match(b, /Give it in full, straight away/, text);
+    assert.match(b, /No hints first, no questions back/, text);
+    assert.doesNotMatch(b, /one step at a time/, text);
+  }
+  const g = block("Walk me through this maths equation: 3x + 4 = 19");
+  assert.match(g, /one step at a time/);
+  assert.match(g, /Do not give the final answer unless they ask/);
+  assert.doesNotMatch(g, /straight away/);
+  // Coursework is still not written for them.
+  assert.match(block("Give me a model answer for my english essay"), /Coursework or other assessed work/);
+  // Nothing said: no mode instruction at all (the base prompt says to answer directly and offer to work through it).
+  assert.doesNotMatch(block("Solve 2x + 7 = 19"), /How they want to be helped/);
+  const promptLib = loadTsFrom(import.meta.url, "../src/lib/assistant/prompt.ts");
+  assert.doesNotMatch(promptLib.SYSTEM_PROMPT, /Teach, do not just tell/);
+  assert.match(promptLib.SYSTEM_PROMPT, /Never make a student work through something they only asked you to answer/);
+});

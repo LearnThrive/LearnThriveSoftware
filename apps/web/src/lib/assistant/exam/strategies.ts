@@ -24,10 +24,23 @@ const ACTIVITY: Record<StudyContext["activity"], string[]> = {
   explain: [],
 };
 
+/** How the student asked to be helped. This outranks any habit of guiding: the student decides, in every subject. */
+const MODE: Record<Exclude<StudyContext["mode"], "unspecified">, string[]> = {
+  answer: [
+    "The student asked for the answer. Give it in full, straight away, in whatever subject this is: a complete model answer at the length and depth the marks need, or a full worked solution ending in the final answer. No hints first, no questions back, and do not ask them to try it themselves first.",
+    "After the answer, add at most one short line offering to talk through any part of it. Never hold the answer back.",
+    "This is for questions and practice they are working on. Coursework or other assessed work that will be handed in as theirs is still not written for them (see the rules above): offer to explain it, plan it or check their own draft.",
+  ],
+  guided: [
+    "The student wants to work through this themselves. Take one step at a time: give the first step or ask one guiding question, then stop and wait for their attempt. Respond to what they write, correct mistakes kindly, and give the next step only when they are ready.",
+    "Do not give the final answer unless they ask for it.",
+  ],
+};
+
 export function strategyBlock(ctx: StudyContext, options: { researchAvailable?: boolean; essay?: string } = {}): string {
   const subject = ctx.subject ? subjectById(ctx.subject) : null;
   const activity = ACTIVITY[ctx.activity];
-  if (!subject && !activity.length && !ctx.board && !ctx.marks) return "";
+  if (!subject && !activity.length && !ctx.board && !ctx.marks && ctx.mode === "unspecified") return "";
   const lines: string[] = ["", "THIS TURN"];
   const facts = [
     subject ? `subject ${subject.label}${ctx.confidence === "low" ? " (a guess; ask if it matters)" : ""}` : null,
@@ -44,6 +57,7 @@ export function strategyBlock(ctx: StudyContext, options: { researchAvailable?: 
     lines.push(`${subject.label} method:`, ...subject.strategy.map((s) => `- ${s}`), ...subject.checks.map((s) => `- ${s}`));
   }
   if (activity.length) lines.push(...activity.map((s) => `- ${s}`));
+  if (ctx.mode !== "unspecified") lines.push(`How they want to be helped (${ctx.mode === "answer" ? "the answer" : "working through it"}):`, ...MODE[ctx.mode].map((s) => `- ${s}`));
   const frame = ctx.activity === "mark_essay" ? markFrame(ctx, options.essay ?? "") : null;
   if (frame) lines.push(`Marking frame: ${describeFrame(frame)}`);
   else if (ctx.activity === "mark_essay") lines.push("- The exam board or the question's mark total is not known, so give feedback by the general assessment objectives and ask which board and mark total apply before giving a mark.");
