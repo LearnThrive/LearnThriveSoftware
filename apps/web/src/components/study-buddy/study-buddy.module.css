@@ -6,13 +6,94 @@
 
 /* ---- the page: header, conversation, box ---- */
 
+/* The workspace owns the screen under the shell's top bar (and the supervised-view banner): the chats beside the conversation when there is room,
+   and a tools column beyond that. The thresholds are in StudyBuddy.tsx (56rem and 80rem of page width). */
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  height: calc(100dvh - var(--app-topbar-height, 3.5rem) - var(--app-banner-height, 0px));
+  min-width: 0;
+}
+
+.workspace[data-roomy] {
+  grid-template-columns: 17rem minmax(0, 1fr);
+}
+
+.workspace[data-roomy][data-wide] {
+  grid-template-columns: 17rem minmax(0, 1fr) 19rem;
+}
+
 .page {
   position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  /* The shell's top bar (and the supervised-view banner, when there is one) sit above; the page owns the rest of the screen. */
-  height: calc(100dvh - var(--app-topbar-height, 3.5rem) - var(--app-banner-height, 0px));
+  height: 100%;
+  min-height: 0;
   min-width: 0;
+}
+
+/* The chats, as a navy panel beside the conversation (the same look they have in the sidebar). */
+.history {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: var(--space-4) var(--space-3);
+  overflow-y: auto;
+  background: var(--app-sidebar);
+  color: var(--app-on-dark);
+}
+
+/* The far column: what Study Buddy can do, so the width is used for something. */
+.tools {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: 0;
+  padding: var(--space-5) var(--space-4);
+  overflow-y: auto;
+  border-left: 1px solid var(--border-subtle);
+  background: var(--surface-3);
+  color: var(--fg-body);
+}
+
+.tools h2 {
+  margin: 0;
+  color: var(--fg-strong);
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+}
+
+.tools ul {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tools li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.tools li > svg {
+  margin-top: 2px;
+  color: var(--fg-accent);
+}
+
+.tools strong {
+  color: var(--fg-strong);
+  font-size: var(--text-small);
+}
+
+.tools p {
+  margin: 2px 0 0;
+  color: var(--fg-muted);
+  font-size: var(--text-small);
+  line-height: 1.5;
 }
 
 .bar {
