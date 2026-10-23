@@ -57,8 +57,8 @@ Study Buddy detects what the student is doing and for which exam, checks quotati
 | `ASSISTANT_BASE_URL` | The provider's address | Ollama: `http://127.0.0.1:11434` |
 | `ASSISTANT_API_KEY` | The production provider's key (`custom`). `NVIDIA_API_KEY` is read for `nim`. Never logged | none |
 | `ASSISTANT_CONTEXT` | Context window to ask for, tokens (the warm-up sends the same value). It must hold the instructions, the history, a picture and the longest answer | 8192 |
-| `ASSISTANT_MAX_OUTPUT_TOKENS` | Most tokens in one answer: about 2000 words of plain English at the default (LaTeX uses more tokens per word). An answer that reaches the limit stops there | 2700 |
-| `ASSISTANT_THINKING` / `ASSISTANT_THINKING_TOKENS` | `off`, `auto`, `on` or a level; extra tokens thinking may use so the answer still fits | `auto` / 600 |
+| `ASSISTANT_MAX_OUTPUT_TOKENS` | Most tokens in one answer: about 3000 words of plain English at the default, still over 2000 for LaTeX maths. An answer that reaches the limit stops with a visible note, and "continue" carries on | 4096 |
+| `ASSISTANT_THINKING` / `ASSISTANT_THINKING_TOKENS` | `off`, `auto`, `on` or a level; extra tokens thinking may use (thinking and the answer share one count) so the answer still fits | `auto` / 1500 |
 | `ASSISTANT_KEEP_ALIVE` | How long the tutor stays resident between questions | `30m` |
 | `ASSISTANT_STAGE_*` | Staged budgets: queue, load, first activity, first answer, idle, tool round, whole turn | see [OLLAMA_THREE_MODEL.md](OLLAMA_THREE_MODEL.md) |
 | `ASSISTANT_MAX_TOOL_ROUNDS` | Read-only tool round trips in one turn (0 disables tools) | 2 |

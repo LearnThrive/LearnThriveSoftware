@@ -303,6 +303,7 @@ export class OllamaProvider implements ChatProvider, WarmableProvider {
               tool_calls?: Array<{ id?: string; function?: { name?: string; arguments?: unknown } }>;
             };
             done?: boolean;
+            done_reason?: string;
             error?: string;
             prompt_eval_count?: number;
             eval_count?: number;
@@ -365,6 +366,7 @@ export class OllamaProvider implements ChatProvider, WarmableProvider {
               usage: { promptTokens: part.prompt_eval_count ?? 0, completionTokens: part.eval_count ?? 0 },
               stats: { firstTokenMs: firstActivityMs ?? Date.now() - started, firstAnswerMs: firstAnswerAt, totalMs: Date.now() - started },
               metrics,
+              cutOff: part.done_reason === "length",
             };
             return;
           }

@@ -124,7 +124,7 @@ Set these in Render's environment, as secrets where the table says so, and nowhe
 | `ASSISTANT_BASE_URL` | The provider's address. Production: the chosen OpenAI-compatible endpoint. Development: the GPU Ollama server. | optional | optional | no | n/a | http://127.0.0.1:11434 (Ollama) |
 | `ASSISTANT_KEEP_ALIVE` | How long Ollama keeps the tutor resident after a turn. Server-side OLLAMA_KEEP_ALIVE is separate (scripts/ollama-local.mjs). | optional | optional | no | n/a | 30m |
 | `ASSISTANT_THINKING` | Thinking policy: off, auto (only genuinely multi-step work), on, or a level the model reports (low/medium/high). | optional | optional | no | n/a | auto |
-| `ASSISTANT_THINKING_TOKENS` | Extra output tokens allowed for thinking, on top of the answer's own budget (otherwise a hard question can spend its whole budget thinking). | optional | optional | no | n/a | 600 |
+| `ASSISTANT_THINKING_TOKENS` | Extra output tokens allowed for thinking, on top of the answer's own budget (thinking and the answer share one token count, so a hard question that thinks at length would otherwise leave the answer a few hundred words). | optional | optional | no | n/a | 1500 |
 | `ASSISTANT_HELPER_BASE_URL` | The CPU-only Ollama server for the embedding and decision roles (a second loopback process; docs/OLLAMA_THREE_MODEL.md). | optional | optional | no | n/a | http://127.0.0.1:11435 |
 | `ASSISTANT_STAGE_QUEUE_MS` | How long a turn may wait for a generation slot. | optional | optional | no | n/a | 20000 |
 | `ASSISTANT_STAGE_LOAD_MS` | How long a model may take to become resident before the turn starts (a visible preparing state, not a silent wait). | optional | optional | no | n/a | 180000 |
@@ -167,7 +167,7 @@ Set these in Render's environment, as secrets where the table says so, and nowhe
 | `ASSISTANT_VRAM_HEADROOM_MIB` | The GPU headroom the benchmark checks under peak image requests (an engineering target, not a runtime limit). | optional | optional | no | n/a | 1536 |
 | `ASSISTANT_API_KEY` | The production provider's key (custom). Never logged. | optional | only when approved | **yes** | the chosen provider | unset |
 | `ASSISTANT_CONTEXT` | Context window to ask for, in tokens. The warm-up sends the same value: a change reloads the model. It has to hold the instructions, the history, a picture and the longest answer. | optional | optional | no | n/a | 8192 |
-| `ASSISTANT_MAX_OUTPUT_TOKENS` | The most tokens in one answer. 2700 is about 2000 words of plain English; maths written in LaTeX spends more tokens per word. An answer that reaches it is cut off, so it must fit inside ASSISTANT_CONTEXT with the instructions and history. | optional | optional | no | n/a | 2700 |
+| `ASSISTANT_MAX_OUTPUT_TOKENS` | The most tokens in one answer. 4096 is about 3000 words of plain English and still over 2000 for maths written in LaTeX. An answer that reaches it stops with a visible note, so it must fit inside ASSISTANT_CONTEXT with the instructions and history. | optional | optional | no | n/a | 4096 |
 | `ASSISTANT_DAILY_MESSAGES` | Messages one account may send a day. | optional | optional | no | n/a | 40 |
 | `LEARNER_INVITE_HOURS` | How long a guardian's learner invitation link works, in hours. | optional | optional | no | n/a | 72 |
 | `LEARNER_INVITES_PER_DAY` | Learner invitations one student may be sent in a day (re-inviting counts). | optional | optional | no | n/a | 5 |

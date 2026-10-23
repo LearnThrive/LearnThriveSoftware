@@ -306,7 +306,7 @@ test("config: staged budgets, image variants, deprecated picture aliases and bou
   const c = cfg.assistantConfig({});
   assert.equal(c.model, "bonsai-2:9b");
   assert.equal(c.contextSize, 8192);
-  assert.equal(c.maxOutputTokens, 2700);
+  assert.equal(c.maxOutputTokens, 4096);
   assert.equal(c.thinking, "auto");
   assert.equal(c.stages.text.turnMs, 180000);
   assert.equal(c.stages.image.turnMs, 240000);

@@ -13,8 +13,8 @@ type Env = Record<string, string | undefined>;
  *   ASSISTANT_MODEL                 tutor model          ASSISTANT_VISION_MODEL   model for images (may be the same)
  *   ASSISTANT_BASE_URL              the provider's address (Ollama default http://127.0.0.1:11434)
  *   ASSISTANT_API_KEY               the production provider's key (`custom`). NVIDIA_API_KEY is read for `nim`. Never logged
- *   ASSISTANT_CONTEXT               context window to ask for, tokens (default 8192: the instructions, the history, a picture and an answer of up to 2700 tokens must all fit)
- *   ASSISTANT_MAX_OUTPUT_TOKENS     most tokens in one answer (default 2700: about 2000 words of plain English; maths written in LaTeX spends more tokens per word)
+ *   ASSISTANT_CONTEXT               context window to ask for, tokens (default 8192: the instructions, the history, a picture and an answer of up to 4096 tokens must all fit)
+ *   ASSISTANT_MAX_OUTPUT_TOKENS     most tokens in one answer (default 4096: about 3000 words of plain English, still over 2000 for maths written in LaTeX; the model's hidden thinking has its own extra allowance, ASSISTANT_THINKING_TOKENS)
  *   ASSISTANT_KEEP_ALIVE            how long the tutor stays resident between questions (default 30m)
  *   ASSISTANT_THINKING              off | auto | on | low | medium | high (default auto: only a genuinely hard question may think)
  *   ASSISTANT_DAILY_MESSAGES        messages per account per day (default 40)     ASSISTANT_PER_MINUTE   per minute (default 6)
@@ -56,7 +56,7 @@ export const ASSISTANT_DEFAULTS = {
   // The candidate profile from the brief (section 12), pending the benchmark in docs/OLLAMA_THREE_MODEL.md.
   model: "bonsai-2:9b",
   contextSize: 8192,
-  maxOutputTokens: 2700,
+  maxOutputTokens: 4096,
   dailyMessages: 40,
   perMinute: 6,
   dailyTokenBudget: 40_000,
@@ -92,7 +92,7 @@ export const ASSISTANT_DEFAULTS = {
   // 0.55 abstains on everything. The margin over the runner-up is the honest discriminator; below either, routing is deterministic.
   decisionMinConfidence: 0.3,
   decisionMinMargin: 0.12,
-  thinkingTokens: 600,
+  thinkingTokens: 1500,
   photoLongSide: 1400,
   renderLongSide: 1200,
   imagesPerMessage: 3,
@@ -242,7 +242,7 @@ export function assistantConfig(env: Env = process.env): AssistantConfig {
     visionModel: pick(env.ASSISTANT_VISION_MODEL) ?? null,
     baseUrl: pick(env.ASSISTANT_BASE_URL) ?? null,
     contextSize: whole(env.ASSISTANT_CONTEXT, ASSISTANT_DEFAULTS.contextSize, 1024, 131072),
-    maxOutputTokens: whole(env.ASSISTANT_MAX_OUTPUT_TOKENS, ASSISTANT_DEFAULTS.maxOutputTokens, 16, 4096),
+    maxOutputTokens: whole(env.ASSISTANT_MAX_OUTPUT_TOKENS, ASSISTANT_DEFAULTS.maxOutputTokens, 16, 8192),
     maxInputChars: ASSISTANT_DEFAULTS.maxInputChars,
     dailyMessages: whole(env.ASSISTANT_DAILY_MESSAGES, ASSISTANT_DEFAULTS.dailyMessages, 1, 1000),
     perMinute: whole(env.ASSISTANT_PER_MINUTE, ASSISTANT_DEFAULTS.perMinute, 1, 60),
