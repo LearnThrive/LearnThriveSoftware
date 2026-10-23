@@ -22,6 +22,8 @@ export interface AiInputProps {
   /** The files that passed the type and count checks, in the order picked. */
   onFilesSelected?: (files: File[]) => void;
   onFileRemove?: (file: File, index: number) => void;
+  /** Names of files still being added (uploaded and read), shown beside the attached ones so nothing sent goes unseen. */
+  pending?: readonly string[];
   disabled?: boolean;
   /** An answer is on its way: sending is paused and a visible "Thinking" line is shown. */
   busy?: boolean;
@@ -187,6 +189,7 @@ export function AiInput({
   files,
   onFilesSelected,
   onFileRemove,
+  pending = [],
   disabled = false,
   busy = false,
   maxLength,
@@ -323,6 +326,36 @@ export function AiInput({
     <div className={styles.root} data-ai-input="" data-busy={busy} data-disabled={disabled} data-full-width={fullWidth || undefined}>
       {hint && <p id={hintId} className={styles.hint}>{hint}</p>}
 
+      {(attached.length > 0 || pending.length > 0) && (
+        <ul className={styles.files} aria-label="Attached files">
+          {attached.map((file, index) => (
+            <li key={`${file.name}-${file.size}-${index}`} className={styles.file} title={file.name}>
+              <button type="button" className={styles.preview} aria-label={`Preview ${file.name}`} aria-haspopup="dialog" onClick={() => setPreviewing(file)}>
+                {isImage(file) && previewUrls.get(file) ? (
+                  // A blob: URL of the student's own file, shown only to them: next/image cannot optimise it.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img className={styles.thumb} src={previewUrls.get(file)} alt="" />
+                ) : (
+                  <span className={styles.thumb} data-kind="document"><FileText size={28} aria-hidden="true" /></span>
+                )}
+              </button>
+              <button type="button" className={styles.tileRemove} aria-label={`Remove ${file.name}`} disabled={disabled} onClick={() => remove(index)}>
+                <X size={14} aria-hidden="true" />
+              </button>
+              <span className={styles.fileName}>{file.name}</span>
+              <span className={styles.fileSize}>{formatBytes(file.size)}</span>
+            </li>
+          ))}
+          {pending.map((name, index) => (
+            <li key={`pending-${name}-${index}`} className={styles.file} data-pending="" title={name}>
+              <span className={styles.thumb} data-kind="document"><span className={styles.spinner} aria-hidden="true" /></span>
+              <span className={styles.fileName}>{name}</span>
+              <span className={styles.fileSize}>Adding…</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
       <form className={styles.pill} data-expanded={expanded} onSubmit={onFormSubmit} onMouseDown={keepFocus} aria-busy={busy}>
         <div className={styles.attach}>
           <button type="button" className={styles.iconButton} aria-label="Take a photo" disabled={disabled} onClick={() => cameraRef.current?.click()}>
@@ -380,29 +413,6 @@ export function AiInput({
         <input ref={imageRef} type="file" hidden accept={imageAccept} multiple data-testid="ai-input-image" onChange={onPick} />
         <input ref={fileRef} type="file" hidden accept={accept} multiple data-testid="ai-input-file" onChange={onPick} />
       </form>
-
-      {attached.length > 0 && (
-        <ul className={styles.files} aria-label="Attached files">
-          {attached.map((file, index) => (
-            <li key={`${file.name}-${file.size}-${index}`} className={styles.file}>
-              <button type="button" className={styles.preview} aria-label={`Preview ${file.name}`} aria-haspopup="dialog" onClick={() => setPreviewing(file)}>
-                {isImage(file) && previewUrls.get(file) ? (
-                  // A blob: URL of the student's own file, shown only to them: next/image cannot optimise it.
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img className={styles.thumb} src={previewUrls.get(file)} alt="" />
-                ) : (
-                  <span className={styles.thumb} data-kind="document"><FileText size={20} aria-hidden="true" /></span>
-                )}
-                <span className={styles.fileName}>{file.name}</span>
-                <span className={styles.fileSize}>{formatBytes(file.size)}</span>
-              </button>
-              <button type="button" className={styles.remove} aria-label={`Remove ${file.name}`} disabled={disabled} onClick={() => remove(index)}>
-                <X size={16} aria-hidden="true" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
 
       {previewing && (
         <FilePreview file={previewing} url={previewUrls.get(previewing) ?? null} onClose={() => { setPreviewing(null); textRef.current?.focus(); }} />

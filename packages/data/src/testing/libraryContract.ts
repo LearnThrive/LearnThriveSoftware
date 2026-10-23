@@ -478,6 +478,23 @@ export function libraryContract(name: string, make: () => Promise<{ harness: Con
       assert.equal(await store.chat.attachFiles(own(a), s.id, [], msg.id), 0);
     });
 
+    test("chat: a file taken out of the box before sending is removed, only by its owner, and never once it was used", async () => {
+      const now = new Date();
+      const a = await family();
+      const b = await family();
+      const s = await store.chat.createSession(own(a), {}, now);
+      const f1 = await store.chat.addFile(own(a), s.id, { storagePath: `${s.id}/one.png`, bytes: 100, contentType: "image/png" }, now);
+      const f2 = await store.chat.addFile(own(a), s.id, { storagePath: `${s.id}/two.png`, bytes: 100, contentType: "image/png" }, now);
+      assert.equal(await store.chat.deleteUnattachedFile(own(b), f1.id), null, "not another family's");
+      assert.equal((await store.chat.deleteUnattachedFile(own(a), f1.id))?.storagePath, `${s.id}/one.png`, "the owner gets the stored path back");
+      assert.equal(await store.chat.deleteUnattachedFile(own(a), f1.id), null, "once");
+      assert.equal(await store.chat.getFile(own(a), f1.id), null);
+      assert.deepEqual((await store.chat.listFiles(own(a), s.id)).map((f) => f.id), [f2.id], "it no longer counts toward the three");
+      const msg = await store.chat.appendMessage(own(a), s.id, "user", "see my working", now);
+      await store.chat.attachFiles(own(a), s.id, [f2.id], msg.id);
+      assert.equal(await store.chat.deleteUnattachedFile(own(a), f2.id), null, "a file already in a message stays with it");
+    });
+
     test("chat: a file's reading and its chunk index belong to the owner, replace cleanly, and go with the file", async () => {
       const now = new Date();
       const a = await family();

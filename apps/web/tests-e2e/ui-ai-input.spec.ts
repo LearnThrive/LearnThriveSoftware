@@ -378,6 +378,11 @@ test.describe('AiInput: files', () => {
     const box = interactive(page);
     await box.getByTestId('ai-input-file').setInputFiles([png('wrong-page.png'), pdf('b.pdf')]);
 
+    // Like other chat apps: the attachments sit above the message box, each with its own always-visible remove button.
+    const tiles = await box.getByRole('list', { name: 'Attached files' }).boundingBox();
+    const field = await box.getByRole('textbox', { name: 'Your message' }).boundingBox();
+    expect(tiles!.y + tiles!.height).toBeLessThanOrEqual(field!.y + 1);
+    await expect(box.getByRole('button', { name: 'Remove wrong-page.png' })).toBeVisible();
     await expect(box.getByRole('button', { name: 'Preview wrong-page.png' }).locator('img')).toBeVisible();
     await box.getByRole('button', { name: 'Preview wrong-page.png' }).click();
     const dialog = page.getByRole('dialog', { name: 'wrong-page.png' });
