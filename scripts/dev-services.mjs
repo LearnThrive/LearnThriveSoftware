@@ -50,6 +50,7 @@ const running = dockerUp ? new Set(docker([...compose, "ps", "--status", "runnin
 const services = [
   { name: "ollama", url: "http://127.0.0.1:11434/api/version", label: "Ollama" },
   { name: "voice", url: "http://127.0.0.1:8765/health", label: "the speech sidecar" },
+  { name: "searxng", url: "http://127.0.0.1:8888/healthz", label: "web search (SearXNG)" },
 ];
 const wanted = [];
 for (const s of services) {

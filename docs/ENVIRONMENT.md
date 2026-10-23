@@ -40,8 +40,8 @@ Set these in Render's environment, as secrets where the table says so, and nowhe
 
 - **Required to run:** `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `ENQUIRY_EMAIL`, `CAPTCHA_SECRET`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`.
 - **Stay unset until the owner flips them** (each opens something that is closed by default): `LIBRARY_ENABLED`, `LIBRARY_TERMS_APPROVED`, `ASSISTANT_ENABLED`, `ASSISTANT_PRODUCTION_APPROVED`, `ASSISTANT_MINORS_APPROVED`, `PAPER_TUTOR_ENABLED`, `PAPER_MARKER_ENABLED`, `PAPER_MARKS_RELEASED`, `NEXT_PUBLIC_APP_PORTAL_ENABLED`. In particular `LIBRARY_ENABLED` and `NEXT_PUBLIC_APP_PORTAL_ENABLED` are not set as part of the Supabase work.
-- **Never set in production** (development, tests or an operator's own shell): `NEXT_PUBLIC_MOTION_DEBUG`, `CAREERS_OPEN_FOR_TESTING`, `DATABASE_ADMIN_URL`, `LEARNTHRIVE_SERVER_PASSWORD`, `SUPABASE_DB_PASSWORD`, `SUPABASE_LOCAL`, `SUPABASE_LOCAL_SERIAL`, `SMOKE_EMAIL`, `CHECK_ENV_ALLOW_HOSTED`, `LIBRARY_DEV_STORAGE_DIR`, `STRIPE_FAKE`, `ASSISTANT_NIM_MODEL`, `ASSISTANT_NIM_VISION_MODEL`, `NVIDIA_API_KEY`, `VOICE_ENABLED`, `VOICE_PROVIDER`, `VOICE_URL`, `VOICE_TOKEN`, `VOICE_HOST`, `VOICE_PORT`, `VOICE_STT_DEVICE`, `VOICE_STT_MODEL`, `VOICE_STT_COMPUTE`, `VOICE_TTS_VOICE`, `LEARNTHRIVE_SUPABASE`, `LEARNTHRIVE_SUPABASE_USE`, `LEARNTHRIVE_DOCKER`, `OLLAMA_MODELS`, `OLLAMA_MODELS_DIR`, `VITE_TURN_URL`, `VITE_TURN_USERNAME`, `VITE_TURN_CREDENTIAL`, `CLOUDFLARE_TURN_KEY_ID`, `CLOUDFLARE_TURN_API_TOKEN`, `TUNNEL_HOST`, `NEXT_DIST_DIR`, `CHROME_PATH`.
-- **Secret:** `RESEND_API_KEY`, `CAPTCHA_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `DATABASE_ADMIN_URL`, `LEARNTHRIVE_SERVER_PASSWORD`, `SUPABASE_DB_PASSWORD`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `ASSISTANT_API_KEY`, `NVIDIA_API_KEY`, `VOICE_TOKEN`, `CLOUDFLARE_TURN_KEY_ID`, `CLOUDFLARE_TURN_API_TOKEN`.
+- **Never set in production** (development, tests or an operator's own shell): `NEXT_PUBLIC_MOTION_DEBUG`, `CAREERS_OPEN_FOR_TESTING`, `DATABASE_ADMIN_URL`, `LEARNTHRIVE_SERVER_PASSWORD`, `SUPABASE_DB_PASSWORD`, `SUPABASE_LOCAL`, `SUPABASE_LOCAL_SERIAL`, `SMOKE_EMAIL`, `CHECK_ENV_ALLOW_HOSTED`, `LIBRARY_DEV_STORAGE_DIR`, `STRIPE_FAKE`, `SEARXNG_SECRET`, `SEARXNG_IMAGE`, `ASSISTANT_NIM_MODEL`, `ASSISTANT_NIM_VISION_MODEL`, `NVIDIA_API_KEY`, `VOICE_ENABLED`, `VOICE_PROVIDER`, `VOICE_URL`, `VOICE_TOKEN`, `VOICE_HOST`, `VOICE_PORT`, `VOICE_STT_DEVICE`, `VOICE_STT_MODEL`, `VOICE_STT_COMPUTE`, `VOICE_TTS_VOICE`, `LEARNTHRIVE_SUPABASE`, `LEARNTHRIVE_SUPABASE_USE`, `LEARNTHRIVE_DOCKER`, `OLLAMA_MODELS`, `OLLAMA_MODELS_DIR`, `VITE_TURN_URL`, `VITE_TURN_USERNAME`, `VITE_TURN_CREDENTIAL`, `CLOUDFLARE_TURN_KEY_ID`, `CLOUDFLARE_TURN_API_TOKEN`, `TUNNEL_HOST`, `NEXT_DIST_DIR`, `CHROME_PATH`.
+- **Secret:** `RESEND_API_KEY`, `CAPTCHA_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `DATABASE_ADMIN_URL`, `LEARNTHRIVE_SERVER_PASSWORD`, `SUPABASE_DB_PASSWORD`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SEARXNG_SECRET`, `ASSISTANT_API_KEY`, `NVIDIA_API_KEY`, `VOICE_TOKEN`, `CLOUDFLARE_TURN_KEY_ID`, `CLOUDFLARE_TURN_API_TOKEN`.
 
 ## Site and mail
 
@@ -137,6 +137,16 @@ Set these in Render's environment, as secrets where the table says so, and nowhe
 | `ASSISTANT_STAGE_TURN_MS` | The whole turn, absolute: tool rounds and retries never reset it. | optional | optional | no | n/a | 180000 |
 | `ASSISTANT_STAGE_TURN_IMAGE_MS` | The whole turn for a message with a picture. | optional | optional | no | n/a | 240000 |
 | `ASSISTANT_MAX_TOOL_ROUNDS` | Tool round trips allowed in one turn (0 turns tool calling off). | optional | optional | no | n/a | 2 |
+| `SEARXNG_BASE_URL` | Where SearXNG runs. Web research is always on; npm start runs the container from config/compose.yaml on this address. It must have the json format enabled in its settings.yml. Never exposed to the browser. | optional | optional | no | n/a | http://127.0.0.1:8888 |
+| `SEARXNG_SECRET` | The secret key for the SearXNG container (config/compose.yaml). Compose reads it; the website never does. The default is a development value that is safe only because the container listens on 127.0.0.1. | optional | unset | **yes** | generate a long random value yourself if the container is ever reachable from elsewhere | a fixed development value |
+| `SEARXNG_IMAGE` | The SearXNG container image. Pin a released tag. | optional | unset | no | n/a | searxng/searxng:latest |
+| `SEARXNG_TIMEOUT_MS` | How long one search may take before it is given up on. | optional | optional | no | n/a | 8000 |
+| `SEARXNG_MAX_RESULTS` | Most results kept from one search. | optional | optional | no | n/a | 8 |
+| `SEARXNG_CACHE_TTL_SECONDS` | How long an identical search or an already-read page is reused (0 turns the cache off). | optional | optional | no | n/a | 3600 |
+| `RESEARCH_MAX_SEARCHES` | Searches one answer may make. | optional | optional | no | n/a | 3 |
+| `RESEARCH_MAX_FETCHES` | Web pages one answer may read. | optional | optional | no | n/a | 3 |
+| `RESEARCH_FETCH_MAX_BYTES` | Most bytes read from one web page or PDF. | optional | optional | no | n/a | 1500000 |
+| `RESEARCH_PER_MINUTE` | Searches one account may start per minute, across answers. | optional | optional | no | n/a | 10 |
 | `ASSISTANT_RETRIEVAL` | on (default) or off: search the family's OWN uploads for relevant chunks. Off also stops indexing. | optional | optional | no | n/a | on |
 | `ASSISTANT_RETRIEVAL_TOP_K` | Chunks of the student's material given to the tutor. | optional | optional | no | n/a | 4 |
 | `ASSISTANT_RETRIEVAL_MIN_SCORE` | The lowest cosine similarity that counts as a retrieval hit (0 to 1). | optional | optional | no | n/a | 0.35 |
@@ -156,8 +166,8 @@ Set these in Render's environment, as secrets where the table says so, and nowhe
 | `ASSISTANT_IMAGES_PER_MESSAGE` | The most pictures sent with one message. | optional | optional | no | n/a | 3 |
 | `ASSISTANT_VRAM_HEADROOM_MIB` | The GPU headroom the benchmark checks under peak image requests (an engineering target, not a runtime limit). | optional | optional | no | n/a | 1536 |
 | `ASSISTANT_API_KEY` | The production provider's key (custom). Never logged. | optional | only when approved | **yes** | the chosen provider | unset |
-| `ASSISTANT_CONTEXT` | Context window to ask for, in tokens. The warm-up sends the same value: a change reloads the model. | optional | optional | no | n/a | 4096 |
-| `ASSISTANT_MAX_OUTPUT_TOKENS` | The most tokens in one answer. | optional | optional | no | n/a | 700 |
+| `ASSISTANT_CONTEXT` | Context window to ask for, in tokens. The warm-up sends the same value: a change reloads the model. It has to hold the instructions, the history, a picture and the longest answer. | optional | optional | no | n/a | 8192 |
+| `ASSISTANT_MAX_OUTPUT_TOKENS` | The most tokens in one answer. 2700 is about 2000 words of plain English; maths written in LaTeX spends more tokens per word. An answer that reaches it is cut off, so it must fit inside ASSISTANT_CONTEXT with the instructions and history. | optional | optional | no | n/a | 2700 |
 | `ASSISTANT_DAILY_MESSAGES` | Messages one account may send a day. | optional | optional | no | n/a | 40 |
 | `LEARNER_INVITE_HOURS` | How long a guardian's learner invitation link works, in hours. | optional | optional | no | n/a | 72 |
 | `LEARNER_INVITES_PER_DAY` | Learner invitations one student may be sent in a day (re-inviting counts). | optional | optional | no | n/a | 5 |

@@ -13,8 +13,8 @@ type Env = Record<string, string | undefined>;
  *   ASSISTANT_MODEL                 tutor model          ASSISTANT_VISION_MODEL   model for images (may be the same)
  *   ASSISTANT_BASE_URL              the provider's address (Ollama default http://127.0.0.1:11434)
  *   ASSISTANT_API_KEY               the production provider's key (`custom`). NVIDIA_API_KEY is read for `nim`. Never logged
- *   ASSISTANT_CONTEXT               context window to ask for, tokens (default 4096: the measured profile; 8192 only where needed)
- *   ASSISTANT_MAX_OUTPUT_TOKENS     most tokens in one answer (default 700)
+ *   ASSISTANT_CONTEXT               context window to ask for, tokens (default 8192: the instructions, the history, a picture and an answer of up to 2700 tokens must all fit)
+ *   ASSISTANT_MAX_OUTPUT_TOKENS     most tokens in one answer (default 2700: about 2000 words of plain English; maths written in LaTeX spends more tokens per word)
  *   ASSISTANT_KEEP_ALIVE            how long the tutor stays resident between questions (default 30m)
  *   ASSISTANT_THINKING              off | auto | on | low | medium | high (default auto: only a genuinely hard question may think)
  *   ASSISTANT_DAILY_MESSAGES        messages per account per day (default 40)     ASSISTANT_PER_MINUTE   per minute (default 6)
@@ -22,6 +22,8 @@ type Env = Record<string, string | undefined>;
  *   ASSISTANT_CONCURRENCY           answers generated at once on this server (default 1: one local GPU)
  *   ASSISTANT_STAGE_*               the staged budgets (queue, load, first activity, first answer, idle, tool round, whole turn)
  *   ASSISTANT_MAX_TOOL_ROUNDS       tool round trips allowed in one turn (default 2)
+ *   SEARXNG_BASE_URL / _TIMEOUT_MS / _MAX_RESULTS / _CACHE_TTL_SECONDS   web research through SearXNG, which is always on (default http://127.0.0.1:8888; docs/RESEARCH.md)
+ *   RESEARCH_MAX_SEARCHES / _MAX_FETCHES / _FETCH_MAX_BYTES / _PER_MINUTE   the per-answer and per-account limits on that research
  *   ASSISTANT_RETRIEVAL             on (default) | off: search the student's own authorised uploads for relevant chunks
  *   ASSISTANT_RETRIEVAL_TOP_K       chunks given to the tutor (default 4)   ASSISTANT_RETRIEVAL_MIN_SCORE   default 0.35
  *   ASSISTANT_EMBED_MODEL / _BASE_URL / _KEEP_ALIVE / _BATCH   the embedding role (CPU helper by default)
@@ -53,8 +55,8 @@ export interface StageBudgets {
 export const ASSISTANT_DEFAULTS = {
   // The candidate profile from the brief (section 12), pending the benchmark in docs/OLLAMA_THREE_MODEL.md.
   model: "bonsai-2:9b",
-  contextSize: 4096,
-  maxOutputTokens: 700,
+  contextSize: 8192,
+  maxOutputTokens: 2700,
   dailyMessages: 40,
   perMinute: 6,
   dailyTokenBudget: 40_000,
@@ -80,6 +82,7 @@ export const ASSISTANT_DEFAULTS = {
   retrievalMinScore: 0.35,
   embedModel: "embeddinggemma-2:270m-q8_0-text",
   helperBaseUrl: "http://127.0.0.1:11435",
+  searxngUrl: "http://127.0.0.1:8888",
   embedKeepAlive: "10m",
   embedBatch: 8,
   decisionModel: "laya:421m-typed-decisions-bf16",
@@ -127,6 +130,18 @@ export interface DecisionConfig {
   minMargin: number;
 }
 
+export interface ResearchConfig {
+  /** Where SearXNG runs. Research is always on; if nothing answers there, the answer says what could not be checked. */
+  baseUrl: string;
+  timeoutMs: number;
+  maxResults: number;
+  cacheTtlSeconds: number;
+  maxSearches: number;
+  maxFetches: number;
+  fetchMaxBytes: number;
+  perMinute: number;
+}
+
 export interface ImageConfig {
   photoLongSide: number;
   renderLongSide: number;
@@ -156,6 +171,7 @@ export interface AssistantConfig {
   maxToolRounds: number;
   retrieval: RetrievalConfig;
   decision: DecisionConfig;
+  research: ResearchConfig;
   images: ImageConfig;
   vramHeadroomMiB: number;
   productionApproved: boolean;
@@ -258,6 +274,16 @@ export function assistantConfig(env: Env = process.env): AssistantConfig {
       timeoutMs: whole(env.ASSISTANT_DECISION_TIMEOUT_MS, ASSISTANT_DEFAULTS.decisionTimeoutMs, 500, 30_000),
       minConfidence: ratio(env.ASSISTANT_DECISION_MIN_CONFIDENCE, ASSISTANT_DEFAULTS.decisionMinConfidence, 0, 1),
       minMargin: ratio(env.ASSISTANT_DECISION_MIN_MARGIN, ASSISTANT_DEFAULTS.decisionMinMargin, 0, 1),
+    },
+    research: {
+      baseUrl: pick(env.SEARXNG_BASE_URL) ?? ASSISTANT_DEFAULTS.searxngUrl,
+      timeoutMs: whole(env.SEARXNG_TIMEOUT_MS, 8000, 500, 60_000),
+      maxResults: whole(env.SEARXNG_MAX_RESULTS, 8, 1, 20),
+      cacheTtlSeconds: whole(env.SEARXNG_CACHE_TTL_SECONDS, 3600, 0, 86_400),
+      maxSearches: whole(env.RESEARCH_MAX_SEARCHES, 3, 0, 10),
+      maxFetches: whole(env.RESEARCH_MAX_FETCHES, 3, 0, 10),
+      fetchMaxBytes: whole(env.RESEARCH_FETCH_MAX_BYTES, 1_500_000, 50_000, 10_000_000),
+      perMinute: whole(env.RESEARCH_PER_MINUTE, 10, 1, 120),
     },
     images: {
       photoLongSide: whole(env.ASSISTANT_PHOTO_LONG_SIDE, ASSISTANT_DEFAULTS.photoLongSide, 512, 2400),

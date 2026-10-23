@@ -42,6 +42,10 @@ NVIDIA's hosted catalogue (`ASSISTANT_PROVIDER=nim`, key in `NVIDIA_API_KEY`) is
 
 `ASSISTANT_PROVIDER` may be a comma list (`ollama,nim`): an ordered fallback chain, development only.
 
+## Subject-aware answers, exam accuracy and web research
+
+Study Buddy detects what the student is doing and for which exam, checks quotations before it answers, looks over the reply afterwards, and looks things up through SearXNG, which is always on (`npm start` runs it). All of it is described in [RESEARCH.md](RESEARCH.md).
+
 ## Environment variables
 
 | Variable | Meaning | Default |
@@ -52,8 +56,8 @@ NVIDIA's hosted catalogue (`ASSISTANT_PROVIDER=nim`, key in `NVIDIA_API_KEY`) is
 | `ASSISTANT_VISION_MODEL` | Model used when a message has images | the text model (it can see) |
 | `ASSISTANT_BASE_URL` | The provider's address | Ollama: `http://127.0.0.1:11434` |
 | `ASSISTANT_API_KEY` | The production provider's key (`custom`). `NVIDIA_API_KEY` is read for `nim`. Never logged | none |
-| `ASSISTANT_CONTEXT` | Context window to ask for, tokens (the warm-up sends the same value) | 4096 |
-| `ASSISTANT_MAX_OUTPUT_TOKENS` | Most tokens in one answer | 700 |
+| `ASSISTANT_CONTEXT` | Context window to ask for, tokens (the warm-up sends the same value). It must hold the instructions, the history, a picture and the longest answer | 8192 |
+| `ASSISTANT_MAX_OUTPUT_TOKENS` | Most tokens in one answer: about 2000 words of plain English at the default (LaTeX uses more tokens per word). An answer that reaches the limit stops there | 2700 |
 | `ASSISTANT_THINKING` / `ASSISTANT_THINKING_TOKENS` | `off`, `auto`, `on` or a level; extra tokens thinking may use so the answer still fits | `auto` / 600 |
 | `ASSISTANT_KEEP_ALIVE` | How long the tutor stays resident between questions | `30m` |
 | `ASSISTANT_STAGE_*` | Staged budgets: queue, load, first activity, first answer, idle, tool round, whole turn | see [OLLAMA_THREE_MODEL.md](OLLAMA_THREE_MODEL.md) |

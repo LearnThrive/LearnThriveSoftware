@@ -42,6 +42,25 @@ services:
       start_period: 300s
     restart: unless-stopped
 
+  # Web research for Study Buddy (docs/RESEARCH.md). Always started with the other services; the website looks for it on 127.0.0.1:8888.
+  # The secret below is a development value, safe only because the port is published on 127.0.0.1. Set SEARXNG_SECRET if that ever changes.
+  searxng:
+    # Pin a released tag before relying on it (SEARXNG_IMAGE), and read its release notes before upgrading.
+    image: ${SEARXNG_IMAGE:-searxng/searxng:latest}
+    ports:
+      - "127.0.0.1:8888:8080"
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+    environment:
+      SEARXNG_SECRET: ${SEARXNG_SECRET:-learnthrive-development-only-searxng-secret}
+      SEARXNG_BASE_URL: http://127.0.0.1:8888/
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
 volumes:
   ollama-models:
   whisper-cache:

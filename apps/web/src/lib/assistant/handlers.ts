@@ -148,6 +148,7 @@ ${ADULT_ACKNOWLEDGEMENT}`).digest("hex"), at: (deps.now ?? (() => new Date()))()
       config: g.assistant.config,
       embeddings: g.assistant.embeddings,
       decision: g.assistant.decision,
+      research: g.assistant.research,
       flag: g.assistant.flag,
       hosted: g.assistant.hosted,
       now: deps.now,

@@ -305,7 +305,8 @@ test("queue: a waiter that exhausts its queue budget is told busy, and a stopped
 test("config: staged budgets, image variants, deprecated picture aliases and bounded numbers", () => {
   const c = cfg.assistantConfig({});
   assert.equal(c.model, "bonsai-2:9b");
-  assert.equal(c.contextSize, 4096);
+  assert.equal(c.contextSize, 8192);
+  assert.equal(c.maxOutputTokens, 2700);
   assert.equal(c.thinking, "auto");
   assert.equal(c.stages.text.turnMs, 180000);
   assert.equal(c.stages.image.turnMs, 240000);
@@ -350,7 +351,7 @@ class RoleProvider {
   }
   async warm(options) {
     this.warmCalls += 1;
-    assert.equal(options.contextSize, 4096, "the warm-up uses the turn's context");
+    assert.equal(options.contextSize, 8192, "the warm-up uses the turn's context");
     this.residentFlag = true;
     return { ok: true, loadMs: 10, detail: "ok" };
   }
