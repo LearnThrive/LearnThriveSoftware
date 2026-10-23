@@ -592,6 +592,14 @@ export class InMemoryLibraryStore implements LibraryStore {
       const s = f ? this.chatSessions.get(f.sessionId) : undefined;
       return f && s && this.owns(owner, s) && !s.deletionRequestedAt ? { ...f } : null;
     },
+    deleteUnattachedFile: async (owner, fileId) => {
+      const f = this.chatFiles.find((x) => x.id === fileId);
+      const s = f ? this.chatSessions.get(f.sessionId) : undefined;
+      if (!f || !s || !this.owns(owner, s) || s.deletionRequestedAt || f.messageId !== null) return null;
+      this.chatFiles = this.chatFiles.filter((x) => x.id !== fileId);
+      this.chatChunks = this.chatChunks.filter((c) => c.fileId !== fileId);
+      return { ...f };
+    },
     getUnattachedFiles: async (owner, sessionId, fileIds) => {
       const s = this.chatSessions.get(sessionId);
       if (!s || !this.owns(owner, s) || s.deletionRequestedAt) return [];

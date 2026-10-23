@@ -111,6 +111,8 @@ export function StudyBuddy() {
   const [announce, setAnnounce] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
   const [reading, setReading] = useState("");
+  // Files picked and still being added (uploaded and read), shown in the box as they go so nothing sent is ever unseen.
+  const [adding, setAdding] = useState<string[]>([]);
   const [query, setQuery] = useState("");
   const [renaming, setRenaming] = useState<{
     id: string;
@@ -235,6 +237,12 @@ export function StudyBuddy() {
     fileIdsRef.current = new Map();
   }
 
+  // Leaving the chat with files still in the box (a new chat, or another one): they are not going to be sent, so release them.
+  function discardAttachments() {
+    for (const file of filesRef.current) forgetOnServer(fileIdsRef.current.get(file));
+    clearAttachments();
+  }
+
   async function open(id: string) {
     if (busy) return;
     sidebar.closeDrawer();
@@ -246,7 +254,7 @@ export function StudyBuddy() {
     setSessionId(id);
     setMessages(data.messages);
     setError("");
-    clearAttachments();
+    discardAttachments();
     stickToLatest.current = true;
   }
 
@@ -268,7 +276,7 @@ export function StudyBuddy() {
     sidebar.closeDrawer();
     setSessionId(null);
     setMessages([]);
-    clearAttachments();
+    discardAttachments();
     setError("");
   }
 
@@ -326,6 +334,7 @@ export function StudyBuddy() {
   // same one, so the id is taken from the ref, which the first upload has already set.
   function upload(picked: File[]) {
     setError("");
+    setAdding((names) => [...names, ...picked.map((f) => f.name)]);
     const run = async () => {
       for (const file of picked) {
         setReading(file.name);
@@ -353,6 +362,10 @@ export function StudyBuddy() {
           setError(
             `${file.name}: ${data?.error ?? (response ? "We could not add that file." : "We lost the connection while sending that file.")}`,
           );
+        setAdding((names) => {
+          const at = names.indexOf(file.name);
+          return at < 0 ? names : names.filter((_, i) => i !== at);
+        });
       }
       setReading("");
     };
@@ -363,11 +376,19 @@ export function StudyBuddy() {
     });
   }
 
+  // Taking a file out of the box also removes it from the chat on the server: it was uploaded when it was picked, and until it is
+  // sent it counts toward the three allowed. Best effort: if the call fails the file is simply left to expire with the chat.
+  function forgetOnServer(fileId: string | undefined) {
+    if (fileId) void fetch(`/api/assistant/files/${fileId}`, { method: "DELETE" }).catch(() => {});
+  }
+
   function removeFile(file: File) {
     setFiles(filesRef.current.filter((f) => f !== file));
     const next = new Map(fileIdsRef.current);
+    forgetOnServer(next.get(file));
     next.delete(file);
     fileIdsRef.current = next;
+    setError("");
   }
 
   async function send(text: string, options: { voice?: boolean } = {}) {
@@ -412,6 +433,8 @@ export function StudyBuddy() {
     stickToLatest.current = true;
     const speech: { speaker: Speaker | null } = { speaker: null };
     if (viaVoice) speech.speaker = voice.beginSpeaking();
+    const sentFiles = { files: filesRef.current, ids: fileIdsRef.current };
+    let refusedUpFront = false;
     clearAttachments();
     spoken.current = 0;
     const controller = new AbortController();
@@ -436,6 +459,7 @@ export function StudyBuddy() {
           error?: string;
         } | null;
         failed = data?.error ?? ERROR_TEXT.unavailable!;
+        refusedUpFront = true;
       } else {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
@@ -510,6 +534,13 @@ export function StudyBuddy() {
       setWaiting("");
     }
     if (failed) setError(failed);
+    // Refused before anything was sent (a limit, a missing tick): the files are still the student's to send, so put them, and the
+    // words, back in the box instead of leaving them uploaded but invisible.
+    if (refusedUpFront && sentFiles.files.length > 0 && filesRef.current.length === 0) {
+      setFiles(sentFiles.files);
+      fileIdsRef.current = sentFiles.ids;
+      setDraft((d) => d || text);
+    }
     if (!answer) setMessages((m) => m.filter((x) => x.id !== reply.id));
     setAnnounce(answer ? "The answer is ready." : "");
     // Stop is silence; a failure speaks nothing more; a finished answer has its last sentences read.
@@ -1050,6 +1081,7 @@ export function StudyBuddy() {
                 upload(picked.filter((f) => !filesRef.current.includes(f)))
               }
               onFileRemove={(file) => removeFile(file)}
+              pending={adding}
               onSubmit={(text) => void send(text)}
               busy={busy}
               maxLength={status.limits?.maxInputChars}

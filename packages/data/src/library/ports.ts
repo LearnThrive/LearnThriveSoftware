@@ -132,6 +132,8 @@ export interface ChatRepository {
   listFiles(owner: ChatOwner, sessionId: string): Promise<ChatFileRecord[]>;
   /** Files uploaded to this chat and not yet used in a message, by id (the caller picked these ids). */
   getUnattachedFiles(owner: ChatOwner, sessionId: string, fileIds: string[]): Promise<ChatFileRecord[]>;
+  /** Removes a file the student took out of the box before sending (and its chunks). Returns it so the caller can delete the stored object; null if it is not the owner's, or was already used in a message. */
+  deleteUnattachedFile(owner: ChatOwner, fileId: string): Promise<ChatFileRecord | null>;
   /** One file, only for the owner of its chat (and not once the chat is being deleted). */
   getFile(owner: ChatOwner, fileId: string): Promise<ChatFileRecord | null>;
   /** Keeps what an upload said (and how many pages), so a follow-up does not re-read it. False if the file is not the owner's. */

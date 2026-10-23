@@ -159,9 +159,17 @@ export async function handlePaperPreview(request: Request, deps: PaperDeps, id: 
 }
 
 export async function handleFile(request: Request, deps: PaperDeps, id: string): Promise<Response> {
-  const g = await gate(request, deps, "assistant-file", { mutating: false });
+  const g = await gate(request, deps, "assistant-file", { mutating: request.method === "DELETE" });
   if (!g.ok) return g.response;
   if (!UUID.test(id)) return refuse("not_found");
+  if (request.method === "DELETE") {
+    // The student took it out of the box before sending: it stops counting toward the three, and its stored copy goes.
+    const removed = await g.rt.store.chat.deleteUnattachedFile(g.owner, id);
+    if (!removed) return refuse("not_found");
+    await g.assistant.uploads.remove(removed.storagePath).catch(() => {});
+    logOutcome("assistant-file", "removed");
+    return jsonResponse(200, { success: true }, NO_STORE);
+  }
   const file = await g.rt.store.chat.getFile(g.owner, id);
   const bytes = file ? await g.assistant.uploads.read(file.storagePath) : null;
   if (!file || !bytes) return refuse("not_found");

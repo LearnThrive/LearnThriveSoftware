@@ -11,6 +11,7 @@ const own = (clientId, studentId = null) => ({ clientId, studentId });
 const h = loadTsFrom(import.meta.url, "../src/lib/assistant/handlers.ts");
 const cfgLib = loadTsFrom(import.meta.url, "../src/lib/assistant/config.ts");
 const rt = loadTsFrom(import.meta.url, "../src/lib/assistant/runtime.ts");
+const { handleFile } = loadTsFrom(import.meta.url, "../src/lib/paper/handlers.ts");
 const retention = loadTsFrom(import.meta.url, "../src/lib/assistant/retention.ts");
 const prompt = loadTsFrom(import.meta.url, "../src/lib/assistant/prompt.ts");
 const { MockProvider } = loadTsFrom(import.meta.url, "../src/lib/assistant/mock.ts");
@@ -136,6 +137,30 @@ function multipart(file, fields = {}) {
   if (file) form.set("file", file);
   return new Request("http://localhost:3100/api/assistant/files", { method: "POST", body: form });
 }
+
+test("uploads: taking a file out of the box removes it, so it stops counting toward the three; only its owner can, and never once it was sent", async (t) => {
+  const w = await world(t);
+  const p = await w.person();
+  const jpeg = () => new File([TINY_JPEG], "work.jpg", { type: "image/jpeg" });
+  const first = await (await h.handleUpload(multipart(jpeg()), w.deps(p.jar))).json();
+  const ids = [first.fileId];
+  for (let i = 0; i < 2; i += 1) ids.push((await (await h.handleUpload(multipart(jpeg(), { sessionId: first.sessionId }), w.deps(p.jar))).json()).fileId);
+  assert.equal((await h.handleUpload(multipart(jpeg(), { sessionId: first.sessionId }), w.deps(p.jar))).status, 422, "three are waiting");
+  const del = (id, jar, headers = {}) => handleFile(new Request(`http://localhost:3100/api/assistant/files/${id}`, { method: "DELETE", headers }), w.deps(jar), id);
+
+  const other = await w.person();
+  assert.equal((await del(ids[0], other.jar)).status, 404, "not another family's");
+  assert.equal((await del(ids[0], p.jar, { origin: "https://evil.example" })).status, 403, "not from another site");
+  assert.equal(w.uploads.objects.size, 3);
+  assert.equal((await del(ids[0], p.jar)).status, 200);
+  assert.equal(w.uploads.objects.size, 2, "its stored copy goes too");
+  assert.equal((await del(ids[0], p.jar)).status, 404, "once");
+  assert.equal((await h.handleUpload(multipart(jpeg(), { sessionId: first.sessionId }), w.deps(p.jar))).status, 200, "there is room again");
+
+  const used = await w.chat(p, { text: "Check this", sessionId: first.sessionId, fileIds: [ids[1]] });
+  assert.equal(used.events.at(-1).type, "done");
+  assert.equal((await del(ids[1], p.jar)).status, 404, "a file already used in a message stays with it");
+});
 
 test("uploads: a photo is cleaned and stored privately, files attach to the chat, three at most, and refusals say why", async (t) => {
   const w = await world(t);
