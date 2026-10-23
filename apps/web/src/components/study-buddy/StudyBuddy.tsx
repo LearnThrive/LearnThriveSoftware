@@ -3,19 +3,23 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent,
 } from "react";
 import {
   ArrowDown,
+  Camera,
   Check,
   FileCheck2,
   FileText,
   MessagesSquare,
+  Mic,
   Pencil,
   Plus,
   Search,
+  ShieldCheck,
   Trash2,
   WifiOff,
   X,
@@ -142,6 +146,22 @@ export function StudyBuddy() {
     onUtterance: (text) => void sendRef.current(text, { voice: true }),
   });
   const sidebar = useMemberSidebar();
+  // How wide the page is: with room, the chats sit beside the conversation (and a tools column on the far side) instead of squeezing into the
+  // shell's sidebar. Measured on the page, not the window, because the shell's own sidebar may be open or collapsed.
+  // A callback ref held in state: the workspace only exists once the page has loaded (earlier screens are the loading and closed states).
+  const [workspace, setWorkspace] = useState<HTMLDivElement | null>(null);
+  const [pageWidth, setPageWidth] = useState(0);
+  useLayoutEffect(() => {
+    const el = workspace;
+    if (!el) return;
+    const measure = () => setPageWidth(el.getBoundingClientRect().width / (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [workspace]);
+  const roomy = pageWidth >= 56;
+  const wide = pageWidth >= 80;
 
   const setSessionId = useCallback((id: string | null) => {
     sessionRef.current = id;
@@ -555,9 +575,7 @@ export function StudyBuddy() {
       )
     : sessions;
 
-  return (
-    <>
-      <SidebarSection>
+  const historyPanel = (
         <section className={styles.chats} aria-label="Your chats">
           <button
             type="button"
@@ -683,7 +701,59 @@ export function StudyBuddy() {
             ) : null}
           </div>
         </section>
-      </SidebarSection>
+  );
+
+  const toolTips = (
+    <aside className={styles.tools} aria-label="Study tools">
+      <h2>Bring your work</h2>
+      <ul>
+        <li>
+          <Camera size={18} aria-hidden="true" />
+          <div>
+            <strong>A photo of your work</strong>
+            <p>Add a photo of a question or your working, and Study Buddy reads it.</p>
+          </div>
+        </li>
+        {status.paperTutor ? (
+          <li>
+            <FileCheck2 size={18} aria-hidden="true" />
+            <div>
+              <strong>A whole maths paper</strong>
+              <p>
+                Add a PDF or photo to have it solved onto a copy{status.paperMarker ? ", or to check your own answers (the marks are AI estimates)" : ""}.
+              </p>
+            </div>
+          </li>
+        ) : null}
+        {status.voice ? (
+          <li>
+            <Mic size={18} aria-hidden="true" />
+            <div>
+              <strong>Talk it through</strong>
+              <p>Use the microphone to ask out loud and hear the answer.</p>
+            </div>
+          </li>
+        ) : null}
+        <li>
+          <ShieldCheck size={18} aria-hidden="true" />
+          <div>
+            <strong>Hints first</strong>
+            <p>You get a hint, then the working. Maths answers are checked by calculation where they can be. It can still be wrong, so check anything important.</p>
+          </div>
+        </li>
+      </ul>
+    </aside>
+  );
+
+  return (
+    <>
+      {roomy ? null : <SidebarSection>{historyPanel}</SidebarSection>}
+      <div className={styles.workspace} ref={setWorkspace} data-roomy={roomy || undefined} data-wide={wide || undefined}>
+        {roomy ? (
+          <aside className={styles.history} aria-label="Chat history">
+            {historyPanel}
+          </aside>
+        ) : null}
 
       <div className={styles.page}>
         <header className={styles.bar}>
@@ -989,6 +1059,8 @@ export function StudyBuddy() {
             </p>
           </div>
         </div>
+      </div>
+        {wide ? toolTips : null}
       </div>
     </>
   );

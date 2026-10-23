@@ -133,7 +133,11 @@
   background: var(--app-sidebar);
   color: var(--app-on-dark);
   overflow-y: auto;
+  /* At a higher browser zoom the menu is taller than the window and scrolls. A classic scrollbar would take about 15px of the 68px icon
+     rail and squeeze every icon to nothing, so the bar is hidden (the menu still scrolls by wheel, touch and keyboard focus). */
+  scrollbar-width: none;
 }
+.app-sidebar::-webkit-scrollbar { display: none; }
 
 .app-sidebar__brand { padding: var(--space-2) var(--space-2) var(--space-1); }
 
@@ -178,6 +182,8 @@
   font-size: var(--text-body);
   transition: background var(--duration-fast) var(--app-ease), color var(--duration-fast) var(--app-ease);
 }
+/* Icons never shrink: in a tight rail a flex item with room to give up would go to 0 width and the link would look empty. */
+.app-nav__link svg, .app-sidebar__collapse svg, .app-brand__mark { flex: none; }
 .app-nav__link svg { transition: color var(--duration-fast) var(--app-ease), transform var(--duration-fast) var(--app-ease); }
 
 .app-nav__link:hover { background: var(--app-sidebar-hover); }
@@ -203,8 +209,10 @@
 .app-sidebar__collapse {
   display: flex; align-items: center; gap: var(--space-3);
   margin-top: auto; padding: 0.5rem var(--space-2);
+  /* Pinned to the bottom of the window: at a higher zoom the menu scrolls, and the toggle must not be lost below the fold. */
+  position: sticky; bottom: calc(var(--space-4) * -1); z-index: 1;
   border: 0; border-radius: var(--app-radius-sm);
-  background: transparent; color: var(--app-on-dark-muted);
+  background: var(--app-sidebar); color: var(--app-on-dark-muted);
   font: inherit; font-size: var(--text-small); cursor: pointer;
   transition: background var(--duration-fast) var(--app-ease), color var(--duration-fast) var(--app-ease),
     transform var(--duration-fast) var(--app-ease);
@@ -222,7 +230,9 @@
 .app-shell--collapsed .app-brand__word { max-width: 0; opacity: 0; }
 .app-shell--collapsed .app-nav__heading { display: none; }
 .app-shell--collapsed .app-nav__link,
-.app-shell--collapsed .app-sidebar__collapse { justify-content: center; }
+.app-shell--collapsed .app-sidebar__collapse { justify-content: center; gap: 0; }
+.app-shell--collapsed .app-brand { gap: 0; justify-content: center; }
+.app-shell--collapsed .app-sidebar { padding-inline: var(--space-2); }
 .app-shell--collapsed .app-nav__count { position: absolute; margin: 0; transform: translate(0.85rem, -0.7rem); }
 .app-shell--collapsed .app-nav__link { position: relative; }
 .app-shell--collapsed .app-nav__section + .app-nav__section {
@@ -388,6 +398,8 @@
 
 /* The secondary slot (SidebarSlot.tsx): a page renders its own section under the navigation, in the sidebar or the mobile drawer. */
 .app-slot-host { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+/* The collapsed icon rail has no room for a page's own section: it was showing, squeezed, because display:flex beats the hidden attribute. */
+.app-slot-host[hidden] { display: none; }
 .app-slot { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: var(--space-3); }
 .app-slot:empty { display: none; }
 /* A page's own section gets a usable height even beside a long navigation: the sidebar scrolls instead of squeezing it. */
