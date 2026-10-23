@@ -1,0 +1,74 @@
+{
+  "measuredAt": "2026-10-23T14:47:12.286Z",
+  "context": 4096,
+  "keepAlive": "30m",
+  "note": "evicted with keep_alive 0, then loaded with the app's options",
+  "results": [
+    {
+      "model": "bonsai-2:9b",
+      "n": 6,
+      "times": [
+        {
+          "wallMs": 5349,
+          "loadMs": 5224
+        },
+        {
+          "wallMs": 5302,
+          "loadMs": 5160
+        },
+        {
+          "wallMs": 5525,
+          "loadMs": 5372
+        },
+        {
+          "wallMs": 5462,
+          "loadMs": 5329
+        },
+        {
+          "wallMs": 5216,
+          "loadMs": 5071
+        },
+        {
+          "wallMs": 5736,
+          "loadMs": 5620
+        }
+      ],
+      "minMs": 5216,
+      "medianMs": 5462,
+      "maxMs": 5736
+    },
+    {
+      "model": "bonsai-2:4b",
+      "n": 6,
+      "times": [
+        {
+          "wallMs": 11388,
+          "loadMs": 11246
+        },
+        {
+          "wallMs": 5691,
+          "loadMs": 5579
+        },
+        {
+          "wallMs": 5237,
+          "loadMs": 5123
+        },
+        {
+          "wallMs": 4817,
+          "loadMs": 4666
+        },
+        {
+          "wallMs": 5270,
+          "loadMs": 5126
+        },
+        {
+          "wallMs": 5247,
+          "loadMs": 5120
+        }
+      ],
+      "minMs": 4817,
+      "medianMs": 5270,
+      "maxMs": 11388
+    }
+  ]
+}

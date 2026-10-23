@@ -10,6 +10,7 @@ const EXPECTED_TABLES = [
   "admin_grants",
   "assignment_students",
   "billing_customers",
+  "chat_file_chunks",
   "chat_files",
   "chat_messages",
   "chat_sessions",
@@ -47,6 +48,7 @@ const EXPECTED_TABLES = [
 const FORCED_TABLES = [
   "admin_grants",
   "billing_customers",
+  "chat_file_chunks",
   "chat_files",
   "chat_messages",
   "chat_sessions",
@@ -137,6 +139,7 @@ describe("migrations", () => {
       "0011_tuition_domain.sql",
       "0012_paper_jobs.sql",
       "0013_paper_assessments.sql",
+      "0014_chat_retrieval.sql",
     ]);
     assert.deepEqual(
       applied.map((f) => Number(f.slice(0, 4))),

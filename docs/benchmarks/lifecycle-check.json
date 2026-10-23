@@ -1,0 +1,125 @@
+{
+  "checkedAt": "2026-10-23T14:38:08.908Z",
+  "model": "bonsai-2:9b",
+  "context": 4096,
+  "keepAlive": "30m",
+  "idleExpiry": {
+    "keepAlive": "15s",
+    "residentAfterLoad": true,
+    "residentAfterIdle": false,
+    "evictedByIdle": true,
+    "nextTurn": {
+      "wallMs": 7046,
+      "firstStatus": {
+        "state": "preparing",
+        "ms": 443
+      },
+      "firstVisibleMs": 7046,
+      "statuses": [
+        "preparing"
+      ],
+      "error": null,
+      "ok": true
+    }
+  },
+  "helpers": {
+    "tutorResidentBefore": true,
+    "tutorResidentAfter": true,
+    "embedOk": true,
+    "embedMs": 31,
+    "decisionAnswered": true,
+    "decisionMs": 447,
+    "helperModelsResident": [
+      {
+        "name": "embeddinggemma-2:270m-q8_0-text",
+        "sizeVramMiB": 0
+      },
+      {
+        "name": "laya:421m-typed-decisions-bf16",
+        "sizeVramMiB": 0
+      }
+    ],
+    "vramUsedMiB": {
+      "before": 3529,
+      "after": 3529
+    }
+  },
+  "pdf": {
+    "bytes": 1180,
+    "firstTurn": {
+      "wallMs": 4722,
+      "firstStatus": {
+        "state": "reading",
+        "ms": 1
+      },
+      "firstVisibleMs": 1777,
+      "statuses": [
+        "reading"
+      ],
+      "error": null,
+      "ok": true
+    },
+    "chunksIndexed": 4,
+    "chunkDimension": 768,
+    "followUp": {
+      "wallMs": 2987,
+      "firstStatus": null,
+      "firstVisibleMs": 1476,
+      "statuses": [],
+      "error": null,
+      "ok": true
+    },
+    "followUpReusedReading": true
+  },
+  "concurrent": {
+    "a": {
+      "wallMs": 2534,
+      "firstStatus": null,
+      "firstVisibleMs": 2204,
+      "statuses": [],
+      "error": null,
+      "ok": true
+    },
+    "b": {
+      "wallMs": 1604,
+      "firstStatus": null,
+      "firstVisibleMs": 1136,
+      "statuses": [],
+      "error": null,
+      "ok": true
+    },
+    "wallMs": 2534,
+    "bothOk": true
+  },
+  "restart": {
+    "whileDown": {
+      "wallMs": 5,
+      "firstStatus": {
+        "state": "preparing",
+        "ms": 4
+      },
+      "firstVisibleMs": null,
+      "statuses": [
+        "preparing"
+      ],
+      "error": "unavailable",
+      "ok": false
+    },
+    "startExit": 0,
+    "afterRestart": {
+      "wallMs": 6567,
+      "firstStatus": {
+        "state": "preparing",
+        "ms": 1013
+      },
+      "firstVisibleMs": 6567,
+      "statuses": [
+        "preparing"
+      ],
+      "error": null,
+      "ok": true
+    },
+    "honestWhileDown": true
+  },
+  "passed": true
+}

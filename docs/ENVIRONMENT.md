@@ -119,11 +119,44 @@ Set these in Render's environment, as secrets where the table says so, and nowhe
 | `ASSISTANT_PRODUCTION_APPROVED` | true only after plan19 section 6 (provider contract, safeguarding, privacy, terms) is complete and recorded. | optional | unset until approved | no | n/a | unset |
 | `ASSISTANT_MINORS_APPROVED` | true only after the safeguarding lead approves in writing. Until then Study Buddy is for adult account holders. | optional | unset until approved | no | n/a | unset |
 | `ASSISTANT_PROVIDER` | ollama (development), nim (evaluation only), custom (the production slot), mock (tests), or a comma list in development. | optional | custom, only when approved | no | n/a | ollama |
-| `ASSISTANT_MODEL` | The text model. | optional | optional | no | n/a | qwen3.5:9b |
-| `ASSISTANT_VISION_MODEL` | The model used when a message has images. | optional | optional | no | n/a | the text model if it can see |
-| `ASSISTANT_BASE_URL` | The provider's address. Production: the chosen OpenAI-compatible endpoint. | optional | optional | no | n/a | http://127.0.0.1:11434 (Ollama) |
+| `ASSISTANT_MODEL` | The tutor model: vision, tools and thinking. The measured profile is in docs/OLLAMA_THREE_MODEL.md; rollback is qwen3.5:9b. | optional | optional | no | n/a | bonsai-2:9b |
+| `ASSISTANT_VISION_MODEL` | The model used when a message has images (may be the tutor). | optional | optional | no | n/a | the text model if it can see |
+| `ASSISTANT_BASE_URL` | The provider's address. Production: the chosen OpenAI-compatible endpoint. Development: the GPU Ollama server. | optional | optional | no | n/a | http://127.0.0.1:11434 (Ollama) |
+| `ASSISTANT_KEEP_ALIVE` | How long Ollama keeps the tutor resident after a turn. Server-side OLLAMA_KEEP_ALIVE is separate (scripts/ollama-local.mjs). | optional | optional | no | n/a | 30m |
+| `ASSISTANT_THINKING` | Thinking policy: off, auto (only genuinely multi-step work), on, or a level the model reports (low/medium/high). | optional | optional | no | n/a | auto |
+| `ASSISTANT_THINKING_TOKENS` | Extra output tokens allowed for thinking, on top of the answer's own budget (otherwise a hard question can spend its whole budget thinking). | optional | optional | no | n/a | 600 |
+| `ASSISTANT_HELPER_BASE_URL` | The CPU-only Ollama server for the embedding and decision roles (a second loopback process; docs/OLLAMA_THREE_MODEL.md). | optional | optional | no | n/a | http://127.0.0.1:11435 |
+| `ASSISTANT_STAGE_QUEUE_MS` | How long a turn may wait for a generation slot. | optional | optional | no | n/a | 20000 |
+| `ASSISTANT_STAGE_LOAD_MS` | How long a model may take to become resident before the turn starts (a visible preparing state, not a silent wait). | optional | optional | no | n/a | 180000 |
+| `ASSISTANT_STAGE_FIRST_ACTIVITY_MS` | From sending the request to the first activity of any kind: thinking, a tool call or text. | optional | optional | no | n/a | 60000 |
+| `ASSISTANT_STAGE_FIRST_ANSWER_MS` | From sending the request to the first visible word of the answer. | optional | optional | no | n/a | 45000 |
+| `ASSISTANT_STAGE_FIRST_ANSWER_IMAGE_MS` | The same, for a turn with a photo or a pictured page. | optional | optional | no | n/a | 90000 |
+| `ASSISTANT_STAGE_IDLE_MS` | The longest silence allowed between two events once activity has started. | optional | optional | no | n/a | 30000 |
+| `ASSISTANT_STAGE_IDLE_IMAGE_MS` | The same, for a turn with a picture. | optional | optional | no | n/a | 45000 |
+| `ASSISTANT_STAGE_TOOL_MS` | One tool execution, including result validation. | optional | optional | no | n/a | 60000 |
+| `ASSISTANT_STAGE_TURN_MS` | The whole turn, absolute: tool rounds and retries never reset it. | optional | optional | no | n/a | 180000 |
+| `ASSISTANT_STAGE_TURN_IMAGE_MS` | The whole turn for a message with a picture. | optional | optional | no | n/a | 240000 |
+| `ASSISTANT_MAX_TOOL_ROUNDS` | Tool round trips allowed in one turn (0 turns tool calling off). | optional | optional | no | n/a | 2 |
+| `ASSISTANT_RETRIEVAL` | on (default) or off: search the family's OWN uploads for relevant chunks. Off also stops indexing. | optional | optional | no | n/a | on |
+| `ASSISTANT_RETRIEVAL_TOP_K` | Chunks of the student's material given to the tutor. | optional | optional | no | n/a | 4 |
+| `ASSISTANT_RETRIEVAL_MIN_SCORE` | The lowest cosine similarity that counts as a retrieval hit (0 to 1). | optional | optional | no | n/a | 0.35 |
+| `ASSISTANT_EMBED_MODEL` | The embedding model (text-only Q8 tag; it never reads a photo). | optional | optional | no | n/a | embeddinggemma-2:270m-q8_0-text |
+| `ASSISTANT_EMBED_BASE_URL` | Where the embedding role runs. Default: the CPU helper. | optional | optional | no | n/a | ASSISTANT_HELPER_BASE_URL |
+| `ASSISTANT_EMBED_KEEP_ALIVE` | How long the embedding model stays resident between turns. | optional | optional | no | n/a | 10m |
+| `ASSISTANT_EMBED_BATCH` | Chunks embedded per request while indexing. | optional | optional | no | n/a | 8 |
+| `ASSISTANT_DECISION` | on (development default) or off: let the typed-decision model route an ambiguous message. Never decides rights, ownership or correctness. | optional | optional | no | n/a | on in development, off in production |
+| `ASSISTANT_DECISION_MODEL` | The typed-decision model (POST /v1/systemone). | optional | optional | no | n/a | laya:421m-typed-decisions-bf16 |
+| `ASSISTANT_DECISION_BASE_URL` | Where the decision role runs. Default: the CPU helper. | optional | optional | no | n/a | ASSISTANT_HELPER_BASE_URL |
+| `ASSISTANT_DECISION_KEEP_ALIVE` | How long the decision model stays resident. | optional | optional | no | n/a | 10m |
+| `ASSISTANT_DECISION_TIMEOUT_MS` | A routing call's own deadline; on timeout routing is deterministic. | optional | optional | no | n/a | 4000 |
+| `ASSISTANT_DECISION_MIN_CONFIDENCE` | The chosen option's own probability below which the model's route is ignored (0 to 1). | optional | optional | no | n/a | 0.3 |
+| `ASSISTANT_DECISION_MIN_MARGIN` | How far ahead of the runner-up the chosen option must be (a five-way tie is not a route). | optional | optional | no | n/a | 0.12 |
+| `ASSISTANT_PHOTO_LONG_SIDE` | Long side of a photo sent to the tutor, in pixels (the stored original is untouched). | optional | optional | no | n/a | 1400 |
+| `ASSISTANT_PAGE_LONG_SIDE` | Long side of a rendered PDF page, in pixels. | optional | optional | no | n/a | 1200 |
+| `ASSISTANT_IMAGES_PER_MESSAGE` | The most pictures sent with one message. | optional | optional | no | n/a | 3 |
+| `ASSISTANT_VRAM_HEADROOM_MIB` | The GPU headroom the benchmark checks under peak image requests (an engineering target, not a runtime limit). | optional | optional | no | n/a | 1536 |
 | `ASSISTANT_API_KEY` | The production provider's key (custom). Never logged. | optional | only when approved | **yes** | the chosen provider | unset |
-| `ASSISTANT_CONTEXT` | Context window to ask for, in tokens. | optional | optional | no | n/a | 8192 |
+| `ASSISTANT_CONTEXT` | Context window to ask for, in tokens. The warm-up sends the same value: a change reloads the model. | optional | optional | no | n/a | 4096 |
 | `ASSISTANT_MAX_OUTPUT_TOKENS` | The most tokens in one answer. | optional | optional | no | n/a | 700 |
 | `ASSISTANT_DAILY_MESSAGES` | Messages one account may send a day. | optional | optional | no | n/a | 40 |
 | `LEARNER_INVITE_HOURS` | How long a guardian's learner invitation link works, in hours. | optional | optional | no | n/a | 72 |
@@ -136,8 +169,8 @@ Set these in Render's environment, as secrets where the table says so, and nowhe
 | `ASSISTANT_PER_MINUTE` | Messages one account may send a minute. | optional | optional | no | n/a | 6 |
 | `ASSISTANT_DAILY_TOKEN_BUDGET` | Hosted providers: completion tokens per account per day (the cost cap). | optional | optional | no | n/a | 40000 |
 | `ASSISTANT_CONCURRENCY` | Answers generated at once on this server. | optional | optional | no | n/a | 1 |
-| `ASSISTANT_PICTURE_FIRST_TOKEN_MS` | How long a message with a photo may wait for the first word (a local vision model may be loading). | optional | optional | no | n/a | 240000 |
-| `ASSISTANT_PICTURE_TOTAL_MS` | How long a message with a photo may take in all. | optional | optional | no | n/a | 360000 |
+| `ASSISTANT_PICTURE_FIRST_TOKEN_MS` | Deprecated alias for ASSISTANT_STAGE_FIRST_ANSWER_IMAGE_MS (kept so an existing .env.local keeps working). | optional | optional | no | n/a | ASSISTANT_STAGE_FIRST_ANSWER_IMAGE_MS |
+| `ASSISTANT_PICTURE_TOTAL_MS` | Deprecated alias for ASSISTANT_STAGE_TURN_IMAGE_MS. | optional | optional | no | n/a | ASSISTANT_STAGE_TURN_IMAGE_MS |
 | `ASSISTANT_SAFEGUARDING_EMAIL` | The safeguarding lead's mailbox for flags (an opaque reference and a category, never the pupil's name). Needed before Study Buddy opens. | optional | optional | no | the safeguarding lead | unset |
 | `ASSISTANT_NIM_MODEL` | Evaluation only: the model when the provider is nim. | optional | unset | no | n/a | meta/llama-3.2-11b-vision-instruct |
 | `ASSISTANT_NIM_VISION_MODEL` | Evaluation only: the vision model when the provider is nim. | optional | unset | no | n/a | unset |

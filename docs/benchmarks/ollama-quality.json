@@ -1,0 +1,321 @@
+{
+  "startedAt": "2026-10-23T14:24:06.951Z",
+  "finishedAt": "2026-10-23T14:24:32.848Z",
+  "machine": {
+    "platform": "win32 x64",
+    "cpus": 16,
+    "cpu": "AMD Ryzen 7 5800H with Radeon Graphics         ",
+    "memoryGiB": 63,
+    "gpu": "NVIDIA GeForce RTX 3070 Laptop GPU, 8192, 617.42"
+  },
+  "ollama": {
+    "main": "http://127.0.0.1:11434",
+    "helper": "http://127.0.0.1:11435",
+    "context": 4096,
+    "keepAlive": "30m"
+  },
+  "runs": {
+    "warm": 10,
+    "photo": 5,
+    "hard": 3
+  },
+  "models": [
+    {
+      "model": "qwen3.5:9b",
+      "digest": "56671c2ab9385f9cfcb404638e32cd62d88e3501d44822208363c010179a3c90",
+      "sizeBytes": 6550825550,
+      "quantisation": "Q4_K_M",
+      "capabilities": {
+        "vision": true,
+        "jsonMode": true,
+        "toolUse": true,
+        "maxContext": 262144,
+        "thinking": true,
+        "thinkingValues": [
+          false,
+          true
+        ],
+        "digest": "56671c2ab9385f9cfcb404638e32cd62d88e3501d44822208363c010179a3c90"
+      },
+      "health": {
+        "ok": true,
+        "detail": "ok"
+      },
+      "context": 4096,
+      "cases": [],
+      "cold": null,
+      "quality": [
+        {
+          "question": "fraction of a number",
+          "runs": 3,
+          "correct": 3,
+          "samples": [
+            {
+              "error": null,
+              "excerpt": "18"
+            }
+          ]
+        },
+        {
+          "question": "linear equation",
+          "runs": 3,
+          "correct": 3,
+          "samples": [
+            {
+              "error": null,
+              "excerpt": "7"
+            }
+          ]
+        },
+        {
+          "question": "percentage",
+          "runs": 3,
+          "correct": 3,
+          "samples": [
+            {
+              "error": null,
+              "excerpt": "36"
+            }
+          ]
+        },
+        {
+          "question": "index laws",
+          "runs": 3,
+          "correct": 3,
+          "samples": [
+            {
+              "error": null,
+              "excerpt": "x^7"
+            }
+          ]
+        },
+        {
+          "question": "nth term",
+          "runs": 3,
+          "correct": 3,
+          "samples": [
+            {
+              "error": null,
+              "excerpt": "4n + 1"
+            }
+          ]
+        },
+        {
+          "question": "factorise",
+          "runs": 3,
+          "correct": 3,
+          "samples": [
+            {
+              "error": null,
+              "excerpt": "(x + 2)(x + 3)"
+            }
+          ]
+        }
+      ],
+      "qualityCorrect": 18,
+      "qualityTotal": 18
+    },
+    {
+      "model": "bonsai-2:9b",
+      "digest": "c8b5462f8688647fe0b53568e3c00181ada5f05300aa4bf00695f2902f4d388e",
+      "sizeBytes": 3180880170,
+      "quantisation": "Q2_0",
+      "capabilities": {
+        "vision": true,
+        "jsonMode": true,
+        "toolUse": true,
+        "maxContext": 262144,
+        "thinking": true,
+        "thinkingValues": [
+          false,
+          true
+        ],
+        "digest": "c8b5462f8688647fe0b53568e3c00181ada5f05300aa4bf00695f2902f4d388e"
+      },
+      "health": {
+        "ok": true,
+        "detail": "ok"
+      },
+      "context": 4096,
+      "cases": [],
+      "cold": null,
+      "quality": [
+        {
+          "question": "fraction of a number",
+          "runs": 3,
+          "correct": 3,
+          "samples": [
+            {
+              "error": null,
+              "excerpt": "18"
+            }
+          ]
+        },
+        {
+          "question": "linear equation",
+          "runs": 3,
+          "correct": 3,
+          "samples": [
+            {
+              "error": null,
+              "excerpt": "7"
+            }
+          ]
+        },
+        {
+          "question": "percentage",
+          "runs": 3,
+          "correct": 3,
+          "samples": [
+            {
+              "error": null,
+              "excerpt": "36"
+            }
+          ]
+        },
+        {
+          "question": "index laws",
+          "runs": 3,
+          "correct": 3,
+          "samples": [
+            {
+              "error": null,
+              "excerpt": "x^7"
+            }
+          ]
+        },
+        {
+          "question": "nth term",
+          "runs": 3,
+          "correct": 3,
+          "samples": [
+            {
+              "error": null,
+              "excerpt": "$4n + 1$"
+            }
+          ]
+        },
+        {
+          "question": "factorise",
+          "runs": 3,
+          "correct": 3,
+          "samples": [
+            {
+              "error": null,
+              "excerpt": "(x + 2)(x + 3)"
+            }
+          ]
+        }
+      ],
+      "qualityCorrect": 18,
+      "qualityTotal": 18
+    },
+    {
+      "model": "bonsai-2:4b",
+      "digest": "93edd652c9326fb1e782c1f54e997ce6a46e2351c763777db0c63b8a51cf6bec",
+      "sizeBytes": 1579008522,
+      "quantisation": "Q2_0",
+      "capabilities": {
+        "vision": true,
+        "jsonMode": true,
+        "toolUse": true,
+        "maxContext": 262144,
+        "thinking": true,
+        "thinkingValues": [
+          false,
+          true
+        ],
+        "digest": "93edd652c9326fb1e782c1f54e997ce6a46e2351c763777db0c63b8a51cf6bec"
+      },
+      "health": {
+        "ok": true,
+        "detail": "ok"
+      },
+      "context": 4096,
+      "cases": [],
+      "cold": null,
+      "quality": [
+        {
+          "question": "fraction of a number",
+          "runs": 3,
+          "correct": 3,
+          "samples": [
+            {
+              "error": null,
+              "excerpt": "18"
+            }
+          ]
+        },
+        {
+          "question": "linear equation",
+          "runs": 3,
+          "correct": 1,
+          "samples": [
+            {
+              "error": null,
+              "excerpt": "1"
+            }
+          ]
+        },
+        {
+          "question": "percentage",
+          "runs": 3,
+          "correct": 3,
+          "samples": [
+            {
+              "error": null,
+              "excerpt": "36"
+            }
+          ]
+        },
+        {
+          "question": "index laws",
+          "runs": 3,
+          "correct": 3,
+          "samples": [
+            {
+              "error": null,
+              "excerpt": "x^7"
+            }
+          ]
+        },
+        {
+          "question": "nth term",
+          "runs": 3,
+          "correct": 3,
+          "samples": [
+            {
+              "error": null,
+              "excerpt": "4n + 1"
+            }
+          ]
+        },
+        {
+          "question": "factorise",
+          "runs": 3,
+          "correct": 3,
+          "samples": [
+            {
+              "error": null,
+              "excerpt": "(x + 2)(x + 3)"
+            }
+          ]
+        }
+      ],
+      "qualityCorrect": 16,
+      "qualityTotal": 18
+    }
+  ],
+  "retrieval": null,
+  "routing": null,
+  "notes": [
+    "quality-only run: no timings, no helper roles"
+  ],
+  "residentAtEnd": [
+    {
+      "name": "bonsai-2:4b",
+      "sizeVramMiB": 1630,
+      "context": 4096
+    }
+  ]
+}

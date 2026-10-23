@@ -47,8 +47,47 @@ export interface ChatFileRecord {
   storagePath: string;
   bytes: number;
   contentType: "image/jpeg" | "image/png" | "application/pdf";
+  /** What the upload said, once it was read: kept so a follow-up does not re-read and re-picture it. Null until read. */
+  extractedText: string | null;
+  /** Pages read (a PDF), or 1 for a photo. Null until read. */
+  pages: number | null;
   createdAt: Date;
   deleteAfter: Date;
+}
+
+export interface ChatFileReading {
+  extractedText: string;
+  pages: number | null;
+}
+
+/** One chunk of an upload with its embedding (0014_chat_retrieval.sql). */
+export interface ChatFileChunkRecord {
+  id: string;
+  fileId: string;
+  sessionId: string;
+  page: number | null;
+  /** "question 4(b)" or "page 2" when the chunk came from a known region; null otherwise. */
+  label: string | null;
+  ordinal: number;
+  text: string;
+  model: string;
+  digest: string | null;
+  dimension: number;
+  chunkConfigVersion: string;
+  embedding: number[];
+  createdAt: Date;
+}
+
+export interface ChatFileChunkInput {
+  page: number | null;
+  label: string | null;
+  ordinal: number;
+  text: string;
+  model: string;
+  digest: string | null;
+  chunkConfigVersion: string;
+  /** The vector. Its length IS the dimension stored with the chunk (the database checks they agree). */
+  embedding: number[];
 }
 
 export interface ChatFileInput {

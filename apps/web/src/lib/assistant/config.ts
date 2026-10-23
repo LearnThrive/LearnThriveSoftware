@@ -1,26 +1,59 @@
 type Env = Record<string, string | undefined>;
 
 /**
- * Study Buddy settings, all from the environment (plan19 phase F). It is OFF in production by default, and fails closed there.
+ * Study Buddy settings, all from the environment (plan19 phase F, refreshed by the three-model brief). It is OFF in production
+ * by default, and fails closed there.
+ *
+ * Tutor, embeddings and decisions are three separate settings groups because they are three separate models, on two separate
+ * local endpoints (the GPU tutor on 11434, the CPU helpers on 11435). Nothing here is a server-process setting: OLLAMA_* values
+ * belong to `scripts/ollama-local.mjs`, because changing them in `.env.local` does not reconfigure a running Ollama.
  *
  *   ASSISTANT_ENABLED               kill switch. Development: on unless "false". Production: on only if exactly "true"
  *   ASSISTANT_PROVIDER              ollama (default), nim, custom, or mock (tests); a comma list is an ordered fallback chain (development only)
- *   ASSISTANT_MODEL                 text model          ASSISTANT_VISION_MODEL   model for images (may be the same)
+ *   ASSISTANT_MODEL                 tutor model          ASSISTANT_VISION_MODEL   model for images (may be the same)
  *   ASSISTANT_BASE_URL              the provider's address (Ollama default http://127.0.0.1:11434)
  *   ASSISTANT_API_KEY               the production provider's key (`custom`). NVIDIA_API_KEY is read for `nim`. Never logged
- *   ASSISTANT_CONTEXT               context window to ask for, tokens (default 8192)
+ *   ASSISTANT_CONTEXT               context window to ask for, tokens (default 4096: the measured profile; 8192 only where needed)
  *   ASSISTANT_MAX_OUTPUT_TOKENS     most tokens in one answer (default 700)
+ *   ASSISTANT_KEEP_ALIVE            how long the tutor stays resident between questions (default 30m)
+ *   ASSISTANT_THINKING              off | auto | on | low | medium | high (default auto: only a genuinely hard question may think)
  *   ASSISTANT_DAILY_MESSAGES        messages per account per day (default 40)     ASSISTANT_PER_MINUTE   per minute (default 6)
  *   ASSISTANT_DAILY_TOKEN_BUDGET    hosted providers only: completion tokens per account per day (default 40000); the cost cap
  *   ASSISTANT_CONCURRENCY           answers generated at once on this server (default 1: one local GPU)
- *   ASSISTANT_PICTURE_FIRST_TOKEN_MS / ASSISTANT_PICTURE_TOTAL_MS   how long a message with a photo may wait for the first word / take in all (defaults 240000 / 360000)
+ *   ASSISTANT_STAGE_*               the staged budgets (queue, load, first activity, first answer, idle, tool round, whole turn)
+ *   ASSISTANT_MAX_TOOL_ROUNDS       tool round trips allowed in one turn (default 2)
+ *   ASSISTANT_RETRIEVAL             on (default) | off: search the student's own authorised uploads for relevant chunks
+ *   ASSISTANT_RETRIEVAL_TOP_K       chunks given to the tutor (default 4)   ASSISTANT_RETRIEVAL_MIN_SCORE   default 0.35
+ *   ASSISTANT_EMBED_MODEL / _BASE_URL / _KEEP_ALIVE / _BATCH   the embedding role (CPU helper by default)
+ *   ASSISTANT_DECISION_MODEL / _BASE_URL / _KEEP_ALIVE / _TIMEOUT_MS / _MIN_CONFIDENCE / _MIN_MARGIN / ASSISTANT_DECISION   the routing role
+ *   ASSISTANT_THINKING_TOKENS       extra output tokens for thinking, on top of the answer's budget (default 600)
+ *   ASSISTANT_IMAGE_*               photo/page long side, pictures per message: the measured image budget
+ *   ASSISTANT_VRAM_HEADROOM_MIB     the headroom target the benchmark checks (default 1536: brief section 5); not a runtime limit
  *   ASSISTANT_PRODUCTION_APPROVED   "true" only after plan19 section 6 is complete and recorded. Required in production
  *   ASSISTANT_MINORS_APPROVED       "true" only after the safeguarding lead has approved in writing. Until then it is for adults
  *   ASSISTANT_SAFEGUARDING_EMAIL    where a safeguarding flag goes (the lead's mailbox). Unset: the static reply is still given
  */
+export interface StageBudgets {
+  /** How long a turn may wait for a generation slot. */
+  queueMs: number;
+  /** How long the model may take to become resident before the turn starts (only when a warm-up is needed). */
+  loadMs: number;
+  /** From sending the request to the first chunk of ANY kind (thinking, a tool call or text). */
+  firstActivityMs: number;
+  /** From sending the request to the first VISIBLE text. */
+  firstAnswerMs: number;
+  /** The longest silence between events once activity has started. */
+  idleMs: number;
+  /** One tool execution, including its result validation. */
+  toolRoundMs: number;
+  /** The whole turn, absolute: tool rounds and retries never reset it. */
+  turnMs: number;
+}
+
 export const ASSISTANT_DEFAULTS = {
-  model: "qwen3.5:9b",
-  contextSize: 8192,
+  // The candidate profile from the brief (section 12), pending the benchmark in docs/OLLAMA_THREE_MODEL.md.
+  model: "bonsai-2:9b",
+  contextSize: 4096,
   maxOutputTokens: 700,
   dailyMessages: 40,
   perMinute: 6,
@@ -28,14 +61,77 @@ export const ASSISTANT_DEFAULTS = {
   concurrency: 1,
   queueMax: 4,
   maxInputChars: 4000,
-  firstTokenTimeoutMs: 45_000,
-  totalTimeoutMs: 120_000,
-  // A question with a photo: a local vision model may have to load first (minutes on a laptop GPU) and then read the picture before it says a word.
-  pictureFirstTokenTimeoutMs: 240_000,
-  pictureTotalTimeoutMs: 360_000,
+  keepAlive: "30m",
+  thinking: "auto" as const,
+  maxToolRounds: 2,
+  queueMs: 20_000,
+  loadMs: 180_000,
+  firstActivityMs: 60_000,
+  firstAnswerMs: 45_000,
+  idleMs: 30_000,
+  toolRoundMs: 60_000,
+  turnMs: 180_000,
+  // A photo adds reading time; these are still a whole turn, not a reset per chunk.
+  imageFirstActivityMs: 90_000,
+  imageFirstAnswerMs: 90_000,
+  imageIdleMs: 45_000,
+  imageTurnMs: 240_000,
+  retrievalTopK: 4,
+  retrievalMinScore: 0.35,
+  embedModel: "embeddinggemma-2:270m-q8_0-text",
+  helperBaseUrl: "http://127.0.0.1:11435",
+  embedKeepAlive: "10m",
+  embedBatch: 8,
+  decisionModel: "laya:421m-typed-decisions-bf16",
+  decisionKeepAlive: "10m",
+  decisionTimeoutMs: 4_000,
+  // Measured on this laptop (docs/OLLAMA_BENCHMARK.md): five-way calibrated probabilities top out near 0.3-0.5, so a floor of
+  // 0.55 abstains on everything. The margin over the runner-up is the honest discriminator; below either, routing is deterministic.
+  decisionMinConfidence: 0.3,
+  decisionMinMargin: 0.12,
+  thinkingTokens: 600,
+  photoLongSide: 1400,
+  renderLongSide: 1200,
+  imagesPerMessage: 3,
+  vramHeadroomMiB: 1536,
 } as const;
 
+export type ThinkingPolicy = "off" | "auto" | "on" | "low" | "medium" | "high";
+const THINKING: readonly ThinkingPolicy[] = ["off", "auto", "on", "low", "medium", "high"];
+
 export type ProviderId = "ollama" | "nim" | "custom" | "mock";
+
+export interface EmbeddingConfig {
+  model: string;
+  baseUrl: string;
+  keepAlive: string;
+  batch: number;
+}
+
+export interface RetrievalConfig {
+  enabled: boolean;
+  topK: number;
+  minScore: number;
+  embedding: EmbeddingConfig;
+}
+
+export interface DecisionConfig {
+  enabled: boolean;
+  model: string;
+  baseUrl: string;
+  keepAlive: string;
+  timeoutMs: number;
+  /** The floor for the chosen option's own probability. */
+  minConfidence: number;
+  /** The floor for (top probability - runner-up): a five-way tie is not a decision. */
+  minMargin: number;
+}
+
+export interface ImageConfig {
+  photoLongSide: number;
+  renderLongSide: number;
+  perMessage: number;
+}
 
 export interface AssistantConfig {
   enabled: boolean;
@@ -52,11 +148,16 @@ export interface AssistantConfig {
   dailyTokenBudget: number;
   concurrency: number;
   queueMax: number;
-  firstTokenTimeoutMs: number;
-  totalTimeoutMs: number;
-  /** The same two limits for a message that carries a photo or PDF page. */
-  pictureFirstTokenTimeoutMs: number;
-  pictureTotalTimeoutMs: number;
+  keepAlive: string;
+  thinking: ThinkingPolicy;
+  /** Extra output tokens allowed for thinking, ON TOP of the answer's budget, so a hard question still gets its answer. */
+  thinkingTokens: number;
+  stages: { text: StageBudgets; image: StageBudgets };
+  maxToolRounds: number;
+  retrieval: RetrievalConfig;
+  decision: DecisionConfig;
+  images: ImageConfig;
+  vramHeadroomMiB: number;
   productionApproved: boolean;
   minorsApproved: boolean;
   safeguardingEmail: string | null;
@@ -69,11 +170,54 @@ function whole(value: string | undefined, fallback: number, min: number, max: nu
   return Number.isInteger(n) && n >= min && n <= max ? n : fallback;
 }
 
+function ratio(value: string | undefined, fallback: number, min: number, max: number): number {
+  const n = Number(value?.trim());
+  return Number.isFinite(n) && n >= min && n <= max ? n : fallback;
+}
+
+/** on / off with a default, so a typo leaves the shipped behaviour rather than silently switching a role on. */
+function toggle(value: string | undefined, fallback: boolean): boolean {
+  const v = value?.trim().toLowerCase();
+  if (v === "on" || v === "true" || v === "1") return true;
+  if (v === "off" || v === "false" || v === "0") return false;
+  return fallback;
+}
+
+function stageBudgets(env: Env, kind: "text" | "image"): StageBudgets {
+  const image = kind === "image";
+  const firstActivity = whole(env.ASSISTANT_STAGE_FIRST_ACTIVITY_MS, image ? ASSISTANT_DEFAULTS.imageFirstActivityMs : ASSISTANT_DEFAULTS.firstActivityMs, 1_000, 900_000);
+  // The owner's earlier picture variables still work as the image first-answer and whole-turn budgets (documented as deprecated).
+  const firstAnswer = whole(
+    image ? env.ASSISTANT_STAGE_FIRST_ANSWER_IMAGE_MS ?? env.ASSISTANT_PICTURE_FIRST_TOKEN_MS : env.ASSISTANT_STAGE_FIRST_ANSWER_MS,
+    image ? ASSISTANT_DEFAULTS.imageFirstAnswerMs : ASSISTANT_DEFAULTS.firstAnswerMs,
+    1_000,
+    900_000,
+  );
+  return {
+    queueMs: whole(env.ASSISTANT_STAGE_QUEUE_MS, ASSISTANT_DEFAULTS.queueMs, 0, 600_000),
+    loadMs: whole(env.ASSISTANT_STAGE_LOAD_MS, ASSISTANT_DEFAULTS.loadMs, 5_000, 1_800_000),
+    // Independent on purpose: a provider arms both timers, and whichever comes first ends the wait. Neither value silently
+    // overrides the other (a deprecated alias therefore still means what it says).
+    firstActivityMs: firstActivity,
+    firstAnswerMs: firstAnswer,
+    idleMs: whole(image ? env.ASSISTANT_STAGE_IDLE_IMAGE_MS : env.ASSISTANT_STAGE_IDLE_MS, image ? ASSISTANT_DEFAULTS.imageIdleMs : ASSISTANT_DEFAULTS.idleMs, 1_000, 600_000),
+    toolRoundMs: whole(env.ASSISTANT_STAGE_TOOL_MS, ASSISTANT_DEFAULTS.toolRoundMs, 1_000, 600_000),
+    turnMs: whole(
+      image ? env.ASSISTANT_STAGE_TURN_IMAGE_MS ?? env.ASSISTANT_PICTURE_TOTAL_MS : env.ASSISTANT_STAGE_TURN_MS,
+      image ? ASSISTANT_DEFAULTS.imageTurnMs : ASSISTANT_DEFAULTS.turnMs,
+      5_000,
+      1_800_000,
+    ),
+  };
+}
+
 export function assistantConfig(env: Env = process.env): AssistantConfig {
   const production = env.NODE_ENV === "production";
   const asked = (pick(env.ASSISTANT_PROVIDER) ?? "ollama").toLowerCase().split(",").map((p) => p.trim());
   const providers = asked.filter((p): p is ProviderId => p === "ollama" || p === "nim" || p === "custom" || p === "mock");
   const flag = pick(env.ASSISTANT_ENABLED);
+  const thinking = (pick(env.ASSISTANT_THINKING)?.toLowerCase() ?? ASSISTANT_DEFAULTS.thinking) as ThinkingPolicy;
+  const helper = pick(env.ASSISTANT_HELPER_BASE_URL) ?? ASSISTANT_DEFAULTS.helperBaseUrl;
   return {
     enabled: production ? flag === "true" : flag !== "false",
     production,
@@ -89,15 +233,46 @@ export function assistantConfig(env: Env = process.env): AssistantConfig {
     dailyTokenBudget: whole(env.ASSISTANT_DAILY_TOKEN_BUDGET, ASSISTANT_DEFAULTS.dailyTokenBudget, 100, 10_000_000),
     concurrency: whole(env.ASSISTANT_CONCURRENCY, ASSISTANT_DEFAULTS.concurrency, 1, 16),
     queueMax: ASSISTANT_DEFAULTS.queueMax,
-    firstTokenTimeoutMs: ASSISTANT_DEFAULTS.firstTokenTimeoutMs,
-    totalTimeoutMs: ASSISTANT_DEFAULTS.totalTimeoutMs,
-    pictureFirstTokenTimeoutMs: whole(env.ASSISTANT_PICTURE_FIRST_TOKEN_MS, ASSISTANT_DEFAULTS.pictureFirstTokenTimeoutMs, 5_000, 900_000),
-    pictureTotalTimeoutMs: whole(env.ASSISTANT_PICTURE_TOTAL_MS, ASSISTANT_DEFAULTS.pictureTotalTimeoutMs, 10_000, 1_800_000),
+    keepAlive: pick(env.ASSISTANT_KEEP_ALIVE) ?? ASSISTANT_DEFAULTS.keepAlive,
+    thinking: THINKING.includes(thinking) ? thinking : ASSISTANT_DEFAULTS.thinking,
+    thinkingTokens: whole(env.ASSISTANT_THINKING_TOKENS, ASSISTANT_DEFAULTS.thinkingTokens, 0, 4096),
+    stages: { text: stageBudgets(env, "text"), image: stageBudgets(env, "image") },
+    maxToolRounds: whole(env.ASSISTANT_MAX_TOOL_ROUNDS, ASSISTANT_DEFAULTS.maxToolRounds, 0, 4),
+    retrieval: {
+      enabled: toggle(env.ASSISTANT_RETRIEVAL, true),
+      topK: whole(env.ASSISTANT_RETRIEVAL_TOP_K, ASSISTANT_DEFAULTS.retrievalTopK, 1, 12),
+      minScore: ratio(env.ASSISTANT_RETRIEVAL_MIN_SCORE, ASSISTANT_DEFAULTS.retrievalMinScore, 0, 1),
+      embedding: {
+        model: pick(env.ASSISTANT_EMBED_MODEL) ?? ASSISTANT_DEFAULTS.embedModel,
+        baseUrl: pick(env.ASSISTANT_EMBED_BASE_URL) ?? helper,
+        keepAlive: pick(env.ASSISTANT_EMBED_KEEP_ALIVE) ?? ASSISTANT_DEFAULTS.embedKeepAlive,
+        batch: whole(env.ASSISTANT_EMBED_BATCH, ASSISTANT_DEFAULTS.embedBatch, 1, 32),
+      },
+    },
+    decision: {
+      // The router is a helper: enabled in development, never in production (the local profile is development only anyway).
+      enabled: !production && toggle(env.ASSISTANT_DECISION, true),
+      model: pick(env.ASSISTANT_DECISION_MODEL) ?? ASSISTANT_DEFAULTS.decisionModel,
+      baseUrl: pick(env.ASSISTANT_DECISION_BASE_URL) ?? helper,
+      keepAlive: pick(env.ASSISTANT_DECISION_KEEP_ALIVE) ?? ASSISTANT_DEFAULTS.decisionKeepAlive,
+      timeoutMs: whole(env.ASSISTANT_DECISION_TIMEOUT_MS, ASSISTANT_DEFAULTS.decisionTimeoutMs, 500, 30_000),
+      minConfidence: ratio(env.ASSISTANT_DECISION_MIN_CONFIDENCE, ASSISTANT_DEFAULTS.decisionMinConfidence, 0, 1),
+      minMargin: ratio(env.ASSISTANT_DECISION_MIN_MARGIN, ASSISTANT_DEFAULTS.decisionMinMargin, 0, 1),
+    },
+    images: {
+      photoLongSide: whole(env.ASSISTANT_PHOTO_LONG_SIDE, ASSISTANT_DEFAULTS.photoLongSide, 512, 2400),
+      renderLongSide: whole(env.ASSISTANT_PAGE_LONG_SIDE, ASSISTANT_DEFAULTS.renderLongSide, 512, 2400),
+      perMessage: whole(env.ASSISTANT_IMAGES_PER_MESSAGE, ASSISTANT_DEFAULTS.imagesPerMessage, 1, 6),
+    },
+    vramHeadroomMiB: whole(env.ASSISTANT_VRAM_HEADROOM_MIB, ASSISTANT_DEFAULTS.vramHeadroomMiB, 256, 8192),
     productionApproved: pick(env.ASSISTANT_PRODUCTION_APPROVED) === "true",
     minorsApproved: pick(env.ASSISTANT_MINORS_APPROVED) === "true",
     safeguardingEmail: pick(env.ASSISTANT_SAFEGUARDING_EMAIL) ?? null,
   };
 }
+
+/** The staged budgets for a turn, chosen by whether it carries a picture. */
+export const stageBudgetsFor = (config: AssistantConfig, hasPictures: boolean): StageBudgets => (hasPictures ? config.stages.image : config.stages.text);
 
 export type Closed = "disabled" | "production_not_approved" | "production_provider" | "no_provider" | "no_backend";
 

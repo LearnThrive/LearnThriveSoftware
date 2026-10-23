@@ -1,10 +1,13 @@
 import { createMailer, emailWrapper, escapeHtml, htmlBanner, htmlHeading, htmlParagraph, htmlTable, readEmailConfig, sendEmail, textTable } from "@/lib/email";
 import { chatUploadStorage, type LibraryStorage } from "@/lib/library/storage";
 import { assistantAvailability, assistantConfig, type AssistantConfig, type Closed } from "./config";
+import { SystemOneClient } from "./decision";
+import { OllamaEmbeddingProvider, type EmbeddingProvider } from "./embeddings";
 import { buildProvider } from "./providers";
 import { GenerationQueue } from "./queue";
 import type { SafeguardingFlag } from "./service";
-import type { ChatProvider } from "./types";
+import { isWarmable, type ChatProvider } from "./types";
+import { warmOnce } from "./warmup";
 
 type Env = Record<string, string | undefined>;
 
@@ -14,6 +17,10 @@ export interface AssistantRuntime {
   queue: GenerationQueue;
   uploads: LibraryStorage;
   hosted: boolean;
+  /** The embedding role (CPU helper). Null when the local stack is not in use: retrieval is then off, not faked. */
+  embeddings: EmbeddingProvider | null;
+  /** The decision role (CPU helper). Null when unavailable: routing stays deterministic. */
+  decision: SystemOneClient | null;
   flag: ((flag: SafeguardingFlag) => Promise<void>) | undefined;
 }
 
@@ -59,7 +66,28 @@ export function assistantRuntime(env: Env = process.env): AssistantRuntime | nul
         if (!sent.ok) throw new Error("send failed");
       }
     : undefined;
-  g.__learnthriveAssistant = { config, provider, queue: new GenerationQueue(config.concurrency, config.queueMax), uploads, hosted: !config.providers.every((p) => p === "ollama" || p === "mock"), flag };
+  // The helper roles are part of the LOCAL stack only: a hosted provider keeps its own retrieval/decision story, and production
+  // never uses these loopback endpoints (config.ts refuses ollama there).
+  const local = !config.production && config.providers.includes("ollama");
+  const embeddings = local && config.retrieval.enabled ? new OllamaEmbeddingProvider({ ...config.retrieval.embedding }) : null;
+  const decision = local && config.decision.enabled ? new SystemOneClient(config.decision) : null;
+  g.__learnthriveAssistant = {
+    config,
+    provider,
+    queue: new GenerationQueue(config.concurrency, config.queueMax),
+    uploads,
+    hosted: !config.providers.every((p) => p === "ollama" || p === "mock"),
+    embeddings,
+    decision,
+    flag,
+  };
+  // Warm the tutor and the helpers once, in the background: the first question should not pay for a cold load. The manager
+  // deduplicates, so a hot reload or two requests cannot start two loads.
+  if (local) {
+    if (isWarmable(provider)) void warmOnce({ provider, model: config.model, contextSize: config.contextSize, keepAlive: config.keepAlive }, { budgetMs: config.stages.text.loadMs }).catch(() => {});
+    if (embeddings) void embeddings.embed(["ready"], { kind: "query" }).catch(() => {});
+    if (decision) void decision.health().catch(() => {});
+  }
   return g.__learnthriveAssistant;
 }
 

@@ -53,3 +53,7 @@ services/voice/.venv/
 services/voice/models/
 services/voice/__pycache__/
 LearnThrive_Study_Buddy_Master_Prompt.md
+
+# scripts/ollama-local.mjs runtime state: PIDs, logs and the warm-up marker for the two local Ollama processes (never source).
+.ollama-local/
+LearnThrive_Ollama_Three_Model_Claude_Code_Prompt.md

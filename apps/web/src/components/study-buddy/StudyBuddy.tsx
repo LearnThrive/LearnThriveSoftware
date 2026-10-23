@@ -458,11 +458,23 @@ export function StudyBuddy() {
               text?: string;
               code?: string;
               position?: number;
+              /** An honest processing state, only when the server has evidence for it. */
+              state?: "preparing" | "reading" | "thinking";
             };
             if (event.type === "session" && event.sessionId)
               setSessionId(event.sessionId);
             else if (event.type === "queued")
               setWaiting(`You are number ${event.position} in the queue.`);
+            else if (event.type === "status")
+              setWaiting(
+                event.state === "preparing"
+                  ? "Preparing the model (the first answer after a start can take a moment)."
+                  : event.state === "thinking"
+                    ? "Working through it\u2026"
+                    : event.state === "reading"
+                      ? "Reading the picture\u2026"
+                      : "",
+              );
             else if (event.type === "delta" && event.text) {
               setWaiting("");
               answer += event.text;

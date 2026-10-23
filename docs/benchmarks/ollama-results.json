@@ -1,0 +1,1873 @@
+{
+  "startedAt": "2026-10-23T11:55:58.469Z",
+  "finishedAt": "2026-10-23T12:02:25.844Z",
+  "machine": {
+    "platform": "win32 x64",
+    "cpus": 16,
+    "cpu": "AMD Ryzen 7 5800H with Radeon Graphics         ",
+    "memoryGiB": 63,
+    "gpu": "NVIDIA GeForce RTX 3070 Laptop GPU, 8192, 617.42"
+  },
+  "ollama": {
+    "main": "http://127.0.0.1:11434",
+    "helper": "http://127.0.0.1:11435",
+    "context": 4096,
+    "keepAlive": "30m"
+  },
+  "runs": {
+    "warm": 10,
+    "photo": 5,
+    "hard": 3
+  },
+  "models": [
+    {
+      "model": "qwen3.5:9b",
+      "digest": "56671c2ab9385f9cfcb404638e32cd62d88e3501d44822208363c010179a3c90",
+      "sizeBytes": 6550825550,
+      "quantisation": "Q4_K_M",
+      "capabilities": {
+        "vision": true,
+        "jsonMode": true,
+        "toolUse": true,
+        "maxContext": 262144,
+        "thinking": true,
+        "thinkingValues": [
+          false,
+          true
+        ],
+        "digest": "56671c2ab9385f9cfcb404638e32cd62d88e3501d44822208363c010179a3c90"
+      },
+      "health": {
+        "ok": true,
+        "detail": "ok"
+      },
+      "context": 4096,
+      "cases": [
+        {
+          "case": "warm text: a short explanation",
+          "runs": 10,
+          "errors": 0,
+          "errorCodes": [],
+          "firstActivityMs": {
+            "count": 10,
+            "min": 65.6,
+            "median": 108.8,
+            "p90": 229.6,
+            "max": 15263.9,
+            "mean": 1622.2
+          },
+          "firstAnswerMs": {
+            "count": 10,
+            "min": 65.6,
+            "median": 108.8,
+            "p90": 229.6,
+            "max": 15263.9,
+            "mean": 1622.2
+          },
+          "totalMs": {
+            "count": 10,
+            "min": 962.3,
+            "median": 1239.9,
+            "p90": 1412.2,
+            "max": 16126.1,
+            "mean": 2667.8
+          },
+          "tokensPerSecond": {
+            "count": 10,
+            "min": 43.3,
+            "median": 53.1,
+            "p90": 53.5,
+            "max": 53.6,
+            "mean": 49.9
+          },
+          "promptEvalMs": {
+            "count": 10,
+            "min": 56,
+            "median": 60,
+            "p90": 75,
+            "max": 15172,
+            "mean": 1573.3
+          },
+          "loadMs": {
+            "count": 10,
+            "min": 5,
+            "median": 6,
+            "p90": 20,
+            "max": 27,
+            "mean": 9.6
+          },
+          "gpu": {
+            "samples": 35,
+            "usedPeakMiB": 7807,
+            "freeMinMiB": 212,
+            "tempMaxC": 60,
+            "powerMaxW": 95.54,
+            "utilPeakPct": 91
+          },
+          "sampleAnswer": "To find 3/4 of 24, first divide 24 by the denominator (4) to get 6, which represents one quarter. Then multiply this result by the numerator (3) to get 18."
+        },
+        {
+          "case": "warm text: solve 2x + 7 = 19",
+          "runs": 10,
+          "errors": 0,
+          "errorCodes": [],
+          "firstActivityMs": {
+            "count": 10,
+            "min": 67.6,
+            "median": 93.8,
+            "p90": 143.9,
+            "max": 214.9,
+            "mean": 105.5
+          },
+          "firstAnswerMs": {
+            "count": 10,
+            "min": 67.6,
+            "median": 93.8,
+            "p90": 143.9,
+            "max": 214.9,
+            "mean": 105.5
+          },
+          "totalMs": {
+            "count": 10,
+            "min": 934.6,
+            "median": 1206.7,
+            "p90": 1385.6,
+            "max": 1631.4,
+            "mean": 1202.4
+          },
+          "tokensPerSecond": {
+            "count": 10,
+            "min": 43.4,
+            "median": 53.8,
+            "p90": 54.2,
+            "max": 54.4,
+            "mean": 51
+          },
+          "promptEvalMs": {
+            "count": 10,
+            "min": 58,
+            "median": 62,
+            "p90": 73,
+            "max": 109,
+            "mean": 67.2
+          },
+          "loadMs": {
+            "count": 10,
+            "min": 5,
+            "median": 8,
+            "p90": 10,
+            "max": 36,
+            "mean": 10.4
+          },
+          "gpu": {
+            "samples": 15,
+            "usedPeakMiB": 7807,
+            "freeMinMiB": 212,
+            "tempMaxC": 62,
+            "powerMaxW": 95.15,
+            "utilPeakPct": 92
+          },
+          "sampleAnswer": "Subtract 7 from both sides to get $2x = 12$.\nDivide both sides by 2 to isolate $x$.\nThe calculation is $x = 12 / 2$.\nTherefore, the final answer is $x = 6$."
+        },
+        {
+          "case": "photo: worked arithmetic answer",
+          "runs": 5,
+          "errors": 0,
+          "errorCodes": [],
+          "firstActivityMs": {
+            "count": 5,
+            "min": 6801.8,
+            "median": 6830.5,
+            "p90": 6982.7,
+            "max": 6982.7,
+            "mean": 6883.9
+          },
+          "firstAnswerMs": {
+            "count": 5,
+            "min": 6801.8,
+            "median": 6830.5,
+            "p90": 6982.7,
+            "max": 6982.7,
+            "mean": 6883.9
+          },
+          "totalMs": {
+            "count": 5,
+            "min": 7940.9,
+            "median": 8117.9,
+            "p90": 8310.3,
+            "max": 8310.3,
+            "mean": 8113.6
+          },
+          "tokensPerSecond": {
+            "count": 5,
+            "min": 50.3,
+            "median": 52.7,
+            "p90": 54.6,
+            "max": 54.6,
+            "mean": 52.7
+          },
+          "promptEvalMs": {
+            "count": 5,
+            "min": 6756,
+            "median": 6795,
+            "p90": 6904,
+            "max": 6904,
+            "mean": 6828.4
+          },
+          "loadMs": {
+            "count": 5,
+            "min": 6,
+            "median": 7,
+            "p90": 8,
+            "max": 8,
+            "mean": 7.2
+          },
+          "gpu": {
+            "samples": 53,
+            "usedPeakMiB": 7866,
+            "freeMinMiB": 153,
+            "tempMaxC": 62,
+            "powerMaxW": 94.17,
+            "utilPeakPct": 100
+          },
+          "sampleAnswer": "To find 3/4 of 24:\n\nStep 1: Divide 24 by 4 → 24 ÷ 4 = 6  \nStep 2: Multiply result by 3 → 6 × 3 = 18  \n\nAnswer: 18 ✅"
+        },
+        {
+          "case": "photo: diagram and table",
+          "runs": 5,
+          "errors": 0,
+          "errorCodes": [],
+          "firstActivityMs": {
+            "count": 5,
+            "min": 8697.7,
+            "median": 8767.5,
+            "p90": 8837,
+            "max": 8837,
+            "mean": 8755.8
+          },
+          "firstAnswerMs": {
+            "count": 5,
+            "min": 8697.7,
+            "median": 8767.5,
+            "p90": 8837,
+            "max": 8837,
+            "mean": 8755.8
+          },
+          "totalMs": {
+            "count": 5,
+            "min": 8908,
+            "median": 9636.2,
+            "p90": 9776.9,
+            "max": 9776.9,
+            "mean": 9424.1
+          },
+          "tokensPerSecond": {
+            "count": 5,
+            "min": 53.7,
+            "median": 55.8,
+            "p90": 58,
+            "max": 58,
+            "mean": 56.1
+          },
+          "promptEvalMs": {
+            "count": 5,
+            "min": 8629,
+            "median": 8732,
+            "p90": 8753,
+            "max": 8753,
+            "mean": 8703
+          },
+          "loadMs": {
+            "count": 5,
+            "min": 5,
+            "median": 6,
+            "p90": 8,
+            "max": 8,
+            "mean": 6.2
+          },
+          "gpu": {
+            "samples": 62,
+            "usedPeakMiB": 7870,
+            "freeMinMiB": 149,
+            "tempMaxC": 62,
+            "powerMaxW": 94.75,
+            "utilPeakPct": 100
+          },
+          "sampleAnswer": "x = 10 cm  \nPythagorean theorem"
+        },
+        {
+          "case": "photo: rotated, superscripts and roots",
+          "runs": 5,
+          "errors": 0,
+          "errorCodes": [],
+          "firstActivityMs": {
+            "count": 5,
+            "min": 82.4,
+            "median": 86.6,
+            "p90": 6877.6,
+            "max": 6877.6,
+            "mean": 1443.7
+          },
+          "firstAnswerMs": {
+            "count": 5,
+            "min": 82.4,
+            "median": 86.6,
+            "p90": 6877.6,
+            "max": 6877.6,
+            "mean": 1443.7
+          },
+          "totalMs": {
+            "count": 5,
+            "min": 1365.6,
+            "median": 1382.1,
+            "p90": 8156.4,
+            "max": 8156.4,
+            "mean": 2734.9
+          },
+          "tokensPerSecond": {
+            "count": 5,
+            "min": 54.4,
+            "median": 55.6,
+            "p90": 55.6,
+            "max": 55.6,
+            "mean": 55.3
+          },
+          "promptEvalMs": {
+            "count": 5,
+            "min": 54,
+            "median": 56,
+            "p90": 6762,
+            "max": 6762,
+            "mean": 1396.8
+          },
+          "loadMs": {
+            "count": 5,
+            "min": 5,
+            "median": 6,
+            "p90": 8,
+            "max": 8,
+            "mean": 6.2
+          },
+          "gpu": {
+            "samples": 18,
+            "usedPeakMiB": 7870,
+            "freeMinMiB": 149,
+            "tempMaxC": 63,
+            "powerMaxW": 158.4,
+            "utilPeakPct": 100
+          },
+          "sampleAnswer": "a) 2×5 + 3×2 = 10 + 6 = 16  \nb) √144 - 2×3 = 12 - 6 = 6  \nc) (2/3)² × 9 = (4/9) × 9 = 4"
+        },
+        {
+          "case": "photo follow-up: check step 2",
+          "runs": 5,
+          "errors": 0,
+          "errorCodes": [],
+          "firstActivityMs": {
+            "count": 5,
+            "min": 82.7,
+            "median": 85.6,
+            "p90": 6899.6,
+            "max": 6899.6,
+            "mean": 1447.4
+          },
+          "firstAnswerMs": {
+            "count": 5,
+            "min": 82.7,
+            "median": 85.6,
+            "p90": 6899.6,
+            "max": 6899.6,
+            "mean": 1447.4
+          },
+          "totalMs": {
+            "count": 5,
+            "min": 1261,
+            "median": 1627.4,
+            "p90": 8537.3,
+            "max": 8537.3,
+            "mean": 2965.2
+          },
+          "tokensPerSecond": {
+            "count": 5,
+            "min": 55,
+            "median": 55.1,
+            "p90": 55.4,
+            "max": 55.4,
+            "mean": 55.2
+          },
+          "promptEvalMs": {
+            "count": 5,
+            "min": 54,
+            "median": 55,
+            "p90": 6775,
+            "max": 6775,
+            "mean": 1398.6
+          },
+          "loadMs": {
+            "count": 5,
+            "min": 5,
+            "median": 6,
+            "p90": 6,
+            "max": 6,
+            "mean": 5.8
+          },
+          "gpu": {
+            "samples": 19,
+            "usedPeakMiB": 7870,
+            "freeMinMiB": 149,
+            "tempMaxC": 63,
+            "powerMaxW": 96.53,
+            "utilPeakPct": 100
+          },
+          "sampleAnswer": "Step 2 is correct: 6 × 3 = 18.  \nThis follows from dividing 24 by 4 to get 6, then multiplying by 3.  \nThe final answer 18 is accurate.  \nStep 3 confirms it: 18"
+        },
+        {
+          "case": "thinking: hard multi-step proof",
+          "runs": 3,
+          "errors": 0,
+          "errorCodes": [],
+          "firstActivityMs": {
+            "count": 3,
+            "min": 97.5,
+            "median": 139.3,
+            "p90": 145.4,
+            "max": 145.4,
+            "mean": 127.4
+          },
+          "firstAnswerMs": null,
+          "totalMs": {
+            "count": 3,
+            "min": 12916.7,
+            "median": 13000.1,
+            "p90": 13104.3,
+            "max": 13104.3,
+            "mean": 13007
+          },
+          "tokensPerSecond": {
+            "count": 3,
+            "min": 54,
+            "median": 54.5,
+            "p90": 54.6,
+            "max": 54.6,
+            "mean": 54.4
+          },
+          "promptEvalMs": {
+            "count": 3,
+            "min": 55,
+            "median": 56,
+            "p90": 97,
+            "max": 97,
+            "mean": 69.3
+          },
+          "loadMs": {
+            "count": 3,
+            "min": 5,
+            "median": 5,
+            "p90": 6,
+            "max": 6,
+            "mean": 5.3
+          },
+          "gpu": {
+            "samples": 51,
+            "usedPeakMiB": 7872,
+            "freeMinMiB": 147,
+            "tempMaxC": 67,
+            "powerMaxW": 100.16,
+            "utilPeakPct": 94
+          },
+          "sampleAnswer": ""
+        },
+        {
+          "case": "tool: a real allowed call (check_calculation)",
+          "runs": 3,
+          "toolRequests": 3,
+          "completed": 3,
+          "details": [
+            {
+              "requested": 1,
+              "error": null,
+              "round": {
+                "name": "check_calculation",
+                "argumentsValid": true,
+                "resultClass": "ok",
+                "answered": true,
+                "firstAnswerMs": 178.73000000001048
+              }
+            },
+            {
+              "requested": 1,
+              "error": null,
+              "round": {
+                "name": "check_calculation",
+                "argumentsValid": true,
+                "resultClass": "ok",
+                "answered": true,
+                "firstAnswerMs": 122.94539999999688
+              }
+            },
+            {
+              "requested": 1,
+              "error": null,
+              "round": {
+                "name": "check_calculation",
+                "argumentsValid": true,
+                "resultClass": "ok",
+                "answered": true,
+                "firstAnswerMs": 117.24809999999707
+              }
+            }
+          ]
+        },
+        {
+          "case": "tool: a disallowed call is refused",
+          "runs": 1,
+          "refused": true,
+          "code": "unknown_tool"
+        },
+        {
+          "case": "cancel: stop after the first token",
+          "runs": 1,
+          "stopped": true,
+          "code": "aborted"
+        },
+        {
+          "case": "two requests at once",
+          "runs": 2,
+          "first": {
+            "firstAnswerMs": 122.59760000000824,
+            "error": null
+          },
+          "second": {
+            "firstAnswerMs": 1015.755600000004,
+            "error": null
+          }
+        },
+        {
+          "case": "missing model",
+          "runs": 1,
+          "code": "bad_request",
+          "timeout": false
+        },
+        {
+          "case": "embedding helper unreachable",
+          "runs": 1,
+          "code": "unavailable"
+        }
+      ],
+      "cold": {
+        "evicted": true,
+        "warm": {
+          "ok": true,
+          "loadMs": 8429,
+          "detail": "ok"
+        },
+        "wallMs": 8521,
+        "sizeVramBytes": 5606337412,
+        "contextLoaded": 4096,
+        "count": 1
+      },
+      "warmUp": {
+        "ok": true,
+        "loadMs": null,
+        "detail": "already_resident",
+        "wallMs": 1
+      }
+    },
+    {
+      "model": "bonsai-2:9b",
+      "digest": "c8b5462f8688647fe0b53568e3c00181ada5f05300aa4bf00695f2902f4d388e",
+      "sizeBytes": 3180880170,
+      "quantisation": "Q2_0",
+      "capabilities": {
+        "vision": true,
+        "jsonMode": true,
+        "toolUse": true,
+        "maxContext": 262144,
+        "thinking": true,
+        "thinkingValues": [
+          false,
+          true
+        ],
+        "digest": "c8b5462f8688647fe0b53568e3c00181ada5f05300aa4bf00695f2902f4d388e"
+      },
+      "health": {
+        "ok": true,
+        "detail": "ok"
+      },
+      "context": 4096,
+      "cases": [
+        {
+          "case": "warm text: a short explanation",
+          "runs": 10,
+          "errors": 0,
+          "errorCodes": [],
+          "firstActivityMs": {
+            "count": 10,
+            "min": 58.6,
+            "median": 84.3,
+            "p90": 85.4,
+            "max": 189.3,
+            "mean": 87.5
+          },
+          "firstAnswerMs": {
+            "count": 10,
+            "min": 58.6,
+            "median": 84.3,
+            "p90": 85.4,
+            "max": 189.3,
+            "mean": 87.5
+          },
+          "totalMs": {
+            "count": 10,
+            "min": 750.8,
+            "median": 791.4,
+            "p90": 864.6,
+            "max": 977.3,
+            "mean": 817
+          },
+          "tokensPerSecond": {
+            "count": 10,
+            "min": 84.6,
+            "median": 86.5,
+            "p90": 87.3,
+            "max": 87.6,
+            "mean": 86.5
+          },
+          "promptEvalMs": {
+            "count": 10,
+            "min": 48,
+            "median": 50,
+            "p90": 52,
+            "max": 157,
+            "mean": 60.5
+          },
+          "loadMs": {
+            "count": 10,
+            "min": 5,
+            "median": 5,
+            "p90": 6,
+            "max": 6,
+            "mean": 5.2
+          },
+          "gpu": {
+            "samples": 10,
+            "usedPeakMiB": 5198,
+            "freeMinMiB": 2821,
+            "tempMaxC": 66,
+            "powerMaxW": 97.03,
+            "utilPeakPct": 86
+          },
+          "sampleAnswer": "To find 3/4 of 24, you first divide 24 by the denominator, 4, to get 6. Then, you multiply that result by the numerator, 3, which gives 18."
+        },
+        {
+          "case": "warm text: solve 2x + 7 = 19",
+          "runs": 10,
+          "errors": 0,
+          "errorCodes": [],
+          "firstActivityMs": {
+            "count": 10,
+            "min": 81.8,
+            "median": 88.1,
+            "p90": 120,
+            "max": 128.5,
+            "mean": 96.4
+          },
+          "firstAnswerMs": {
+            "count": 10,
+            "min": 81.8,
+            "median": 88.1,
+            "p90": 120,
+            "max": 128.5,
+            "mean": 96.4
+          },
+          "totalMs": {
+            "count": 10,
+            "min": 677,
+            "median": 980.7,
+            "p90": 1056.9,
+            "max": 1094.7,
+            "mean": 923.1
+          },
+          "tokensPerSecond": {
+            "count": 10,
+            "min": 81,
+            "median": 85.7,
+            "p90": 87.2,
+            "max": 87.4,
+            "mean": 85.1
+          },
+          "promptEvalMs": {
+            "count": 10,
+            "min": 49,
+            "median": 52,
+            "p90": 59,
+            "max": 76,
+            "mean": 55.2
+          },
+          "loadMs": {
+            "count": 10,
+            "min": 5,
+            "median": 5,
+            "p90": 6,
+            "max": 7,
+            "mean": 5.4
+          },
+          "gpu": {
+            "samples": 12,
+            "usedPeakMiB": 5198,
+            "freeMinMiB": 2821,
+            "tempMaxC": 67,
+            "powerMaxW": 91.02,
+            "utilPeakPct": 88
+          },
+          "sampleAnswer": "Subtract 7 from both sides of the equation: $2x = 12$.\nDivide both sides by 2 to isolate $x$: $x = 6$.\nThe solution is **$x = 6$**."
+        },
+        {
+          "case": "photo: worked arithmetic answer",
+          "runs": 5,
+          "errors": 0,
+          "errorCodes": [],
+          "firstActivityMs": {
+            "count": 5,
+            "min": 908.5,
+            "median": 936.2,
+            "p90": 1011,
+            "max": 1011,
+            "mean": 951
+          },
+          "firstAnswerMs": {
+            "count": 5,
+            "min": 908.5,
+            "median": 936.2,
+            "p90": 1011,
+            "max": 1011,
+            "mean": 951
+          },
+          "totalMs": {
+            "count": 5,
+            "min": 1473.2,
+            "median": 1613.3,
+            "p90": 1753.7,
+            "max": 1753.7,
+            "mean": 1623.9
+          },
+          "tokensPerSecond": {
+            "count": 5,
+            "min": 84.4,
+            "median": 85.5,
+            "p90": 86.4,
+            "max": 86.4,
+            "mean": 85.4
+          },
+          "promptEvalMs": {
+            "count": 5,
+            "min": 875,
+            "median": 879,
+            "p90": 957,
+            "max": 957,
+            "mean": 897.4
+          },
+          "loadMs": {
+            "count": 5,
+            "min": 6,
+            "median": 6,
+            "p90": 7,
+            "max": 7,
+            "mean": 6.2
+          },
+          "gpu": {
+            "samples": 10,
+            "usedPeakMiB": 5258,
+            "freeMinMiB": 2761,
+            "tempMaxC": 68,
+            "powerMaxW": 93.78,
+            "utilPeakPct": 100
+          },
+          "sampleAnswer": "To find $\\frac{3}{4}$ of $24$, divide $24$ by $4$ to get $6$. Then multiply $6$ by $3$ to get $18$. The answer is $18$."
+        },
+        {
+          "case": "photo: diagram and table",
+          "runs": 5,
+          "errors": 0,
+          "errorCodes": [],
+          "firstActivityMs": {
+            "count": 5,
+            "min": 1122,
+            "median": 1145.9,
+            "p90": 1164.8,
+            "max": 1164.8,
+            "mean": 1145.9
+          },
+          "firstAnswerMs": {
+            "count": 5,
+            "min": 1122,
+            "median": 1145.9,
+            "p90": 1164.8,
+            "max": 1164.8,
+            "mean": 1145.9
+          },
+          "totalMs": {
+            "count": 5,
+            "min": 1282.2,
+            "median": 1329.2,
+            "p90": 1484.2,
+            "max": 1484.2,
+            "mean": 1375.3
+          },
+          "tokensPerSecond": {
+            "count": 5,
+            "min": 84.6,
+            "median": 85,
+            "p90": 87.5,
+            "max": 87.5,
+            "mean": 85.9
+          },
+          "promptEvalMs": {
+            "count": 5,
+            "min": 1088,
+            "median": 1108,
+            "p90": 1114,
+            "max": 1114,
+            "mean": 1103.8
+          },
+          "loadMs": {
+            "count": 5,
+            "min": 5,
+            "median": 6,
+            "p90": 8,
+            "max": 8,
+            "mean": 6.4
+          },
+          "gpu": {
+            "samples": 9,
+            "usedPeakMiB": 5264,
+            "freeMinMiB": 2755,
+            "tempMaxC": 68,
+            "powerMaxW": 90.53,
+            "utilPeakPct": 100
+          },
+          "sampleAnswer": "x = 10 cm using Pythagoras' theorem ($a^2 + b^2 = c^2$)."
+        },
+        {
+          "case": "photo: rotated, superscripts and roots",
+          "runs": 5,
+          "errors": 0,
+          "errorCodes": [],
+          "firstActivityMs": {
+            "count": 5,
+            "min": 79.3,
+            "median": 85.9,
+            "p90": 974.5,
+            "max": 974.5,
+            "mean": 264.3
+          },
+          "firstAnswerMs": {
+            "count": 5,
+            "min": 79.3,
+            "median": 85.9,
+            "p90": 974.5,
+            "max": 974.5,
+            "mean": 264.3
+          },
+          "totalMs": {
+            "count": 5,
+            "min": 1083.9,
+            "median": 2569.1,
+            "p90": 2709.5,
+            "max": 2709.5,
+            "mean": 2030
+          },
+          "tokensPerSecond": {
+            "count": 5,
+            "min": 83.4,
+            "median": 83.7,
+            "p90": 85,
+            "max": 85,
+            "mean": 84
+          },
+          "promptEvalMs": {
+            "count": 5,
+            "min": 50,
+            "median": 51,
+            "p90": 906,
+            "max": 906,
+            "mean": 222.6
+          },
+          "loadMs": {
+            "count": 5,
+            "min": 5,
+            "median": 6,
+            "p90": 7,
+            "max": 7,
+            "mean": 6
+          },
+          "gpu": {
+            "samples": 13,
+            "usedPeakMiB": 5264,
+            "freeMinMiB": 2755,
+            "tempMaxC": 68,
+            "powerMaxW": 88.82,
+            "utilPeakPct": 100
+          },
+          "sampleAnswer": "a) $2\\sqrt{5} + 3\\sqrt{2} \\approx 2(2.24) + 3(1.41) = 4.48 + 4.23 = 8.71$\nb) $\\text{sqrt}(144) - 2\\sqrt{3} = 12 - 2(1.73) = 12 - 3.46 = 8.54$\nc) $(2/3)^2 \\times"
+        },
+        {
+          "case": "photo follow-up: check step 2",
+          "runs": 5,
+          "errors": 0,
+          "errorCodes": [],
+          "firstActivityMs": {
+            "count": 5,
+            "min": 78.6,
+            "median": 91.3,
+            "p90": 973.2,
+            "max": 973.2,
+            "mean": 265.7
+          },
+          "firstAnswerMs": {
+            "count": 5,
+            "min": 78.6,
+            "median": 91.3,
+            "p90": 973.2,
+            "max": 973.2,
+            "mean": 265.7
+          },
+          "totalMs": {
+            "count": 5,
+            "min": 810.9,
+            "median": 859.2,
+            "p90": 1709.2,
+            "max": 1709.2,
+            "mean": 1049.2
+          },
+          "tokensPerSecond": {
+            "count": 5,
+            "min": 82.1,
+            "median": 85.4,
+            "p90": 85.6,
+            "max": 85.6,
+            "mean": 84.3
+          },
+          "promptEvalMs": {
+            "count": 5,
+            "min": 49,
+            "median": 56,
+            "p90": 882,
+            "max": 882,
+            "mean": 221.4
+          },
+          "loadMs": {
+            "count": 5,
+            "min": 6,
+            "median": 6,
+            "p90": 7,
+            "max": 7,
+            "mean": 6.4
+          },
+          "gpu": {
+            "samples": 6,
+            "usedPeakMiB": 5264,
+            "freeMinMiB": 2755,
+            "tempMaxC": 69,
+            "powerMaxW": 90.57,
+            "utilPeakPct": 100
+          },
+          "sampleAnswer": "Yes, the working in Step 2 is correct. The calculation $6 \\times 3 = 18$ accurately finds three-quarters of 24 after dividing by 4 in Step 1. This method correc"
+        },
+        {
+          "case": "thinking: hard multi-step proof",
+          "runs": 3,
+          "errors": 0,
+          "errorCodes": [],
+          "firstActivityMs": {
+            "count": 3,
+            "min": 135.3,
+            "median": 159.7,
+            "p90": 206.4,
+            "max": 206.4,
+            "mean": 167.1
+          },
+          "firstAnswerMs": null,
+          "totalMs": {
+            "count": 3,
+            "min": 8216.6,
+            "median": 8310.5,
+            "p90": 8362.1,
+            "max": 8362.1,
+            "mean": 8296.4
+          },
+          "tokensPerSecond": {
+            "count": 3,
+            "min": 84.6,
+            "median": 85.6,
+            "p90": 87.4,
+            "max": 87.4,
+            "mean": 85.9
+          },
+          "promptEvalMs": {
+            "count": 3,
+            "min": 50,
+            "median": 52,
+            "p90": 88,
+            "max": 88,
+            "mean": 63.3
+          },
+          "loadMs": {
+            "count": 3,
+            "min": 5,
+            "median": 6,
+            "p90": 7,
+            "max": 7,
+            "mean": 6
+          },
+          "gpu": {
+            "samples": 32,
+            "usedPeakMiB": 5264,
+            "freeMinMiB": 2755,
+            "tempMaxC": 70,
+            "powerMaxW": 105.45,
+            "utilPeakPct": 88
+          },
+          "sampleAnswer": ""
+        },
+        {
+          "case": "tool: a real allowed call (check_calculation)",
+          "runs": 3,
+          "toolRequests": 3,
+          "completed": 3,
+          "details": [
+            {
+              "requested": 1,
+              "error": null,
+              "round": {
+                "name": "check_calculation",
+                "argumentsValid": true,
+                "resultClass": "ok",
+                "answered": true,
+                "firstAnswerMs": 193.35359999997308
+              }
+            },
+            {
+              "requested": 1,
+              "error": null,
+              "round": {
+                "name": "check_calculation",
+                "argumentsValid": true,
+                "resultClass": "ok",
+                "answered": true,
+                "firstAnswerMs": 112.97070000000531
+              }
+            },
+            {
+              "requested": 1,
+              "error": null,
+              "round": {
+                "name": "check_calculation",
+                "argumentsValid": true,
+                "resultClass": "ok",
+                "answered": true,
+                "firstAnswerMs": 123.31460000004154
+              }
+            }
+          ]
+        },
+        {
+          "case": "tool: a disallowed call is refused",
+          "runs": 1,
+          "refused": true,
+          "code": "unknown_tool"
+        },
+        {
+          "case": "cancel: stop after the first token",
+          "runs": 1,
+          "stopped": true,
+          "code": "aborted"
+        },
+        {
+          "case": "two requests at once",
+          "runs": 2,
+          "first": {
+            "firstAnswerMs": 144.56380000000354,
+            "error": null
+          },
+          "second": {
+            "firstAnswerMs": 597.6962000000058,
+            "error": null
+          }
+        },
+        {
+          "case": "missing model",
+          "runs": 1,
+          "code": "bad_request",
+          "timeout": false
+        },
+        {
+          "case": "embedding helper unreachable",
+          "runs": 1,
+          "code": "unavailable"
+        }
+      ],
+      "cold": {
+        "evicted": true,
+        "warm": {
+          "ok": true,
+          "loadMs": 7291,
+          "detail": "ok"
+        },
+        "wallMs": 7380,
+        "sizeVramBytes": 2819862035,
+        "contextLoaded": 4096,
+        "count": 1
+      },
+      "warmUp": {
+        "ok": true,
+        "loadMs": null,
+        "detail": "already_resident",
+        "wallMs": 1
+      }
+    },
+    {
+      "model": "bonsai-2:4b",
+      "digest": "93edd652c9326fb1e782c1f54e997ce6a46e2351c763777db0c63b8a51cf6bec",
+      "sizeBytes": 1579008522,
+      "quantisation": "Q2_0",
+      "capabilities": {
+        "vision": true,
+        "jsonMode": true,
+        "toolUse": true,
+        "maxContext": 262144,
+        "thinking": true,
+        "thinkingValues": [
+          false,
+          true
+        ],
+        "digest": "93edd652c9326fb1e782c1f54e997ce6a46e2351c763777db0c63b8a51cf6bec"
+      },
+      "health": {
+        "ok": true,
+        "detail": "ok"
+      },
+      "context": 4096,
+      "cases": [
+        {
+          "case": "warm text: a short explanation",
+          "runs": 10,
+          "errors": 0,
+          "errorCodes": [],
+          "firstActivityMs": {
+            "count": 10,
+            "min": 54.3,
+            "median": 60.1,
+            "p90": 111.2,
+            "max": 248.1,
+            "mean": 85.1
+          },
+          "firstAnswerMs": {
+            "count": 10,
+            "min": 54.3,
+            "median": 60.1,
+            "p90": 111.2,
+            "max": 248.1,
+            "mean": 85.1
+          },
+          "totalMs": {
+            "count": 10,
+            "min": 434.3,
+            "median": 534.9,
+            "p90": 741.5,
+            "max": 988,
+            "mean": 581.8
+          },
+          "tokensPerSecond": {
+            "count": 10,
+            "min": 112.4,
+            "median": 120.5,
+            "p90": 123,
+            "max": 124.7,
+            "mean": 119.3
+          },
+          "promptEvalMs": {
+            "count": 10,
+            "min": 46,
+            "median": 50,
+            "p90": 57,
+            "max": 205,
+            "mean": 64.5
+          },
+          "loadMs": {
+            "count": 10,
+            "min": 5,
+            "median": 6,
+            "p90": 9,
+            "max": 15,
+            "mean": 6.8
+          },
+          "gpu": {
+            "samples": 7,
+            "usedPeakMiB": 3826,
+            "freeMinMiB": 4193,
+            "tempMaxC": 67,
+            "powerMaxW": 88.48,
+            "utilPeakPct": 79
+          },
+          "sampleAnswer": "To find 3/4 of 24, you first multiply the fraction by the whole number: 3 × 24 = 72. Then, you divide that result by the denominator: 72 ÷ 4 = 18. Alternatively"
+        },
+        {
+          "case": "warm text: solve 2x + 7 = 19",
+          "runs": 10,
+          "errors": 0,
+          "errorCodes": [],
+          "firstActivityMs": {
+            "count": 10,
+            "min": 57,
+            "median": 85.3,
+            "p90": 90.7,
+            "max": 90.8,
+            "mean": 77.9
+          },
+          "firstAnswerMs": {
+            "count": 10,
+            "min": 57,
+            "median": 85.3,
+            "p90": 90.7,
+            "max": 90.8,
+            "mean": 77.9
+          },
+          "totalMs": {
+            "count": 10,
+            "min": 423.7,
+            "median": 759.4,
+            "p90": 811.3,
+            "max": 838.6,
+            "mean": 695.1
+          },
+          "tokensPerSecond": {
+            "count": 10,
+            "min": 121.1,
+            "median": 123.9,
+            "p90": 125.2,
+            "max": 125.2,
+            "mean": 123.4
+          },
+          "promptEvalMs": {
+            "count": 10,
+            "min": 46,
+            "median": 50,
+            "p90": 52,
+            "max": 57,
+            "mean": 49.7
+          },
+          "loadMs": {
+            "count": 10,
+            "min": 5,
+            "median": 5,
+            "p90": 5,
+            "max": 6,
+            "mean": 5.1
+          },
+          "gpu": {
+            "samples": 9,
+            "usedPeakMiB": 3826,
+            "freeMinMiB": 4193,
+            "tempMaxC": 68,
+            "powerMaxW": 90.03,
+            "utilPeakPct": 83
+          },
+          "sampleAnswer": "Subtract 7 from both sides of the equation: 2x + 7 - 7 = 19 - 7.\nThis simplifies to: 2x = 12.\nDivide both sides by 2: 2x / 2 = 12 / 2.\nThis gives us: x = 6.\nThe"
+        },
+        {
+          "case": "photo: worked arithmetic answer",
+          "runs": 5,
+          "errors": 0,
+          "errorCodes": [],
+          "firstActivityMs": {
+            "count": 5,
+            "min": 513.8,
+            "median": 575.3,
+            "p90": 15677.6,
+            "max": 15677.6,
+            "mean": 3577.5
+          },
+          "firstAnswerMs": {
+            "count": 5,
+            "min": 513.8,
+            "median": 575.3,
+            "p90": 15677.6,
+            "max": 15677.6,
+            "mean": 3577.5
+          },
+          "totalMs": {
+            "count": 5,
+            "min": 1053.8,
+            "median": 1129.1,
+            "p90": 16239.6,
+            "max": 16239.6,
+            "mean": 4128.9
+          },
+          "tokensPerSecond": {
+            "count": 5,
+            "min": 119.2,
+            "median": 119.4,
+            "p90": 121.6,
+            "max": 121.6,
+            "mean": 119.9
+          },
+          "promptEvalMs": {
+            "count": 5,
+            "min": 481,
+            "median": 492,
+            "p90": 15620,
+            "max": 15620,
+            "mean": 3517
+          },
+          "loadMs": {
+            "count": 5,
+            "min": 6,
+            "median": 6,
+            "p90": 7,
+            "max": 7,
+            "mean": 6.2
+          },
+          "gpu": {
+            "samples": 27,
+            "usedPeakMiB": 3860,
+            "freeMinMiB": 4159,
+            "tempMaxC": 65,
+            "powerMaxW": 85.41,
+            "utilPeakPct": 100
+          },
+          "sampleAnswer": "To find 3/4 of 24, divide 24 by 4 to get 6. Then multiply 6 by 3 to get 18. The answer is 18. Check: 18 divided by 24 simplifies to 3/4, which confirms the resu"
+        },
+        {
+          "case": "photo: diagram and table",
+          "runs": 5,
+          "errors": 0,
+          "errorCodes": [],
+          "firstActivityMs": {
+            "count": 5,
+            "min": 615.1,
+            "median": 618.5,
+            "p90": 690,
+            "max": 690,
+            "mean": 636.1
+          },
+          "firstAnswerMs": {
+            "count": 5,
+            "min": 615.1,
+            "median": 618.5,
+            "p90": 690,
+            "max": 690,
+            "mean": 636.1
+          },
+          "totalMs": {
+            "count": 5,
+            "min": 727.4,
+            "median": 756.9,
+            "p90": 823.5,
+            "max": 823.5,
+            "mean": 767.6
+          },
+          "tokensPerSecond": {
+            "count": 5,
+            "min": 111.9,
+            "median": 116.1,
+            "p90": 121.2,
+            "max": 121.2,
+            "mean": 116.5
+          },
+          "promptEvalMs": {
+            "count": 5,
+            "min": 579,
+            "median": 582,
+            "p90": 614,
+            "max": 614,
+            "mean": 590
+          },
+          "loadMs": {
+            "count": 5,
+            "min": 6,
+            "median": 6,
+            "p90": 10,
+            "max": 10,
+            "mean": 7
+          },
+          "gpu": {
+            "samples": 5,
+            "usedPeakMiB": 3864,
+            "freeMinMiB": 4155,
+            "tempMaxC": 65,
+            "powerMaxW": 103.34,
+            "utilPeakPct": 100
+          },
+          "sampleAnswer": "x = 10 cm\nPythagoras' theorem"
+        },
+        {
+          "case": "photo: rotated, superscripts and roots",
+          "runs": 5,
+          "errors": 0,
+          "errorCodes": [],
+          "firstActivityMs": {
+            "count": 5,
+            "min": 73.6,
+            "median": 75.7,
+            "p90": 543.3,
+            "max": 543.3,
+            "mean": 172
+          },
+          "firstAnswerMs": {
+            "count": 5,
+            "min": 73.6,
+            "median": 75.7,
+            "p90": 543.3,
+            "max": 543.3,
+            "mean": 172
+          },
+          "totalMs": {
+            "count": 5,
+            "min": 654,
+            "median": 685,
+            "p90": 2317.6,
+            "max": 2317.6,
+            "mean": 1020.8
+          },
+          "tokensPerSecond": {
+            "count": 5,
+            "min": 124.6,
+            "median": 125.8,
+            "p90": 126.3,
+            "max": 126.3,
+            "mean": 125.6
+          },
+          "promptEvalMs": {
+            "count": 5,
+            "min": 45,
+            "median": 45,
+            "p90": 482,
+            "max": 482,
+            "mean": 132.6
+          },
+          "loadMs": {
+            "count": 5,
+            "min": 5,
+            "median": 5,
+            "p90": 6,
+            "max": 6,
+            "mean": 5.4
+          },
+          "gpu": {
+            "samples": 6,
+            "usedPeakMiB": 3864,
+            "freeMinMiB": 4155,
+            "tempMaxC": 66,
+            "powerMaxW": 92.7,
+            "utilPeakPct": 84
+          },
+          "sampleAnswer": "a) $2^5 + 3\\sqrt{2}$\n1. Calculate powers: $2^5 = 32$\n2. Simplify radical: $\\sqrt{2} \\approx 1.414$\n3. Multiply: $3 \\times 1.414 = 4.242$\n4. Add: $32 + 4.242 = 3"
+        },
+        {
+          "case": "photo follow-up: check step 2",
+          "runs": 5,
+          "errors": 0,
+          "errorCodes": [],
+          "firstActivityMs": {
+            "count": 5,
+            "min": 75.2,
+            "median": 77.7,
+            "p90": 557.7,
+            "max": 557.7,
+            "mean": 173.5
+          },
+          "firstAnswerMs": {
+            "count": 5,
+            "min": 75.2,
+            "median": 77.7,
+            "p90": 557.7,
+            "max": 557.7,
+            "mean": 173.5
+          },
+          "totalMs": {
+            "count": 5,
+            "min": 515.4,
+            "median": 590.5,
+            "p90": 1070.3,
+            "max": 1070.3,
+            "mean": 686.4
+          },
+          "tokensPerSecond": {
+            "count": 5,
+            "min": 118.6,
+            "median": 121.4,
+            "p90": 125,
+            "max": 125,
+            "mean": 121.7
+          },
+          "promptEvalMs": {
+            "count": 5,
+            "min": 46,
+            "median": 46,
+            "p90": 473,
+            "max": 473,
+            "mean": 131.8
+          },
+          "loadMs": {
+            "count": 5,
+            "min": 6,
+            "median": 6,
+            "p90": 7,
+            "max": 7,
+            "mean": 6.4
+          },
+          "gpu": {
+            "samples": 4,
+            "usedPeakMiB": 3864,
+            "freeMinMiB": 4155,
+            "tempMaxC": 66,
+            "powerMaxW": 92.44,
+            "utilPeakPct": 99
+          },
+          "sampleAnswer": "Step 2 is correct because dividing 24 by 4 gives 6, and multiplying that result by 3 gives 18.  \nThe calculation follows the standard method for finding a fract"
+        },
+        {
+          "case": "thinking: hard multi-step proof",
+          "runs": 3,
+          "errors": 0,
+          "errorCodes": [],
+          "firstActivityMs": {
+            "count": 3,
+            "min": 85.7,
+            "median": 85.9,
+            "p90": 104,
+            "max": 104,
+            "mean": 91.9
+          },
+          "firstAnswerMs": null,
+          "totalMs": {
+            "count": 3,
+            "min": 5672.4,
+            "median": 5703.6,
+            "p90": 5748.1,
+            "max": 5748.1,
+            "mean": 5708
+          },
+          "tokensPerSecond": {
+            "count": 3,
+            "min": 124,
+            "median": 124.6,
+            "p90": 125.3,
+            "max": 125.3,
+            "mean": 124.6
+          },
+          "promptEvalMs": {
+            "count": 3,
+            "min": 46,
+            "median": 47,
+            "p90": 64,
+            "max": 64,
+            "mean": 52.3
+          },
+          "loadMs": {
+            "count": 3,
+            "min": 5,
+            "median": 5,
+            "p90": 5,
+            "max": 5,
+            "mean": 5
+          },
+          "gpu": {
+            "samples": 22,
+            "usedPeakMiB": 3864,
+            "freeMinMiB": 4155,
+            "tempMaxC": 68,
+            "powerMaxW": 92.66,
+            "utilPeakPct": 85
+          },
+          "sampleAnswer": ""
+        },
+        {
+          "case": "tool: a real allowed call (check_calculation)",
+          "runs": 3,
+          "toolRequests": 3,
+          "completed": 3,
+          "details": [
+            {
+              "requested": 1,
+              "error": null,
+              "round": {
+                "name": "check_calculation",
+                "argumentsValid": true,
+                "resultClass": "ok",
+                "answered": true,
+                "firstAnswerMs": 133.38890000001993
+              }
+            },
+            {
+              "requested": 1,
+              "error": null,
+              "round": {
+                "name": "check_calculation",
+                "argumentsValid": true,
+                "resultClass": "ok",
+                "answered": true,
+                "firstAnswerMs": 113.46980000002077
+              }
+            },
+            {
+              "requested": 1,
+              "error": null,
+              "round": {
+                "name": "check_calculation",
+                "argumentsValid": true,
+                "resultClass": "ok",
+                "answered": true,
+                "firstAnswerMs": 109.71099999995204
+              }
+            }
+          ]
+        },
+        {
+          "case": "tool: a disallowed call is refused",
+          "runs": 1,
+          "refused": true,
+          "code": "unknown_tool"
+        },
+        {
+          "case": "cancel: stop after the first token",
+          "runs": 1,
+          "stopped": true,
+          "code": "aborted"
+        },
+        {
+          "case": "two requests at once",
+          "runs": 2,
+          "first": {
+            "firstAnswerMs": 99.19640000001527,
+            "error": null
+          },
+          "second": {
+            "firstAnswerMs": 751.5058999999892,
+            "error": null
+          }
+        },
+        {
+          "case": "missing model",
+          "runs": 1,
+          "code": "bad_request",
+          "timeout": false
+        },
+        {
+          "case": "embedding helper unreachable",
+          "runs": 1,
+          "code": "unavailable"
+        }
+      ],
+      "cold": {
+        "evicted": true,
+        "warm": {
+          "ok": true,
+          "loadMs": 8189,
+          "detail": "ok"
+        },
+        "wallMs": 8314,
+        "sizeVramBytes": 1709178878,
+        "contextLoaded": 4096,
+        "count": 1
+      },
+      "warmUp": {
+        "ok": true,
+        "loadMs": null,
+        "detail": "already_resident",
+        "wallMs": 1
+      }
+    }
+  ],
+  "retrieval": {
+    "ok": true,
+    "model": "embeddinggemma-2:270m-q8_0-text",
+    "dimension": 768,
+    "documents": 8,
+    "queries": 6,
+    "indexMs": 7691,
+    "queryMs": {
+      "count": 6,
+      "min": 18.4,
+      "median": 19.5,
+      "p90": 21.9,
+      "max": 21.9,
+      "mean": 19.6
+    },
+    "hitAt1": 6,
+    "hitAt4": 6,
+    "cases": [
+      {
+        "want": "fractions",
+        "top": [
+          "fractions",
+          "percentages",
+          "quadratics",
+          "indices"
+        ],
+        "hitAt1": true,
+        "hitAt4": true,
+        "topScore": 0.837
+      },
+      {
+        "want": "quadratics",
+        "top": [
+          "quadratics",
+          "pythagoras",
+          "simultaneous",
+          "fractions"
+        ],
+        "hitAt1": true,
+        "hitAt4": true,
+        "topScore": 0.848
+      },
+      {
+        "want": "pythagoras",
+        "top": [
+          "pythagoras",
+          "area",
+          "quadratics",
+          "fractions"
+        ],
+        "hitAt1": true,
+        "hitAt4": true,
+        "topScore": 0.791
+      },
+      {
+        "want": "sequences",
+        "top": [
+          "sequences",
+          "indices",
+          "fractions",
+          "pythagoras"
+        ],
+        "hitAt1": true,
+        "hitAt4": true,
+        "topScore": 0.836
+      },
+      {
+        "want": "percentages",
+        "top": [
+          "percentages",
+          "fractions",
+          "area",
+          "indices"
+        ],
+        "hitAt1": true,
+        "hitAt4": true,
+        "topScore": 0.876
+      },
+      {
+        "want": "indices",
+        "top": [
+          "indices",
+          "quadratics",
+          "fractions",
+          "percentages"
+        ],
+        "hitAt1": true,
+        "hitAt4": true,
+        "topScore": 0.727
+      }
+    ]
+  },
+  "routing": {
+    "ok": true,
+    "model": "laya:421m-typed-decisions-bf16",
+    "cases": 12,
+    "answered": 3,
+    "abstained": 9,
+    "correct": 3,
+    "latencyMs": {
+      "count": 12,
+      "min": 28.4,
+      "median": 29.2,
+      "p90": 4837.2,
+      "max": 5010.1,
+      "mean": 845
+    },
+    "details": [
+      {
+        "want": "general_chat",
+        "got": null,
+        "confidence": null,
+        "abstained": true
+      },
+      {
+        "want": "general_chat",
+        "got": null,
+        "confidence": null,
+        "abstained": true
+      },
+      {
+        "want": "explain_question",
+        "got": "explain_question",
+        "confidence": 0.4695190762054026,
+        "abstained": false
+      },
+      {
+        "want": "explain_question",
+        "got": null,
+        "confidence": null,
+        "abstained": true
+      },
+      {
+        "want": "search_material",
+        "got": "search_material",
+        "confidence": 0.4439123173325806,
+        "abstained": false
+      },
+      {
+        "want": "search_material",
+        "got": null,
+        "confidence": null,
+        "abstained": true
+      },
+      {
+        "want": "solve_paper",
+        "got": null,
+        "confidence": null,
+        "abstained": true
+      },
+      {
+        "want": "solve_paper",
+        "got": "solve_paper",
+        "confidence": 0.5087202910422739,
+        "abstained": false
+      },
+      {
+        "want": "general_chat",
+        "got": null,
+        "confidence": null,
+        "abstained": true
+      },
+      {
+        "want": "clarify",
+        "got": null,
+        "confidence": null,
+        "abstained": true
+      },
+      {
+        "want": "clarify",
+        "got": null,
+        "confidence": null,
+        "abstained": true
+      },
+      {
+        "want": "explain_question",
+        "got": null,
+        "confidence": null,
+        "abstained": true
+      }
+    ]
+  },
+  "notes": [],
+  "residentAtEnd": [
+    {
+      "name": "bonsai-2:4b",
+      "sizeVramMiB": 1630,
+      "context": 4096
+    }
+  ]
+}

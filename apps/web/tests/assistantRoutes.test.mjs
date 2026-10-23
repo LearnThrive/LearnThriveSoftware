@@ -259,6 +259,20 @@ test("status: says whether Study Buddy is open and why not, without needing a fa
   assert.deepEqual(prod, { open: false, reason: "disabled" }, "production is off by default");
   const sick = await (await h.handleStatus(new Request("http://localhost/x"), w.deps(p.jar, { assistant: { ...w.assistant, provider: { health: async () => ({ ok: false, detail: "unreachable" }) } } }))).json();
   assert.deepEqual([sick.open, sick.reason], [false, "unreachable"]);
+  // The helper roles are probed, not inferred: one up, one down. Neither closes the chat.
+  const helpers = await (
+    await h.handleStatus(
+      new Request("http://localhost/x"),
+      w.deps(p.jar, {
+        assistant: {
+          ...w.assistant,
+          embeddings: { health: async () => ({ ok: true, detail: "ok" }) },
+          decision: { health: async () => ({ ok: false, detail: "down" }) },
+        },
+      }),
+    )
+  ).json();
+  assert.deepEqual([helpers.open, helpers.retrieval, helpers.decision], [true, true, false]);
 });
 
 test("the safeguarding email carries a reference, the kind and a short excerpt and nothing that names a family", () => {

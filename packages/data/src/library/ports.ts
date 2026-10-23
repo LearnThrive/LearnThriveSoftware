@@ -1,4 +1,4 @@
-import type { ChatExport, ChatFileInput, ChatOwner, ChatFileRecord, ChatMessageRecord, ChatRole, ChatSessionRecord, PurgeResult } from "./chat";
+import type { ChatExport, ChatFileChunkInput, ChatFileChunkRecord, ChatFileInput, ChatFileReading, ChatOwner, ChatFileRecord, ChatMessageRecord, ChatRole, ChatSessionRecord, PurgeResult } from "./chat";
 import type { IdentityRepository } from "./identity";
 import type { PaperJobRepository } from "./papers";
 import type { AdminGrantInput, AdminGrantRecord, ClaimResult, EntitlementWindow, SubscriptionInput, SubscriptionRecord } from "./billing";
@@ -134,6 +134,14 @@ export interface ChatRepository {
   getUnattachedFiles(owner: ChatOwner, sessionId: string, fileIds: string[]): Promise<ChatFileRecord[]>;
   /** One file, only for the owner of its chat (and not once the chat is being deleted). */
   getFile(owner: ChatOwner, fileId: string): Promise<ChatFileRecord | null>;
+  /** Keeps what an upload said (and how many pages), so a follow-up does not re-read it. False if the file is not the owner's. */
+  setFileReading(owner: ChatOwner, fileId: string, reading: ChatFileReading): Promise<boolean>;
+  /** Replaces one file's chunks with these (same-model vectors only). Returns how many were stored. */
+  replaceFileChunks(owner: ChatOwner, sessionId: string, fileId: string, chunks: readonly ChatFileChunkInput[], now: Date): Promise<number>;
+  /** The owner's chunks for a chat (optionally one file), oldest file first, then in reading order. */
+  listFileChunks(owner: ChatOwner, sessionId: string, options?: { fileId?: string; limit?: number }): Promise<ChatFileChunkRecord[]>;
+  /** Removes one file's chunks (the file itself stays). 0 if it is not the owner's. */
+  deleteFileChunks(owner: ChatOwner, sessionId: string, fileId: string): Promise<number>;
   /** Hides the chat at once; the retention job removes it and its files. false if it is not this owner's, or already requested. */
   requestDeletion(owner: ChatOwner, sessionId: string, now: Date): Promise<boolean>;
   /** Every chat of this owner (and only theirs: a guardian's own chats, or one learner's). */

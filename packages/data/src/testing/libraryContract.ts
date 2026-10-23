@@ -478,6 +478,47 @@ export function libraryContract(name: string, make: () => Promise<{ harness: Con
       assert.equal(await store.chat.attachFiles(own(a), s.id, [], msg.id), 0);
     });
 
+    test("chat: a file's reading and its chunk index belong to the owner, replace cleanly, and go with the file", async () => {
+      const now = new Date();
+      const a = await family();
+      const b = await family();
+      const s = await store.chat.createSession(own(a), { title: "Retrieval" }, now);
+      const file = await store.chat.addFile(own(a), s.id, { storagePath: `${s.id}/page.jpg`, bytes: 12, contentType: "image/jpeg" }, now);
+      assert.equal(file.extractedText, null, "nothing read yet");
+      assert.equal(file.pages, null);
+      assert.equal(await store.chat.setFileReading(own(b), file.id, { extractedText: "stolen", pages: 1 }), false, "only the owner's file");
+      assert.equal(await store.chat.setFileReading(own(a), file.id, { extractedText: "Question 4(b): solve 2x + 7 = 19", pages: 2 }), true);
+      const read = (await store.chat.listFiles(own(a), s.id)).find((f) => f.id === file.id)!;
+      assert.equal(read.extractedText, "Question 4(b): solve 2x + 7 = 19");
+      assert.equal(read.pages, 2);
+
+      const chunk = (ordinal: number, text: string, embedding: number[]) => ({ page: 1, label: "question 4(b)", ordinal, text, model: "embeddinggemma-2:270m-q8_0-text", digest: "abc", chunkConfigVersion: "v1", embedding });
+      assert.equal(await store.chat.replaceFileChunks(own(b), s.id, file.id, [chunk(0, "stolen", [1, 0])], now), 0, "another family's chat");
+      assert.equal(await store.chat.replaceFileChunks(own(a), s.id, file.id, [chunk(0, "Solve 2x + 7 = 19.", [1, 0]), chunk(1, "Question 4(b) asks for x.", [0.9, 0.1])], now), 2);
+      assert.deepEqual(await store.chat.listFileChunks(own(b), s.id), [], "never readable by another family");
+      assert.deepEqual((await store.chat.listFileChunks(own(a), s.id)).map((c) => [c.ordinal, c.text]), [
+        [0, "Solve 2x + 7 = 19."],
+        [1, "Question 4(b) asks for x."],
+      ]);
+      const chunks = await store.chat.listFileChunks(own(a), s.id);
+      assert.deepEqual(chunks[0]!.embedding, [1, 0], "the vector comes back as numbers");
+      assert.equal(chunks[0]!.dimension, 2);
+      assert.equal(chunks[0]!.chunkConfigVersion, "v1", "the index records what made it");
+
+      assert.equal(await store.chat.replaceFileChunks(own(a), s.id, file.id, [chunk(0, "only", [0, 1])], now), 1, "a re-index replaces, never appends");
+      assert.deepEqual((await store.chat.listFileChunks(own(a), s.id)).map((c) => c.text), ["only"]);
+      assert.equal((await store.chat.listFileChunks(own(a), s.id, { fileId: file.id, limit: 1 })).length, 1);
+      assert.equal(await store.chat.deleteFileChunks(own(b), s.id, file.id), 0);
+      assert.equal(await store.chat.deleteFileChunks(own(a), s.id, file.id), 1);
+      assert.deepEqual(await store.chat.listFileChunks(own(a), s.id), []);
+
+      // The chunks are removed with the file (and its chat), never outliving their source.
+      await store.chat.replaceFileChunks(own(a), s.id, file.id, [chunk(0, "again", [1, 1])], now);
+      await store.chat.requestDeletion(own(a), s.id, now);
+      await store.chat.purgeDue(now);
+      assert.deepEqual(await store.chat.listFileChunks(own(a), s.id), []);
+    });
+
     test("chat: deleting a chat hides it at once; the retention job then removes it and says which files to delete", async () => {
       const now = new Date();
       const a = await family();
