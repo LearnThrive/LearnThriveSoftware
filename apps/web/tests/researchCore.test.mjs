@@ -299,3 +299,21 @@ test("research is wanted for quotation checks and exam-board documents, not for 
   assert.equal(verify.needsResearch("Help me factorise x^2 + 5x + 6").needed, false);
   assert.equal(verify.needsResearch("Explain photosynthesis").needed, false);
 });
+
+test("SearXNG: no results because its engines are suspended is a broken search, not a search that found nothing", async () => {
+  const body = { results: [], unresponsive_engines: [["brave", "Suspended: too many requests"], ["duckduckgo", "Suspended: access denied"]] };
+  const out = await new SearxngClient(cfg, reply(200, body)).search("macbeth");
+  assert.equal(out.status, "unavailable");
+  assert.match(out.detail, /brave: Suspended: too many requests/);
+  assert.equal((await new SearxngClient(cfg, reply(200, { results: [{ url: "https://a.example/1", title: "A" }], unresponsive_engines: [["brave", "x"]] })).search("macbeth")).status, "ok", "results from the engines that did answer are used");
+});
+
+test("a search that returned no pages never makes a quotation 'unsupported': only pages that were read can show words are absent", async () => {
+  const quote = "an entirely ordinary sentence from some play that is not searched for";
+  const none = service(searxWith([]), {});
+  assert.equal((await none.session("u").verifyQuotation({ quotation: quote, work: "Some Play" })).status, "unverifiable");
+  const down = service(searxWith([], "unavailable"), {});
+  assert.equal((await down.session("u").verifyQuotation({ quotation: quote, work: "Some Play" })).status, "unverifiable");
+  const readButAbsent = service(searxWith([raw("https://www.folger.edu/a")]), { "https://www.folger.edu/a": "<p>nothing like it appears on this page at all, only other words</p>" });
+  assert.equal((await readButAbsent.session("u").verifyQuotation({ quotation: quote, work: "Some Play" })).status, "unsupported");
+});

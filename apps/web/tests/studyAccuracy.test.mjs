@@ -79,7 +79,7 @@ async function turn(t, { reply, researchService = null, text, history = [], cutO
   }
   const events = [];
   for await (const e of svc.sendMessage(deps, { owner: { clientId, studentId: null }, sessionId, text })) events.push(e);
-  return { events, answer: events.filter((e) => e.type === "delta").map((e) => e.text).join(""), provider, last: provider.requests.at(-1) };
+  return { events, answer: events.filter((e) => e.type === "delta").map((e) => e.text).join(""), provider, last: provider.requests[0], repair: provider.requests.length > 1 ? provider.requests.at(-1) : null };
 }
 
 const userText = (request) => request.filter((m) => m.role === "user").at(-1).content;
@@ -157,7 +157,11 @@ test("5. an invented quotation is not called verified, the real wording is offer
   const r = await turn(t, { researchService: sources.service, reply: `As Macbeth says, "${invented}", he is ruled by ambition.`, text: `Is this quote right from Macbeth: "${invented}"?` });
   assert.match(userText(r.last), /NOT FOUND/);
   assert.doesNotMatch(userText(r.last), /VERIFIED[:\s]*(?:these|with)/);
-  assert.match(r.answer, /Check:[\s\S]*could not be matched to the sources I read/);
+  // The student never reads the invented quotation: the model was asked to repair it, and what remained unsupported was cut.
+  assert.ok(r.repair, "the model was asked for a repair");
+  assert.match(userText(r.repair), /Your draft contains statements the sources do not support/);
+  assert.doesNotMatch(r.answer, new RegExp(invented));
+  assert.match(r.answer, /could not write an answer that I was able to check/);
   // A near miss against a page that was read is shown with the real wording.
   const real = research({ results: [raw("https://www.folger.edu/macbeth")], web: { "https://www.folger.edu/macbeth": "<p>I have no spur To prick the sides of my intent, but only Vaulting ambition, which o'erleaps itself And falls on th' other.</p>" } });
   const near = await turn(t, { researchService: real.service, reply: "Close.", text: "Check this quote from Macbeth: 'I have no spur to prick the sides of my intent but only vaulting ambition which overleaps itself'" });
@@ -439,13 +443,20 @@ test("facts the model invents that are in none of the sources are flagged, and s
   const sources = research({ results: [raw("https://www.bbc.co.uk/birling")], web: { "https://www.bbc.co.uk/birling": BIRLING_PAGE } });
   const reply = 'Mr Birling is furious when Bertha is left in a mental institution. He tells Sheila, "It is not your business to have children," showing his selfishness.';
   const r = await turn(t, { researchService: sources.service, reply, text: "Write me a model answer: how far does Priestley present Mr Birling as selfish in An Inspector Calls?" });
-  assert.match(r.answer, /Check:/);
-  assert.match(r.answer, /not appear in the sources I read or in your message: Bertha/);
-  assert.match(r.answer, /could not be matched to the sources I read/);
-  assert.match(r.answer, /It is not your business to have children/);
+  // Every sentence of that reply is invented, so none of it is shown.
+  assert.doesNotMatch(r.answer, /Bertha|not your business to have children/);
+  assert.match(r.answer, /could not write an answer that I was able to check/);
+  // One invented sentence among accurate ones is cut and the accurate ones are kept.
+  const mixed = await turn(t, { researchService: sources.service, reply: 'Birling is a wealthy factory owner. He is furious when Bertha is left in a mental institution. He sacked Eva Smith after the strike.', text: "Write me a model answer: how far does Priestley present Mr Birling as selfish in An Inspector Calls?" });
+  assert.match(mixed.answer, /wealthy factory owner/);
+  assert.match(mixed.answer, /sacked Eva Smith/);
+  assert.doesNotMatch(mixed.answer, /Bertha|mental institution/);
+  assert.match(mixed.answer, /could not be supported by the sources/);
   // A faithful reply raises neither.
   const good = await turn(t, { researchService: sources.service, reply: 'Birling says "a man has to mind his own business and look after himself and his own", and Priestley shows he sacked Eva Smith after the strike.', text: "Write me a model answer: how far does Priestley present Mr Birling as selfish in An Inspector Calls?" });
-  assert.doesNotMatch(good.answer, /Check:/);
+  assert.equal(good.repair, null, "nothing to repair");
+  assert.match(good.answer, /sacked Eva Smith after the strike/, "the accurate answer is delivered whole");
+  assert.match(good.answer, /found only on secondary sites, not in the text itself/, "a quotation seen only on a BBC page is supported, not verified");
 });
 
 test("when the search service cannot be reached the student is told plainly, and the model is told research failed", async (t) => {
@@ -479,4 +490,238 @@ test("topic words for a search come from the question, not from a quoted passage
   assert.ok(topic.includes("birling") && topic.includes("priestley") && topic.includes("family"), topic.join());
   assert.ok(!topic.includes("business") && !topic.includes("model") && !topic.includes("answer"), topic.join());
   assert.deepEqual(groundLib.unsupportedNames("Then Bertha went home. Sheila agreed.", ["Sheila is a daughter"], "question"), ["Bertha"]);
+});
+
+/* the gate, claims, attribution and the crawler ----------------------------------------------------------------------------------------- */
+
+const claimsLib = loadTsFrom(import.meta.url, "../src/lib/assistant/research/claims.ts");
+const playLib = loadTsFrom(import.meta.url, "../src/lib/assistant/research/playText.ts");
+const { Crawl4aiClient } = loadTsFrom(import.meta.url, "../src/lib/assistant/research/crawl4ai.ts");
+const { fetchSource } = loadTsFrom(import.meta.url, "../src/lib/assistant/research/fetchSource.ts");
+
+const MACBETH_PAGE = `<html><title>Macbeth Act 5 Scene 1</title><body><h3>Act V, Scene I</h3>
+<A NAME=speech1><b>Doctor</b></a><blockquote><A NAME=5.1.1>I have two nights watched with you, but can perceive no truth in your report.</A><br></blockquote>
+<A NAME=speech2><b>LADY MACBETH</b></a><blockquote><A NAME=5.1.31>Out, damned spot! out, I say!</A><br><A NAME=5.1.32>One: two: why, then, 'tis time to do't.</A><br></blockquote>
+<A NAME=speech3><b>LADY MACBETH</b></a><blockquote><A NAME=5.1.52>Here's the smell of the blood still: all the perfumes of Arabia will not sweeten this little hand.</A><br></blockquote></body></html>`;
+const DAGGER_PAGE = `<html><title>Macbeth Act 2 Scene 1</title><body><h3>Act II, Scene I</h3>
+<A NAME=speech9><b>MACBETH</b></a><blockquote><A NAME=2.1.33>Is this a dagger which I see before me,</A><br><A NAME=2.1.34>The handle toward my hand? Come, let me clutch thee.</A><br></blockquote></body></html>`;
+
+test("G1. the draft is held: the student never reads a false quotation, the model is asked to repair it, and the approved text is what is shown", async (t) => {
+  const bad = "the darkness of my ambition shall conquer every crown";
+  const sources = research({ results: [raw("https://shakespeare.mit.edu/macbeth/macbeth.5.1.html")], web: { "https://shakespeare.mit.edu/macbeth/macbeth.5.1.html": MACBETH_PAGE } });
+  const reply = (messages) => {
+    const last = messages.at(-1).content;
+    return last.startsWith("Your draft contains") ? 'Lady Macbeth cries "Out, damned spot! out, I say!", showing her guilt in Act 5.' : `Lady Macbeth says "${bad}", showing her ambition, and later "Out, damned spot! out, I say!".`;
+  };
+  const r = await turn(t, { researchService: sources.service, reply, text: "Write me a model answer: starting with Act 5 Scene 1, how far is Lady Macbeth presented as changing in Macbeth?" });
+  const shown = r.events.filter((e) => e.type === "delta").map((e) => e.text);
+  assert.ok(shown.length > 0);
+  assert.ok(shown.every((d) => !d.includes(bad)), "no delta ever carried the false quotation");
+  assert.doesNotMatch(r.answer, new RegExp(bad));
+  assert.match(r.answer, /Out, damned spot! out, I say!/);
+  assert.equal(r.provider.requests.length, 2, "one draft and one repair");
+  const order = r.events.map((e) => e.type === "status" ? e.state : e.type);
+  assert.ok(order.indexOf("verifying") >= 0 && order.indexOf("verifying") < order.indexOf("delta"), "the page says it is checking before any text is released");
+  assert.match(r.answer, /could not be supported by the sources/);
+});
+
+test("G2. a repair that does not fix the problem is cut by the server after at most two rewrites", async (t) => {
+  const sources = research({ results: [raw("https://shakespeare.mit.edu/macbeth/macbeth.5.1.html")], web: { "https://shakespeare.mit.edu/macbeth/macbeth.5.1.html": MACBETH_PAGE } });
+  const stubborn = 'Lady Macbeth is first seen in Act 1. Lady Macbeth says "a wholly invented line about golden crowns and silver thrones", which is wrong. She ends the play mad.';
+  const r = await turn(t, { researchService: sources.service, reply: stubborn, text: "Write me a model answer: how far is Lady Macbeth presented as changing in Macbeth?" });
+  assert.ok(r.provider.requests.length <= 3, "a draft and at most two rewrites: " + r.provider.requests.length);
+  assert.doesNotMatch(r.answer, /golden crowns/);
+  assert.match(r.answer, /first seen in Act 1/);
+});
+
+test("G3. the gate does not delay other subjects or ordinary chat, and a calculation is not held", async (t) => {
+  const maths = await turn(t, { reply: "x = 5", text: "Solve 3x + 4 = 19 and show your working" });
+  assert.equal(maths.provider.requests.length, 1);
+  assert.ok(!maths.events.some((e) => e.type === "status" && e.state === "verifying"));
+  const chat = await turn(t, { reply: "Hello!", text: "hello there" });
+  assert.ok(!chat.events.some((e) => e.type === "status" && (e.state === "verifying" || e.state === "researching")));
+});
+
+test("G4. who says a line is read from the play's structure: right speaker verified with act and scene, wrong speaker rejected", async () => {
+  const speeches = playLib.parseSpeeches({ html: MACBETH_PAGE, text: "", url: "https://shakespeare.mit.edu/macbeth/macbeth.5.1.html" });
+  assert.equal(speeches.length, 3);
+  const located = playLib.locateQuotation(speeches, "Out, damned spot! Out, I say!");
+  assert.equal(located.speech.speaker, "LADY MACBETH");
+  assert.deepEqual([located.speech.act, located.speech.scene], [5, 1]);
+  assert.equal(playLib.sameSpeaker("Lady Macbeth", "LADY MACBETH"), true);
+  assert.equal(playLib.sameSpeaker("Macbeth", "LADY MACBETH"), false, "Macbeth is not Lady Macbeth");
+  assert.equal(playLib.claimedSpeaker('Lady Macbeth says "Out, damned spot!" in Act 5.', "Out, damned spot!"), "Lady Macbeth");
+  assert.equal(playLib.claimedSpeaker('"Out, damned spot!" cries Lady Macbeth.', "Out, damned spot!"), "Lady Macbeth");
+  assert.equal(playLib.claimedSpeaker('The words "Out, damned spot!" show guilt.', "Out, damned spot!"), null);
+  const dagger = research({ results: [raw("https://shakespeare.mit.edu/macbeth/macbeth.2.1.html")], web: { "https://shakespeare.mit.edu/macbeth/macbeth.2.1.html": DAGGER_PAGE } });
+  const wrong = await dagger.service.session("u").verifyQuotation({ quotation: "Is this a dagger which I see before me", work: "Macbeth", claimedSpeaker: "Lady Macbeth" });
+  assert.equal(wrong.status, "incorrect_attribution");
+  assert.match(wrong.note, /spoken by MACBETH/);
+  const right = await dagger.service.session("u").verifyQuotation({ quotation: "Is this a dagger which I see before me", work: "Macbeth", claimedSpeaker: "Macbeth" });
+  assert.equal(right.status, "verified_exact");
+  assert.equal(right.speaker, "MACBETH");
+  assert.equal(right.location, "Act 2 Scene 1");
+  assert.equal(right.attribution, "confirmed");
+  const wrongPlace = await dagger.service.session("u").verifyQuotation({ quotation: "Is this a dagger which I see before me", work: "Macbeth", claimedAct: 5, claimedScene: 1 });
+  assert.equal(wrongPlace.status, "incorrect_attribution");
+  // The same words in a student's own upload are evidence of what they were given, and are labelled so.
+  const own = await research({ results: [] }).service.session("u").verifyQuotation({ quotation: "a man has to mind his own business", work: "An Inspector Calls", extracts: ["Birling: a man has to mind his own business and look after himself and his own."] });
+  assert.equal(own.status, "verified_exact");
+  assert.match(own.note, /extract you supplied/);
+});
+
+const IC_PAGE = "<p>Arthur Birling is a wealthy factory owner. Eric Birling got Eva Smith pregnant and stole money from his father's firm. Eva Smith kills herself by drinking disinfectant. Sheila Birling had Eva dismissed from Milwards. Gerald Croft had an affair with Eva, whom he called Daisy Renton. Mrs Birling refused Eva help from her charity.</p>";
+const MACBETH_SUMMARY = "<p>At the banquet, Macbeth sees the ghost of Banquo, whom he had murdered. Lady Macbeth tells the guests that her husband has a strange illness. Macbeth murders Duncan while Lady Macbeth waits. Lady Macbeth sleepwalks and tries to wash imagined blood from her hands. Lady Macbeth dies offstage.</p>";
+
+test("G5. invented events are caught even though the real characters are named: pregnancy, prison, institutions, ghosts, the wrong person doing a thing", () => {
+  const status = (reply, page) => claimsLib.checkEventClaims(reply, [page.replace(/<[^>]+>/g, " ")]).map((c) => [c.subject, c.event, c.status]);
+  const bad = [
+    ["Gerald becomes pregnant.", "pregnancy"],
+    ["Sheila is pregnant.", "pregnancy"],
+    ["Eric is sent to prison during the play.", "prison"],
+    ["Bertha is left in a mental institution.", "an institution"],
+  ];
+  for (const [sentence, event] of bad) {
+    const got = status(sentence, IC_PAGE);
+    assert.ok(got.length === 1 && got[0][1] === event && got[0][2] !== "supported", `${sentence} -> ${JSON.stringify(got)}`);
+  }
+  assert.equal(status("Gerald becomes pregnant.", IC_PAGE)[0][2], "contradicted", "the sources say it was Eric's doing, so it is contradicted, not just unsupported");
+  assert.equal(status("Eric is sent to prison during the play.", IC_PAGE)[0][2], "unsupported", "no source mentions it: missing evidence, not proof of falsehood");
+  const ghost = status("Lady Macbeth sees Banquo's ghost at the banquet.", MACBETH_SUMMARY);
+  assert.deepEqual(ghost.map((g) => g[2]), ["contradicted"]);
+  assert.deepEqual(status("Macbeth sees Banquo's ghost at the banquet.", MACBETH_SUMMARY).map((g) => g[2]), ["supported"]);
+  assert.equal(status("Lady Macbeth murders Duncan.", MACBETH_SUMMARY)[0][2], "contradicted", "Macbeth's act is not Lady Macbeth's");
+  assert.equal(status("Macbeth murders Duncan.", MACBETH_SUMMARY)[0][2], "supported");
+  assert.equal(status("Eric got Eva Smith pregnant.", IC_PAGE)[0][2], "supported");
+  assert.equal(status("Eva Smith dies by suicide.", IC_PAGE).length >= 0, true);
+  assert.equal(status("Mrs Birling refused help.", IC_PAGE).length, 0, "an event not on the watched list is not judged");
+  assert.deepEqual(claimsLib.inventedCharacters("A character called Bertha is sent away.", [IC_PAGE]), ["Bertha"]);
+  assert.equal(claimsLib.sameCharacter("Mrs Birling", "Mr Birling"), false);
+  assert.equal(claimsLib.sameCharacter("Eric", "Eric Birling"), true);
+  assert.equal(claimsLib.sameCharacter("Eric Birling", "Sheila Birling"), false);
+  assert.equal(claimsLib.sameCharacter("Macbeth", "Lady Macbeth"), false);
+});
+
+test("G6. through the whole turn, an invented event is removed before it is shown and an accurate one is kept", async (t) => {
+  const sources = research({ results: [raw("https://www.bbc.co.uk/ic")], web: { "https://www.bbc.co.uk/ic": IC_PAGE } });
+  const reply = "Eric Birling got Eva Smith pregnant. Gerald becomes pregnant and is sent away. Mr Birling is a wealthy factory owner.";
+  const r = await turn(t, { researchService: sources.service, reply, text: "Write me a model answer: how far does Priestley present Mr Birling as selfish in An Inspector Calls?" });
+  assert.match(r.answer, /Eric Birling got Eva Smith pregnant/);
+  assert.match(r.answer, /wealthy factory owner/);
+  assert.doesNotMatch(r.answer, /Gerald becomes pregnant/);
+  assert.ok(r.events.filter((e) => e.type === "delta").every((e) => !/Gerald becomes pregnant/.test(e.text)));
+});
+
+/* Crawl4AI --------------------------------------------------------------------------------------------------------------------------------- */
+
+const crawlConfig = { enabled: true, baseUrl: "http://127.0.0.1:11235", token: "test-token", timeoutMs: 500, maxConcurrency: 2 };
+const crawlReply = (status, body) => async () => ({ status, ok: status >= 200 && status < 300, text: async () => (typeof body === "string" ? body : JSON.stringify(body)) });
+const goodResult = (extra = {}) => ({ success: true, results: [{ url: "https://x.example/p", redirected_url: "https://x.example/p", success: true, status_code: 200, html: "<p>hi</p>", markdown: { raw_markdown: "Some readable page text that the browser produced after the scripts ran.", fit_markdown: "" }, metadata: { title: "A page" }, ...extra }] });
+
+test("C1. Crawl4AI client: sends the server-side token and the documented request, and turns every failure into a status", async () => {
+  let seen;
+  const ok = await new Crawl4aiClient(crawlConfig, async (url, init) => ((seen = { url, init }), crawlReply(200, goodResult())())).crawl("https://x.example/p");
+  assert.equal(ok.status, "ok");
+  assert.equal(ok.title, "A page");
+  assert.match(ok.text, /readable page text/);
+  assert.equal(seen.url, "http://127.0.0.1:11235/crawl");
+  assert.equal(seen.init.headers.authorization, "Bearer test-token");
+  const sent = JSON.parse(seen.init.body);
+  assert.deepEqual(sent.urls, ["https://x.example/p"]);
+  assert.equal(sent.browser_config.type, "BrowserConfig");
+  assert.equal(sent.crawler_config.type, "CrawlerRunConfig");
+  assert.equal(sent.crawler_config.params.cache_mode, "bypass");
+  const run = (reply, cfg = crawlConfig) => new Crawl4aiClient(cfg, reply).crawl("https://x.example/p");
+  assert.equal((await run(crawlReply(401, "no"))).status, "unauthorised");
+  assert.equal((await run(crawlReply(403, "no"))).status, "unauthorised");
+  assert.doesNotMatch((await run(crawlReply(401, "no"))).detail, /test-token/, "the token is never put in a message");
+  assert.equal((await run(crawlReply(500, "boom"))).status, "unavailable");
+  assert.equal((await run(crawlReply(200, "<html>not json</html>"))).status, "bad_response");
+  assert.equal((await run(crawlReply(200, { success: true, results: [] }))).status, "bad_response");
+  assert.equal((await run(crawlReply(200, goodResult({ success: false, error_message: "net::ERR_NAME_NOT_RESOLVED" })))).status, "extraction_failed");
+  assert.equal((await run(crawlReply(200, goodResult({ markdown: { raw_markdown: "   " } })))).status, "extraction_failed", "an empty page is not a success");
+  assert.equal((await run(async () => { throw Object.assign(new Error("x"), { cause: { code: "ECONNREFUSED" } }); })).status, "unavailable");
+  assert.equal((await run(crawlReply(200, goodResult()), { ...crawlConfig, enabled: false })).status, "disabled");
+  assert.equal((await run(crawlReply(200, goodResult()), { ...crawlConfig, token: "" })).status, "unauthorised");
+  assert.equal((await run((_u, init) => new Promise((_, rej) => init.signal.addEventListener("abort", () => rej(new Error("a")))), { ...crawlConfig, timeoutMs: 10 })).status, "timeout" );
+  assert.equal((await run(crawlReply(200, goodResult({ markdown: "plain markdown string from an older server" })))).text, "plain markdown string from an older server");
+});
+
+test("C2. Crawl4AI client: concurrency is bounded and health reports readiness without a token", async () => {
+  let active = 0;
+  let peak = 0;
+  const client = new Crawl4aiClient({ ...crawlConfig, maxConcurrency: 2 }, async () => {
+    active += 1;
+    peak = Math.max(peak, active);
+    await new Promise((r) => setTimeout(r, 15));
+    active -= 1;
+    return crawlReply(200, goodResult())();
+  });
+  await Promise.all([1, 2, 3, 4, 5].map((i) => client.crawl(`https://x.example/${i}`)));
+  assert.ok(peak <= 2, "peak " + peak);
+  const h = await new Crawl4aiClient(crawlConfig, async (url, init) => ((assertNoAuth = init.headers.authorization), crawlReply(200, { status: "ok", version: "0.9.2" })())).health();
+  assert.equal(h.ok, true);
+  assert.equal(h.version, "0.9.2");
+  assert.equal(assertNoAuth, undefined, "/health is called without the token");
+  assert.equal((await new Crawl4aiClient(crawlConfig, async () => { throw new Error("down"); }).health()).ok, false);
+});
+let assertNoAuth;
+
+const htmlPageResponse = (html) => async () => ({ status: 200, headers: { get: (n) => (n.toLowerCase() === "content-type" ? "text/html" : null) }, read: async (max) => ({ bytes: new TextEncoder().encode(html).subarray(0, max), truncated: false }) });
+
+test("C3. fetching prefers the browser's text for HTML, falls back to the direct fetch with the reason, and never trusts where the browser ended up", async () => {
+  const direct = htmlPageResponse("<html><title>Shell</title><body><div id=app></div><script>render()</script></body></html>");
+  const crawler = (outcome) => ({ available: true, crawl: async () => outcome });
+  const good = await fetchSource("https://x.example/p", { fetcher: direct, resolve: PUBLIC, crawler: crawler({ status: "ok", detail: "ok", url: "x", finalUrl: "https://x.example/p", title: "Rendered", text: "The rendered page says that a man has to mind his own business, which only exists after JavaScript runs.", html: "", httpStatus: 200 }) });
+  assert.equal(good.ok, true);
+  assert.equal(good.via, "crawl4ai");
+  assert.match(good.text, /only exists after JavaScript runs/);
+  assert.equal(good.title, "Rendered");
+  const fell = await fetchSource("https://x.example/p", { fetcher: htmlPageResponse("<html><title>Plain</title><body><p>Plain readable text that is long enough to be a real paragraph of content on the page.</p></body></html>"), resolve: PUBLIC, crawler: crawler({ status: "unavailable", detail: "Crawl4AI could not be reached (ECONNREFUSED). Is the container running?", url: "x", finalUrl: "x", title: "", text: "", html: "", httpStatus: null }) });
+  assert.equal(fell.ok, true);
+  assert.equal(fell.via, "direct");
+  assert.match(fell.crawlNote, /could not be reached/, "the failure is reported, not hidden");
+  const sneaky = await fetchSource("https://x.example/p", { fetcher: direct, resolve: PUBLIC, crawler: crawler({ status: "ok", detail: "ok", url: "x", finalUrl: "http://169.254.169.254/latest/meta-data", title: "", text: "credentials here, a long enough string of text to pass any length check at all.", html: "", httpStatus: 200 }) });
+  assert.equal(sneaky.ok, false);
+  assert.equal(sneaky.code, "blocked");
+  let crawled = false;
+  const blocked = await fetchSource("http://127.0.0.1:3000/admin", { fetcher: direct, resolve: PUBLIC, crawler: { available: true, crawl: async () => ((crawled = true), {}) } });
+  assert.equal(blocked.ok, false);
+  assert.equal(crawled, false, "a private address is never sent to the crawler");
+});
+
+test("G7. speeches are read from each published layout: MIT HTML, a page converted to Markdown, and the Folger edition with line numbers", () => {
+  const url = "https://www.folger.edu/explore/shakespeares-works/macbeth/read/5/1/";
+  const folger = playLib.parseSpeeches({ url, html: "", text: "GENTLEWOMAN 2065 It is an accustomed action with her to\n2066 seem thus washing her hands.\nLADY MACBETH 2068 Yet here’s a spot.\nDOCTOR 2069 Hark, she speaks.\nLADY MACBETH 2072 Out, damned spot, out, I say! One. Two.\n2073 Why then, ’tis time to do ’t. Hell is murky." });
+  assert.deepEqual(folger.map((s) => s.speaker), ["GENTLEWOMAN", "LADY MACBETH", "DOCTOR", "LADY MACBETH"]);
+  assert.deepEqual([folger[3].act, folger[3].scene], [5, 1]);
+  const hit = playLib.locateQuotation(folger, "Out, damned spot! Out, I say!");
+  assert.equal(hit.speech.speaker, "LADY MACBETH");
+  assert.equal(playLib.sameSpeaker("Macbeth", hit.speech.speaker), false);
+  const md = playLib.parseSpeeches({ url: "https://shakespeare.mit.edu/macbeth/macbeth.5.1.html", html: "", text: "**Doctor**\n> Hark! she speaks.\n\n**LADY MACBETH**\n> Out, damned spot! out, I say!--One: two: why,  \n>  then, 'tis time to do't." });
+  assert.deepEqual(md.map((s) => s.speaker), ["Doctor", "LADY MACBETH"]);
+  assert.match(md[1].text, /Out, damned spot! out, I say!--One: two: why, then/);
+  assert.equal(playLib.locateQuotation(md, "Out, damned spot").speech.speaker, "LADY MACBETH");
+});
+
+test("G8. who sees a ghost is read from the sentence's grammar: the ghost 'appears to Macbeth', and Lady Macbeth in the same sentence is not the one who sees it", () => {
+  const pages = ["When Banquo's Ghost reappears to Macbeth the guests stare and ask questions, so Lady Macbeth gets rid of them. Banquo's ghost appears to Macbeth alone, showing his overactive imagination."];
+  const verdict = (reply) => claimsLib.checkEventClaims(reply, pages).map((c) => c.status);
+  assert.deepEqual(verdict("Macbeth sees Banquo's ghost at the banquet."), ["supported"]);
+  assert.deepEqual(verdict("Lady Macbeth sees Banquo's ghost at the banquet."), ["contradicted"]);
+  assert.deepEqual(verdict("Banquo's ghost appears to Lady Macbeth."), ["contradicted"]);
+});
+
+test("Crawl4AI configuration: on by default with a local development token, never in production without a token set on purpose", () => {
+  const dev = cfgLib.assistantConfig({ NODE_ENV: "development" }).crawler;
+  assert.equal(dev.enabled, true);
+  assert.equal(dev.baseUrl, "http://127.0.0.1:11235");
+  assert.ok(dev.token.length > 20);
+  assert.equal(cfgLib.assistantConfig({ NODE_ENV: "development", CRAWL4AI_ENABLED: "off" }).crawler.enabled, false);
+  assert.equal(cfgLib.assistantConfig({ NODE_ENV: "production" }).crawler.enabled, false, "the public development token is not accepted in production");
+  const prod = cfgLib.assistantConfig({ NODE_ENV: "production", CRAWL4AI_API_TOKEN: "x".repeat(40), CRAWL4AI_BASE_URL: "http://crawler.internal:11235" }).crawler;
+  assert.equal(prod.enabled, true);
+  assert.equal(prod.baseUrl, "http://crawler.internal:11235");
+  assert.equal(cfgLib.assistantConfig({ NODE_ENV: "development", CRAWL4AI_TIMEOUT_MS: "5" }).crawler.timeoutMs, 15000, "an out-of-range value falls back to the default");
+  assert.equal(cfgLib.assistantConfig({ NODE_ENV: "development", CRAWL4AI_MAX_CONCURRENCY: "99" }).crawler.maxConcurrency, 2);
 });

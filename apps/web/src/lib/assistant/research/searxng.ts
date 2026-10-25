@@ -125,6 +125,12 @@ export class SearxngClient {
         });
         if (results.length >= this.config.maxResults * 2) break;
       }
+      // No results because the search engines behind SearXNG are suspended or refusing it is a broken search, not a search that found nothing.
+      const down = Array.isArray((parsed as { unresponsive_engines?: unknown })?.unresponsive_engines) ? ((parsed as { unresponsive_engines: unknown[] }).unresponsive_engines as unknown[]) : [];
+      if (!results.length && down.length) {
+        const named = down.slice(0, 4).map((e) => (Array.isArray(e) ? `${String(e[0])}: ${String(e[1] ?? "").slice(0, 60)}` : String(e).slice(0, 60)));
+        return fail("unavailable", `SearXNG's search engines are not answering (${named.join("; ")}). They are probably limiting this machine; try again later, or add engines in settings.yml.`);
+      }
       const outcome: SearchOutcome = results.length ? { status: "ok", query: q, results, detail: `${results.length} results.` } : { status: "empty", query: q, results: [], detail: "SearXNG found nothing for that query." };
       this.cache.set(key, outcome);
       return outcome;

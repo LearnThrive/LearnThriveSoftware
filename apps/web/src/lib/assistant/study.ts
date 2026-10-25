@@ -5,6 +5,8 @@ import { strategyBlock } from "./exam/strategies";
 import { defuseMarkers } from "./research/htmlText";
 import { groundTurn, groundingBlock, shouldGround, unsupportedNames, type Grounding } from "./research/ground";
 import { extractQuotations } from "./research/quotations";
+import type { GateResult } from "./gate";
+import { claimedSpeaker } from "./research/playText";
 import { boardName, needsResearch, type QuoteStatus, type QuoteVerdict, type ResearchService, type ResearchSession } from "./research/verify";
 
 /**
@@ -25,6 +27,14 @@ export interface StudyPrep {
   grounding: Grounding | null;
   /** Whether this turn is one that should have been grounded in sources. */
   willGround: boolean;
+  /** Whether the draft is held and verified before the student sees it (see gate.ts). */
+  gated: boolean;
+  /** Text of the student's uploaded files: evidence of what they were given, never of what an edition says. */
+  extracts: string[];
+  /** Quotation checks already made this turn, by quotation and claimed speaker. */
+  quoteChecks: Map<string, QuoteVerdict>;
+  /** What the gate did, for the note under the answer. */
+  gate: GateResult | null;
   frame: MarkFrame | null;
   material: string;
   question: string;
@@ -38,6 +48,8 @@ export interface StudyInput {
   history: readonly HistoryItem[];
   settings?: ContextSettings;
   research: ResearchService | null;
+  /** The text of files the student uploaded for this turn. */
+  extracts?: string[];
   owner: string;
   signal?: AbortSignal;
 }
@@ -46,6 +58,7 @@ const MAX_QUOTES = 6;
 
 const SAYS: Record<QuoteStatus, string> = {
   verified_exact: "VERIFIED: these are the words of the text",
+  incorrect_attribution: "WRONG SPEAKER OR PLACE: the words are in the text, but not said by the person or in the place claimed",
   verified_variant: "VERIFIED WITH A DIFFERENCE: close to the text, but the wording is not identical",
   supported_secondary: "NOT CONFIRMED: seen only on a secondary site (revision or general), not in the text itself",
   paraphrase_or_misquote: "NOT MATCHED: something close is in the sources, but not these words (a paraphrase or misquotation?)",
@@ -56,6 +69,15 @@ const SAYS: Record<QuoteStatus, string> = {
 function describe(v: QuoteVerdict): string {
   const where = [v.work, v.location, v.speaker ? `spoken by ${v.speaker}` : null].filter(Boolean).join(", ");
   return `"${v.quotation.slice(0, 160)}": ${SAYS[v.status]}${where && (v.status === "verified_exact" || v.status === "verified_variant") ? ` (${where})` : ""}.${v.sourceWording ? ` The text reads: "${v.sourceWording.slice(0, 240)}".` : ""}${v.status === "unverifiable" ? ` ${v.note}` : ""}`;
+}
+
+/**
+ * Answers the student is going to learn from or copy, where one wrong quotation or invented event does real harm, are held and verified before
+ * they are shown. Ordinary chat, calculations and other subjects stream as before.
+ */
+export function needsGate(ctx: Pick<StudyContext, "subject" | "activity" | "mode">, willGround: boolean): boolean {
+  if (ctx.subject === "english_literature" && (willGround || ctx.activity === "quote_check" || ctx.activity === "mark_essay")) return true;
+  return ctx.subject === "history" && willGround && (ctx.mode === "answer" || ctx.activity === "exam_answer" || ctx.activity === "mark_essay");
 }
 
 /** What a turn is, decided before any work starts, so the page can say "checking sources" while the server reads. */
@@ -71,6 +93,7 @@ export async function prepareStudy(input: StudyInput): Promise<StudyPrep> {
   const willGround = shouldGround(ctx, input.text);
   const grounding = session && willGround ? await groundTurn(session, ctx, input.text).catch((): Grounding => ({ status: "unavailable", queries: [], sources: [], note: "the reading failed" })) : null;
   const verdicts = new Map<string, QuoteStatus>();
+  const quoteChecks = new Map<string, QuoteVerdict>();
   const lines: string[] = [];
   const question = input.text;
 
@@ -84,7 +107,9 @@ export async function prepareStudy(input: StudyInput): Promise<StudyPrep> {
         beyond += 1;
         continue;
       }
-      const verdict = await session.verifyQuotation({ quotation, work: ctx.work });
+      const sentence = input.material.split(/(?<=[.!?])\s+|\n+/).find((s) => s.includes(quotation)) ?? quotation;
+      const verdict = await session.verifyQuotation({ quotation, work: ctx.work, claimedSpeaker: claimedSpeaker(sentence, quotation), extracts: input.extracts });
+      quoteChecks.set(`${quoteKey(quotation)}|${claimedSpeaker(sentence, quotation) ?? ""}`, verdict);
       verdicts.set(quoteKey(quotation), verdict.status);
       lines.push(describe(verdict));
     }
@@ -107,7 +132,7 @@ export async function prepareStudy(input: StudyInput): Promise<StudyPrep> {
     : "");
 
   const frame = ctx.activity === "mark_essay" ? markFrame(ctx, input.material) : null;
-  return { ctx, system: strategyBlock(ctx, { researchAvailable: Boolean(session), essay: input.material }), evidence, session, verdicts, grounding, willGround, frame, material: input.material, question };
+  return { ctx, system: strategyBlock(ctx, { researchAvailable: Boolean(session), essay: input.material }), evidence, session, verdicts, grounding, willGround, gated: Boolean(session) && needsGate(ctx, willGround), extracts: input.extracts ?? [], quoteChecks, gate: null, frame, material: input.material, question };
 }
 
 /**
@@ -151,6 +176,10 @@ export async function finishStudy(prep: StudyPrep, answer: string, options: { de
   if (session && gotSources) {
     const names = unsupportedNames(answer, session.pageTexts(), `${prep.question} ${prep.material}`);
     if (names.length) notes.push(`${names.length === 1 ? "This name or term does" : "These names or terms do"} not appear in the sources I read or in your message: ${names.join(", ")}. ${names.length === 1 ? "It" : "They"} may be a mistake, so check before using.`);
+  }
+  if (prep.gate && (prep.gate.removed.length || prep.gate.firstDraft.length)) {
+    const n = prep.gate.firstDraft.length;
+    notes.push(`${n} statement${n === 1 ? "" : "s"} in the first draft of this answer could not be supported by the sources, so ${prep.gate.removed.length ? "the answer was rewritten and what remained unsupported was removed" : "the answer was rewritten"} before you saw it.`);
   }
   if (notes.length) parts.push(`Check:\n${notes.map((n) => `- ${n}`).join("\n")}`);
 
