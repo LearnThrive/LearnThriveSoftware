@@ -18,7 +18,7 @@ async function enrolledAndOpen(page: Page) {
   await confirm(page, email);
   expect((await page.request.post('/api/dev/library-seed', { data: { action: 'enrol', email } })).ok()).toBe(true);
   await page.goto('/library/study-buddy');
-  await expect(page.getByRole('heading', { level: 1, name: 'Study Buddy' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'LearnThrive AI' })).toBeVisible();
   await hydrated(page);
 }
 
@@ -44,7 +44,7 @@ test('a worksheet is solved: questions to choose, progress, honest statuses, a d
   await expect(progress.getByRole('listitem').nth(1)).toContainText('Not confidently solved');
 
   // The summary is posted into the chat, labelled as AI-generated.
-  const summary = page.locator('article[aria-label="Study Buddy"]').last();
+  const summary = page.locator('article[aria-label="LearnThrive AI"]').last();
   await expect(summary).toContainText('AI-generated');
   await expect(summary).toContainText('Question 1');
 
@@ -109,7 +109,7 @@ test('a completed paper is checked: estimated marks only, what cannot be confirm
   await questions.getByRole('button', { name: 'Save and check again' }).click();
   await expect(questions.getByText('Not right').first()).toBeVisible({ timeout: 30_000 });
   await expect(questions).toContainText('You corrected how I read this');
-  const summary = page.locator('article[aria-label="Study Buddy"]').last();
+  const summary = page.locator('article[aria-label="LearnThrive AI"]').last();
   await expect(summary).toContainText('not official marks');
 
   const href = (await panel.getByRole('link', { name: 'Download the checked paper' }).getAttribute('href'))!;

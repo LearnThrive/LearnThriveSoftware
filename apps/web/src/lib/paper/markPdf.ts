@@ -45,7 +45,7 @@ export async function markPaper(original: Uint8Array, marked: MarkedQuestion[], 
   const copied = await doc.copyPages(source, source.getPageIndices());
   for (const page of copied) doc.addPage(page);
   doc.setTitle("AI-estimated feedback on a completed paper");
-  doc.setProducer("LearnThrive Study Buddy");
+  doc.setProducer("LearnThrive AI");
 
   for (const q of marked) {
     const page = copied[q.page - 1];

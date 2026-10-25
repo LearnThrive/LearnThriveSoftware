@@ -2,11 +2,11 @@ import { test, expect, type Page } from '@playwright/test';
 import { ACCESS, expectAxeClean } from './account-support';
 import { hydrated } from './careers-support';
 
-// One sign-in for the whole platform: /login is the account sign-in (the one Study Buddy has always used), and what a person finds
-// behind it follows from who they are. Staff and enrolled families get the dashboard (and, with Study Buddy and the Library open,
-// those too); a Library subscriber gets Study Buddy and the Library and never the dashboard; anyone else gets their account page.
+// One sign-in for the whole platform: /login is the account sign-in (the one LearnThrive AI has always used), and what a person finds
+// behind it follows from who they are. Staff and enrolled families get the dashboard (and, with LearnThrive AI and the Library open,
+// those too); a Library subscriber gets LearnThrive AI and the Library and never the dashboard; anyone else gets their account page.
 //
-// Runs on the second dev server (the Library open, Study Buddy on the mock model), where all three are available. The people are the
+// Runs on the second dev server (the Library open, LearnThrive AI on the mock model), where all three are available. The people are the
 // development accounts (docs/DEVELOPMENT_ACCOUNTS.md), seeded behind this same sign-in.
 
 const WHO = {
@@ -45,16 +45,16 @@ test('/login is the one sign-in page, and the Library\'s old address leads to it
   await expect(page).toHaveURL(/\/login$/);
 });
 
-test('an enrolled family signs in to the dashboard and finds Study Buddy and the Library in the same menu', async ({ page }) => {
+test('an enrolled family signs in to the dashboard and finds LearnThrive AI and the Library in the same menu', async ({ page }) => {
   await signIn(page, WHO.client, /\/dashboard$/);
   const menu = dashboardMenu(page);
-  await expect(menu.getByRole('link', { name: 'Study Buddy' })).toBeVisible();
+  await expect(menu.getByRole('link', { name: 'LearnThrive AI' })).toBeVisible();
   await expect(menu.getByRole('link', { name: 'Library' })).toBeVisible();
   // Their whole dashboard is still theirs.
   await expect(menu.getByRole('link', { name: 'Children' })).toBeVisible();
   await expectAxeClean(page, 'the enrolled family\'s dashboard with the Learning menu');
 
-  await menu.getByRole('link', { name: 'Study Buddy' }).click();
+  await menu.getByRole('link', { name: 'LearnThrive AI' }).click();
   await expect(page).toHaveURL(/\/library\/study-buddy$/);
   // And the way back is in the member menu.
   await memberMenu(page).getByRole('link', { name: 'Home' }).click();
@@ -64,15 +64,15 @@ test('an enrolled family signs in to the dashboard and finds Study Buddy and the
 test('an enrolled student is the same: the dashboard first, everything one click away', async ({ page }) => {
   await signIn(page, WHO.student, /\/dashboard$/);
   await expect(page.locator('.app-usermenu__role')).toContainText('Student');
-  await expect(dashboardMenu(page).getByRole('link', { name: 'Study Buddy' })).toBeVisible();
+  await expect(dashboardMenu(page).getByRole('link', { name: 'LearnThrive AI' })).toBeVisible();
 });
 
-test('a Library subscriber lands on Study Buddy, has no dashboard link, and the dashboard is closed to them', async ({ page }) => {
+test('a Library subscriber lands on LearnThrive AI, has no dashboard link, and the dashboard is closed to them', async ({ page }) => {
   await signIn(page, WHO.member, /\/library\/study-buddy$/);
-  await expect(memberMenu(page).getByRole('link', { name: 'Study Buddy' })).toBeVisible();
+  await expect(memberMenu(page).getByRole('link', { name: 'LearnThrive AI' })).toBeVisible();
   await expect(memberMenu(page).getByRole('link', { name: 'Library' })).toBeVisible();
   await expect(memberMenu(page).getByRole('link', { name: 'Dashboard' })).toHaveCount(0);
-  await expect(page.getByText('Study Buddy is included for enrolled students and Library subscribers.')).toHaveCount(0);
+  await expect(page.getByText('LearnThrive AI is included for enrolled students and Library subscribers.')).toHaveCount(0);
 
   // Asking for the dashboard (or a page in it) leads back to what they have, never to the dashboard.
   for (const path of ['/dashboard', '/dashboard/lessons', '/dashboard/calendar']) {
@@ -83,23 +83,23 @@ test('a Library subscriber lands on Study Buddy, has no dashboard link, and the 
   expect((await page.request.get('/api/lessons/anything/ics')).status()).toBe(401);
 });
 
-test('someone signed in with nothing yet lands on their account page, and Study Buddy tells them what it is included with', async ({ page }) => {
+test('someone signed in with nothing yet lands on their account page, and LearnThrive AI tells them what it is included with', async ({ page }) => {
   await signIn(page, WHO.visitor, /\/account$/);
   await page.goto('/library/study-buddy');
-  await expect(page.getByText('Study Buddy is included for enrolled students and Library subscribers.')).toBeVisible();
+  await expect(page.getByText('LearnThrive AI is included for enrolled students and Library subscribers.')).toBeVisible();
   await page.goto('/dashboard');
   await expect(page).toHaveURL(/\/account$/);
 });
 
-test('staff sign in to the dashboard: an administrator also gets Study Buddy and the Library, a tutor only their own work', async ({ page }) => {
+test('staff sign in to the dashboard: an administrator also gets LearnThrive AI and the Library, a tutor only their own work', async ({ page }) => {
   await signIn(page, WHO.admin, /\/dashboard$/);
-  await expect(dashboardMenu(page).getByRole('link', { name: 'Study Buddy' })).toBeVisible();
+  await expect(dashboardMenu(page).getByRole('link', { name: 'LearnThrive AI' })).toBeVisible();
   await expect(dashboardMenu(page).getByRole('link', { name: 'Library' })).toBeVisible();
   await page.context().clearCookies();
 
   await signIn(page, WHO.tutor, /\/dashboard$/);
   await expect(dashboardMenu(page).getByRole('link', { name: 'Calendar' })).toBeVisible();
-  await expect(dashboardMenu(page).getByRole('link', { name: 'Study Buddy' })).toHaveCount(0);
+  await expect(dashboardMenu(page).getByRole('link', { name: 'LearnThrive AI' })).toHaveCount(0);
   await expect(dashboardMenu(page).getByRole('link', { name: 'Library' })).toHaveCount(0);
 });
 
@@ -154,7 +154,7 @@ test('the public header offers a signed-in person their own place instead of "Lo
   await signIn(page, WHO.member, /\/library\/study-buddy$/);
   await page.goto('/');
   const header = page.getByRole('banner');
-  await expect(header.getByRole('link', { name: /^Study Buddy/ })).toBeVisible();
+  await expect(header.getByRole('link', { name: /^LearnThrive AI/ })).toBeVisible();
   await expect(header.getByRole('link', { name: /^Login$/ })).toHaveCount(0);
   await page.context().clearCookies();
 
@@ -184,12 +184,12 @@ test('one shell, by keyboard alone: the skip link first, the menu in reading ord
   for (let i = 0; i < 8 && order.length < 4; i += 1) {
     await page.keyboard.press('Tab');
     const name = await page.evaluate(() => (document.activeElement as HTMLElement | null)?.textContent?.trim() ?? '');
-    if (['Study Buddy', 'Library', 'Search', 'Account'].includes(name)) order.push(name);
+    if (['LearnThrive AI', 'Library', 'Search', 'Account'].includes(name)) order.push(name);
   }
-  expect(order).toEqual(['Study Buddy', 'Library', 'Search', 'Account']);
-  // Shift+Tab back to Study Buddy and follow it with Enter.
+  expect(order).toEqual(['LearnThrive AI', 'Library', 'Search', 'Account']);
+  // Shift+Tab back to LearnThrive AI and follow it with Enter.
   for (let i = 0; i < 3; i += 1) await page.keyboard.press('Shift+Tab');
-  await expect(dashboardMenu(page).getByRole('link', { name: 'Study Buddy' })).toBeFocused();
+  await expect(dashboardMenu(page).getByRole('link', { name: 'LearnThrive AI' })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/library\/study-buddy$/);
   // The account menu: opens from its button, Escape closes it and returns focus to the button.

@@ -132,7 +132,7 @@ export interface NavExtras {
 
 export function navigationFor(role: Role, extras: NavExtras = {}): AppNavSection[] {
   const learning: AppNavItem[] = [];
-  if (extras.studyBuddy) learning.push({ label: "Study Buddy", href: "/library/study-buddy", icon: "study-buddy" });
+  if (extras.studyBuddy) learning.push({ label: "LearnThrive AI", href: "/library/study-buddy", icon: "study-buddy" });
   if (extras.library) learning.push({ label: "Library", href: "/library", icon: "library" });
   return learning.length > 0 ? [...NAV_BY_ROLE[role], { title: "Learning", items: learning }] : NAV_BY_ROLE[role];
 }
@@ -158,7 +158,7 @@ export interface PlatformNavInput {
 export function platformNavigation(input: PlatformNavInput): AppNavSection[] {
   const sections: AppNavSection[] = input.tuition ? [...NAV_BY_ROLE[input.role]] : [];
   const learning: AppNavItem[] = [];
-  if (input.studyBuddy) learning.push({ label: "Study Buddy", href: "/library/study-buddy", icon: "study-buddy" });
+  if (input.studyBuddy) learning.push({ label: "LearnThrive AI", href: "/library/study-buddy", icon: "study-buddy" });
   if (input.library) learning.push({ label: "Library", href: "/library", icon: "library", matchPrefix: "/library/search" });
   // A person with the whole platform keeps a short sidebar: the Library's search is in the top-bar palette and the account is in the
   // account menu. A Library-only member has no such tools, so their small menu carries both.

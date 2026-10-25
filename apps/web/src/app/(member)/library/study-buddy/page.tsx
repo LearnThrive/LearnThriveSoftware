@@ -6,7 +6,7 @@ import { requireAccountPage } from "@/lib/account/pages";
 import { assistantClosed } from "@/lib/assistant/runtime";
 import styles from "@/components/study-buddy/study-buddy.module.css";
 
-export const metadata: Metadata = { title: "Study Buddy | LearnThrive", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "LearnThrive AI | LearnThrive", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";
 
 /**
@@ -25,8 +25,8 @@ export default async function StudyBuddyPage() {
     return (
       <main id="main-content" className={styles.center}>
         <div>
-          <h1>Study Buddy</h1>
-          <p>Study Buddy is included for enrolled students and Library subscribers.</p>
+          <h1>LearnThrive AI</h1>
+          <p>LearnThrive AI is included for enrolled students and Library subscribers.</p>
           <p>
             <Link className="text-link" href="/pricing">
               About the Library <span aria-hidden="true">→</span>
@@ -39,7 +39,7 @@ export default async function StudyBuddyPage() {
   if (!account.adultConfirmed && !account.learner) {
     return (
       <main id="main-content" className={styles.center}>
-        <p>Study Buddy is for adult account holders.</p>
+        <p>LearnThrive AI is for adult account holders.</p>
       </main>
     );
   }

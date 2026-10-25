@@ -81,14 +81,14 @@ interface Status {
 const ERROR_TEXT: Record<string, string> = {
   rate_limited_minute: "You are asking quickly. Please wait a moment.",
   rate_limited_day:
-    "You have used today's questions. Study Buddy will be back tomorrow.",
-  busy: "Study Buddy is busy right now. Please try again in a moment.",
+    "You have used today's questions. LearnThrive AI will be back tomorrow.",
+  busy: "LearnThrive AI is busy right now. Please try again in a moment.",
   unavailable:
-    "Study Buddy could not answer just now. Please try again shortly.",
-  timeout: "That took too long. Study Buddy may still have been warming up, so please try again. A photo can take a minute or two the first time.",
-  budget: "Study Buddy has reached its limit for today.",
+    "LearnThrive AI could not answer just now. Please try again shortly.",
+  timeout: "That took too long. LearnThrive AI may still have been warming up, so please try again. A photo can take a minute or two the first time.",
+  budget: "LearnThrive AI has reached its limit for today.",
   vision_unavailable:
-    "Study Buddy cannot look at photos right now. You can type the question instead.",
+    "LearnThrive AI cannot look at photos right now. You can type the question instead.",
   too_long: "That message is too long. Please shorten it.",
   empty: "Please type a question first.",
   no_chat: "That chat is no longer there. Please start a new one.",
@@ -310,7 +310,7 @@ export function StudyBuddy() {
   async function removeAll() {
     if (
       !window.confirm(
-        "Delete all your Study Buddy chats? They are removed for good.",
+        "Delete all your LearnThrive AI chats? They are removed for good.",
       )
     )
       return;
@@ -500,7 +500,7 @@ export function StudyBuddy() {
               code?: string;
               position?: number;
               /** An honest processing state, only when the server has evidence for it. */
-              state?: "preparing" | "reading" | "researching" | "thinking";
+              state?: "preparing" | "reading" | "researching" | "verifying" | "thinking";
             };
             if (event.type === "session" && event.sessionId)
               setSessionId(event.sessionId);
@@ -516,7 +516,9 @@ export function StudyBuddy() {
                       ? "Reading the picture\u2026"
                       : event.state === "researching"
                         ? "Checking sources online\u2026"
-                        : "",
+                        : event.state === "verifying"
+                          ? "Checking the answer against the sources\u2026"
+                          : "",
               );
             else if (event.type === "delta" && event.text) {
               setWaiting("");
@@ -593,7 +595,7 @@ export function StudyBuddy() {
   if (!status) {
     return (
       <div className={styles.center}>
-        <PencilLoader size="md" label="Opening Study Buddy" />
+        <PencilLoader size="md" label="Opening LearnThrive AI" />
       </div>
     );
   }
@@ -601,8 +603,8 @@ export function StudyBuddy() {
     return (
       <div className={styles.center} role="status">
         <div>
-          <h1 className={styles.centerTitle}>Study Buddy</h1>
-          <p>Study Buddy is not available right now. Please try again later.</p>
+          <h1 className={styles.centerTitle}>LearnThrive AI</h1>
+          <p>LearnThrive AI is not available right now. Please try again later.</p>
         </div>
       </div>
     );
@@ -773,7 +775,7 @@ export function StudyBuddy() {
           <Camera size={18} aria-hidden="true" />
           <div>
             <strong>A photo of your work</strong>
-            <p>Add a photo of a question or your working, and Study Buddy reads it.</p>
+            <p>Add a photo of a question or your working, and LearnThrive AI reads it.</p>
           </div>
         </li>
         {status.paperTutor ? (
@@ -824,7 +826,7 @@ export function StudyBuddy() {
               <MessagesSquare size={18} />
             </span>
             <div>
-              <h1 id="sb-heading">Study Buddy</h1>
+              <h1 id="sb-heading">LearnThrive AI</h1>
               <p className={styles.barSub}>
                 {first
                   ? "Maths, English, Science and 11+ · hints first"
@@ -861,7 +863,7 @@ export function StudyBuddy() {
                   <h2>What are you working on?</h2>
                   <p>
                     Ask a question, or add a photo or PDF of your work. Ask for
-                    the answer or a model answer and Study Buddy gives it; ask
+                    the answer or a model answer and LearnThrive AI gives it; ask
                     to work through it and it goes step by step with you.
                   </p>
                   <ul
@@ -915,14 +917,14 @@ export function StudyBuddy() {
                   <article
                     key={m.id}
                     className={styles.theirs}
-                    aria-label="Study Buddy"
+                    aria-label="LearnThrive AI"
                     aria-busy={streaming || undefined}
                   >
                     <h2 className={styles.who}>
                       <span className={styles.avatar} aria-hidden="true">
                         <MessagesSquare size={13} />
                       </span>
-                      Study Buddy <span className={styles.aiTag}>AI</span>
+                      LearnThrive AI
                     </h2>
                     {m.content ? <RenderedAnswer text={m.content} /> : null}
                     {m.content && !streaming ? (
@@ -941,7 +943,7 @@ export function StudyBuddy() {
               })}
               {thinking ? (
                 <div className={styles.thinking}>
-                  <PencilLoader size="sm" label="Study Buddy is thinking" />
+                  <PencilLoader size="sm" label="LearnThrive AI is thinking" />
                   <span>{waiting || "Thinking…"}</span>
                 </div>
               ) : null}
@@ -1152,7 +1154,7 @@ export function StudyBuddy() {
               fullWidth
             />
             <p className={styles.footnote}>
-              Answers are AI-generated and may be wrong: Study Buddy is an AI,
+              Answers are AI-generated and may be wrong: This is an AI,
               not a tutor or a person. Never share your full name, school or
               address. <a href="/privacy">Privacy</a>
             </p>

@@ -64,7 +64,7 @@ async function ready(page: Page) {
     };
   });
   await page.goto('/library/study-buddy');
-  await expect(page.getByRole('heading', { level: 1, name: 'Study Buddy' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'LearnThrive AI' })).toBeVisible();
   await hydrated(page);
   await page.getByRole('checkbox', { name: /18 or over/ }).check();
 }
@@ -142,12 +142,12 @@ test('talking over a long answer stops it arriving and starts a new turn; Stop s
   await expect(state(page)).toHaveText(/Listening/);
   await page.waitForTimeout(1500);
   await panel(page).getByRole('button', { name: 'Stop and send' }).click();
-  await expect(page.locator('article[aria-label="Study Buddy"]').first()).toContainText('Step 3', { timeout: 15_000 });
+  await expect(page.locator('article[aria-label="LearnThrive AI"]').first()).toContainText('Step 3', { timeout: 15_000 });
   await expect(panel(page).getByRole('button', { name: 'Stop speaking' })).toBeVisible();
   await panel(page).getByRole('button', { name: 'Talk over the answer' }).click();
   await expect(page.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
   await expect(state(page)).toHaveText(/Listening/);
-  const shown = await page.locator('article[aria-label="Study Buddy"]').first().innerText();
+  const shown = await page.locator('article[aria-label="LearnThrive AI"]').first().innerText();
   expect(shown).not.toContain('Step 80');
 });
 
@@ -165,7 +165,7 @@ test('a blocked microphone says so plainly, nothing is recorded or sent, and typ
   expect(voiceRequests).toEqual([]);
   await page.getByLabel('Your message').fill('What is a fraction?');
   await page.getByRole('button', { name: /^send$/i }).click();
-  await expect(page.locator('article[aria-label="Study Buddy"]').first()).toContainText('Good question');
+  await expect(page.locator('article[aria-label="LearnThrive AI"]').first()).toContainText('Good question');
 });
 
 test('a typed question is not sent as voice and is not read aloud', async ({ page }) => {
@@ -176,7 +176,7 @@ test('a typed question is not sent as voice and is not read aloud', async ({ pag
   await page.getByLabel('Your message').fill('What is a fraction?');
   await page.getByRole('button', { name: /^send$/i }).click();
   expect(JSON.parse((await chat).postData()!).voice).toBeUndefined();
-  await expect(page.locator('article[aria-label="Study Buddy"]').first()).toContainText('Good question');
+  await expect(page.locator('article[aria-label="LearnThrive AI"]').first()).toContainText('Good question');
   await page.waitForTimeout(500);
   expect(requests.filter((u) => u.includes('/voice/'))).toEqual([]);
 });

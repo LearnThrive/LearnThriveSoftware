@@ -236,7 +236,7 @@ export async function annotatePaper(original: Uint8Array, questions: SolvedQuest
   for (const page of copied) doc.addPage(page);
   const originalCount = copied.length;
   doc.setTitle("AI-generated worked solutions");
-  doc.setProducer("LearnThrive Study Buddy");
+  doc.setProducer("LearnThrive AI");
 
   const placements: Placement[] = [];
   const needsWorked = new Set<string>();

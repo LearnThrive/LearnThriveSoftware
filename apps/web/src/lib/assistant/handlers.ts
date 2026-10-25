@@ -46,15 +46,15 @@ export type Reason = "learner_unavailable" | "consent_needed" | "unavailable" | 
 const STATUS: Record<Reason, number> = { learner_unavailable: 403, consent_needed: 403, unavailable: 503, voice_unavailable: 503, bad_audio: 422, signed_out: 401, adult_required: 403, no_access: 403, adult_confirmation: 422, bad_request: 400, too_large: 413, not_found: 404, too_many_files: 422, rate_limited: 429 };
 
 const MESSAGE: Record<Reason, string> = {
-  learner_unavailable: "Study Buddy is not available for this learner right now. Please ask your parent or guardian.",
-  consent_needed: "A parent or guardian needs to say that Study Buddy may be used before it can open. Please ask them.",
-  unavailable: `Study Buddy is not available right now. Please email ${siteConfig.email} if you need help.`,
+  learner_unavailable: "LearnThrive AI is not available for this learner right now. Please ask your parent or guardian.",
+  consent_needed: "A parent or guardian needs to say that LearnThrive AI may be used before it can open. Please ask them.",
+  unavailable: `LearnThrive AI is not available right now. Please email ${siteConfig.email} if you need help.`,
   voice_unavailable: "Voice is not available right now. You can still type your question.",
   bad_audio: "We could not use that recording. Please try again, or type your question.",
-  signed_out: "Please sign in to use Study Buddy.",
-  adult_required: "Study Buddy is for adult account holders.",
-  no_access: "Study Buddy is included for enrolled students and Library subscribers.",
-  adult_confirmation: "Please confirm that you are 18 or over and that you are the person using Study Buddy.",
+  signed_out: "Please sign in to use LearnThrive AI.",
+  adult_required: "LearnThrive AI is for adult account holders.",
+  no_access: "LearnThrive AI is included for enrolled students and Library subscribers.",
+  adult_confirmation: "Please confirm that you are 18 or over and that you are the person using LearnThrive AI.",
   bad_request: "We could not read that request.",
   too_large: "That is too large.",
   not_found: "We could not find that.",

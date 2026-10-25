@@ -87,7 +87,7 @@ export function LearnersPanel() {
   return (
     <div className={styles.wrap}>
       <p className={styles.lead}>
-        Add the students you look after. Young learners are used from your own sign-in (the supervised view); older students can be invited to sign in on their own. You decide who can use Study Buddy, and you can
+        Add the students you look after. Young learners are used from your own sign-in (the supervised view); older students can be invited to sign in on their own. You decide who can use LearnThrive AI, and you can
         delete a learner&apos;s conversations but never read them.
       </p>
       {error ? (
@@ -111,14 +111,14 @@ export function LearnersPanel() {
               {s.learnerStatus ? <li className={styles.badge} data-tone={s.learnerStatus === "active" ? "good" : "warn"}>Own login: {s.learnerStatus}</li> : null}
               {s.accessMode === "supervised" ? <li className={styles.badge} data-tone="good">Supervised view on</li> : null}
               {s.invitationOpen ? <li className={styles.badge}>Invitation waiting</li> : null}
-              <li className={styles.badge} data-tone={s.consent ? "good" : "warn"}>{s.consent ? "Study Buddy agreed" : "Study Buddy not agreed"}</li>
+              <li className={styles.badge} data-tone={s.consent ? "good" : "warn"}>{s.consent ? "LearnThrive AI agreed" : "LearnThrive AI not agreed"}</li>
             </ul>
 
             <div className={styles.section}>
-              <h3>Study Buddy</h3>
+              <h3>LearnThrive AI</h3>
               <label className={styles.check}>
-                <input type="checkbox" checked={s.consent} onChange={(e) => void act(`/api/learners/${s.id}/consent`, "POST", { granted: e.target.checked }, e.target.checked ? "Agreed." : "Withdrawn. Study Buddy is closed for this learner.")} />
-                <span>I agree that {s.displayName} may use Study Buddy.</span>
+                <input type="checkbox" checked={s.consent} onChange={(e) => void act(`/api/learners/${s.id}/consent`, "POST", { granted: e.target.checked }, e.target.checked ? "Agreed." : "Withdrawn. LearnThrive AI is closed for this learner.")} />
+                <span>I agree that {s.displayName} may use LearnThrive AI.</span>
               </label>
               <details>
                 <summary>What I am agreeing to</summary>
@@ -191,9 +191,9 @@ export function LearnersPanel() {
 
             <div className={styles.section}>
               <h3>Conversations</h3>
-              <p className={styles.help}>{s.displayName}&apos;s conversations with Study Buddy are private to them. You can delete them all, but not read them.</p>
+              <p className={styles.help}>{s.displayName}&apos;s conversations with LearnThrive AI are private to them. You can delete them all, but not read them.</p>
               <div className={styles.row}>
-                <button type="button" className={`button button--secondary ${styles.danger}`} onClick={() => window.confirm(`Delete all of ${s.displayName}'s Study Buddy conversations? This cannot be undone.`) && void act(`/api/learners/${s.id}/chats/delete`, "POST", {}, "Conversations deleted.")}>
+                <button type="button" className={`button button--secondary ${styles.danger}`} onClick={() => window.confirm(`Delete all of ${s.displayName}'s LearnThrive AI conversations? This cannot be undone.`) && void act(`/api/learners/${s.id}/chats/delete`, "POST", {}, "Conversations deleted.")}>
                   Delete conversations
                 </button>
               </div>

@@ -8,7 +8,7 @@ const StudyBuddy = dynamic(() => import("./StudyBuddy").then((m) => m.StudyBuddy
   ssr: false,
   loading: () => (
     <div style={{ display: "grid", placeItems: "center", minHeight: "12rem" }}>
-      <PencilLoader size="md" label="Opening Study Buddy" />
+      <PencilLoader size="md" label="Opening LearnThrive AI" />
     </div>
   ),
 });
