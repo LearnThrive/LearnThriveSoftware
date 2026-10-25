@@ -168,9 +168,60 @@ anything the sources contradict or do not contain (at most two rewrites, thinkin
 that is still wrong. If nothing supported is left, the student gets an honest "I could not write an answer that I was able to check" instead. Quotations
 that are merely *unchecked* (the evidence could not be fetched) are not cut: they stay and the "Check" under the answer says they are unverified.
 
-Safeguarding replies and blocked input never reach the gate, and ordinary chat, calculations and other subjects stream immediately. The page shows
-"Checking sources online..." while the server reads, and "Checking the answer against the sources..." while the draft is verified. If the turn is
+Safeguarding replies and blocked input never reach the gate, and ordinary chat, simple calculations and other subjects stream immediately. The page shows
+"Checking sources online..." while the server reads, and "Checking the answer before showing it..." while the draft is verified. If the turn is
 interrupted while a draft is held, the draft is released with a plain note that it was not checked; a blocked output is never released.
+
+### Response modes
+
+Each turn is given a mode from the message (`responseMode` in `study.ts`), never from the model:
+
+| Mode | When | What happens |
+| --- | --- | --- |
+| Fast | ordinary chat, a simple question or calculation | streamed at once; no reading, no hold; a picked hosted model does not reason |
+| Verified | a question answered from sources (grounded subjects, a quotation check) | sources read first; Literature and history answers held by the gate; a picked hosted model reasons lightly |
+| Advanced | a hard problem (prove, show that, simultaneous, quadratic, differentiate, stoichiometry, 6+ marks, a long multi-step calculation), an essay to mark | full reasoning for a picked hosted model; a maths, physics or chemistry answer is **held while its working is checked by calculation** |
+
+### Checking by calculation (maths, physics, chemistry)
+
+For an advanced STEM answer the gate also checks the working itself, with the Paper Tutor's own safe expression parser (`checks/maths.ts`; no eval, no
+model): a line with no unknowns must be true (a decimal may be a rounding to the figures it is written with); a chain `A = B = C` must hold for every
+value where both sides have the same unknowns (a substitution such as `v = u + at = 0 + 9.8 x 3` is not judged); and a run of equations in one unknown
+must not gain a solution from one step to the next. Chemical symbol equations must balance in atoms and charge (`checks/chemistry.ts`; `2H2 + O2 -> 2H2O`,
+`Cu^{2+} + 2e^- -> Cu`, hydrates, state symbols). A wrong step is sent back to the same model for repair, with the line and the reason, and the rewrite is
+checked again. A step still wrong after two repairs is **named under the answer, not cut**: removing a line of working would leave a solution that skips it.
+The same checks run, without holding the answer, on any other reply that contains working, and their findings go in the "Check" under it.
+
+What it does not judge: approximations, alternatives (`x = 2 or x = 3`, `±`), inequalities, trigonometry and logarithms, calculus, units and dimensions,
+word equations, and charges written ambiguously (`Fe3+` without a caret). Those are unchecked, never called wrong. Computer science code is not run.
+
+### Evidence statuses
+
+Every checker keeps its own detailed result, and they share one vocabulary (`checks/evidence.ts`):
+
+| Status | Meaning | Examples |
+| --- | --- | --- |
+| VERIFIED | checked against primary evidence and it holds | the exact words are in the text; a line of working is right |
+| SUPPORTED | a reliable source says so, but not the primary text, or the wording differs slightly | a quotation seen only on a revision site; a close variant |
+| INFERRED | an interpretation or conclusion, not a checkable fact | analysis of a writer's method |
+| CONTESTED | sources disagree | |
+| UNSUPPORTED | looked for and not found in what was read | an invented quotation; an event no source mentions |
+| CONTRADICTED | the evidence says otherwise | a wrong speaker; a misquotation; a wrong step; an unbalanced equation |
+| UNVERIFIABLE | could not be checked | nothing to check against; a service down; a form the checker cannot read |
+
+Only CONTRADICTED and UNSUPPORTED are repaired or cut. A search snippet, a revision site, or a model agreeing with itself is never VERIFIED.
+
+### Subjects and the checks they get
+
+| Subject (exam/subjects.ts) | Checks before and after the answer |
+| --- | --- |
+| English Literature | quotations verified against primary text or the student's extract, speaker and act/scene from the play's structure, event claims, invented characters; held by the gate |
+| History | grounded in sources; event claims checked; model answers and essays held by the gate |
+| Maths | working and arithmetic checked by calculation; advanced answers held and repaired; never searched (a calculation is checked locally) |
+| Physics, Chemistry | the same calculation checks, and equations balanced (chemistry); explanations (not calculations) grounded in sources |
+| Biology, Geography, Religious Studies, Psychology, Business and Economics, Computer Science | grounded in sources where facts matter; names and terms not in any source flagged; arithmetic checked |
+| English Language, Modern Languages | subject strategies (quote only from the extract; agreement and tense); arithmetic checked; not searched |
+| 11+ | detected as maths or English by its content; the same checks |
 
 ## Searching: SearXNG
 

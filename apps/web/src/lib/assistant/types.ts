@@ -33,6 +33,8 @@ export interface ProviderMessage {
   toolCalls?: ProviderToolCall[];
   /** On a tool message: the tool the content answers. */
   toolName?: string;
+  /** On a tool message: the id of the call it answers (OpenAI-compatible endpoints pair a result with its call by this). */
+  toolCallId?: string;
 }
 
 export interface ProviderCapabilities {
@@ -117,15 +119,18 @@ export type StreamChunk =
       cutOff?: boolean;
     };
 
-export type ProviderErrorCode = "unavailable" | "timeout" | "rate_limited" | "bad_request" | "aborted" | "protocol";
+/** `empty`: the request finished without anything the student could read (a reasoning model that spent its allowance thinking, say). */
+export type ProviderErrorCode = "unavailable" | "timeout" | "rate_limited" | "bad_request" | "aborted" | "protocol" | "empty";
 
 export class ProviderError extends Error {
   constructor(
     readonly code: ProviderErrorCode,
     readonly provider: string,
     readonly retryAfterMs?: number,
+    /** A short machine word for the developer (`unauthorised`, `model_missing`, `http_500`, `reasoning_exhausted`): never a message body or a secret. */
+    readonly detail?: string,
   ) {
-    super(`${provider}: ${code}`);
+    super(`${provider}: ${code}${detail ? ` (${detail})` : ""}`);
   }
 }
 
