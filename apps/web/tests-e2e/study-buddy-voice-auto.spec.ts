@@ -64,7 +64,7 @@ async function ready(page: Page) {
     };
   });
   await page.goto('/library/study-buddy');
-  await expect(page.getByRole('heading', { level: 1, name: 'Study Buddy' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'LearnThrive AI' })).toBeVisible();
   await hydrated(page);
   await page.getByRole('checkbox', { name: /18 or over/ }).check();
 }
@@ -97,7 +97,7 @@ test('speak once: the words are sent by themselves, once, as a normal message, a
   await expect(page.locator('article[aria-label="You"] p').first()).toHaveText(HEARD, { timeout: 15_000 });
   expect(chats).toHaveLength(1);
   expect(JSON.parse(chats[0]!.postData()!)).toMatchObject({ text: HEARD, voice: true });
-  await expect(page.locator('article[aria-label="Study Buddy"]').first()).toContainText('Good question');
+  await expect(page.locator('article[aria-label="LearnThrive AI"]').first()).toContainText('Good question');
   const said = JSON.parse((await spoke).postData()!) as { text: string };
   expect(said.text, 'what is spoken has no LaTeX or Markdown').not.toMatch(/[$\\*#^]/);
   await expectAxeClean(page, 'voice chat panel');
@@ -121,7 +121,7 @@ test('with "Keep listening" off, the panel waits for a press after the answer; w
   await panel(page).getByRole('checkbox', { name: 'Keep listening' }).uncheck();
   await panel(page).getByRole('button', { name: 'Read aloud on' }).click();
   await expect(panel(page).getByRole('button', { name: 'Read aloud off' })).toHaveAttribute('aria-pressed', 'false');
-  await expect(page.locator('article[aria-label="Study Buddy"]').first()).toContainText('Good question', { timeout: 15_000 });
+  await expect(page.locator('article[aria-label="LearnThrive AI"]').first()).toContainText('Good question', { timeout: 15_000 });
   await expect(state(page)).toHaveText('Tap to talk');
   await page.waitForTimeout(1500);
   expect(await micRequests(page)).toBe(1);

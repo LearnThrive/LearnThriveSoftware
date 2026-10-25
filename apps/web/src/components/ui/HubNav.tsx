@@ -38,7 +38,7 @@ export interface HubNavItem {
 export const hubNavItems: HubNavItem[] = [
   { href: "/", label: "Home", icon: "home" },
   { href: "/library", label: "Library", icon: "library" },
-  { href: "/library/study-buddy", label: "Study Buddy", icon: "study-buddy" },
+  { href: "/library/study-buddy", label: "LearnThrive AI", icon: "study-buddy" },
   { href: "/library/search", label: "Search", icon: "search" },
   { href: "/account", label: "Account", icon: "account" },
 ];

@@ -9,7 +9,7 @@ import { hydrated } from './careers-support';
 const AXE_SOURCE = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
 const WCAG22 = ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'];
 const PATH = '/dev/ui-components/hub-nav';
-const LABELS = ['Home', 'Library', 'Study Buddy', 'Search', 'Account'];
+const LABELS = ['Home', 'Library', 'LearnThrive AI', 'Search', 'Account'];
 
 async function runAxe(page: Page, label: string) {
   await page.addScriptTag({ content: AXE_SOURCE });
@@ -197,8 +197,8 @@ test.describe('HubNav', () => {
       await open(page, width, 'light');
       const before = await live(page).boundingBox();
       const heading = await page.getByRole('heading', { name: 'Each current item' }).boundingBox();
-      await focusByKeyboard(page, 'Study Buddy');
-      await expect.poll(() => labelOpacity(page, 'Study Buddy')).toBe(1);
+      await focusByKeyboard(page, 'LearnThrive AI');
+      await expect.poll(() => labelOpacity(page, 'LearnThrive AI')).toBe(1);
       expect(await live(page).boundingBox()).toEqual(before);
       expect(await page.getByRole('heading', { name: 'Each current item' }).boundingBox()).toEqual(heading);
     }

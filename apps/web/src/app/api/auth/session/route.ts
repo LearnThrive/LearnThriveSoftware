@@ -23,7 +23,7 @@ export async function GET() {
 
   const studyBuddyOpen = assistantClosed(process.env, true) === null;
   const home = who ? homePath(who.access, { studyBuddyOpen, dashboardOpen: PORTAL_ENABLED }) : "/dashboard";
-  const homeLabel = home === "/dashboard" ? "Dashboard" : home === "/library/study-buddy" ? "Study Buddy" : home === "/library" ? "Library" : "Account";
+  const homeLabel = home === "/dashboard" ? "Dashboard" : home === "/library/study-buddy" ? "LearnThrive AI" : home === "/library" ? "Library" : "Account";
   const name = user?.name ?? who?.account.displayName ?? who?.user.email ?? "Member";
   return NextResponse.json({ signedIn: true, name, role: user?.role ?? who?.account.role ?? "CLIENT", home, homeLabel }, { headers });
 }

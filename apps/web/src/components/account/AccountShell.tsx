@@ -31,7 +31,7 @@ export function AccountShell({ title, intro, children }: { title?: string; intro
                 Your lessons, schedule and reports in one place
               </li>
               <li className="auth-enter" style={{ animationDelay: "210ms" }}>
-                Study Buddy and the Library, included for enrolled students
+                LearnThrive AI and the Library, included for enrolled students
               </li>
               <li className="auth-enter" style={{ animationDelay: "250ms" }}>
                 Parents, guardians, adult learners, tutors and administrators sign in here

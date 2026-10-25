@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { hydrated } from './careers-support';
 import { address, confirm, distinctVisitor, expectAxeClean, signUp } from './account-support';
 
-// plan19 phase F: Study Buddy in a browser, on the server with the MOCK provider (ASSISTANT_PROVIDER=mock): no model, no network.
+// plan19 phase F: LearnThrive AI in a browser, on the server with the MOCK provider (ASSISTANT_PROVIDER=mock): no model, no network.
 // Covers the screen, streaming, Stop, maths, safeguarding and blocked replies, uploads, deleting and exporting chats, and access.
 
 distinctVisitor();
@@ -21,7 +21,7 @@ async function enrolled(page: Page) {
 
 async function open(page: Page) {
   await page.goto('/library/study-buddy');
-  await expect(page.getByRole('heading', { level: 1, name: 'Study Buddy' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'LearnThrive AI' })).toBeVisible();
   await hydrated(page);
 }
 
@@ -61,12 +61,12 @@ test('an enrolled adult asks a question: an adult confirmation first, a streamed
   await expect(page.getByText('Please tick the box to confirm you are 18 or over')).toBeVisible();
   await ask(page, 'Factorise x^2 + 3x', { first: true });
 
-  const answer = page.locator('article[aria-label="Study Buddy"]').first();
+  const answer = page.locator('article[aria-label="LearnThrive AI"]').first();
   await expect(answer).toContainText('Good question');
   await expect(answer.locator('.katex')).toBeVisible();
   await expect(answer.locator('li')).toHaveCount(2);
   // Every answer says it is the AI's; the fuller "AI-generated, may be wrong" notice is said once, beside the box, not on each answer.
-  await expect(answer.getByRole('heading', { name: 'Study Buddy AI' })).toBeVisible();
+  await expect(answer.getByRole('heading', { name: 'LearnThrive AI' })).toBeVisible();
   await expect(page.getByText(/Answers are AI-generated and may be wrong/)).toHaveCount(1);
   await expect(answer.getByRole('button', { name: 'Copy' })).toBeVisible();
   await expect(page.locator('article[aria-label="You"]').first()).toContainText('Factorise x^2 + 3x');
@@ -76,7 +76,7 @@ test('an enrolled adult asks a question: an adult confirmation first, a streamed
 
   // A follow-up in the same chat needs no confirmation.
   await ask(page, 'and x^2 - 9?');
-  await expect(page.locator('article[aria-label="Study Buddy"]')).toHaveCount(2);
+  await expect(page.locator('article[aria-label="LearnThrive AI"]')).toHaveCount(2);
 
   // Nothing is kept in the browser, and only the session cookies exist.
   expect(await page.evaluate(() => [localStorage.length, sessionStorage.length])).toEqual([0, 0]);
@@ -87,7 +87,7 @@ test('Stop ends a long answer and keeps what was shown', async ({ page }) => {
   await enrolled(page);
   await open(page);
   await ask(page, '[slow] go on', { first: true });
-  const answer = page.locator('article[aria-label="Study Buddy"]').first();
+  const answer = page.locator('article[aria-label="LearnThrive AI"]').first();
   await expect(answer).toContainText('Step 1 of the long working.');
   await page.getByRole('button', { name: 'Stop' }).click();
   await expect(page.getByRole('button', { name: 'Stop' })).toHaveCount(0);
@@ -96,19 +96,19 @@ test('Stop ends a long answer and keeps what was shown', async ({ page }) => {
   expect(kept).not.toContain('Step 80');
   await page.reload();
   await page.getByRole('button', { name: /go on/ }).first().click();
-  await expect(page.locator('article[aria-label="Study Buddy"]').first()).toContainText('Step 1 of the long working.');
+  await expect(page.locator('article[aria-label="LearnThrive AI"]').first()).toContainText('Step 1 of the long working.');
 });
 
 test('safeguarding and blocked messages get the fixed replies, and personal details are not kept', async ({ page }) => {
   await enrolled(page);
   await open(page);
   await ask(page, 'I want to die', { first: true });
-  const reply = page.locator('article[aria-label="Study Buddy"]').first();
+  const reply = page.locator('article[aria-label="LearnThrive AI"]').first();
   await expect(reply).toContainText('Childline');
   await expect(reply).toContainText('0800 1111');
   await expect(reply).toContainText('999');
   await ask(page, 'my number is 07700 900123');
-  await expect(page.locator('article[aria-label="Study Buddy"]').nth(1)).toContainText('do not share personal details');
+  await expect(page.locator('article[aria-label="LearnThrive AI"]').nth(1)).toContainText('do not share personal details');
   await page.locator('aside').getByRole('button', { name: 'New chat', exact: true }).first().click();
   const sessions = await page.request.get('/api/assistant/sessions');
   const list = (await sessions.json()).sessions as Array<{ id: string; title: string }>;
@@ -128,7 +128,7 @@ test('a photo is attached, uploaded and seen by the model; a bad file says why',
   await expect(page.getByText('working.jpg', { exact: true })).toBeVisible();
   await page.getByLabel('Your message').fill('Is this right?');
   await page.getByRole('button', { name: /send/i }).click();
-  await expect(page.locator('article[aria-label="Study Buddy"]').first()).toContainText('I can see your photo.');
+  await expect(page.locator('article[aria-label="LearnThrive AI"]').first()).toContainText('I can see your photo.');
   // What was sent stays in the message, above the words, and opens larger.
   const sent = page.locator('article[aria-label="You"]').first();
   await expect(sent.getByRole('list', { name: 'What you sent' }).locator('img')).toBeVisible();
@@ -175,7 +175,7 @@ test('the screen has no horizontal scroll at 360px and talks only to this site',
   await enrolled(page);
   await open(page);
   await ask(page, 'Hello', { first: true });
-  await expect(page.locator('article[aria-label="Study Buddy"]').first()).toContainText('Good question');
+  await expect(page.locator('article[aria-label="LearnThrive AI"]').first()).toContainText('Good question');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   expect([...hosts]).toEqual(['localhost:3101']);
 });
@@ -216,7 +216,7 @@ test('on a phone the navigation is a drawer: it opens, keeps its links and the c
   const menu = page.getByRole('button', { name: 'Open navigation' });
   await menu.click();
   const nav = page.getByRole('dialog', { name: 'Navigation' }).getByRole('navigation', { name: 'Main navigation' });
-  await expect(nav.getByRole('link', { name: 'Study Buddy' })).toHaveAttribute('aria-current', 'page');
+  await expect(nav.getByRole('link', { name: 'LearnThrive AI' })).toHaveAttribute('aria-current', 'page');
   await expect(page.getByRole('region', { name: 'Your chats' }).getByRole('button', { name: 'First phone question', exact: true })).toBeVisible();
   await expectAxeClean(page, 'study buddy, phone drawer');
   await page.keyboard.press('Escape');
@@ -244,7 +244,7 @@ test('two files picked together for a new chat both reach the question (they use
   const body = JSON.parse((await sent).postData()!) as { fileIds: string[]; sessionId: string | null };
   expect(body.fileIds).toHaveLength(2);
   expect(body.sessionId).toBeTruthy();
-  await expect(page.locator('article[aria-label="Study Buddy"]').first()).toContainText('I can see your photo.');
+  await expect(page.locator('article[aria-label="LearnThrive AI"]').first()).toContainText('I can see your photo.');
   const sessions = (await (await page.request.get('/api/assistant/sessions')).json()).sessions as unknown[];
   expect(sessions).toHaveLength(1);
 });
@@ -257,7 +257,7 @@ test('reading an older message is not interrupted by a streaming answer, and "La
   await expect(page.getByRole('button', { name: 'Copy' })).toBeVisible();
   await ask(page, '[slow] go on');
   const log = page.getByRole('log', { name: 'Conversation' });
-  await expect(page.locator('article[aria-label="Study Buddy"]').nth(1)).toContainText('Step 3');
+  await expect(page.locator('article[aria-label="LearnThrive AI"]').nth(1)).toContainText('Step 3');
   await log.evaluate((el) => el.scrollTo({ top: 0 }));
   await page.waitForTimeout(600);
   expect(await log.evaluate((el) => el.scrollTop)).toBeLessThan(50);
@@ -271,7 +271,7 @@ test('long equations and code scroll inside the answer at 320px; the page never 
   await enrolled(page);
   await open(page);
   await ask(page, '[long] show me', { first: true });
-  const answer = page.locator('article[aria-label="Study Buddy"]').first();
+  const answer = page.locator('article[aria-label="LearnThrive AI"]').first();
   await expect(answer.locator('.katex-display')).toBeVisible();
   await expect(answer.locator('ol li')).toHaveCount(3);
   await expect(answer.locator('pre')).toBeVisible();
