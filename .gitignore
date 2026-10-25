@@ -59,3 +59,5 @@ LearnThrive_Study_Buddy_Master_Prompt.md
 LearnThrive_Ollama_Three_Model_Claude_Code_Prompt.md
 LearnThrive_Production_Completion_Claude_Code_Prompt.md
 LearnThrive_Study_Buddy_Fixes_Claude_Prompt.md
+LearnThrive_Study_Buddy_Finish_Brief_Claude_Prompt.md
+.gitignore
