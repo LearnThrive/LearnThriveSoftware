@@ -6,8 +6,10 @@ import { OllamaEmbeddingProvider, type EmbeddingProvider } from "./embeddings";
 import { Crawl4aiClient } from "./research/crawl4ai";
 import { SearxngClient } from "./research/searxng";
 import { ResearchService } from "./research/verify";
-import { buildProvider } from "./providers";
+import { modelLabSettings } from "./models";
+import { buildHostedProvider, buildProvider } from "./providers";
 import { GenerationQueue } from "./queue";
+import type { ModelLab } from "./selection";
 import type { SafeguardingFlag } from "./service";
 import { isWarmable, type ChatProvider } from "./types";
 import { warmOnce } from "./warmup";
@@ -27,6 +29,20 @@ export interface AssistantRuntime {
   /** Web research through SearXNG. Always present: if the instance does not answer, a turn says what could not be checked. */
   research: ResearchService;
   flag: ((flag: SafeguardingFlag) => Promise<void>) | undefined;
+  /** The developer model picker (selection.ts): null where it is not offered (production, no key, no models enabled). */
+  lab: ModelLab | null;
+}
+
+/** The picker's hosted providers, one per enabled model, built once. Null when the picker is not offered on this server. */
+export function buildModelLab(config: AssistantConfig, env: Env = process.env, fetchImpl?: typeof fetch): ModelLab | null {
+  const settings = modelLabSettings(env, config.providers);
+  if (!settings.available) return null;
+  const providers = new Map<string, ChatProvider>();
+  for (const profile of settings.models) {
+    const provider = buildHostedProvider(profile, env, { reasoningTokens: settings.reasoningTokens, fetch: fetchImpl });
+    if (provider) providers.set(profile.choice, provider);
+  }
+  return providers.size ? { settings, providers } : null;
 }
 
 const g = globalThis as unknown as { __learnthriveAssistant?: AssistantRuntime };
@@ -94,6 +110,7 @@ export function assistantRuntime(env: Env = process.env): AssistantRuntime | nul
     decision,
     research,
     flag,
+    lab: buildModelLab(config, env),
   };
   // Warm the tutor and the helpers once, in the background: the first question should not pay for a cold load. The manager
   // deduplicates, so a hot reload or two requests cannot start two loads.

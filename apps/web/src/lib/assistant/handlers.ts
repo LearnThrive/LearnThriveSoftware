@@ -7,8 +7,10 @@ import { jsonResponse, logOutcome, originAllowed, parseMultipart, readBodyLimite
 import { siteConfig } from "@/lib/site";
 import { assistantAvailability, assistantConfig, paperMarkerEnabled, paperTutorEnabled } from "./config";
 import { moderateInput } from "./moderation";
+import { modelLabel } from "./models";
 import { ADULT_ACKNOWLEDGEMENT, ADULT_ACK_VERSION } from "./prompt";
 import type { AssistantRuntime } from "./runtime";
+import { mayChooseModel, pickerChoices, pickerScope, resolveSelection } from "./selection";
 import { sendMessage, type ChatEvent } from "./service";
 import { UPLOAD_LIMITS, inspectChatUpload } from "./uploads";
 import { voiceClosed, type VoiceRuntime } from "./voice";
@@ -41,9 +43,46 @@ export interface AssistantDeps {
   now?: () => Date;
 }
 
-export type Reason = "learner_unavailable" | "consent_needed" | "unavailable" | "voice_unavailable" | "bad_audio" | "signed_out" | "adult_required" | "no_access" | "adult_confirmation" | "bad_request" | "too_large" | "not_found" | "too_many_files" | "rate_limited";
+export type Reason =
+  | "learner_unavailable"
+  | "consent_needed"
+  | "unavailable"
+  | "voice_unavailable"
+  | "bad_audio"
+  | "signed_out"
+  | "adult_required"
+  | "no_access"
+  | "adult_confirmation"
+  | "bad_request"
+  | "too_large"
+  | "not_found"
+  | "too_many_files"
+  | "rate_limited"
+  | "model_not_allowed"
+  | "bad_model"
+  | "model_unavailable"
+  | "uploads_not_sent";
 
-const STATUS: Record<Reason, number> = { learner_unavailable: 403, consent_needed: 403, unavailable: 503, voice_unavailable: 503, bad_audio: 422, signed_out: 401, adult_required: 403, no_access: 403, adult_confirmation: 422, bad_request: 400, too_large: 413, not_found: 404, too_many_files: 422, rate_limited: 429 };
+const STATUS: Record<Reason, number> = {
+  learner_unavailable: 403,
+  consent_needed: 403,
+  unavailable: 503,
+  voice_unavailable: 503,
+  bad_audio: 422,
+  signed_out: 401,
+  adult_required: 403,
+  no_access: 403,
+  adult_confirmation: 422,
+  bad_request: 400,
+  too_large: 413,
+  not_found: 404,
+  too_many_files: 422,
+  rate_limited: 429,
+  model_not_allowed: 403,
+  bad_model: 400,
+  model_unavailable: 503,
+  uploads_not_sent: 422,
+};
 
 const MESSAGE: Record<Reason, string> = {
   learner_unavailable: "LearnThrive AI is not available for this learner right now. Please ask your parent or guardian.",
@@ -60,6 +99,10 @@ const MESSAGE: Record<Reason, string> = {
   not_found: "We could not find that.",
   too_many_files: `You can attach at most ${UPLOAD_LIMITS.filesPerMessage} files to a question.`,
   rate_limited: "Too many requests. Please wait a little.",
+  model_not_allowed: "Choosing the AI model is not available for this account.",
+  bad_model: "That AI model is not one that can be chosen here.",
+  model_unavailable: "That AI model is not available right now. Choose another one.",
+  uploads_not_sent: "Files are not sent to this trial model. Remove the file, or switch to the local model to use it.",
 };
 
 export const refuse = (reason: Reason, extra: Record<string, string> = {}) => jsonResponse(STATUS[reason], { code: reason, error: MESSAGE[reason] }, { "Cache-Control": "no-store", ...extra });
@@ -131,6 +174,17 @@ export async function handleChat(request: Request, deps: AssistantDeps): Promise
   const sessionId = typeof raw.sessionId === "string" && raw.sessionId ? raw.sessionId : null;
   if (sessionId && !UUID.test(sessionId)) return refuse("bad_request");
   const fileIds = Array.isArray(raw.fileIds) ? raw.fileIds.filter((id): id is string => typeof id === "string" && UUID.test(id)).slice(0, UPLOAD_LIMITS.filesPerMessage) : [];
+  // A request that names a model is checked here, on the server, every time: who is asking, and whether it is a choice offered here. Refused
+  // outright otherwise (never quietly answered by another model), before anything is recorded or sent.
+  const selection = resolveSelection({ requested: raw.model, actor: g.actor, lab: g.assistant.lab ?? null, config: g.assistant.config, provider: g.assistant.provider, hosted: g.assistant.hosted });
+  if (!selection.ok) {
+    logOutcome("assistant-chat", selection.reason);
+    return refuse(selection.reason);
+  }
+  if (fileIds.length && !selection.target.uploads) {
+    logOutcome("assistant-chat", "uploads_not_sent");
+    return refuse("uploads_not_sent");
+  }
   const minors = g.assistant.config.minorsApproved;
   const adultAck = raw.adultAck === true;
   if (!sessionId && !minors) {
@@ -151,6 +205,7 @@ ${ADULT_ACKNOWLEDGEMENT}`).digest("hex"), at: (deps.now ?? (() => new Date()))()
       research: g.assistant.research,
       flag: g.assistant.flag,
       hosted: g.assistant.hosted,
+      target: selection.target,
       now: deps.now,
       log: (outcome, details) => logOutcome("assistant-chat", outcome, details),
     },
@@ -251,7 +306,20 @@ export async function handleSession(request: Request, deps: AssistantDeps, sessi
   const files = await g.rt.store.chat.listFiles(g.owner, sessionId);
   // What each message carried, so a reopened chat still shows the photos and documents (fetched from /api/assistant/files/:id).
   const carried = (messageId: string) => files.filter((f) => f.messageId === messageId).map((f) => ({ id: f.id, contentType: f.contentType, bytes: f.bytes }));
-  return jsonResponse(200, { id: session.id, title: session.title, messages: messages.map((m) => ({ id: m.id, role: m.role, content: m.content, createdAt: m.createdAt.toISOString(), ...(m.role === "user" && carried(m.id).length > 0 ? { files: carried(m.id) } : {}) })) }, { "Cache-Control": "no-store" });
+  // Which model wrote an answer is shown only to someone who may choose models (the developer evaluating them), never to a student.
+  const labels = mayChooseModel(g.actor, g.assistant.lab ?? null);
+  return jsonResponse(
+    200,
+    {
+      id: session.id,
+      title: session.title,
+      messages: messages.map((m) => {
+        const answeredBy = labels && m.role === "assistant" ? modelLabel(m.generatedBy) : null;
+        return { id: m.id, role: m.role, content: m.content, createdAt: m.createdAt.toISOString(), ...(m.role === "user" && carried(m.id).length > 0 ? { files: carried(m.id) } : {}), ...(answeredBy ? { model: answeredBy } : {}) };
+      }),
+    },
+    { "Cache-Control": "no-store" },
+  );
 }
 
 export async function handleDeleteAll(request: Request, deps: AssistantDeps): Promise<Response> {
@@ -268,6 +336,16 @@ export async function handleExport(request: Request, deps: AssistantDeps): Promi
   const data = await g.rt.store.chat.exportAll(g.owner, (deps.now ?? (() => new Date()))());
   logOutcome("assistant-export", "sent", { chats: data.sessions.length });
   return new Response(JSON.stringify(data, null, 2), { status: 200, headers: { "Content-Type": "application/json; charset=utf-8", "Content-Disposition": 'attachment; filename="study-buddy-export.json"', "Cache-Control": "no-store" } });
+}
+
+/** A hosted model's readiness, re-asked at most once a minute: opening the page should not list NVIDIA's catalogue every time. */
+const readiness = new Map<string, { at: number; ok: boolean; detail: string }>();
+async function choiceHealth(choice: string, provider: { health(signal?: AbortSignal): Promise<{ ok: boolean; detail: string }> }): Promise<{ ok: boolean; detail: string }> {
+  const known = readiness.get(choice);
+  if (known && Date.now() - known.at < 60_000) return known;
+  const h = await provider.health(AbortSignal.timeout(4000)).catch(() => ({ ok: false, detail: "unreachable" }));
+  readiness.set(choice, { at: Date.now(), ...h });
+  return h;
 }
 
 /** Whether Study Buddy is open for this visitor, so the page can say why not. Reveals nothing about who is asking. */
@@ -288,11 +366,26 @@ export async function handleStatus(request: Request, deps: AssistantDeps): Promi
     config.decision.enabled ? helper(g.assistant.decision) : false,
   ]);
   const voice = deps.voice && !voiceClosed(env, true) ? await deps.voice.health().catch(() => false) : false;
+  // The developer's model picker: the choices, whether each answers now (a model listing, no generation), and an opaque key for the
+  // browser to keep this account's last choice under. Absent for everyone who may not choose.
+  const lab = g.assistant.lab ?? null;
+  const picker = mayChooseModel(g.actor, lab)
+    ? await Promise.all(
+        pickerChoices(lab, config).map(async (c) => {
+          if (c.id === "local") return { ...c, ready: health.ok, detail: health.ok ? null : health.detail };
+          const h = await choiceHealth(c.id, lab!.providers.get(c.id)!);
+          return { ...c, ready: h.ok, detail: h.ok ? null : h.detail };
+        }),
+      )
+    : null;
+  // A developer whose local tutor is down can still use a hosted model, so the page opens when any choice answers.
+  const usable = health.ok || Boolean(picker?.some((c) => c.ready));
   return jsonResponse(
     200,
     {
-      open: health.ok,
-      reason: health.ok ? null : health.detail,
+      open: usable,
+      reason: usable ? null : health.detail,
+      ...(picker ? { models: { choices: picker, default: picker.find((c) => c.ready && c.id !== "local")?.id ?? picker.find((c) => c.ready)?.id ?? picker[0]?.id ?? null, scope: pickerScope(g.actor.profileId), uploads: lab!.settings.uploads } } : {}),
       voice,
       paperTutor: paperTutorEnabled(env),
       paperMarker: paperMarkerEnabled(env),

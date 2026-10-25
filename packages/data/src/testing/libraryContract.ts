@@ -454,6 +454,17 @@ export function libraryContract(name: string, make: () => Promise<{ harness: Con
       assert.deepEqual((await store.chat.listSessions(own({ clientId }))).slice(0, 2).map((x) => x.id), [other.id, s.id], "newest activity first");
     });
 
+    test("chat: an answer keeps the model that wrote it; a question and an ordinary answer carry none", async () => {
+      const now = new Date();
+      const { clientId } = await family();
+      const s = await store.chat.createSession(own({ clientId }), {}, now);
+      await store.chat.appendMessage(own({ clientId }), s.id, "user", "question", now, { generatedBy: "nim:should-not-stick" });
+      await store.chat.appendMessage(own({ clientId }), s.id, "assistant", "picked", now, { generatedBy: "nim:deepseek-ai/deepseek-v4.1-flash" });
+      await store.chat.appendMessage(own({ clientId }), s.id, "assistant", "ordinary", now);
+      const listed = await store.chat.listMessages(own({ clientId }), s.id);
+      assert.deepEqual(listed.map((m) => m.generatedBy ?? null), [null, "nim:deepseek-ai/deepseek-v4.1-flash", null]);
+    });
+
     test("chat: uploads expire in 7 days, attach once, and only to the family's own message", async () => {
       const now = new Date();
       const a = await family();

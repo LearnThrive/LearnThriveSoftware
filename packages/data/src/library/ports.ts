@@ -1,4 +1,4 @@
-import type { ChatExport, ChatFileChunkInput, ChatFileChunkRecord, ChatFileInput, ChatFileReading, ChatOwner, ChatFileRecord, ChatMessageRecord, ChatRole, ChatSessionRecord, PurgeResult } from "./chat";
+import type { ChatExport, ChatFileChunkInput, ChatFileChunkRecord, ChatFileInput, ChatFileReading, ChatOwner, ChatFileRecord, ChatMessageMeta, ChatMessageRecord, ChatRole, ChatSessionRecord, PurgeResult } from "./chat";
 import type { IdentityRepository } from "./identity";
 import type { PaperJobRepository } from "./papers";
 import type { AdminGrantInput, AdminGrantRecord, ClaimResult, EntitlementWindow, SubscriptionInput, SubscriptionRecord } from "./billing";
@@ -125,7 +125,7 @@ export interface ChatRepository {
   getSession(owner: ChatOwner, sessionId: string): Promise<ChatSessionRecord | null>;
   listMessages(owner: ChatOwner, sessionId: string): Promise<ChatMessageRecord[]>;
   /** Appends a message, moves the chat's last activity and its deletion date (30 days from now). Throws if it is not this owner's chat. */
-  appendMessage(owner: ChatOwner, sessionId: string, role: ChatRole, content: string, now: Date): Promise<ChatMessageRecord>;
+  appendMessage(owner: ChatOwner, sessionId: string, role: ChatRole, content: string, now: Date, meta?: ChatMessageMeta): Promise<ChatMessageRecord>;
   addFile(owner: ChatOwner, sessionId: string, file: ChatFileInput, now: Date): Promise<ChatFileRecord>;
   /** Attaches uploaded files (still unattached) to the message that used them. Returns how many were attached. */
   attachFiles(owner: ChatOwner, sessionId: string, fileIds: string[], messageId: string): Promise<number>;

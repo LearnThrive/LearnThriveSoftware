@@ -14,7 +14,7 @@ The assistant is an AI, says so, and is a second line, never the only one. In or
    - personal details (phone, address, email), prompt injection, adult content and "write my coursework" are turned away with a fixed reply.
 3. Uploads (`uploads.ts`, `documents.ts`): photos are decoded in plain JavaScript, turned upright from their EXIF orientation, shrunk and re-encoded with **no metadata at all**. PDFs are read with pdf.js: the text of each page in reading order, labelled with its page number, with powers and subscripts kept (`x^5`); a page with no usable text, a picture or stacked maths (fractions) is also drawn as a picture for the model, up to 3 pictures a message, the pages the question names first. A password-locked, damaged, blank or too-slow PDF gets its own message, and the model is told what it could not see so it never invents it. A PDF that is only restricted (copy or print, an empty open password, as many exam-board PDFs are) is read normally; scripts and embedded files are refused. At most 3 files, 8 MB each, 15 MB and 20 pages for a PDF. HEIC is refused with a message, not converted. A follow-up question in the same chat still has the last files, but not their pictures: what the document said is stored once and reused, and only an explicit "look at the diagram on page 2" re-renders one page (three-model brief, section 11). `npm run documents:check` runs every fixture in `apps/web/tests/fixtures/documents` through the real model.
 4. A FIFO queue in front of the model (`ASSISTANT_CONCURRENCY`, default 1: one GPU), then the provider's stream passes through the **output guard** sentence by sentence (a leaked system prompt, a phone number, adult words are stopped mid-answer and replaced by a fixed line).
-5. The answer is stored with the chat. Nothing is kept in the browser (no cookies besides the account session, no `localStorage`).
+5. The answer is stored with the chat. Nothing is kept in the browser (no cookies besides the account session, no `localStorage`). The one exception is the developer model picker below: for an administrator who may use it, the id of the last model chosen (`deepseek-v4.1-flash`, say) is kept under an opaque per-account key. Students never have it.
 
 The system prompt is hints-first: it guides, asks the pupil to try the next step, and gives a final answer when the pupil says they have finished and want to check. It also carries a canary token; the output guard stops any answer that contains it.
 
@@ -40,7 +40,43 @@ Without a GPU or Ollama, `ASSISTANT_PROVIDER=mock` runs a scripted model (this i
 
 NVIDIA's hosted catalogue (`ASSISTANT_PROVIDER=nim`, key in `NVIDIA_API_KEY`) is for **evaluation with synthetic prompts only**. It is a free trial with request limits, only some listed models are callable from an account (the others answer 404), and models are retired without much notice (two were already gone, HTTP 410, when the benchmark ran). It is never used in production and never receives real student content; `config.ts` refuses it in production.
 
-`ASSISTANT_PROVIDER` may be a comma list (`ollama,nim`): an ordered fallback chain, development only.
+`ASSISTANT_PROVIDER` may be a comma list (`ollama,nim`): an ordered fallback chain, development only. Each provider in a chain sends **its own** model names (`ASSISTANT_MODEL` belongs to Ollama, `ASSISTANT_NIM_MODEL` to NIM): an OpenAI-compatible provider ignores a model name that is not its own, so an Ollama tag can never reach NVIDIA. Before 25 October 2026 the service passed `ASSISTANT_MODEL` to whichever provider answered, so a `nim` request could name `bonsai-2:9b`.
+
+## Model picker (developer evaluation of hosted models)
+
+A private way for the people building LearnThrive to compare two hosted reasoning models inside Study Buddy itself. It is **not** a student feature, and the free NVIDIA trial behind it is **not** production-ready or cleared for real student data.
+
+| Choice | NVIDIA model id | What the profile does (`src/lib/assistant/models.ts`) |
+| --- | --- | --- |
+| DeepSeek V4.1 Flash | `deepseek-ai/deepseek-v4.1-flash` | `chat_template_kwargs: { thinking, reasoning_effort }`: off for ordinary chat, a low or high effort for sourced or hard questions. The model card documents a numeric effort from 1 to 100; NVIDIA's V4 example uses a named one. The numeric form is tried first; if the endpoint refuses it (HTTP 400), the named form is tried, then the plain request, and the form that worked is remembered for the rest of the process. Temperature 1.0, top_p 0.95 (model card). Reasoning allowance 12,000 tokens on top of the answer. |
+| Step 5 Preview | `stepfun-ai/step-5-preview` | Always reasons: the documented checkpoint keeps reasoning on even when `enable_thinking=false` is sent, so that flag is never sent or relied on. `reasoning_effort` is sent (low for ordinary chat); its 16,000-token reasoning allowance is always added to `max_tokens`. Temperature 1.0, top_p 0.95. |
+| Local model | the configured `ASSISTANT_MODEL` | Listed only when the default provider is Ollama. |
+
+**Who sees it.** The picker appears, and a chat request may name a model, only when **all** of these hold, checked on the server on every request (`selection.ts`): a development server (never `NODE_ENV=production`), `NVIDIA_API_KEY` set, at least one model in `ASSISTANT_NIM_MODELS`, `ASSISTANT_MODEL_PICKER` not `off`, and the signed-in account is an **ADMIN acting as themselves** (not a tutor, parent, learner, or anyone viewing as a learner). A request from anyone else that names a model is refused with 403 `model_not_allowed`; an unknown choice is refused with 400 `bad_model`. The page sends a choice id, never a model name or an address, and the server maps it through the built-in table. Hiding the button is not the permission.
+
+**What changes with the choice.** Only the model that generates the answer, its token allowance and its time budgets. Subject detection, SearXNG and Crawl4AI research, quotation and claim checks, the calculation checks, safeguarding, moderation, the output guard, history and formatting are the same code for every choice. Searches and pages are cached for an hour, so asking the same question of the second model reuses the same evidence. One question makes requests to the chosen model only (more only for a tool round or a repair, by the same model). Nothing ever asks both.
+
+**Switching.** The picker sits in the chat header. It is disabled while an answer is arriving, so a model never changes part-way through one; a change applies to the next question. The conversation carries on across a switch, and earlier answers keep their own label. Each answer shows **"Answered by DeepSeek V4.1 Flash"** (or Step 5 Preview), taken from the model the provider reported when it finished, and stored with the message (`chat_messages.generated_by`, migration 0015), so a reopened chat keeps its labels. Copy includes the label. Only an account that may choose sees the labels.
+
+**Readiness.** The picker marks a model that is not answering (a red dot and the reason). The check is NVIDIA's model listing, which costs no generation and is re-asked at most once a minute; that listing does not need a valid key, so a refused key shows up on the first question, not before it.
+
+**Failures are reported, not hidden.** A chosen model that fails is never answered by another model. The page says which model failed and why (`unauthorised`: the key was refused; `model_missing`: NVIDIA does not list it for that key; rate limited, with the wait; `reasoning_exhausted`: it spent its allowance thinking and wrote no answer). Hidden reasoning (`reasoning_content` or `reasoning` on the stream) is never shown, stored or counted as an answer: a stream with reasoning and no answer is an error, not an empty success.
+
+**Uploads.** Files are **not** sent to the trial models unless `ASSISTANT_NIM_UPLOADS=on` (synthetic test files only). With it off, a question with a new file is refused with a clear message, and an earlier upload in the chat is withheld and the model is told so. Both models' cards say they accept images; that is not verified here. The Paper Tutor and voice keep using the configured default provider.
+
+**Limits.** Per account per day: `ASSISTANT_NIM_DAILY_REQUESTS` (default 300) and `ASSISTANT_NIM_DAILY_TOKENS` (default 600,000 completion tokens, reasoning included), kept apart from the ordinary budget. The per-minute and per-day message caps still apply. A 429 is retried twice with backoff before the first token, never after.
+
+**Start it.** In `apps/web/.env.local` (never committed):
+
+```bash
+NVIDIA_API_KEY=<your key from build.nvidia.com>
+ASSISTANT_NIM_MODELS=deepseek-ai/deepseek-v4.1-flash,stepfun-ai/step-5-preview
+# optional: ASSISTANT_PROVIDER stays ollama, so "Local model" is a third choice
+```
+
+Then `npm run dev` from the repository root, and sign in as an administrator (on the in-memory backend, `admin@learnthrive.dev` from [DEVELOPMENT_ACCOUNTS.md](DEVELOPMENT_ACCOUNTS.md)). Changing the model in the picker needs no restart, and it does not restart SearXNG or Crawl4AI. If you use the local Supabase stack, apply migration 0015 first (`npx supabase migration up`, or `npm run supabase:reset` to rebuild).
+
+**Live check.** `npm run assistant:nim-smoke` (in `apps/web`) lists NVIDIA's catalogue, asks each model one tiny question and runs one tool round. It prints the model id actually sent, whether the stream finished, whether reasoning stayed out of the answer, and the usage. That is three short requests per model, and it proves the wiring, not the teaching. Comparing the quality of the two models is done by hand: nothing here scores or ranks them.
 
 ## Subject-aware answers, exam accuracy and web research
 
@@ -74,6 +110,11 @@ Study Buddy detects what the student is doing and for which exam, checks quotati
 | `ASSISTANT_MINORS_APPROVED` | `true` only after the safeguarding lead approves in writing | unset |
 | `ASSISTANT_SAFEGUARDING_EMAIL` | Where a safeguarding flag goes. Unset: the fixed reply is still given | unset |
 | `ASSISTANT_NIM_MODEL`, `ASSISTANT_NIM_VISION_MODEL` | Models used when the provider is `nim` | `meta/llama-3.2-11b-vision-instruct` |
+| `ASSISTANT_NIM_MODELS` | The models the developer picker offers (above): NVIDIA ids from the built-in table, comma separated. Unset: no picker | unset |
+| `ASSISTANT_MODEL_PICKER` | `off` hides the picker even when models are listed | on where allowed |
+| `ASSISTANT_NIM_DAILY_REQUESTS` / `ASSISTANT_NIM_DAILY_TOKENS` | The picker's per-account daily allowance on the hosted models | 300 / 600000 |
+| `ASSISTANT_NIM_UPLOADS` | `on` lets uploads be sent to the hosted trial models (synthetic files only) | off |
+| `ASSISTANT_NIM_REASONING_TOKENS` | One reasoning allowance for every hosted model | each model's own |
 | `PAPER_MARKER_ENABLED` | Checking a student's own completed paper (below). **Off everywhere unless exactly `true`**, and only where the Paper Tutor is on. | off |
 | `PAPER_TUTOR_ENABLED` | The Paper Tutor, inside Study Buddy's own switches. Development: on unless `false`. **Production: on only if exactly `true`.** | on (dev) / off (prod) |
 

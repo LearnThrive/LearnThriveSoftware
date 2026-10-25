@@ -552,12 +552,14 @@ export class InMemoryLibraryStore implements LibraryStore {
       if (!s || !this.owns(owner, s) || s.deletionRequestedAt) return [];
       return this.chatMessages.filter((m) => m.sessionId === sessionId).map((m) => ({ ...m }));
     },
-    appendMessage: async (owner, sessionId, role, content, now) => {
+    appendMessage: async (owner, sessionId, role, content, now, meta) => {
       const s = this.chatSessions.get(sessionId);
       if (!s || !this.owns(owner, s) || s.deletionRequestedAt) throw new Error("no such chat");
       const last = this.chatMessages.filter((m) => m.sessionId === sessionId).at(-1);
       const at = last && last.createdAt.getTime() >= now.getTime() ? new Date(last.createdAt.getTime() + 1) : now;
-      const message: ChatMessageRecord = { id: randomUUID(), sessionId, role, content, createdAt: at, deleteAfter: new Date(at.getTime() + CHAT_TEXT_DAYS * DAY_MS) };
+      // The same rule as the database's check: only an answer carries the model that wrote it, and only a bounded identifier.
+      const generatedBy = role === "assistant" && meta?.generatedBy ? meta.generatedBy.slice(0, 120) : null;
+      const message: ChatMessageRecord = { id: randomUUID(), sessionId, role, content, createdAt: at, deleteAfter: new Date(at.getTime() + CHAT_TEXT_DAYS * DAY_MS), generatedBy };
       this.chatMessages.push(message);
       s.lastActivityAt = at;
       s.deleteAfter = message.deleteAfter;

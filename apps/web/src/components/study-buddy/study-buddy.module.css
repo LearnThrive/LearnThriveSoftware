@@ -26,6 +26,8 @@
 .page {
   position: relative;
   display: grid;
+  /* One column that may be narrower than the header's unbroken subtitle: the subtitle ellipses instead of widening the page on a phone. */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100%;
   min-height: 0;
@@ -610,6 +612,208 @@
   color: var(--fg-accent);
 }
 
+/* ---- the developer model picker (ModelPicker.tsx): only for accounts the server lists choices for ---- */
+
+.barEnd {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.picker {
+  position: relative;
+  min-width: 0;
+}
+
+.pickerButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: min(16rem, 46vw);
+  min-height: 2.5rem;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-1);
+  color: var(--fg-strong);
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
+}
+
+.pickerButton:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.pickerButton:disabled {
+  color: var(--fg-muted);
+  cursor: not-allowed;
+}
+
+.pickerButton svg:first-child {
+  flex: none;
+  color: var(--fg-accent);
+}
+
+.pickerName {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pickerDot {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--fg-error);
+}
+
+.pickerChevron {
+  flex: none;
+  color: var(--fg-muted);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.pickerChevron[data-open] {
+  transform: rotate(180deg);
+}
+
+.pickerPanel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  display: grid;
+  gap: var(--space-2);
+  width: min(21rem, calc(100vw - 2 * var(--space-4)));
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-2);
+}
+
+.pickerHeading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: var(--text-small);
+  font-weight: 700;
+}
+
+.pickerList {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  outline: none;
+}
+
+.pickerOption {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.pickerOption[data-active] {
+  background: var(--surface-sunken);
+}
+
+.pickerList:focus-visible .pickerOption[data-active] {
+  border-color: var(--focus-colour);
+}
+
+.pickerOption[aria-selected="true"] {
+  background: var(--accent-soft);
+}
+
+.pickerRadio {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin-top: 0.125rem;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 50%;
+  color: var(--on-accent);
+}
+
+.pickerOption[aria-selected="true"] .pickerRadio {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.pickerText {
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+  font-size: var(--text-small);
+  line-height: 1.4;
+}
+
+.pickerText strong {
+  color: var(--fg-strong);
+}
+
+.pickerText span {
+  color: var(--fg-muted);
+}
+
+.pickerText .pickerWarn {
+  color: var(--fg-error);
+}
+
+.pickerNote {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.modelTag {
+  overflow: hidden;
+  min-width: 0;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  color: var(--fg-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 30rem) {
+  .pickerButton {
+    max-width: 44vw;
+    padding-inline: var(--space-2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pickerButton,
+  .pickerChevron {
+    transition: none;
+  }
+}
+
+.pickerButton:focus-visible,
 .display:focus-visible,
 .answer pre:focus-visible,
 .barButton:focus-visible,

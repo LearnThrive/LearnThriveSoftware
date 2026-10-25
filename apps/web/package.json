@@ -24,6 +24,7 @@
     "research:check": "node --import tsx scripts/research-check.mjs",
     "research:eval": "node --import tsx scripts/research-eval.mjs",
     "assistant:bench": "node --import tsx scripts/assistant-bench.mjs",
+    "assistant:nim-smoke": "node --import tsx scripts/nim-smoke.mjs",
     "paper:bench": "node --import tsx scripts/paper-bench.mjs",
     "documents:check": "node --import tsx scripts/document-check.mjs",
     "voice:dev": "uv run --project ../../services/voice python ../../services/voice/server.py",

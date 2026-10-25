@@ -15,6 +15,8 @@ import { finishStudy, planStudy, prepareStudy, type StudyPrep } from "./study";
 import { reviewAnswer } from "./gate";
 import type { ResearchService } from "./research/verify";
 import type { EmbeddingProvider } from "./embeddings";
+import { modelLabel } from "./models";
+import { defaultTarget, type GenerationTarget } from "./selection";
 
 /**
  * One question to Study Buddy, from the signed-in family's request to the stored answer (plan19 phase F, three-model brief).
@@ -32,7 +34,27 @@ import type { EmbeddingProvider } from "./embeddings";
  * reported, but they do not stop the clock on the first visible word. Nothing the person typed, uploaded or was answered is ever
  * logged: `log` receives counters and reason codes only.
  */
-export type ChatErrorCode = "empty" | "too_long" | "rate_limited_minute" | "rate_limited_day" | "busy" | "unavailable" | "timeout" | "budget" | "vision_unavailable" | "no_chat" | "aborted";
+/**
+ * `no_answer`: the model finished without anything to read (a reasoning model that spent its allowance thinking). The `model_*` codes are only
+ * used for a turn whose model a developer chose, so the picker can say which model failed and how: an ordinary turn says `unavailable`.
+ */
+export type ChatErrorCode =
+  | "empty"
+  | "too_long"
+  | "rate_limited_minute"
+  | "rate_limited_day"
+  | "busy"
+  | "unavailable"
+  | "timeout"
+  | "budget"
+  | "vision_unavailable"
+  | "no_chat"
+  | "aborted"
+  | "no_answer"
+  | "model_rate_limited"
+  | "model_unavailable"
+  | "model_budget"
+  | "uploads_not_sent";
 
 /** What the page may show while the server has evidence for it. Never a percentage. */
 export type ChatStatus = "preparing" | "reading" | "researching" | "verifying" | "thinking";
@@ -42,8 +64,10 @@ export type ChatEvent =
   | { type: "queued"; position: number }
   | { type: "status"; state: ChatStatus }
   | { type: "delta"; text: string }
-  | { type: "done"; messageId: string | null; provider: string | null; firstTokenMs: number | null }
-  | { type: "error"; code: ChatErrorCode; retryAfterSeconds?: number };
+  /** `model`: who answered, in words ("Step 5 Preview"), only for a turn whose model a developer chose. Taken from what the provider reported. */
+  | { type: "done"; messageId: string | null; provider: string | null; firstTokenMs: number | null; model?: string | null }
+  /** `model` and `detail` (a machine word such as `unauthorised` or `reasoning_exhausted`) only for a turn whose model a developer chose. */
+  | { type: "error"; code: ChatErrorCode; retryAfterSeconds?: number; model?: string | null; detail?: string };
 
 export interface SafeguardingFlag {
   reference: string;
@@ -71,6 +95,11 @@ export interface ChatServiceDeps {
   hosted?: boolean;
   /** Web research through SearXNG. Absent (tests): nothing is looked up and quotations are reported as unchecked. */
   research?: ResearchService | null;
+  /**
+   * What generates this turn (selection.ts): the provider, the model it is asked for, and that model's limits. Absent: the configured provider
+   * with the configured limits. Only the generation differs between targets: the research, checks, history and safeguards are the same.
+   */
+  target?: GenerationTarget;
 }
 
 export interface ChatInput {
@@ -92,6 +121,9 @@ const DAY_MS = 86_400_000;
 export const USAGE_MINUTE = "assistant_message_minute";
 export const USAGE_DAY = "assistant_message_day";
 export const USAGE_TOKENS_DAY = "assistant_token_day";
+/** A developer's hosted-model use (the picker): completion tokens and requests per account per day, kept apart from the ordinary budget. */
+export const USAGE_HOSTED_TOKENS_DAY = "assistant_hosted_token_day";
+export const USAGE_HOSTED_REQUESTS_DAY = "assistant_hosted_request_day";
 
 const windowStart = (now: Date, size: number) => new Date(Math.floor(now.getTime() / size) * size);
 
@@ -131,8 +163,22 @@ interface TurnTimings {
 
 const remaining = (deadline: number) => Math.max(1, deadline - Date.now());
 
+/**
+ * How hard a picked hosted model should reason for this turn: not at all for ordinary chat (the first word matters), lightly for a question
+ * answered from sources, fully for a hard problem. The provider turns this into the model's own controls (models.ts).
+ */
+export function hostedEffort(mode: "fast" | "verified" | "advanced"): { reasoning: boolean; think: "off" | "low" | "medium" | "high" } {
+  if (mode === "advanced") return { reasoning: true, think: "high" };
+  if (mode === "verified") return { reasoning: true, think: "low" };
+  return { reasoning: false, think: "off" };
+}
+
 export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): AsyncGenerator<ChatEvent> {
   const { store, config } = deps;
+  const target = deps.target ?? defaultTarget(config, deps.provider, deps.hosted === true);
+  const provider = target.provider;
+  // Only a turn whose model a developer chose names the model, and the provider's own failure words, in what the page is told.
+  const picked = target.choice !== null;
   const now = (deps.now ?? (() => new Date()))();
   const log = deps.log ?? (() => {});
   const text = input.text.replace(/\r\n/g, "\n").trim();
@@ -197,12 +243,24 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
   let uploadedText = "";
   let attachable = fileIds.length ? await store.chat.getUnattachedFiles(input.owner, sessionId, fileIds) : [];
   const fresh = attachable.length > 0;
+  // The route refuses this before anything streams (handlers.ts); this is the second wall, before a byte of the file is read.
+  if (fresh && !target.uploads) {
+    log("uploads_not_sent");
+    return void (yield { type: "error", code: "uploads_not_sent", model: target.label });
+  }
+  let withheld = false;
   if (!fresh) {
     const earlier = (await store.chat.listFiles(input.owner, sessionId)).filter((f) => f.messageId !== null);
     const last = earlier.at(-1)?.messageId;
     attachable = last ? earlier.filter((f) => f.messageId === last) : [];
+    // A model that may not receive uploads (a picked hosted model, by default) is not shown an earlier one either, and is told so.
+    if (attachable.length && !target.uploads) {
+      attachable = [];
+      withheld = true;
+    }
   }
-  const vision = attachable.length > 0 ? (await deps.provider.capabilities(config.visionModel ?? undefined)).vision : false;
+  if (withheld) uploadedText += `\n\n<uploaded-file withheld="true">Files uploaded earlier in this chat are not shared with this model. If the question depends on them, say you cannot see them.</uploaded-file>`;
+  const vision = attachable.length > 0 ? (await provider.capabilities(target.visionModel ?? undefined)).vision : false;
   const maxImages = vision ? config.images.perMessage : 0;
   const wantsPicture = /\b(photo|picture|image|diagram|drawing|look at|see (it|that|the)|show me|page\s*\d+)\b/i.test(text);
   // A fresh upload really is being decoded and read here, so saying so is evidence, not decoration. Once per turn.
@@ -316,7 +374,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
   // The history that fits in the context window, newest kept first.
   const userContent = (text || "Please look at the attached file.") + uploadedText + (retrieved.length ? describeHits(retrieved, fileNames) : "") + (study?.evidence ?? "");
   const systemPrompt = input.voice ? `${SYSTEM_PROMPT}\n\n${VOICE_PROMPT_ADDENDUM}` : SYSTEM_PROMPT + (study?.system ?? "");
-  const budgetChars = Math.max(2000, (config.contextSize - config.maxOutputTokens - approxTokens(systemPrompt) - approxTokens(userContent)) * 3.5);
+  const budgetChars = Math.max(2000, (target.contextSize - target.maxOutputTokens - approxTokens(systemPrompt) - approxTokens(userContent)) * 3.5);
   const kept: ProviderMessage[] = [];
   let used = 0;
   for (let i = history.length - 1; i >= 0; i -= 1) {
@@ -331,21 +389,52 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
   const userMessage = await store.chat.appendMessage(input.owner, sessionId, "user", text || "(attached a file)", now);
   if (fresh) await store.chat.attachFiles(input.owner, sessionId, attachable.map((f) => f.id), userMessage.id);
 
-  if (deps.hosted && (await store.chat.usageCount(input.owner.clientId, USAGE_TOKENS_DAY, day)) >= config.dailyTokenBudget) {
+  if (target.quota) {
+    // A developer's picked hosted model: its own daily allowance, in tokens and in requests, checked before a request is made.
+    const [tokens, requests] = await Promise.all([store.chat.usageCount(input.owner.clientId, USAGE_HOSTED_TOKENS_DAY, day), store.chat.usageCount(input.owner.clientId, USAGE_HOSTED_REQUESTS_DAY, day)]);
+    if (tokens >= target.quota.tokens || requests >= target.quota.requests) {
+      log("budget", { hosted: 1 });
+      yield { type: "error", code: "model_budget", model: target.label };
+      return;
+    }
+  } else if (target.hosted && (await store.chat.usageCount(input.owner.clientId, USAGE_TOKENS_DAY, day)) >= config.dailyTokenBudget) {
     log("budget");
     yield { type: "error", code: "budget" };
     return;
   }
 
+  // Every request to the provider goes through here, so a tool round or a repair is counted and charged like the first request.
+  const tokensKey = target.quota ? USAGE_HOSTED_TOKENS_DAY : USAGE_TOKENS_DAY;
+  const charge = async (completionTokens: number) => {
+    if (target.hosted && completionTokens > 0) await store.chat.incrementUsage(input.owner.clientId, tokensKey, day, completionTokens);
+  };
+  const generate = (prompt: readonly ProviderMessage[], options: Parameters<ChatProvider["stream"]>[1]) => {
+    if (target.quota) void store.chat.incrementUsage(input.owner.clientId, USAGE_HOSTED_REQUESTS_DAY, day, 1).catch(() => {});
+    return provider.stream(prompt, options);
+  };
+
   // ---- the turn ---------------------------------------------------------------------------------------------------
-  const stage: StageBudgets = stageBudgetsFor(config, images.length > 0);
+  const stage: StageBudgets = { ...stageBudgetsFor(config, images.length > 0), ...target.stages };
   const guard = new OutputGuard();
   let shown = "";
-  const st: { firstTokenMs: number | null; providerId: string | null; failure: ChatErrorCode | null; cutOff: boolean; timings: TurnTimings } = {
+  const st: {
+    firstTokenMs: number | null;
+    providerId: string | null;
+    /** The provider and model that reported finishing ("nim:deepseek-ai/deepseek-v4.1-flash"): what the answer is attributed to. */
+    generatedBy: string | null;
+    failure: ChatErrorCode | null;
+    failureDetail: string | undefined;
+    retryAfterSeconds: number | undefined;
+    cutOff: boolean;
+    timings: TurnTimings;
+  } = {
     firstTokenMs: null,
     cutOff: false,
     providerId: null,
+    generatedBy: null,
     failure: null,
+    failureDetail: undefined,
+    retryAfterSeconds: undefined,
     timings: { queueMs: 0, prepareMs: 0, firstActivityMs: null, firstAnswerMs: null, totalMs: 0, rounds: 0, tools: 0, metrics: null },
   };
   const queuedEvents: ChatEvent[] = [];
@@ -356,13 +445,14 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
   let heldUndelivered = gated;
 
   const stream = async function* (): AsyncGenerator<ChatEvent> {
-    const model = images.length && config.visionModel ? config.visionModel : config.model;
-    const caps = await deps.provider.capabilities(model);
+    // The target's own model names (a provider also refuses a name that is not its own, so a chain cannot pass one along).
+    const model = (images.length && target.visionModel ? target.visionModel : target.model) ?? undefined;
+    const caps = await provider.capabilities(model);
 
     // Prepare the model only when the server says it is not resident, and say so only then (evidence, not a guess).
-    if (isWarmable(deps.provider) && (await deps.provider.resident(model)) !== true) {
+    if (model && isWarmable(provider) && (await provider.resident(model)) !== true) {
       yield { type: "status", state: "preparing" };
-      const prepared = await warmOnce({ provider: deps.provider, model, contextSize: config.contextSize, keepAlive: config.keepAlive }, { signal: input.signal, budgetMs: stage.loadMs });
+      const prepared = await warmOnce({ provider, model, contextSize: config.contextSize, keepAlive: config.keepAlive }, { signal: input.signal, budgetMs: stage.loadMs });
       st.timings.prepareMs = Date.now() - enqueuedAt;
       log("prepared", { ok: prepared.ok ? 1 : 0, loadMs: prepared.loadMs ?? -1, detail: prepared.detail });
       if (!prepared.ok) {
@@ -372,7 +462,10 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
     }
 
     const tools = caps.toolUse && config.maxToolRounds > 0 ? toolsFor(study?.session) : [];
-    const thinking = thinkingFor(config.thinking, text, images.length > 0);
+    // A picked hosted model reasons by the turn's mode (fast chat, a sourced answer, a hard problem); the local tutor keeps its own policy.
+    const mode = study?.mode ?? (thinkingFor("auto", text, images.length > 0).reasoning ? "advanced" : "fast");
+    const thinking: { reasoning: boolean; think?: boolean | string } = target.profile ? hostedEffort(mode) : thinkingFor(config.thinking, text, images.length > 0);
+    let announcedThinking = false;
     const turnStartedAt = Date.now();
     const turnDeadline = turnStartedAt + stage.turnMs;
     const toolCtx = {
@@ -388,14 +481,14 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
     for (;;) {
       const calls: ProviderToolCall[] = [];
       const retryMessages: ProviderMessage[] = [];
-      for await (const chunk of deps.provider.stream(messages, {
+      for await (const chunk of generate(messages, {
         model,
         // Thinking spends output tokens: give it its own budget so the final answer is not cut off (measured in the benchmark).
         // The answer's limit plus, when the model may think, its own allowance (thinking and answer share one count), but never more than
         // the context window leaves once the prompt is in it, so the window is not overrun.
-        maxTokens: Math.max(256, Math.min(config.maxOutputTokens + (thinking.reasoning ? config.thinkingTokens : 0), config.contextSize - messages.reduce((n, m) => n + approxTokens(m.content), 0) - 64)),
+        maxTokens: Math.max(256, Math.min(target.maxOutputTokens + (thinking.reasoning ? target.thinkingTokens : 0), target.contextSize - messages.reduce((n, m) => n + approxTokens(m.content), 0) - 64)),
         temperature: 0.4,
-        contextSize: config.contextSize,
+        contextSize: target.contextSize,
         signal: input.signal,
         keepAlive: config.keepAlive,
         firstTokenTimeoutMs: Math.min(stage.firstActivityMs, remaining(turnDeadline)),
@@ -409,7 +502,10 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
         if (chunk.type === "activity") {
           if (st.timings.firstActivityMs === null) st.timings.firstActivityMs = Date.now() - turnStartedAt;
           // Activity is not the answer: report it once, do not touch the visible-answer clock.
-          if (chunk.kind === "thinking" && !shown && st.timings.firstAnswerMs === null) yield { type: "status", state: "thinking" };
+          if (chunk.kind === "thinking" && !announcedThinking && !shown && st.timings.firstAnswerMs === null) {
+            announcedThinking = true;
+            yield { type: "status", state: "thinking" };
+          }
           continue;
         }
         if (chunk.type === "tool_call") {
@@ -427,10 +523,11 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
           continue;
         }
         st.providerId = chunk.provider;
+        st.generatedBy = `${chunk.provider}:${chunk.model}`;
         st.firstTokenMs = chunk.stats.firstTokenMs;
         st.cutOff = chunk.cutOff === true;
         st.timings.metrics = chunk.metrics ?? null;
-        if (deps.hosted) await store.chat.incrementUsage(input.owner.clientId, USAGE_TOKENS_DAY, day, chunk.usage.completionTokens);
+        await charge(chunk.usage.completionTokens);
       }
 
       // A tool round only while nothing has been shown and the budget allows: a tool call after text would stitch two answers.
@@ -446,7 +543,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
         ]);
         st.timings.tools += 1;
         log("tool", { ok: outcome.ok ? 1 : 0, name: tools.some((t) => t.name === call.name) ? 1 : 0 });
-        retryMessages.push({ role: "tool", toolName: call.name, content: outcome.content });
+        retryMessages.push({ role: "tool", toolName: call.name, toolCallId: call.id, content: outcome.content });
       }
       messages.push({ role: "assistant", content: "", toolCalls: used }, ...retryMessages);
       if (Date.now() > turnDeadline) {
@@ -467,23 +564,24 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
         // A corrected rewrite from the model. Not allowed to think, never allowed to overrun the window: if it cannot fit, the draft is cut instead.
         const rewrite = async (instruction: string, draft: string): Promise<string> => {
           const prompt: ProviderMessage[] = [...messages, { role: "assistant", content: draft }, { role: "user", content: instruction }];
-          const room = config.contextSize - prompt.reduce((n, m) => n + approxTokens(m.content), 0) - 64;
+          const room = target.contextSize - prompt.reduce((n, m) => n + approxTokens(m.content), 0) - 64;
           if (room < approxTokens(draft) * 0.9) return draft;
           const again = new OutputGuard();
           let out = "";
           let cut = false;
           try {
-            for await (const c of deps.provider.stream(prompt, {
+            // The same target as the draft: a repair is never written by a different model.
+            for await (const c of generate(prompt, {
               model,
-              maxTokens: Math.min(config.maxOutputTokens, room),
+              maxTokens: Math.min(target.maxOutputTokens, room),
               temperature: 0.2,
-              contextSize: config.contextSize,
+              contextSize: target.contextSize,
               signal: input.signal,
               keepAlive: config.keepAlive,
               firstTokenTimeoutMs: stage.firstActivityMs,
               firstAnswerTimeoutMs: stage.firstAnswerMs,
               idleTimeoutMs: stage.idleMs,
-              totalTimeoutMs: Math.min(stage.turnMs, 120_000),
+              totalTimeoutMs: Math.min(stage.turnMs, target.profile ? 240_000 : 120_000),
               reasoning: false,
               think: false,
             })) {
@@ -491,7 +589,10 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
                 const s = again.push(c.text);
                 if (s) out += s;
                 if (again.stoppedFor) return draft;
-              } else if (c.type === "done" && c.cutOff) cut = true;
+              } else if (c.type === "done") {
+                if (c.cutOff) cut = true;
+                await charge(c.usage.completionTokens);
+              }
             }
             out += again.finish();
           } catch {
@@ -501,7 +602,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
         };
         let reviewed: Awaited<ReturnType<typeof reviewAnswer>> | null = null;
         try {
-          reviewed = await reviewAnswer(study, shown, { rewrite, maxRepairs: 2, deadlineMs: 90_000 });
+          reviewed = await reviewAnswer(study, shown, { rewrite, maxRepairs: 2, deadlineMs: target.profile ? 240_000 : 90_000 });
         } catch {
           reviewed = null;
         }
@@ -584,8 +685,22 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
     }
     if (crashed instanceof QueueAborted) st.failure = "aborted";
     else if (crashed instanceof ProviderError) {
-      st.failure = crashed.code === "timeout" ? "timeout" : crashed.code === "aborted" ? "aborted" : "unavailable";
-      log("provider_error", { code: crashed.code });
+      // The real failure, said plainly: never replaced by an answer from another model. A picked model's failure names the model and the cause.
+      st.failure =
+        crashed.code === "timeout"
+          ? "timeout"
+          : crashed.code === "aborted"
+            ? "aborted"
+            : crashed.code === "empty"
+              ? "no_answer"
+              : picked && crashed.code === "rate_limited"
+                ? "model_rate_limited"
+                : picked
+                  ? "model_unavailable"
+                  : "unavailable";
+      st.failureDetail = picked ? (crashed.detail ?? crashed.code) : undefined;
+      st.retryAfterSeconds = crashed.retryAfterMs ? Math.max(1, Math.ceil(crashed.retryAfterMs / 1000)) : undefined;
+      log("provider_error", { code: crashed.code, picked: picked ? 1 : 0 });
     } else if (crashed) throw crashed;
   } finally {
     // Whatever was shown is stored, even if the person stopped it or the model failed halfway.
@@ -626,11 +741,20 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
     shown += note;
     yield { type: "delta", text: note };
   }
+  // Who wrote it: what the provider reported when it finished. A picked hosted model is one provider (never a chain), so a reply it stopped
+  // part-way through is still truthfully its own; anything else without a report is left unattributed rather than guessed.
+  const generatedBy = picked ? (st.generatedBy ?? (target.profile ? `nim:${target.profile.model}` : null)) : null;
+  const answeredBy = picked ? (modelLabel(generatedBy) ?? null) : null;
   let messageId: string | null = null;
-  if (shown.trim()) messageId = (await store.chat.appendMessage(input.owner, sessionId, "assistant", shown, deps.now ? deps.now() : new Date())).id;
+  if (shown.trim()) messageId = (await store.chat.appendMessage(input.owner, sessionId, "assistant", shown, deps.now ? deps.now() : new Date(), generatedBy ? { generatedBy } : undefined)).id;
   if (st.failure && st.failure !== "aborted") {
-    yield { type: "error", code: st.failure };
+    yield {
+      type: "error",
+      code: st.failure,
+      ...(st.retryAfterSeconds && (st.failure === "model_rate_limited" || st.failure === "unavailable") ? { retryAfterSeconds: st.retryAfterSeconds } : {}),
+      ...(picked ? { model: answeredBy ?? target.label, ...(st.failureDetail ? { detail: st.failureDetail } : {}) } : {}),
+    };
     return;
   }
-  yield { type: "done", messageId, provider: st.providerId, firstTokenMs: st.firstTokenMs };
+  yield { type: "done", messageId, provider: st.providerId, firstTokenMs: st.firstTokenMs, ...(picked ? { model: answeredBy } : {}) };
 }

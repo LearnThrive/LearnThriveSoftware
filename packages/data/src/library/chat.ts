@@ -37,6 +37,14 @@ export interface ChatMessageRecord {
   content: string;
   createdAt: Date;
   deleteAfter: Date;
+  /** The provider and model that wrote an assistant message when a developer chose the model (0015_chat_message_model.sql). Null otherwise. */
+  generatedBy?: string | null;
+}
+
+/** Extra facts stored with a message. */
+export interface ChatMessageMeta {
+  /** Only for an assistant message: the provider and model that actually produced it ("nim:deepseek-ai/deepseek-v4.1-flash"). */
+  generatedBy?: string | null;
 }
 
 export interface ChatFileRecord {

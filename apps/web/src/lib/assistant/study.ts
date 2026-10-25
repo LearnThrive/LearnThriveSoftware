@@ -5,7 +5,7 @@ import { strategyBlock } from "./exam/strategies";
 import { defuseMarkers } from "./research/htmlText";
 import { groundTurn, groundingBlock, shouldGround, unsupportedNames, type Grounding } from "./research/ground";
 import { extractQuotations } from "./research/quotations";
-import type { GateResult } from "./gate";
+import { checkCalculations, type GateResult } from "./gate";
 import { claimedSpeaker } from "./research/playText";
 import { boardName, needsResearch, type QuoteStatus, type QuoteVerdict, type ResearchService, type ResearchSession } from "./research/verify";
 
@@ -38,7 +38,30 @@ export interface StudyPrep {
   frame: MarkFrame | null;
   material: string;
   question: string;
+  /** How much work this turn deserves (responseMode). */
+  mode: ResponseMode;
 }
+
+/**
+ * Fast: ordinary chat and simple questions, no reading and no held answer. Verified: a question answered from sources (grounded, or a quotation
+ * check). Advanced: a hard problem or a substantial exam task, where the model may reason fully and a STEM answer's working is checked before
+ * it is shown. Decided from the message, never from the model.
+ */
+export type ResponseMode = "fast" | "verified" | "advanced";
+
+const HARD = /\b(prove|show that|hence|simultaneous|quadratic|derive|differentiate|integrate|justify|explain why|deduce|working backwards|stoichiometr\w*|limiting reagent|percentage yield|moles? of|resultant|projectile|suvat|moments?)\b/i;
+const STEM: ReadonlySet<string> = new Set(["maths", "physics", "chemistry"]);
+
+export function responseMode(ctx: Pick<StudyContext, "subject" | "activity" | "marks">, text: string, willGround: boolean): ResponseMode {
+  const numeric = /\d/.test(text) && /\b(solve|find|calculate|work out|evaluate|simplify|determine)\b/i.test(text);
+  const hard = HARD.test(text) || (text.length > 180 && numeric) || (ctx.marks ?? 0) >= 6 || ctx.activity === "mark_essay" || (ctx.activity === "exam_answer" && (ctx.marks ?? 0) >= 4);
+  if (hard) return "advanced";
+  if (willGround || ctx.activity === "quote_check") return "verified";
+  return "fast";
+}
+
+/** A STEM answer to a hard problem is held until its working has been checked by calculation (gate.ts). */
+export const holdsWorking = (ctx: Pick<StudyContext, "subject" | "activity">, mode: ResponseMode): boolean => mode === "advanced" && (STEM.has(ctx.subject ?? "") || ctx.activity === "solve");
 
 export interface StudyInput {
   /** What the student typed. */
@@ -132,7 +155,9 @@ export async function prepareStudy(input: StudyInput): Promise<StudyPrep> {
     : "");
 
   const frame = ctx.activity === "mark_essay" ? markFrame(ctx, input.material) : null;
-  return { ctx, system: strategyBlock(ctx, { researchAvailable: Boolean(session), essay: input.material }), evidence, session, verdicts, grounding, willGround, gated: Boolean(session) && needsGate(ctx, willGround), extracts: input.extracts ?? [], quoteChecks, gate: null, frame, material: input.material, question };
+  const mode = responseMode(ctx, input.text, willGround);
+  const gated = (Boolean(session) && needsGate(ctx, willGround)) || holdsWorking(ctx, mode);
+  return { ctx, system: strategyBlock(ctx, { researchAvailable: Boolean(session), essay: input.material }), evidence, session, verdicts, grounding, willGround, gated, extracts: input.extracts ?? [], quoteChecks, gate: null, frame, material: input.material, question, mode };
 }
 
 /**
@@ -172,16 +197,29 @@ export async function finishStudy(prep: StudyPrep, answer: string, options: { de
     const why = prep.grounding?.note || (prep.session ? "" : "web search is not available");
     notes.push(`No web sources could be read for this answer${why ? ` (${why.replace(/[.\s]+$/, "")})` : ""}, so its facts, events and quotations have not been checked against anything. Treat them as unverified and check the text.`);
   }
-  notes.push(...qaNotes({ answer, ctx: prep.ctx, verdicts: prep.verdicts }));
+  // Working and equations: what the gate could not get repaired, or (for an answer that was not held) what a calculation finds now. A line the
+  // plain-arithmetic check below also catches is named once.
+  const calc = prep.gate ? { issues: prep.gate.flagged, checked: prep.gate.checked } : checkCalculations(answer);
+  const squash = (s: string) => s.replace(/\s+/g, "");
+  for (const issue of calc.issues.slice(0, 3)) notes.push(`${issue.kind === "equation" ? "This equation" : "This step of the working"} does not check out: ${issue.span.slice(0, 120)} (${issue.problem}). Check it before relying on the answer.`);
+  for (const note of qaNotes({ answer, ctx: prep.ctx, verdicts: prep.verdicts })) {
+    const sum = /^This arithmetic is wrong: (.+) \(it is /.exec(note)?.[1];
+    if (sum && calc.issues.some((i) => squash(i.span).includes(squash(sum)))) continue;
+    notes.push(note);
+  }
   if (session && gotSources) {
     const names = unsupportedNames(answer, session.pageTexts(), `${prep.question} ${prep.material}`);
     if (names.length) notes.push(`${names.length === 1 ? "This name or term does" : "These names or terms do"} not appear in the sources I read or in your message: ${names.join(", ")}. ${names.length === 1 ? "It" : "They"} may be a mistake, so check before using.`);
   }
   if (prep.gate && (prep.gate.removed.length || prep.gate.firstDraft.length)) {
-    const n = prep.gate.firstDraft.length;
-    notes.push(`${n} statement${n === 1 ? "" : "s"} in the first draft of this answer could not be supported by the sources, so ${prep.gate.removed.length ? "the answer was rewritten and what remained unsupported was removed" : "the answer was rewritten"} before you saw it.`);
+    const sourced = prep.gate.firstDraft.filter((i) => i.kind === "quotation" || i.kind === "event" || i.kind === "character").length;
+    const worked = prep.gate.firstDraft.length - sourced;
+    if (sourced)
+      notes.push(`${sourced} statement${sourced === 1 ? "" : "s"} in the first draft of this answer could not be supported by the sources, so ${prep.gate.removed.length ? "the answer was rewritten and what remained unsupported was removed" : "the answer was rewritten"} before you saw it.`);
+    if (worked) notes.push(`${worked} step${worked === 1 ? "" : "s"} of working in the first draft did not check out by calculation, so the answer was ${prep.gate.flagged.length ? "rewritten (what is still wrong is named above)" : "corrected"} before you saw it.`);
   }
   if (notes.length) parts.push(`Check:\n${notes.map((n) => `- ${n}`).join("\n")}`);
+  else if (prep.gate && prep.gate.checked >= 2 && prep.mode === "advanced") parts.push(`Checked: ${prep.gate.checked} lines of the working were checked by calculation.`);
 
   const listed = new Map<string, string>();
   for (const s of prep.grounding?.sources ?? []) listed.set(s.url, s.title);
