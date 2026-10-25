@@ -10,7 +10,7 @@ import type { StudyContext } from "./context";
  */
 export const quoteKey = (quote: string): string => words(quote).join(" ");
 
-const BAD: ReadonlySet<string> = new Set(["paraphrase_or_misquote", "unsupported"]);
+const BAD: ReadonlySet<string> = new Set(["paraphrase_or_misquote", "unsupported", "incorrect_attribution"]);
 
 export interface QaInput {
   answer: string;
@@ -44,16 +44,19 @@ export function qaNotes({ answer, ctx, verdicts }: QaInput): string[] {
   if (lit) {
     const wrong: string[] = [];
     const unchecked: string[] = [];
+    const secondary: string[] = [];
     for (const q of extractQuotations(answer)) {
       const known = verdicts.get(quoteKey(q));
       if (known) {
         if (BAD.has(known)) wrong.push(q);
-        else if (known === "unverifiable" || known === "supported_secondary") unchecked.push(q);
+        else if (known === "unverifiable") unchecked.push(q);
+        else if (known === "supported_secondary") secondary.push(q);
         continue;
       }
       if (words(q).length >= 3) unchecked.push(q);
     }
     if (wrong.length) notes.push(`These quotations could not be matched to the sources I read, so do not rely on them until you have checked the text: ${wrong.slice(0, 3).map((q) => `"${q}"`).join(", ")}.`);
+    if (secondary.length) notes.push(`${secondary.length === 1 ? "This quotation was" : "These quotations were"} found only on secondary sites, not in the text itself: ${secondary.slice(0, 3).map((q) => `"${q}"`).join(", ")}. Check ${secondary.length === 1 ? "it" : "them"} against your copy before using in an exam.`);
     if (unchecked.length) notes.push(`I could not check ${unchecked.length === 1 ? "this quotation" : "these quotations"} against the text: ${unchecked.slice(0, 3).map((q) => `"${q}"`).join(", ")}. Check the exact wording in your copy before using ${unchecked.length === 1 ? "it" : "them"} in an exam.`);
   }
   for (const sum of wrongSums(answer)) notes.push(`This arithmetic is wrong: ${sum}.`);

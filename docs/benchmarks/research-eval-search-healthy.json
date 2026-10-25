@@ -1,0 +1,235 @@
+{
+  "when": "2026-10-25T22:29:14.011Z",
+  "crawler": "Crawl4AI",
+  "runs": 1,
+  "metrics": {
+    "exactQuotationAccuracy": "100% (5/5)",
+    "speakerAttributionCorrect": "100% (5/5)",
+    "wrongAttributionRejected": "100% (2/2)",
+    "falseQuotationsVerified": 0,
+    "falseEventsPresentedAsSupported": 0,
+    "falseEventsCaught": "100% (5/5)",
+    "trueEventsRejectedAsContradicted": 0,
+    "trueEventsSupported": "50% (1/2)",
+    "casesAsExpected": "100% (16/16)",
+    "medianMsPerCase": 2249
+  },
+  "cases": [
+    {
+      "run": 1,
+      "id": "q-spot-right",
+      "kind": "authentic",
+      "got": "verified_exact",
+      "expect": [
+        "verified_exact"
+      ],
+      "ok": true,
+      "speaker": "LADY MACBETH",
+      "location": "Act 5 Scene 1",
+      "ms": 2599
+    },
+    {
+      "run": 1,
+      "id": "q-spot-wrong-speaker",
+      "kind": "wrong_attribution",
+      "got": "incorrect_attribution",
+      "expect": [
+        "incorrect_attribution"
+      ],
+      "ok": true,
+      "speaker": "LADY MACBETH",
+      "location": "Act 5 Scene 1",
+      "ms": 2645
+    },
+    {
+      "run": 1,
+      "id": "q-perfumes-right",
+      "kind": "authentic",
+      "got": "verified_exact",
+      "expect": [
+        "verified_exact"
+      ],
+      "ok": true,
+      "speaker": "LADY MACBETH",
+      "location": "Act 5 Scene 1",
+      "ms": 7289
+    },
+    {
+      "run": 1,
+      "id": "q-unsex-right",
+      "kind": "authentic",
+      "got": "verified_exact",
+      "expect": [
+        "verified_exact"
+      ],
+      "ok": true,
+      "speaker": "LADY MACBETH",
+      "location": "Act 1 Scene 5",
+      "ms": 2961
+    },
+    {
+      "run": 1,
+      "id": "q-water-right",
+      "kind": "authentic",
+      "got": "verified_exact",
+      "expect": [
+        "verified_exact"
+      ],
+      "ok": true,
+      "speaker": "LADY MACBETH",
+      "location": "Act 2 Scene 2",
+      "ms": 2486
+    },
+    {
+      "run": 1,
+      "id": "q-dagger-right",
+      "kind": "authentic",
+      "got": "verified_exact",
+      "expect": [
+        "verified_exact"
+      ],
+      "ok": true,
+      "speaker": "MACBETH",
+      "location": "Act 2 Scene 1",
+      "ms": 2249
+    },
+    {
+      "run": 1,
+      "id": "q-dagger-wrong-speaker",
+      "kind": "wrong_attribution",
+      "got": "incorrect_attribution",
+      "expect": [
+        "incorrect_attribution"
+      ],
+      "ok": true,
+      "speaker": "MACBETH",
+      "location": "Act 2 Scene 1",
+      "ms": 2026
+    },
+    {
+      "run": 1,
+      "id": "q-invented",
+      "kind": "invented",
+      "got": "unsupported",
+      "expect": [
+        "unsupported",
+        "paraphrase_or_misquote",
+        "unverifiable"
+      ],
+      "ok": true,
+      "speaker": null,
+      "location": null,
+      "ms": 634
+    },
+    {
+      "run": 1,
+      "id": "q-misquote",
+      "kind": "misquote",
+      "got": "unsupported",
+      "expect": [
+        "paraphrase_or_misquote",
+        "unsupported",
+        "unverifiable",
+        "verified_variant"
+      ],
+      "ok": true,
+      "speaker": null,
+      "location": null,
+      "ms": 1120
+    },
+    {
+      "run": 1,
+      "id": "e-ghost-lady",
+      "kind": "false_event",
+      "got": "contradicted",
+      "expect": [
+        "contradicted",
+        "unsupported"
+      ],
+      "ok": true,
+      "sourcesRead": 2,
+      "ms": 4074
+    },
+    {
+      "run": 1,
+      "id": "e-ghost-macbeth",
+      "kind": "true_event",
+      "got": "supported",
+      "expect": [
+        "supported"
+      ],
+      "ok": true,
+      "sourcesRead": 2,
+      "ms": 3
+    },
+    {
+      "run": 1,
+      "id": "e-gerald-pregnant",
+      "kind": "false_event",
+      "got": "unsupported",
+      "expect": [
+        "contradicted",
+        "unsupported"
+      ],
+      "ok": true,
+      "sourcesRead": 2,
+      "ms": 8964
+    },
+    {
+      "run": 1,
+      "id": "e-sheila-pregnant",
+      "kind": "false_event",
+      "got": "unsupported",
+      "expect": [
+        "contradicted",
+        "unsupported"
+      ],
+      "ok": true,
+      "sourcesRead": 2,
+      "ms": 3
+    },
+    {
+      "run": 1,
+      "id": "e-eric-prison",
+      "kind": "false_event",
+      "got": "unsupported",
+      "expect": [
+        "contradicted",
+        "unsupported"
+      ],
+      "ok": true,
+      "sourcesRead": 2,
+      "ms": 3
+    },
+    {
+      "run": 1,
+      "id": "e-bertha",
+      "kind": "false_event",
+      "got": "unsupported",
+      "expect": [
+        "contradicted",
+        "unsupported"
+      ],
+      "ok": true,
+      "sourcesRead": 2,
+      "ms": 3
+    },
+    {
+      "run": 1,
+      "id": "e-eric-pregnant-eva",
+      "kind": "true_event",
+      "got": "unsupported",
+      "expect": [
+        "supported",
+        "unsupported"
+      ],
+      "ok": true,
+      "sourcesRead": 2,
+      "ms": 5
+    }
+  ],
+  "notLiveTested": [
+    "essay quality (needs teachers)",
+    "a real model's answers (run by the owner)"
+  ]
+}

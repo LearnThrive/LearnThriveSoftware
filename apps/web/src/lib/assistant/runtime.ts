@@ -3,6 +3,7 @@ import { chatUploadStorage, type LibraryStorage } from "@/lib/library/storage";
 import { assistantAvailability, assistantConfig, type AssistantConfig, type Closed } from "./config";
 import { SystemOneClient } from "./decision";
 import { OllamaEmbeddingProvider, type EmbeddingProvider } from "./embeddings";
+import { Crawl4aiClient } from "./research/crawl4ai";
 import { SearxngClient } from "./research/searxng";
 import { ResearchService } from "./research/verify";
 import { buildProvider } from "./providers";
@@ -80,6 +81,8 @@ export function assistantRuntime(env: Env = process.env): AssistantRuntime | nul
     searx: new SearxngClient({ enabled: true, baseUrl: r.baseUrl, timeoutMs: r.timeoutMs, maxResults: r.maxResults, cacheTtlSeconds: r.cacheTtlSeconds }),
     limits: { maxSearches: r.maxSearches, maxFetches: r.maxFetches, fetchMaxBytes: r.fetchMaxBytes, fetchTimeoutMs: 10_000, perMinute: r.perMinute },
     cacheTtlSeconds: r.cacheTtlSeconds,
+    // The browser that reads the pages SearXNG finds. If it is off or unreachable, pages are fetched directly and the turn says so.
+    fetchOptions: { crawler: config.crawler.enabled ? new Crawl4aiClient(config.crawler) : null },
   });
   g.__learnthriveAssistant = {
     config,

@@ -51,6 +51,8 @@ const services = [
   { name: "ollama", url: "http://127.0.0.1:11434/api/version", label: "Ollama" },
   { name: "voice", url: "http://127.0.0.1:8765/health", label: "the speech sidecar" },
   { name: "searxng", url: "http://127.0.0.1:8888/healthz", label: "web search (SearXNG)" },
+  // Page extraction. Skipped when switched off; the website falls back to a plain fetch when it is not there.
+  ...(["off", "false", "0"].includes((env.CRAWL4AI_ENABLED ?? "").toLowerCase()) ? [] : [{ name: "crawl4ai", url: "http://127.0.0.1:11235/health", label: "page extraction (Crawl4AI)" }]),
 ];
 const wanted = [];
 for (const s of services) {

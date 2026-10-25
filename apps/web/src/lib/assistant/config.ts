@@ -23,6 +23,7 @@ type Env = Record<string, string | undefined>;
  *   ASSISTANT_STAGE_*               the staged budgets (queue, load, first activity, first answer, idle, tool round, whole turn)
  *   ASSISTANT_MAX_TOOL_ROUNDS       tool round trips allowed in one turn (default 2)
  *   SEARXNG_BASE_URL / _TIMEOUT_MS / _MAX_RESULTS / _CACHE_TTL_SECONDS   web research through SearXNG, which is always on (default http://127.0.0.1:8888; docs/RESEARCH.md)
+ *   CRAWL4AI_ENABLED / _BASE_URL / _API_TOKEN / _TIMEOUT_MS / _MAX_CONCURRENCY   the self-hosted browser that reads the pages SearXNG finds (on by default; falls back to a plain fetch)
  *   RESEARCH_MAX_SEARCHES / _MAX_FETCHES / _FETCH_MAX_BYTES / _PER_MINUTE   the per-answer and per-account limits on that research
  *   ASSISTANT_RETRIEVAL             on (default) | off: search the student's own authorised uploads for relevant chunks
  *   ASSISTANT_RETRIEVAL_TOP_K       chunks given to the tutor (default 4)   ASSISTANT_RETRIEVAL_MIN_SCORE   default 0.35
@@ -83,6 +84,9 @@ export const ASSISTANT_DEFAULTS = {
   embedModel: "embeddinggemma-2:270m-q8_0-text",
   helperBaseUrl: "http://127.0.0.1:11435",
   searxngUrl: "http://127.0.0.1:8888",
+  crawl4aiUrl: "http://127.0.0.1:11235",
+  // A public development value so the local container and the website agree without setup. Production must set its own.
+  crawl4aiDevToken: "learnthrive-development-only-crawl4ai-token",
   embedKeepAlive: "10m",
   embedBatch: 8,
   decisionModel: "laya:421m-typed-decisions-bf16",
@@ -142,6 +146,15 @@ export interface ResearchConfig {
   perMinute: number;
 }
 
+export interface CrawlerConfig {
+  enabled: boolean;
+  baseUrl: string;
+  /** Server-side only. Never logged, never sent to the browser. */
+  token: string;
+  timeoutMs: number;
+  maxConcurrency: number;
+}
+
 export interface ImageConfig {
   photoLongSide: number;
   renderLongSide: number;
@@ -172,6 +185,7 @@ export interface AssistantConfig {
   retrieval: RetrievalConfig;
   decision: DecisionConfig;
   research: ResearchConfig;
+  crawler: CrawlerConfig;
   images: ImageConfig;
   vramHeadroomMiB: number;
   productionApproved: boolean;
@@ -284,6 +298,14 @@ export function assistantConfig(env: Env = process.env): AssistantConfig {
       maxFetches: whole(env.RESEARCH_MAX_FETCHES, 5, 0, 10),
       fetchMaxBytes: whole(env.RESEARCH_FETCH_MAX_BYTES, 1_500_000, 50_000, 10_000_000),
       perMinute: whole(env.RESEARCH_PER_MINUTE, 10, 1, 120),
+    },
+    crawler: {
+      // On by default. In production it needs a token that was set on purpose: the development token is public, so it is not accepted there.
+      enabled: toggle(env.CRAWL4AI_ENABLED, true) && !(production && !pick(env.CRAWL4AI_API_TOKEN)),
+      baseUrl: pick(env.CRAWL4AI_BASE_URL) ?? ASSISTANT_DEFAULTS.crawl4aiUrl,
+      token: pick(env.CRAWL4AI_API_TOKEN) ?? ASSISTANT_DEFAULTS.crawl4aiDevToken,
+      timeoutMs: whole(env.CRAWL4AI_TIMEOUT_MS, 15_000, 2_000, 120_000),
+      maxConcurrency: whole(env.CRAWL4AI_MAX_CONCURRENCY, 2, 1, 8),
     },
     images: {
       photoLongSide: whole(env.ASSISTANT_PHOTO_LONG_SIDE, ASSISTANT_DEFAULTS.photoLongSide, 512, 2400),

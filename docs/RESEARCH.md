@@ -1,7 +1,8 @@
 # Study Buddy: subject-aware answers, exam accuracy and web research
 
-This is how Study Buddy decides what a student is doing, checks what it can check before and after it answers, and (optionally) uses your own
-[SearXNG](https://docs.searxng.org/) instance to look things up. It is a layer around the model, not a replacement for it.
+This is how Study Buddy decides what a student is doing, checks what it can check before and after it answers, and uses your own
+[SearXNG](https://docs.searxng.org/) (to find pages) and [Crawl4AI](https://github.com/unclecode/crawl4ai) (to read them in a real browser) to look things up.
+Both are free, open source and self-hosted. It is a layer around the model, not a replacement for it.
 
 The principles, in the order they win a disagreement:
 
@@ -12,6 +13,18 @@ The principles, in the order they win a disagreement:
 5. **Uncertainty is shown.** "Could not be checked" is a normal result and the student is told.
 6. **Web pages are untrusted data.** Nothing in a page is an instruction.
 
+## Baseline: what was wrong before the Crawl4AI work
+
+Recorded from the code and from live checks on this machine, before the changes below. The earlier unit tests all passed while these were true.
+
+- **Pages built with JavaScript could not be read.** `fetchSource` fetched raw HTML and stripped tags, so a page whose text appears after scripts run gave an empty shell.
+- **A school's website could "verify" a quotation.** `.sch.uk`, `.ac.uk` and `.gov.uk` pages were ranked "institutional" and an exact phrase on one was reported as verified. A live check verified "Out, damned spot!" from a school page with the speaker unchecked, and gave the same verdict for the WRONG speaker.
+- **Words on a page said nothing about who speaks them.** There was no speaker, act or scene, so Macbeth's line could be attributed to Lady Macbeth and still pass.
+- **Real names hid invented events.** The name check only listed unfamiliar capitalised words, so "Gerald becomes pregnant" or "Lady Macbeth sees Banquo's ghost" passed.
+- **A false answer was shown, then warned about.** The reply streamed to the student first; the check ran afterwards.
+- **A broken search looked like an empty one.** SearXNG answering 200 with no results because its engines were suspended ("too many requests") was classed as "no source found" and could mark a true quotation "unsupported".
+- **The tests were mocked.** Nothing had run SearXNG, a browser or a live website.
+
 ## What happens on a turn
 
 ```
@@ -20,8 +33,11 @@ student message
   -> prepareStudy              GROUNDING: for a subject where facts matter, search and read the best pages first;
                                quotations in the message looked up on the web (nothing is stored locally);
                                exam-board documents looked up if asked; result written as a <verification> block
-  -> model answers             with a per-turn instruction block for the subject and activity, the <verification> block,
-                               and (if research is on) the research tools
+  -> model answers             with a per-turn instruction block for the subject and activity, the <research> and <verification> blocks,
+                               and (if research is on) the research tools. For literature and history answers the draft is HELD (the gate)
+  -> reviewAnswer (gate.ts)    every quotation (words, speaker, act and scene) and every watched event is verified; the model is asked
+                               to repair what the sources contradict or do not contain (twice at most); the server cuts what is still wrong;
+                               only then is the text shown
   -> finishStudy               quotations and names in the reply checked against the pages read;
                                marks the evidence lowers, quotations that did not match or were never checked,
                                plainly wrong sums, sources read -> a short "Check" under the reply
@@ -45,6 +61,20 @@ Spoken (voice) turns skip both to stay quick.
 | Per-turn research session: budgets, repeats, verdicts | `research/verify.ts` |
 | Query privacy | `research/privacy.ts` |
 | The research tools the model may call | `research/tools.ts`, `tools.ts` |
+
+## Architecture: SearXNG finds, Crawl4AI reads, the verifier decides
+
+```
+question -> classify (subject, activity)  -> SearXNG: candidate pages (search queries carry no personal details)
+         -> rank by source tier           -> address checks (private ranges, credentials, ports, redirects) in the website
+         -> Crawl4AI: the page read in a real browser (direct fetch if it is off or fails, with the reason recorded)
+         -> the address the browser ended on is checked again -> text cleaned, instruction-like text reported and ignored
+         -> evidence: excerpts for the model, plus the full text for checking the reply
+         -> verifier (independent of the model): quotations, speakers, places, events -> gate -> student
+```
+
+Crawl4AI is an extraction backend only. It never searches, and none of its hosted or paid endpoints is used. Every result records HOW the text was
+obtained (`via: crawl4ai | direct`) and, if the browser was tried and failed, why (`crawlNote`). A page is never reported as read when it was not.
 
 ## Subject awareness
 
@@ -79,6 +109,21 @@ The pre-reply reading and the post-reply checks cost up to about five searches a
 
 ## Quotations and facts
 
+**Only a primary text can verify a quotation.** `verified_exact` / `verified_variant` need the words in an edition of the work (Folger, MIT, Gutenberg and the like), an
+exam board's own page, or an extract the student uploaded (which is labelled as "the extract you supplied", not as an edition). A school site, a university
+page, the BBC, a revision site or a forum can only give `supported_secondary`: shown to the student as "found only on secondary sites". A copyrighted
+work (*An Inspector Calls*) has no primary text on the web, so its quotations are at best `supported_secondary`; nothing is copied into the repository.
+
+**Speaker and place come from the text's structure** (`research/playText.ts`): the MIT layout (anchors per speech), a page converted to Markdown, and the
+Folger layout with line numbers are read into speeches (speaker, act, scene). A quotation is found *inside a speech*, so Macbeth's words are never
+verified as Lady Macbeth's because both are on the page. When the answer says who speaks a line ("Lady Macbeth says '...'", "'...' cries Macbeth") that
+claim is compared with the speaker found; a mismatch is `incorrect_attribution`. If the page's layout cannot be read, the words may still be
+`verified_exact` but the verdict says the speaker was **not checked**. For a public-domain play whose first pages did not include the text itself, one
+further search looks for it by name.
+
+A search that returns nothing to read is `unverifiable`, never `unsupported`: only pages that were read can show words are absent. SearXNG answering with
+no results because its engines are suspended is reported as a broken search (with the engines' own reasons).
+
 `verifyQuotation` returns one of:
 
 | Status | Meaning |
@@ -98,6 +143,34 @@ title or a character's name so a search can name the work. Every quotation is th
 switched off, or SearXNG unreachable, a quotation is `unverifiable` and the student is told so. That is deliberate: the tutor has to use sources.
 
 `verifyClaim` returns passages from pages that were read, with their source tier. It never returns "true".
+
+## Event claims: who did what
+
+`research/claims.ts` checks the dramatic events a reply gives to named characters against the full text of the pages read. It watches a short list of
+events models invent (pregnancy, prison, an institution, a killing, suicide, a death, a ghost, drinking, a crime, a marriage, an affair, poison), only
+for claims with a named subject. For each it finds who the sources say did it and compares:
+
+| Result | Meaning |
+| --- | --- |
+| `supported` | a page read says this character did this |
+| `contradicted` | the pages say it happened, but to someone else ("Gerald becomes pregnant": the pages say Eric) |
+| `unsupported` | no page read mentions it (missing evidence, not proof of falsehood) |
+
+Names are compared as people: "Macbeth" is not "Lady Macbeth", "Mr Birling" is not "Mrs Birling", "Eric Birling" is not "Sheila Birling". Who *sees* a
+ghost is read from the grammar ("appears to Macbeth"), so Lady Macbeth being named in the same sentence does not make her the one who sees it. A character
+introduced as "a character called Bertha" that no source mentions is flagged. Before a claim is called unsupported the gate makes one more targeted
+search for it. The check is deliberately narrow: it cannot judge interpretation, and it can still miss an invented event that is not on the list.
+
+## The gate: nothing unchecked is shown first
+
+For English Literature answers (and history model answers and essays) the draft is **held, not streamed**. `gate.ts` verifies it, asks the model to rewrite
+anything the sources contradict or do not contain (at most two rewrites, thinking off, never overrunning the context window), and then cuts any sentence
+that is still wrong. If nothing supported is left, the student gets an honest "I could not write an answer that I was able to check" instead. Quotations
+that are merely *unchecked* (the evidence could not be fetched) are not cut: they stay and the "Check" under the answer says they are unverified.
+
+Safeguarding replies and blocked input never reach the gate, and ordinary chat, calculations and other subjects stream immediately. The page shows
+"Checking sources online..." while the server reads, and "Checking the answer against the sources..." while the draft is verified. If the turn is
+interrupted while a draft is held, the draft is released with a plain note that it was not checked; a blocked output is never released.
 
 ## Searching: SearXNG
 
@@ -155,6 +228,50 @@ node apps/web/scripts/research-check.mjs --query "AQA GCSE English Literature sp
 It makes one real search and prints the HTTP outcome, the number of results, the hosts, and the fix for a 403, a 429, a non-JSON answer or no
 results. Nothing in the test suite calls it. **No result from a real SearXNG instance is recorded in this repository**: the tests below use fakes.
 
+### Crawl4AI: reading the pages
+
+Crawl4AI is the open-source self-hosted browser crawler (image pinned to `unclecode/crawl4ai:0.9.2`, the version its documentation names stable). It runs in
+Docker on CPU, with a 4 GB memory limit, 2 CPUs, 1 GB shared memory, `no-new-privileges`, and its port published on `127.0.0.1:11235` only. It is started by
+`npm start` beside SearXNG. It shares nothing with Ollama and uses no GPU.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `CRAWL4AI_ENABLED` | on | Off: pages are fetched directly. |
+| `CRAWL4AI_BASE_URL` | `http://127.0.0.1:11235` | Server-side only. |
+| `CRAWL4AI_API_TOKEN` | a public development value | Sent as a Bearer token; Crawl4AI 0.9.x refuses every request except `/health` without it. Compose and the website must agree. **Production must set its own**; with only the development value the website turns the crawler off. |
+| `CRAWL4AI_IMAGE` | `unclecode/crawl4ai:0.9.2` | Change deliberately. |
+| `CRAWL4AI_TIMEOUT_MS` | 15000 | One page. |
+| `CRAWL4AI_MAX_CONCURRENCY` | 2 | Pages read at once. |
+
+Start, stop and check:
+
+```bash
+docker compose -f config/compose.yaml up -d crawl4ai     # or: npm start
+docker compose -f config/compose.yaml stop crawl4ai
+npm run research:check                                   # SearXNG, Crawl4AI, a JavaScript page, then the whole pipeline on live websites
+npm run research:eval                                    # the labelled accuracy benchmark (writes docs/benchmarks/research-eval.json)
+```
+
+Troubleshooting (the website never crashes on any of these; it falls back to a direct fetch and the turn records why):
+
+| Symptom | Cause and fix |
+| --- | --- |
+| `unauthorised` (HTTP 401/403) | `CRAWL4AI_API_TOKEN` differs from the one the container was started with. Recreate the container after changing it. |
+| `unavailable ... ECONNREFUSED` | The container is not running (Docker off, still starting: it takes about 40 s). |
+| `timeout` | The page was slow; raise `CRAWL4AI_TIMEOUT_MS` or accept the direct fetch. |
+| `extraction_failed` | The page loaded but had no readable text, or the browser could not load it (a blocked address returns HTTP 400 from Crawl4AI's own address guard). |
+| `bad_response` | Not JSON, or no result: check `CRAWL4AI_BASE_URL` points at Crawl4AI itself. |
+
+**Cost.** Measured on this machine at idle after benchmark use: about 640 MB of memory and ~2% CPU for the crawler, ~170 MB for SearXNG. Reading a page in the
+browser adds roughly 1 to 3 seconds per page over a direct fetch; a grounded literature answer spends about 5 to 7 seconds reading before the model starts, and the
+gate adds a verification pass (and a rewrite when something is wrong) after the draft.
+
+**Deployment.** `127.0.0.1` on a developer's laptop is not reachable from a hosted website. A hosted website needs SearXNG and Crawl4AI deployed beside it on a
+private network (never on a public address), `CRAWL4AI_BASE_URL` / `SEARXNG_BASE_URL` pointing at them, and its own long random `CRAWL4AI_API_TOKEN`. Because the
+crawler's browser follows redirects and scripts the website cannot see, also restrict the crawler container's outbound network (no route to your private
+ranges or the cloud metadata address) with the host firewall or a dedicated network. Crawl4AI 0.9.2 itself refuses private and local addresses (observed: HTTP 400
+"URL blocked (SSRF protection)" for a `host.docker.internal` address); that is a second layer, not a replacement for the first.
+
 ### What the model can call (only when research is on)
 
 `search_web`, `fetch_source`, `verify_quotation`, `verify_claim`, `find_exam_specification`, `find_mark_scheme`. They are read-only and bounded by
@@ -170,6 +287,10 @@ essay mills). At most two results from one site are kept. A page from a low tier
 
 ## Safety
 
+- **Crawler hardening.** The crawler is reached only from the server, with a server-side token that is never logged, put in a message, or sent to the
+  browser. Only addresses that passed the website's checks are sent to it; the address it ended on is checked again and the page is discarded if it led
+  somewhere private. Crawl4AI's hooks and deep-crawl options are off by default and are not used; no proxy is configured; one page per request, with a
+  timeout, a concurrency cap and a response-size cap.
 - **Server-side request forgery.** Every address is checked before it is fetched *and at every redirect*: http/https only, no credentials, ports
   80/443 only, no local or internal names, no IP in a private, loopback, link-local (including the cloud metadata address), shared or reserved
   range in any spelling (decimal, hex, octal, IPv6, IPv4-mapped), and a name is allowed only if **every** address it resolves to is public.
@@ -194,7 +315,19 @@ supports and shows every reduction with its reason: very short answers, no quota
 nothing linking context to the question, a whole-text question answered from one part. A mark is only ever lowered. The note always says it is
 practice feedback, not an official mark, a grade or a prediction. No grade boundaries are stated.
 
-## Tests
+## Tests, live checks and what is NOT tested
+
+| Layer | Command | What it proves |
+| --- | --- | --- |
+| Unit and mocked integration | `cd apps/web && npm test` | Logic with a fake model and fake search: statuses, the gate, claims, the crawler client's every failure path, fallback, address checks. Not evidence that any real service works. |
+| Live services | `npm run research:check` | Real SearXNG, real Crawl4AI, a real JavaScript-rendered page (quotes.toscrape.com/js, a practice site made for this), and the whole pipeline on real websites. |
+| Accuracy benchmark | `npm run research:eval` | Labelled quotation and event cases through the live stack. Results are written to `docs/benchmarks/research-eval.json` and depend on what the search engines return that day. A case whose search could not run is reported as not tested. |
+| Real model | not run by the agent | The owner runs the real model by hand. **NOT TESTED:** model answers for the Macbeth and *An Inspector Calls* benchmark tasks, and the repair loop with a real model. |
+| Essay quality (23/30) | [ESSAY_BENCHMARK_PROTOCOL.md](ESSAY_BENCHMARK_PROTOCOL.md) | **NOT TESTED.** Needs qualified teachers marking unseen tasks. The model's own marks are not evidence. |
+
+A local JavaScript fixture website cannot be used with Crawl4AI: its own address guard refuses private addresses, and its `raw:` input does not run scripts.
+That is why the JavaScript check uses a public practice site.
+
 
 ```bash
 cd apps/web
@@ -209,6 +342,16 @@ SSRF through the tools; search down; SearXNG 403; marks capped by evidence; unma
 privacy and rate limits.
 
 ## Limitations
+
+- **Public search engines throttle.** SearXNG relies on engines (Google, Brave, DuckDuckGo) that suspend a client that asks too much. During benchmarking all
+  of them were suspended ("too many requests") and searches returned nothing, which is now reported as a broken search and a "could not be checked" result,
+  not as a failure of the quotation. Caching helps; an instance with more engines, or its own egress addresses, helps more. This is the main reliability risk.
+- **Only the checks above exist.** A fabricated claim that is not a quotation and not on the watched event list is not caught by the verifier. It reduces
+  risk; it does not remove it, and no claim is made that hallucination is eliminated.
+- **Copyrighted works.** *An Inspector Calls* has no primary text to verify against, so its quotations top out at "found only on secondary sites" unless the
+  student uploads the extract. Using sources lawfully (robots rules, paywalls, licences) is the operator's responsibility; the crawler does not bypass
+  access restrictions, but it does not read robots.txt either.
+- **Edition differences.** Folger and MIT editions differ in punctuation and some words; those become `verified_variant`, never silently exact.
 
 - Nothing here has been run against a live SearXNG instance or a real model in this repository; the code is tested against fakes and a scripted
   model. Run `research-check.mjs` and a few real questions before relying on it.

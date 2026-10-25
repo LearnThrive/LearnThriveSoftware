@@ -61,6 +61,29 @@ services:
       retries: 20
     restart: unless-stopped
 
+  # Page extraction for Study Buddy (docs/RESEARCH.md): Crawl4AI, the open-source self-hosted browser crawler. SearXNG finds the pages; this
+  # reads them in a real browser so pages built with JavaScript come back as readable text. CPU only (no GPU, nothing shared with Ollama).
+  # It needs about 4 GB of memory while crawling. The token below is a development value, safe only because the port is published on
+  # 127.0.0.1; set CRAWL4AI_API_TOKEN to a long random value anywhere else (the website refuses to use the development one in production).
+  crawl4ai:
+    image: ${CRAWL4AI_IMAGE:-unclecode/crawl4ai:0.9.2}
+    ports:
+      - "127.0.0.1:11235:11235"
+    shm_size: 1g
+    mem_limit: 4g
+    cpus: 2
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      CRAWL4AI_API_TOKEN: ${CRAWL4AI_API_TOKEN:-learnthrive-development-only-crawl4ai-token}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:11235/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    restart: unless-stopped
+
 volumes:
   ollama-models:
   whisper-cache:

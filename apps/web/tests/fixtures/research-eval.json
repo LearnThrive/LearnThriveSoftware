@@ -1,0 +1,23 @@
+{
+  "description": "Labelled cases for scripts/research-eval.mjs. 'expect' lists the verdicts that count as CORRECT for the case; anything else is a miss. Quotations are from Macbeth (public domain). Event cases are judged against pages the pipeline actually reads.",
+  "quotations": [
+    { "id": "q-spot-right", "work": "Macbeth", "quotation": "Out, damned spot! Out, I say!", "speaker": "Lady Macbeth", "expect": ["verified_exact"], "kind": "authentic" },
+    { "id": "q-spot-wrong-speaker", "work": "Macbeth", "quotation": "Out, damned spot! Out, I say!", "speaker": "Macbeth", "expect": ["incorrect_attribution"], "kind": "wrong_attribution" },
+    { "id": "q-perfumes-right", "work": "Macbeth", "quotation": "All the perfumes of Arabia will not sweeten this little hand.", "speaker": "Lady Macbeth", "expect": ["verified_exact"], "kind": "authentic" },
+    { "id": "q-unsex-right", "work": "Macbeth", "quotation": "unsex me here", "speaker": "Lady Macbeth", "expect": ["verified_exact"], "kind": "authentic" },
+    { "id": "q-water-right", "work": "Macbeth", "quotation": "A little water clears us of this deed.", "speaker": "Lady Macbeth", "expect": ["verified_exact"], "kind": "authentic" },
+    { "id": "q-dagger-right", "work": "Macbeth", "quotation": "Is this a dagger which I see before me", "speaker": "Macbeth", "expect": ["verified_exact"], "kind": "authentic" },
+    { "id": "q-dagger-wrong-speaker", "work": "Macbeth", "quotation": "Is this a dagger which I see before me", "speaker": "Lady Macbeth", "expect": ["incorrect_attribution"], "kind": "wrong_attribution" },
+    { "id": "q-invented", "work": "Macbeth", "quotation": "The darkness of my ambition shall conquer every crown", "speaker": "Macbeth", "expect": ["unsupported", "paraphrase_or_misquote", "unverifiable"], "kind": "invented" },
+    { "id": "q-misquote", "work": "Macbeth", "quotation": "Out, damned stain! Out, I say!", "speaker": "Lady Macbeth", "expect": ["paraphrase_or_misquote", "unsupported", "unverifiable", "verified_variant"], "kind": "misquote" }
+  ],
+  "events": [
+    { "id": "e-ghost-lady", "question": "How far does Shakespeare present Lady Macbeth as changing in Macbeth? Write a model answer.", "reply": "Lady Macbeth sees Banquo's ghost at the banquet.", "expect": ["contradicted", "unsupported"], "kind": "false_event" },
+    { "id": "e-ghost-macbeth", "question": "How far does Shakespeare present Lady Macbeth as changing in Macbeth? Write a model answer.", "reply": "Macbeth sees Banquo's ghost at the banquet.", "expect": ["supported"], "kind": "true_event" },
+    { "id": "e-gerald-pregnant", "question": "How far does Priestley present Mr Birling as a man who cares only for himself in An Inspector Calls? Write a model answer.", "reply": "Gerald becomes pregnant.", "expect": ["contradicted", "unsupported"], "kind": "false_event" },
+    { "id": "e-sheila-pregnant", "question": "How far does Priestley present Mr Birling as a man who cares only for himself in An Inspector Calls? Write a model answer.", "reply": "Sheila is pregnant.", "expect": ["contradicted", "unsupported"], "kind": "false_event" },
+    { "id": "e-eric-prison", "question": "How far does Priestley present Mr Birling as a man who cares only for himself in An Inspector Calls? Write a model answer.", "reply": "Eric is sent to prison during the play.", "expect": ["contradicted", "unsupported"], "kind": "false_event" },
+    { "id": "e-bertha", "question": "How far does Priestley present Mr Birling as a man who cares only for himself in An Inspector Calls? Write a model answer.", "reply": "Bertha is left in a mental institution.", "expect": ["contradicted", "unsupported"], "kind": "false_event" },
+    { "id": "e-eric-pregnant-eva", "question": "How far does Priestley present Mr Birling as a man who cares only for himself in An Inspector Calls? Write a model answer.", "reply": "Eric got Eva Smith pregnant.", "expect": ["supported", "unsupported"], "kind": "true_event", "note": "A true event: 'unsupported' means the pages read did not mention it (missing evidence), 'contradicted' would be a false rejection." }
+  ]
+}

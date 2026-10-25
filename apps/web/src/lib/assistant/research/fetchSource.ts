@@ -1,5 +1,7 @@
 import { checkUrl, type Resolver } from "./safeUrl";
+import type { Crawl4aiClient } from "./crawl4ai";
 import { cleanText, defuseMarkers, htmlToText, scanForInjection } from "./htmlText";
+import { isPlayTextHost } from "./playText";
 
 /**
  * Reads one web page for the tutor. The address is checked before the request and again at EVERY redirect (a public page can redirect to a private
@@ -54,7 +56,21 @@ export const defaultPageFetcher: PageFetcher = async (url, { signal }) => {
 export type FetchFailure = "blocked" | "redirect_loop" | "bad_status" | "unsupported_type" | "timeout" | "unavailable" | "unreadable";
 
 export type FetchedSource =
-  | { ok: true; url: string; title: string; text: string; contentType: "html" | "text" | "pdf"; truncated: boolean; injection: string[] }
+  | {
+      ok: true;
+      url: string;
+      title: string;
+      text: string;
+      contentType: "html" | "text" | "pdf";
+      truncated: boolean;
+      injection: string[];
+      /** How the text was obtained: read in a real browser by Crawl4AI, or fetched directly. */
+      via: "crawl4ai" | "direct";
+      /** Why the crawler was not used or failed, when it was tried (never silently dropped). */
+      crawlNote: string;
+      /** The page's HTML, kept only for known play-text sites so speakers and scenes can be read from its structure. */
+      html: string;
+    }
   | { ok: false; code: FetchFailure; reason: string };
 
 export interface FetchOptions {
@@ -65,6 +81,8 @@ export interface FetchOptions {
   maxRedirects?: number;
   timeoutMs?: number;
   signal?: AbortSignal;
+  /** The self-hosted browser reader. Used for HTML pages when it is available; the direct fetch is the fallback. */
+  crawler?: Crawl4aiClient | null;
   /** Reads a PDF's bytes into text. Injected so tests need no PDF library. */
   pdfText?: (bytes: Uint8Array) => Promise<string | null>;
 }
@@ -111,6 +129,9 @@ export async function fetchSource(start: string, options: FetchOptions = {}): Pr
       const maxChars = options.maxChars ?? 30_000;
       let title = "";
       let text: string;
+      let via: "crawl4ai" | "direct" = "direct";
+      let crawlNote = "";
+      let html = "";
       if (kind === "pdf") {
         const extracted = await (options.pdfText ?? defaultPdfText)(bytes);
         if (!extracted || !extracted.trim()) return { ok: false, code: "unreadable", reason: "that PDF could not be read as text" };
@@ -119,10 +140,27 @@ export async function fetchSource(start: string, options: FetchOptions = {}): Pr
         const raw = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
         if (kind === "html") ({ title, text } = htmlToText(raw, maxChars));
         else text = cleanText(raw, maxChars);
+        if (kind === "html" && isPlayTextHost(verdict.url.hostname)) html = raw.slice(0, 1_500_000);
+        // A real browser reads pages that build their text with JavaScript. The address it ended on is checked again, because a browser
+        // follows redirects (and scripts) that the direct fetch above did not.
+        if (kind === "html" && options.crawler?.available) {
+          const crawled = await options.crawler.crawl(verdict.url.toString(), control.signal);
+          if (crawled.status === "ok") {
+            const end = await checkUrl(crawled.finalUrl, { resolve: options.resolve });
+            if (!end.ok) return { ok: false, code: "blocked", reason: `the page led somewhere that is not fetched (${end.reason})` };
+            const readable = cleanText(crawled.text, maxChars);
+            if (readable.length >= Math.min(300, text.length)) {
+              text = readable;
+              title = crawled.title || title;
+              via = "crawl4ai";
+              if (isPlayTextHost(new URL(crawled.finalUrl).hostname) && crawled.html) html = crawled.html.slice(0, 1_500_000);
+            } else crawlNote = "the browser read less of the page than the direct fetch";
+          } else crawlNote = crawled.detail;
+        }
       }
       if (!text.trim()) return { ok: false, code: "unreadable", reason: "the page had no readable text" };
       const injection = scanForInjection(`${title}\n${text}`);
-      return { ok: true, url: verdict.url.toString(), title: defuseMarkers(title), text: defuseMarkers(text), contentType: kind, truncated: truncated || text.length >= maxChars, injection };
+      return { ok: true, url: verdict.url.toString(), title: defuseMarkers(title), text: defuseMarkers(text), contentType: kind, truncated: truncated || text.length >= maxChars, injection, via, crawlNote, html };
     }
     return { ok: false, code: "redirect_loop", reason: "too many redirects" };
   } catch (error) {

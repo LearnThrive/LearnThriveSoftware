@@ -1,0 +1,236 @@
+{
+  "when": "2026-10-25T22:35:54.285Z",
+  "crawler": "Crawl4AI",
+  "runs": 1,
+  "metrics": {
+    "exactQuotationAccuracy": "NOT TESTED",
+    "speakerAttributionCorrect": "NOT TESTED",
+    "wrongAttributionRejected": "NOT TESTED",
+    "falseQuotationsVerified": 0,
+    "falseEventsPresentedAsSupported": 0,
+    "falseEventsCaught": "100% (5/5)",
+    "trueEventsRejectedAsContradicted": 0,
+    "trueEventsSupported": "0% (0/2)",
+    "casesAsExpected": "89% (8/9)",
+    "casesNotTestedBecauseSearchCouldNotRun": 7,
+    "medianMsPerCase": 7457
+  },
+  "cases": [
+    {
+      "run": 1,
+      "id": "q-spot-right",
+      "kind": "authentic",
+      "got": "unverifiable",
+      "expect": [
+        "verified_exact"
+      ],
+      "ok": null,
+      "speaker": null,
+      "location": null,
+      "ms": 7461
+    },
+    {
+      "run": 1,
+      "id": "q-spot-wrong-speaker",
+      "kind": "wrong_attribution",
+      "got": "unverifiable",
+      "expect": [
+        "incorrect_attribution"
+      ],
+      "ok": null,
+      "speaker": null,
+      "location": null,
+      "ms": 10020
+    },
+    {
+      "run": 1,
+      "id": "q-perfumes-right",
+      "kind": "authentic",
+      "got": "unverifiable",
+      "expect": [
+        "verified_exact"
+      ],
+      "ok": null,
+      "speaker": null,
+      "location": null,
+      "ms": 8577
+    },
+    {
+      "run": 1,
+      "id": "q-unsex-right",
+      "kind": "authentic",
+      "got": "unverifiable",
+      "expect": [
+        "verified_exact"
+      ],
+      "ok": null,
+      "speaker": null,
+      "location": null,
+      "ms": 10027
+    },
+    {
+      "run": 1,
+      "id": "q-water-right",
+      "kind": "authentic",
+      "got": "unverifiable",
+      "expect": [
+        "verified_exact"
+      ],
+      "ok": null,
+      "speaker": null,
+      "location": null,
+      "ms": 7769
+    },
+    {
+      "run": 1,
+      "id": "q-dagger-right",
+      "kind": "authentic",
+      "got": "unverifiable",
+      "expect": [
+        "verified_exact"
+      ],
+      "ok": null,
+      "speaker": null,
+      "location": null,
+      "ms": 10016
+    },
+    {
+      "run": 1,
+      "id": "q-dagger-wrong-speaker",
+      "kind": "wrong_attribution",
+      "got": "unverifiable",
+      "expect": [
+        "incorrect_attribution"
+      ],
+      "ok": null,
+      "speaker": null,
+      "location": null,
+      "ms": 10024
+    },
+    {
+      "run": 1,
+      "id": "q-invented",
+      "kind": "invented",
+      "got": "unverifiable",
+      "expect": [
+        "unsupported",
+        "paraphrase_or_misquote",
+        "unverifiable"
+      ],
+      "ok": true,
+      "speaker": null,
+      "location": null,
+      "ms": 7457
+    },
+    {
+      "run": 1,
+      "id": "q-misquote",
+      "kind": "misquote",
+      "got": "unverifiable",
+      "expect": [
+        "paraphrase_or_misquote",
+        "unsupported",
+        "unverifiable",
+        "verified_variant"
+      ],
+      "ok": true,
+      "speaker": null,
+      "location": null,
+      "ms": 7272
+    },
+    {
+      "run": 1,
+      "id": "e-ghost-lady",
+      "kind": "false_event",
+      "got": "unsupported",
+      "expect": [
+        "contradicted",
+        "unsupported"
+      ],
+      "ok": true,
+      "sourcesRead": 0,
+      "ms": 1953
+    },
+    {
+      "run": 1,
+      "id": "e-ghost-macbeth",
+      "kind": "true_event",
+      "got": "unsupported",
+      "expect": [
+        "supported"
+      ],
+      "ok": false,
+      "sourcesRead": 0,
+      "ms": 1
+    },
+    {
+      "run": 1,
+      "id": "e-gerald-pregnant",
+      "kind": "false_event",
+      "got": "unsupported",
+      "expect": [
+        "contradicted",
+        "unsupported"
+      ],
+      "ok": true,
+      "sourcesRead": 0,
+      "ms": 1944
+    },
+    {
+      "run": 1,
+      "id": "e-sheila-pregnant",
+      "kind": "false_event",
+      "got": "unsupported",
+      "expect": [
+        "contradicted",
+        "unsupported"
+      ],
+      "ok": true,
+      "sourcesRead": 0,
+      "ms": 0
+    },
+    {
+      "run": 1,
+      "id": "e-eric-prison",
+      "kind": "false_event",
+      "got": "unsupported",
+      "expect": [
+        "contradicted",
+        "unsupported"
+      ],
+      "ok": true,
+      "sourcesRead": 0,
+      "ms": 0
+    },
+    {
+      "run": 1,
+      "id": "e-bertha",
+      "kind": "false_event",
+      "got": "unsupported",
+      "expect": [
+        "contradicted",
+        "unsupported"
+      ],
+      "ok": true,
+      "sourcesRead": 0,
+      "ms": 0
+    },
+    {
+      "run": 1,
+      "id": "e-eric-pregnant-eva",
+      "kind": "true_event",
+      "got": "unsupported",
+      "expect": [
+        "supported",
+        "unsupported"
+      ],
+      "ok": true,
+      "sourcesRead": 0,
+      "ms": 0
+    }
+  ],
+  "notLiveTested": [
+    "essay quality (needs teachers)",
+    "a real model's answers (run by the owner)"
+  ]
+}

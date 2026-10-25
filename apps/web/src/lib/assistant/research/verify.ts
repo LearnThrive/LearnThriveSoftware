@@ -2,6 +2,7 @@ import { TtlCache } from "./cache";
 import { fetchSource, type FetchedSource, type FetchOptions } from "./fetchSource";
 import { workOf } from "./works";
 import { cleanQuery, quotationQuery } from "./privacy";
+import { isPlayTextHost, isPublicDomainPlay, locateQuotation, parseSpeeches, sameSpeaker, type Speech } from "./playText";
 import { matchQuotation, words } from "./quotations";
 import { isOfficialExamHost, rankResults, tierOf, type RankedResult, type SearchPurpose, type SourceTier } from "./ranking";
 import type { SearchOutcome, SearchStatus } from "./searxng";
@@ -34,12 +35,12 @@ export const RESEARCH_LIMITS: ResearchLimits = { maxSearches: 3, maxFetches: 3, 
 export interface ResearchDeps {
   searx: SearchLike;
   limits: ResearchLimits;
-  fetchOptions?: Pick<FetchOptions, "fetcher" | "resolve" | "pdfText">;
+  fetchOptions?: Pick<FetchOptions, "fetcher" | "resolve" | "pdfText" | "crawler">;
   cacheTtlSeconds?: number;
   now?: () => number;
 }
 
-export type QuoteStatus = "verified_exact" | "verified_variant" | "supported_secondary" | "paraphrase_or_misquote" | "unsupported" | "unverifiable";
+export type QuoteStatus = "verified_exact" | "verified_variant" | "supported_secondary" | "paraphrase_or_misquote" | "incorrect_attribution" | "unsupported" | "unverifiable";
 
 export interface Evidence {
   url: string;
@@ -59,6 +60,8 @@ export interface QuoteVerdict {
   speaker?: string;
   /** What the source actually says, when it differs from what was quoted. */
   sourceWording?: string;
+  /** Whether the speaker (and place) the reply claimed were checked against the structure of the text: confirmed, contradicted, or not checkable. */
+  attribution?: "confirmed" | "mismatch" | "unchecked";
   evidence: Evidence[];
   note: string;
 }
@@ -207,6 +210,11 @@ export class ResearchSession {
     return [...this.read.values()].filter((p): p is Extract<FetchedSource, { ok: true }> => p.ok).map((p) => p.text);
   }
 
+  /** Whether this page has already been read this turn. */
+  wasRead(url: string): boolean {
+    return this.read.has(url.replace(/#.*$/, ""));
+  }
+
   /** Whether a search in this turn returned this address: the only addresses the model may ask to have opened. */
   wasOffered(url: string): boolean {
     const key = url.replace(/#.*$/, "");
@@ -236,18 +244,26 @@ export class ResearchSession {
   }
 
   /** Whether a quotation is in the work it is said to come from. See QuoteStatus for what each answer means and does not mean. */
-  async verifyQuotation(input: { quotation: string; work?: string | null; author?: string | null }): Promise<QuoteVerdict> {
+  async verifyQuotation(input: { quotation: string; work?: string | null; author?: string | null; claimedSpeaker?: string | null; claimedAct?: number | null; claimedScene?: number | null; extracts?: readonly string[] }): Promise<QuoteVerdict> {
     const quotation = input.quotation.replace(/\s+/g, " ").trim();
     const work = input.work || workOf(`${input.quotation} ${input.work ?? ""} ${input.author ?? ""}`) || null;
     const base = { quotation, work, evidence: [] as Evidence[] };
     if (words(quotation).length < 2) return { ...base, status: "unverifiable", note: "Too short to check on its own." };
 
+    // Text the student supplied is evidence of what they were given, not of what a published edition says: it is said so.
+    for (const extract of input.extracts ?? []) {
+      const m = matchQuotation(quotation, extract);
+      if (m.kind === "exact" && !m.short) return { ...base, status: "verified_exact", attribution: "unchecked", evidence: [{ url: "user:extract", title: "the extract you supplied", tier: "general", extract: clip(m.matched, 300), read: true }], note: "Found in the extract you supplied (not checked against a published edition)." };
+    }
+
     if (!this.available) return { ...base, status: "unverifiable", note: "This could not be checked against a source here (web search is not available)." };
 
-    type Found = { kind: "exact" | "variant"; tier: SourceTier; evidence: Evidence; matched: string };
+    type Found = { kind: "exact" | "variant"; tier: SourceTier; evidence: Evidence; matched: string; speech: Speech | null };
     const found: { best: Found | null; nearest: number; nearestEvidence: Evidence | null; readAny: boolean } = { best: null, nearest: 0, nearestEvidence: null, readAny: false };
-    const strongTier = (t: SourceTier) => t === "authoritative_text" || t === "official_exam" || t === "institutional" || t === "reputable_education";
-    const consider = (url: string, title: string, tier: SourceTier, text: string) => {
+    // Only a primary text (an edition of the work) or an exam board's own page can VERIFY a quotation. A school's website, a university
+    // page, the BBC, revision sites and general sites quote plays, and are sometimes wrong: they can support a quotation, never confirm it.
+    const strongTier = (t: SourceTier) => t === "authoritative_text" || t === "official_exam";
+    const consider = (url: string, title: string, tier: SourceTier, text: string, html = "") => {
       found.readAny = true;
       const m = matchQuotation(quotation, text);
       found.nearest = Math.max(found.nearest, m.similarity);
@@ -257,23 +273,40 @@ export class ResearchSession {
         return;
       }
       const best = found.best;
-      if (!best || (m.kind === "exact" && best.kind !== "exact") || (m.kind === best.kind && rank(tier) > rank(best.tier))) found.best = { kind: m.kind, tier, evidence, matched: m.matched };
+      // Who says it, and where, from the structure of a play's text: the words being on the page proves nothing about the speaker.
+      let speech: Speech | null = null;
+      try {
+        if (strongTier(tier) && isPlayTextHost(new URL(url).hostname)) speech = locateQuotation(parseSpeeches({ html, text, url }), quotation)?.speech ?? null;
+      } catch {
+        speech = null;
+      }
+      if (!best || (m.kind === "exact" && best.kind !== "exact") || (m.kind === best.kind && rank(tier) > rank(best.tier)) || (m.kind === best.kind && rank(tier) === rank(best.tier) && speech && !best.speech)) found.best = { kind: m.kind, tier, evidence, matched: m.matched, speech };
     };
     const done = () => found.best?.kind === "exact" && strongTier(found.best.tier);
 
     // Pages already read this turn (the research done before the reply) are checked first: no new search if one of them settles it.
-    for (const [key, page] of this.read) if (page.ok) consider(page.url, page.title || key, tierOf(page.url), page.text);
+    for (const [key, page] of this.read) if (page.ok) consider(page.url, page.title || key, tierOf(page.url), page.text, page.html);
 
     if (!done()) {
       const search = await this.searchWeb(quotationQuery({ quotation, work: work ?? undefined, author: input.author ?? undefined }), "quotation");
       if (!search.ranked.length && !found.readAny) {
         const failed = search.outcome.status !== "ok" && search.outcome.status !== "empty";
-        return { ...base, status: failed ? "unverifiable" : "unsupported", note: failed ? `This could not be checked: ${search.note}` : "No source was found containing these words." };
+        // A search that returned nothing to read has not shown the words are absent: that is unverifiable. "Unsupported" is only for pages that were READ.
+        return { ...base, status: "unverifiable", note: failed ? `This could not be checked: ${search.note}` : "The search returned no pages to check these words against." };
       }
       for (const r of search.ranked.filter((x) => x.tier !== "low" && !this.read.has(x.url.replace(/#.*$/, ""))).slice(0, 3)) {
         if (done()) break;
         const page = await this.fetchPage(r.url);
-        if (page.ok) consider(page.url, page.title || r.title, r.tier, page.text);
+        if (page.ok) consider(page.url, page.title || r.title, r.tier, page.text, page.html);
+      }
+      // A public-domain play has a primary text on the web. If none was found, look for it by name: that is the only place speaker and scene are known.
+      if (!(found.best && strongTier(found.best.tier)) && isPublicDomainPlay(work) && !(this.queries.size >= this.limits.maxSearches)) {
+        const more = await this.searchWeb(`${work} ${words(quotation).slice(0, 8).join(" ")} shakespeare.mit.edu`, "quotation");
+        for (const r of more.ranked.filter((x) => isPlayTextHost(x.host) && !this.read.has(x.url.replace(/#.*$/, ""))).slice(0, 2)) {
+          if (done() && found.best?.speech) break;
+          const page = await this.fetchPage(r.url);
+          if (page.ok) consider(page.url, page.title || r.title, r.tier, page.text, page.html);
+        }
       }
       if (!found.best && !found.readAny) {
         // Only search snippets were seen: a snippet is a lead, never proof.
@@ -286,10 +319,18 @@ export class ResearchSession {
     const best = found.best;
     if (best) {
       const strong = strongTier(best.tier);
+      const where = best.speech ? [best.speech.act ? `Act ${best.speech.act}` : "", best.speech.scene ? `Scene ${best.speech.scene}` : ""].filter(Boolean).join(" ") : "";
+      if (strong && best.speech && input.claimedSpeaker && !sameSpeaker(input.claimedSpeaker, best.speech.speaker))
+        return { ...base, status: "incorrect_attribution", attribution: "mismatch", speaker: best.speech.speaker, location: where || undefined, evidence: [best.evidence], note: `These words are spoken by ${best.speech.speaker}${where ? ` (${where})` : ""}, not by ${input.claimedSpeaker}.` };
+      if (strong && best.speech && ((input.claimedAct && best.speech.act && input.claimedAct !== best.speech.act) || (input.claimedScene && best.speech.scene && input.claimedScene !== best.speech.scene)))
+        return { ...base, status: "incorrect_attribution", attribution: "mismatch", speaker: best.speech.speaker, location: where || undefined, evidence: [best.evidence], note: `These words are in ${where}, not where the answer places them.` };
       const status: QuoteStatus = strong ? (best.kind === "exact" ? "verified_exact" : "verified_variant") : "supported_secondary";
       return {
         ...base,
         status,
+        attribution: strong && best.speech ? "confirmed" : "unchecked",
+        speaker: strong ? best.speech?.speaker : undefined,
+        location: strong && where ? where : undefined,
         sourceWording: best.kind === "variant" ? best.evidence.extract : undefined,
         evidence: [best.evidence],
         note: strong ? `Found in a ${best.tier.replace("_", " ")} source that was read.` : "Found only in a secondary source (revision or general site). Treat as likely, not confirmed.",

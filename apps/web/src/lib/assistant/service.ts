@@ -12,6 +12,7 @@ import { deterministicRoute, needsDecision, type RouteDecision, type SystemOneCl
 import { enqueueIndex, drainIndexQueue, describeHits, indexFile, searchUploads, type RetrievalDeps, type RetrievalHit } from "./retrieval";
 import { runTool, toolsFor } from "./tools";
 import { finishStudy, planStudy, prepareStudy, type StudyPrep } from "./study";
+import { reviewAnswer } from "./gate";
 import type { ResearchService } from "./research/verify";
 import type { EmbeddingProvider } from "./embeddings";
 
@@ -34,7 +35,7 @@ import type { EmbeddingProvider } from "./embeddings";
 export type ChatErrorCode = "empty" | "too_long" | "rate_limited_minute" | "rate_limited_day" | "busy" | "unavailable" | "timeout" | "budget" | "vision_unavailable" | "no_chat" | "aborted";
 
 /** What the page may show while the server has evidence for it. Never a percentage. */
-export type ChatStatus = "preparing" | "reading" | "researching" | "thinking";
+export type ChatStatus = "preparing" | "reading" | "researching" | "verifying" | "thinking";
 
 export type ChatEvent =
   | { type: "session"; sessionId: string }
@@ -306,7 +307,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
     // Reading sources takes a few seconds: say so, so the wait is not mistaken for a stall.
     if (deps.research && planStudy(text, history).ground) yield { type: "status", state: "researching" };
     try {
-      study = await prepareStudy({ text, material: text + uploadedText, history, research: deps.research ?? null, owner: input.owner.clientId, signal: input.signal });
+      study = await prepareStudy({ text, material: text + uploadedText, history, research: deps.research ?? null, extracts: uploadedText ? [uploadedText] : [], owner: input.owner.clientId, signal: input.signal });
     } catch {
       study = null;
     }
@@ -349,6 +350,10 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
   };
   const queuedEvents: ChatEvent[] = [];
   const enqueuedAt = Date.now();
+
+  // Answers where a wrong quotation or invented event does real harm are held, verified and repaired before the student reads a word (gate.ts).
+  const gated = study?.gated === true;
+  let heldUndelivered = gated;
 
   const stream = async function* (): AsyncGenerator<ChatEvent> {
     const model = images.length && config.visionModel ? config.visionModel : config.model;
@@ -416,7 +421,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
           const safe = guard.push(chunk.text);
           if (safe) {
             shown += safe;
-            yield { type: "delta", text: safe };
+            if (!gated) yield { type: "delta", text: safe };
           }
           if (guard.stoppedFor) return;
           continue;
@@ -453,7 +458,59 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
     const rest = guard.finish();
     if (rest) {
       shown += rest;
-      yield { type: "delta", text: rest };
+      if (!gated) yield { type: "delta", text: rest };
+    }
+    // The gate: the draft is checked, repaired by the model (twice at most) and cut by the server if it is still unsupported. Then it is shown.
+    if (gated && study && heldUndelivered && !guard.stoppedFor) {
+      if (shown.trim()) {
+        yield { type: "status", state: "verifying" };
+        // A corrected rewrite from the model. Not allowed to think, never allowed to overrun the window: if it cannot fit, the draft is cut instead.
+        const rewrite = async (instruction: string, draft: string): Promise<string> => {
+          const prompt: ProviderMessage[] = [...messages, { role: "assistant", content: draft }, { role: "user", content: instruction }];
+          const room = config.contextSize - prompt.reduce((n, m) => n + approxTokens(m.content), 0) - 64;
+          if (room < approxTokens(draft) * 0.9) return draft;
+          const again = new OutputGuard();
+          let out = "";
+          let cut = false;
+          try {
+            for await (const c of deps.provider.stream(prompt, {
+              model,
+              maxTokens: Math.min(config.maxOutputTokens, room),
+              temperature: 0.2,
+              contextSize: config.contextSize,
+              signal: input.signal,
+              keepAlive: config.keepAlive,
+              firstTokenTimeoutMs: stage.firstActivityMs,
+              firstAnswerTimeoutMs: stage.firstAnswerMs,
+              idleTimeoutMs: stage.idleMs,
+              totalTimeoutMs: Math.min(stage.turnMs, 120_000),
+              reasoning: false,
+              think: false,
+            })) {
+              if (c.type === "text") {
+                const s = again.push(c.text);
+                if (s) out += s;
+                if (again.stoppedFor) return draft;
+              } else if (c.type === "done" && c.cutOff) cut = true;
+            }
+            out += again.finish();
+          } catch {
+            return draft;
+          }
+          return cut ? draft : out;
+        };
+        let reviewed: Awaited<ReturnType<typeof reviewAnswer>> | null = null;
+        try {
+          reviewed = await reviewAnswer(study, shown, { rewrite, maxRepairs: 2, deadlineMs: 90_000 });
+        } catch {
+          reviewed = null;
+        }
+        study.gate = reviewed;
+        shown = reviewed ? reviewed.text : `${shown}\n\n(This answer could not be checked against the sources, so treat its quotations and facts as unverified.)`;
+        for (let at = 0; at < shown.length; at += 240) yield { type: "delta", text: shown.slice(at, at + 240) };
+        log("gate", { repairs: reviewed?.repairs ?? -1, firstDraftProblems: reviewed?.firstDraft.length ?? -1, removed: reviewed?.removed.length ?? -1 });
+      }
+      heldUndelivered = false;
     }
     // An answer that hit the length limit says so, instead of stopping mid-sentence as if it had finished. "Continue" carries on from it.
     if (st.cutOff && shown.trim() && !guard.stoppedFor) {
@@ -554,6 +611,15 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
     tokensPerSecond: st.timings.metrics?.tokensPerSecond ?? -1,
   });
 
+  if (heldUndelivered) {
+    // The reply was held for checking but the turn ended first (an error, a timeout, a stopped output). A blocked reply is never released.
+    if (guard.stoppedFor) shown = "";
+    else if (shown.trim()) {
+      shown += "\n\n(This answer was interrupted before it could be checked against the sources, so treat its quotations and facts as unverified.)";
+      yield { type: "delta", text: shown };
+    }
+    heldUndelivered = false;
+  }
   if (guard.stoppedFor) {
     log("output_blocked", { reason: guard.stoppedFor });
     const note = `${shown ? "\n\n" : ""}${OUTPUT_BLOCKED_REPLY}`;
