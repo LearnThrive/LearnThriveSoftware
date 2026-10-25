@@ -17,11 +17,13 @@ The principles, in the order they win a disagreement:
 ```
 student message
   -> detectStudyContext        subject, board, qualification, marks, command word, activity (no model call)
-  -> prepareStudy              quotations in the message looked up on the web (nothing is stored locally);
+  -> prepareStudy              GROUNDING: for a subject where facts matter, search and read the best pages first;
+                               quotations in the message looked up on the web (nothing is stored locally);
                                exam-board documents looked up if asked; result written as a <verification> block
   -> model answers             with a per-turn instruction block for the subject and activity, the <verification> block,
                                and (if research is on) the research tools
-  -> finishStudy               marks the evidence lowers, quotations that did not match or were never checked,
+  -> finishStudy               quotations and names in the reply checked against the pages read;
+                               marks the evidence lowers, quotations that did not match or were never checked,
                                plainly wrong sums, sources read -> a short "Check" under the reply
 ```
 
@@ -39,7 +41,7 @@ Spoken (voice) turns skip both to stay quick.
 | SearXNG client (JSON API, every outcome a status) | `research/searxng.ts` |
 | Source ranking by tier | `research/ranking.ts` |
 | Fetching a page safely (redirects re-checked, byte cap, PDF) | `research/fetchSource.ts`, `research/safeUrl.ts`, `research/htmlText.ts` |
-| Quotation matching; naming a set text | `research/quotations.ts`, `research/works.ts` |
+| Quotation matching; naming a set text; grounding | `research/quotations.ts`, `research/works.ts`, `research/ground.ts` |
 | Per-turn research session: budgets, repeats, verdicts | `research/verify.ts` |
 | Query privacy | `research/privacy.ts` |
 | The research tools the model may call | `research/tools.ts`, `tools.ts` |
@@ -54,13 +56,34 @@ and **what the student sets beats a guess**. When it is not sure, the instructio
 
 Nothing is added to the instructions when nothing is detected, so a greeting costs no extra tokens.
 
+## Grounding: read first, answer second
+
+A small local model asked for a model answer on a set text will invent a scene, a character and a quotation, and it will not reliably call a search
+tool itself. So the **server** reads before the model writes (`research/ground.ts`):
+
+1. For English Literature, history, geography, the sciences, religious studies, psychology, business and computer science (not a calculation, a
+   quiz or small talk), it builds one or two searches from the work and the question's topic words. The question's wording ("model answer", "30
+   marks") and any quoted passage are left out.
+2. It reads the best pages (one per site, best source tier first) and keeps the sentences that say most about the topic.
+3. Those excerpts go to the model in a `<research>` block with a rule: build the answer **only** from facts, events, relationships and
+   quotations in the excerpts or in the student's message; leave out or flag anything else; never invent a quotation, scene or character. The block
+   also states how many searches and pages were used, so "did you use search?" has a true answer. While this runs the page shows "Checking sources
+   online...".
+4. After the reply, quotations the model added are checked against the pages already read (then by a search, budget allowing), and any capitalised
+   name in the reply that is in none of the pages and not in the student's message is listed. Both appear under the reply.
+5. If nothing could be read (SearXNG unreachable, nothing found), the model is told research failed and the student sees "No web sources could be
+   read for this answer... treat its facts, events and quotations as unverified". It never silently answers from memory as if it had checked.
+
+The pre-reply reading and the post-reply checks cost up to about five searches and five page reads per answer (`RESEARCH_MAX_SEARCHES`,
+`RESEARCH_MAX_FETCHES`), and add a few seconds before the first word.
+
 ## Quotations and facts
 
 `verifyQuotation` returns one of:
 
 | Status | Meaning |
 | --- | --- |
-| `verified_exact` | the words are in an authoritative, institutional or official page that was read |
+| `verified_exact` | the words are in an authoritative, institutional, official or reputable-education (BBC, a university) page that was read |
 | `verified_variant` | the same passage, with a difference (a modernised spelling, a dropped word); the real wording is shown |
 | `supported_secondary` | seen only on a revision or general site, or only in a search snippet. **Not confirmed.** |
 | `paraphrase_or_misquote` | something close is in the sources read, but not these words |
@@ -90,8 +113,8 @@ Web research is **always on**: there is no on/off setting. Every variable below 
 | `SEARXNG_TIMEOUT_MS` | 8000 | One search. |
 | `SEARXNG_MAX_RESULTS` | 8 | Results kept. |
 | `SEARXNG_CACHE_TTL_SECONDS` | 3600 | Identical searches and pages already read are reused (0 = no cache). |
-| `RESEARCH_MAX_SEARCHES` | 3 | Per answer. |
-| `RESEARCH_MAX_FETCHES` | 3 | Pages read per answer. |
+| `RESEARCH_MAX_SEARCHES` | 5 | Per answer. |
+| `RESEARCH_MAX_FETCHES` | 5 | Pages read per answer. |
 | `RESEARCH_FETCH_MAX_BYTES` | 1500000 | Per page or PDF. |
 | `RESEARCH_PER_MINUTE` | 10 | Searches per account per minute. |
 | `SEARXNG_SECRET`, `SEARXNG_IMAGE` | a development value, `searxng/searxng:latest` | Used only by the container in `config/compose.yaml`. |
@@ -194,5 +217,8 @@ privacy and rate limits.
 - PDFs are read through the existing document reader; a scanned PDF with no text layer is reported as unreadable.
 - Marking is AQA English Literature only. The caps use simple measures (length, quotations, context words); they stop generous marks, they do
   not judge quality. A human marker is the authority.
-- A 9B local model may ignore the tools. The server-side checks do not depend on it: quotations are verified before it answers, and the
+- A 9B local model may ignore the tools. The server-side reading and checks do not depend on it: pages are read before it answers, and the
   "Check" is added after.
+- The name check is a heuristic: it lists capitalised words that are in none of the pages read, so it can miss an invented fact that uses only known
+  names (a real character doing something they did not do) and can flag a real name the two pages happened not to mention. Excerpts are only as
+  complete as the two pages read.
