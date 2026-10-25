@@ -143,8 +143,8 @@ Set these in Render's environment, as secrets where the table says so, and nowhe
 | `SEARXNG_TIMEOUT_MS` | How long one search may take before it is given up on. | optional | optional | no | n/a | 8000 |
 | `SEARXNG_MAX_RESULTS` | Most results kept from one search. | optional | optional | no | n/a | 8 |
 | `SEARXNG_CACHE_TTL_SECONDS` | How long an identical search or an already-read page is reused (0 turns the cache off). | optional | optional | no | n/a | 3600 |
-| `RESEARCH_MAX_SEARCHES` | Searches one answer may make. | optional | optional | no | n/a | 3 |
-| `RESEARCH_MAX_FETCHES` | Web pages one answer may read. | optional | optional | no | n/a | 3 |
+| `RESEARCH_MAX_SEARCHES` | Searches one answer may make. | optional | optional | no | n/a | 5 |
+| `RESEARCH_MAX_FETCHES` | Web pages one answer may read. | optional | optional | no | n/a | 5 |
 | `RESEARCH_FETCH_MAX_BYTES` | Most bytes read from one web page or PDF. | optional | optional | no | n/a | 1500000 |
 | `RESEARCH_PER_MINUTE` | Searches one account may start per minute, across answers. | optional | optional | no | n/a | 10 |
 | `ASSISTANT_RETRIEVAL` | on (default) or off: search the family's OWN uploads for relevant chunks. Off also stops indexing. | optional | optional | no | n/a | on |

@@ -500,7 +500,7 @@ export function StudyBuddy() {
               code?: string;
               position?: number;
               /** An honest processing state, only when the server has evidence for it. */
-              state?: "preparing" | "reading" | "thinking";
+              state?: "preparing" | "reading" | "researching" | "thinking";
             };
             if (event.type === "session" && event.sessionId)
               setSessionId(event.sessionId);
@@ -514,7 +514,9 @@ export function StudyBuddy() {
                     ? "Working through it\u2026"
                     : event.state === "reading"
                       ? "Reading the picture\u2026"
-                      : "",
+                      : event.state === "researching"
+                        ? "Checking sources online\u2026"
+                        : "",
               );
             else if (event.type === "delta" && event.text) {
               setWaiting("");

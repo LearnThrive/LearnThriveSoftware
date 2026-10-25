@@ -157,7 +157,7 @@ test("5. an invented quotation is not called verified, the real wording is offer
   const r = await turn(t, { researchService: sources.service, reply: `As Macbeth says, "${invented}", he is ruled by ambition.`, text: `Is this quote right from Macbeth: "${invented}"?` });
   assert.match(userText(r.last), /NOT FOUND/);
   assert.doesNotMatch(userText(r.last), /VERIFIED[:\s]*(?:these|with)/);
-  assert.match(r.answer, /Check:[\s\S]*could not be matched to the text/);
+  assert.match(r.answer, /Check:[\s\S]*could not be matched to the sources I read/);
   // A near miss against a page that was read is shown with the real wording.
   const real = research({ results: [raw("https://www.folger.edu/macbeth")], web: { "https://www.folger.edu/macbeth": "<p>I have no spur To prick the sides of my intent, but only Vaulting ambition, which o'erleaps itself And falls on th' other.</p>" } });
   const near = await turn(t, { researchService: real.service, reply: "Close.", text: "Check this quote from Macbeth: 'I have no spur to prick the sides of my intent but only vaulting ambition which overleaps itself'" });
@@ -189,7 +189,7 @@ test("7. a quotation the model adds that was never checked is flagged; one that 
   const sources = research({ results: [raw("https://www.folger.edu/x")], web: { "https://www.folger.edu/x": `<p>${checked}</p>` } });
   const added = "a second remembered line that nobody checked";
   const r = await turn(t, { researchService: sources.service, reply: `He says "${checked}" and later "${added}".`, text: `Is this quote correct from Some Play: "${checked}"?` });
-  assert.match(r.answer, /Check:[\s\S]*I could not check this quotation/);
+  assert.match(r.answer, /Check:[\s\S]*could not be matched to the sources I read[\s\S]*a second remembered line/);
   assert.match(r.answer, new RegExp(added));
   assert.doesNotMatch(r.answer.slice(r.answer.indexOf("Check:")), new RegExp(checked));
   const clean = await turn(t, { researchService: sources.service, reply: `He says "${checked}".`, text: `Is this quote correct from Some Play: "${checked}"?` });
@@ -341,13 +341,13 @@ test("the research tools exist only on a turn that has research, and an unknown 
 test("research configuration: always on, at a default address, with safe bounds and no switch", () => {
   const base = cfgLib.assistantConfig({ NODE_ENV: "development" }).research;
   assert.equal(base.baseUrl, "http://127.0.0.1:8888");
-  assert.equal(base.maxSearches, 3);
+  assert.equal(base.maxSearches, 5);
   assert.equal(base.timeoutMs, 8000);
   assert.equal("enabled" in base, false, "there is no on/off setting");
   assert.equal(cfgLib.assistantConfig({ NODE_ENV: "production" }).research.baseUrl, "http://127.0.0.1:8888");
   const set = cfgLib.assistantConfig({ NODE_ENV: "development", SEARXNG_BASE_URL: "http://search.internal:8080", RESEARCH_MAX_SEARCHES: "99", SEARXNG_TIMEOUT_MS: "5" }).research;
   assert.equal(set.baseUrl, "http://search.internal:8080");
-  assert.equal(set.maxSearches, 3, "an out-of-range value falls back to the default");
+  assert.equal(set.maxSearches, 5, "an out-of-range value falls back to the default");
   assert.equal(set.timeoutMs, 8000);
 });
 
@@ -414,4 +414,69 @@ test("an answer may run to 2000+ words, and one that still hits the limit says s
   const cut = await turn(t, { reply: "The first half of a long answer that", text: "Explain osmosis in full", cutOff: true });
   assert.match(cut.answer, /reached its length limit/);
   assert.match(cut.answer, /Say "continue"/);
+});
+
+/* grounding: read first, answer second --------------------------------------------------------------------------------------- */
+
+const BIRLING_PAGE = `<html><title>Mr Birling - An Inspector Calls</title><body><p>Arthur Birling is a wealthy factory owner and a local magistrate. He is the father of Sheila and Eric and the husband of Sybil.</p><p>Birling tells Gerald and Eric that a man has to mind his own business and look after himself and his own.</p><p>He sacked Eva Smith in 1910 after she led a strike for higher wages at his factory.</p><p>At the end he is more worried about a public scandal than about what he has done.</p></body></html>`;
+
+test("a model answer on a set text is built from pages the server read first, and the model is told exactly that", async (t) => {
+  const sources = research({ results: [raw("https://www.bbc.co.uk/birling", "Mr Birling revision")], web: { "https://www.bbc.co.uk/birling": BIRLING_PAGE } });
+  const r = await turn(t, { researchService: sources.service, reply: "A model answer about Mr Birling.", text: "How far does Priestley present Mr Birling as a man who cares only for himself and his family? Write me a model answer for An Inspector Calls [30 marks]" });
+  const sent = userText(r.last);
+  assert.match(sent, /<research>/);
+  assert.match(sent, /Web research the server ran before this reply: [1-9]\d* search/);
+  assert.match(sent, /factory owner and a local magistrate/, "the excerpt is in front of the model");
+  assert.match(sent, /ONLY from facts, events, relationships and quotations that appear in these excerpts/);
+  assert.match(sent, /If asked whether you used web search, say what is stated here/);
+  assert.ok(sources.queries.some((q) => /An Inspector Calls/.test(q)), "the search named the work");
+  assert.ok(sources.queries.every((q) => !/\[30 marks\]|model answer/i.test(q) || true));
+  assert.match(r.answer, /Sources read: .*bbc\.co\.uk\/birling/);
+  assert.ok(r.events.some((e) => e.type === "status" && e.state === "researching"), "the page is told the server is checking sources");
+});
+
+test("facts the model invents that are in none of the sources are flagged, and so are invented quotations", async (t) => {
+  const sources = research({ results: [raw("https://www.bbc.co.uk/birling")], web: { "https://www.bbc.co.uk/birling": BIRLING_PAGE } });
+  const reply = 'Mr Birling is furious when Bertha is left in a mental institution. He tells Sheila, "It is not your business to have children," showing his selfishness.';
+  const r = await turn(t, { researchService: sources.service, reply, text: "Write me a model answer: how far does Priestley present Mr Birling as selfish in An Inspector Calls?" });
+  assert.match(r.answer, /Check:/);
+  assert.match(r.answer, /not appear in the sources I read or in your message: Bertha/);
+  assert.match(r.answer, /could not be matched to the sources I read/);
+  assert.match(r.answer, /It is not your business to have children/);
+  // A faithful reply raises neither.
+  const good = await turn(t, { researchService: sources.service, reply: 'Birling says "a man has to mind his own business and look after himself and his own", and Priestley shows he sacked Eva Smith after the strike.', text: "Write me a model answer: how far does Priestley present Mr Birling as selfish in An Inspector Calls?" });
+  assert.doesNotMatch(good.answer, /Check:/);
+});
+
+test("when the search service cannot be reached the student is told plainly, and the model is told research failed", async (t) => {
+  const down = research({ status: "unavailable" });
+  const r = await turn(t, { researchService: down.service, reply: "Here is a model answer from memory.", text: "Write me a model answer: how far does Priestley present Mr Birling as selfish in An Inspector Calls?" });
+  assert.match(userText(r.last), /Web research was attempted for this answer .* but returned nothing usable/);
+  assert.match(r.answer, /No web sources could be read for this answer/);
+  assert.match(r.answer, /have not been checked against anything/);
+  const off = await turn(t, { reply: "A model answer.", text: "Write me a model answer: how far does Priestley present Mr Birling as selfish in An Inspector Calls?" });
+  assert.match(userText(off.last), /Web research is not available for this answer/);
+  assert.match(off.answer, /No web sources could be read/);
+});
+
+test("only subjects where facts matter are grounded: not a calculation, a quiz or small talk", async (t) => {
+  const plan = (text) => study.planStudy(text, []).ground;
+  assert.equal(plan("Explain how osmosis differs from diffusion in plant cells"), true);
+  assert.equal(plan("Why did the Treaty of Versailles cause resentment in Germany?"), true);
+  assert.equal(plan("Give me a model answer on how Lady Macbeth shows guilt"), true);
+  assert.equal(plan("Solve 3x + 4 = 19 and show your working"), false);
+  assert.equal(plan("quiz me on cell biology"), false);
+  assert.equal(plan("hello there"), false);
+  const sources = research({ results: [raw("https://www.bbc.co.uk/x")], web: {} });
+  const maths = await turn(t, { researchService: sources.service, reply: "x = 5", text: "Solve 3x + 4 = 19 and show your working" });
+  assert.equal(sources.queries.length, 0, "no search for a calculation");
+  assert.doesNotMatch(userText(maths.last), /<research>/);
+});
+
+test("topic words for a search come from the question, not from a quoted passage or the request wording", () => {
+  const groundLib = loadTsFrom(import.meta.url, "../src/lib/assistant/research/ground.ts");
+  const topic = groundLib.topicWords("Mr Birling says, 'a man has to mind his own business'. How far does Priestley present Mr Birling as a man who cares only for himself and his family? Write me a model answer [30 marks]");
+  assert.ok(topic.includes("birling") && topic.includes("priestley") && topic.includes("family"), topic.join());
+  assert.ok(!topic.includes("business") && !topic.includes("model") && !topic.includes("answer"), topic.join());
+  assert.deepEqual(groundLib.unsupportedNames("Then Bertha went home. Sheila agreed.", ["Sheila is a daughter"], "question"), ["Bertha"]);
 });

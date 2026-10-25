@@ -53,7 +53,7 @@ export function qaNotes({ answer, ctx, verdicts }: QaInput): string[] {
       }
       if (words(q).length >= 3) unchecked.push(q);
     }
-    if (wrong.length) notes.push(`These quotations could not be matched to the text, so do not rely on them: ${wrong.slice(0, 3).map((q) => `"${q}"`).join(", ")}.`);
+    if (wrong.length) notes.push(`These quotations could not be matched to the sources I read, so do not rely on them until you have checked the text: ${wrong.slice(0, 3).map((q) => `"${q}"`).join(", ")}.`);
     if (unchecked.length) notes.push(`I could not check ${unchecked.length === 1 ? "this quotation" : "these quotations"} against the text: ${unchecked.slice(0, 3).map((q) => `"${q}"`).join(", ")}. Check the exact wording in your copy before using ${unchecked.length === 1 ? "it" : "them"} in an exam.`);
   }
   for (const sum of wrongSums(answer)) notes.push(`This arithmetic is wrong: ${sum}.`);

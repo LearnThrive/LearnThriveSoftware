@@ -3,7 +3,7 @@ import { fetchSource, type FetchedSource, type FetchOptions } from "./fetchSourc
 import { workOf } from "./works";
 import { cleanQuery, quotationQuery } from "./privacy";
 import { matchQuotation, words } from "./quotations";
-import { isOfficialExamHost, rankResults, type RankedResult, type SearchPurpose, type SourceTier } from "./ranking";
+import { isOfficialExamHost, rankResults, tierOf, type RankedResult, type SearchPurpose, type SourceTier } from "./ranking";
 import type { SearchOutcome, SearchStatus } from "./searxng";
 
 /**
@@ -202,6 +202,11 @@ export class ResearchSession {
     return { outcome, ranked: rankResults(outcome.results, purpose, { limit: this.service.deps.limits.maxFetches + 3 }), note };
   }
 
+  /** The text of every page read this turn, for checking a reply against what was actually read. */
+  pageTexts(): string[] {
+    return [...this.read.values()].filter((p): p is Extract<FetchedSource, { ok: true }> => p.ok).map((p) => p.text);
+  }
+
   /** Whether a search in this turn returned this address: the only addresses the model may ask to have opened. */
   wasOffered(url: string): boolean {
     const key = url.replace(/#.*$/, "");
@@ -239,34 +244,48 @@ export class ResearchSession {
 
     if (!this.available) return { ...base, status: "unverifiable", note: "This could not be checked against a source here (web search is not available)." };
 
-    const search = await this.searchWeb(quotationQuery({ quotation, work: work ?? undefined, author: input.author ?? undefined }), "quotation");
-    if (!search.ranked.length) {
-      const failed = search.outcome.status !== "ok" && search.outcome.status !== "empty";
-      return { ...base, status: failed ? "unverifiable" : "unsupported", note: failed ? `This could not be checked: ${search.note}` : "No source was found containing these words." };
-    }
-
-    let best: { kind: "exact" | "variant"; tier: SourceTier; evidence: Evidence; matched: string } | null = null;
-    let nearest = 0;
-    let nearestEvidence: Evidence | null = null;
-    let readAny = false;
-    const candidates = search.ranked.filter((r) => r.tier !== "low").slice(0, 3);
-    for (const r of candidates) {
-      if (best?.kind === "exact" && (best.tier === "authoritative_text" || best.tier === "official_exam" || best.tier === "institutional")) break;
-      const page = await this.fetchPage(r.url);
-      if (!page.ok) continue;
-      readAny = true;
-      const m = matchQuotation(quotation, page.text);
-      nearest = Math.max(nearest, m.similarity);
-      const evidence = this.record({ url: page.url, title: page.title || r.title, tier: r.tier, extract: clip(m.matched || nearestSentences(page.text, quotation, 1), 300), read: true });
+    type Found = { kind: "exact" | "variant"; tier: SourceTier; evidence: Evidence; matched: string };
+    const found: { best: Found | null; nearest: number; nearestEvidence: Evidence | null; readAny: boolean } = { best: null, nearest: 0, nearestEvidence: null, readAny: false };
+    const strongTier = (t: SourceTier) => t === "authoritative_text" || t === "official_exam" || t === "institutional" || t === "reputable_education";
+    const consider = (url: string, title: string, tier: SourceTier, text: string) => {
+      found.readAny = true;
+      const m = matchQuotation(quotation, text);
+      found.nearest = Math.max(found.nearest, m.similarity);
+      const evidence = this.record({ url, title, tier, extract: clip(m.matched || nearestSentences(text, quotation, 1), 300), read: true });
       if (m.kind === "none") {
-        if (!nearestEvidence || m.similarity >= nearest) nearestEvidence = evidence;
-        continue;
+        if (!found.nearestEvidence || m.similarity >= found.nearest) found.nearestEvidence = evidence;
+        return;
       }
-      if (!best || (m.kind === "exact" && best.kind !== "exact") || (m.kind === best.kind && rank(r.tier) > rank(best.tier))) best = { kind: m.kind, tier: r.tier, evidence, matched: m.matched };
+      const best = found.best;
+      if (!best || (m.kind === "exact" && best.kind !== "exact") || (m.kind === best.kind && rank(tier) > rank(best.tier))) found.best = { kind: m.kind, tier, evidence, matched: m.matched };
+    };
+    const done = () => found.best?.kind === "exact" && strongTier(found.best.tier);
+
+    // Pages already read this turn (the research done before the reply) are checked first: no new search if one of them settles it.
+    for (const [key, page] of this.read) if (page.ok) consider(page.url, page.title || key, tierOf(page.url), page.text);
+
+    if (!done()) {
+      const search = await this.searchWeb(quotationQuery({ quotation, work: work ?? undefined, author: input.author ?? undefined }), "quotation");
+      if (!search.ranked.length && !found.readAny) {
+        const failed = search.outcome.status !== "ok" && search.outcome.status !== "empty";
+        return { ...base, status: failed ? "unverifiable" : "unsupported", note: failed ? `This could not be checked: ${search.note}` : "No source was found containing these words." };
+      }
+      for (const r of search.ranked.filter((x) => x.tier !== "low" && !this.read.has(x.url.replace(/#.*$/, ""))).slice(0, 3)) {
+        if (done()) break;
+        const page = await this.fetchPage(r.url);
+        if (page.ok) consider(page.url, page.title || r.title, r.tier, page.text);
+      }
+      if (!found.best && !found.readAny) {
+        // Only search snippets were seen: a snippet is a lead, never proof.
+        const snippet = search.ranked.find((r) => matchQuotation(quotation, r.snippet).kind === "exact");
+        if (snippet) return { ...base, status: "supported_secondary", evidence: [this.record({ url: snippet.url, title: snippet.title, tier: snippet.tier, extract: clip(snippet.snippet, 300), read: false })], note: "Seen only in a search-result snippet; no page could be read to confirm it." };
+        return { ...base, status: "unverifiable", note: "No page could be read to check this." };
+      }
     }
 
+    const best = found.best;
     if (best) {
-      const strong = best.tier === "authoritative_text" || best.tier === "official_exam" || best.tier === "institutional";
+      const strong = strongTier(best.tier);
       const status: QuoteStatus = strong ? (best.kind === "exact" ? "verified_exact" : "verified_variant") : "supported_secondary";
       return {
         ...base,
@@ -276,13 +295,9 @@ export class ResearchSession {
         note: strong ? `Found in a ${best.tier.replace("_", " ")} source that was read.` : "Found only in a secondary source (revision or general site). Treat as likely, not confirmed.",
       };
     }
-    if (readAny && nearest >= 0.5) return { ...base, status: "paraphrase_or_misquote", evidence: nearestEvidence ? [nearestEvidence] : [], note: "Something close to this is in the sources read, but not these exact words. It may be a paraphrase or a misquotation." };
-    if (readAny) return { ...base, status: "unsupported", note: "These words were not found in the sources that were read. That does not prove they are wrong; the text itself should be checked." };
-    // Only search snippets were seen: a snippet is a lead, never proof.
-    const snippet = search.ranked.find((r) => matchQuotation(quotation, r.snippet).kind === "exact");
-    return snippet
-      ? { ...base, status: "supported_secondary", evidence: [this.record({ url: snippet.url, title: snippet.title, tier: snippet.tier, extract: clip(snippet.snippet, 300), read: false })], note: "Seen only in a search-result snippet; no page could be read to confirm it." }
-      : { ...base, status: "unverifiable", note: "No page could be read to check this." };
+    if (found.readAny && found.nearest >= 0.5) return { ...base, status: "paraphrase_or_misquote", evidence: found.nearestEvidence ? [found.nearestEvidence] : [], note: "Something close to this is in the sources read, but not these exact words. It may be a paraphrase or a misquotation." };
+    if (found.readAny) return { ...base, status: "unsupported", note: "These words were not found in the sources that were read. That does not prove they are wrong; the text itself should be checked." };
+    return { ...base, status: "unverifiable", note: "No page could be read to check this." };
   }
 
   /** Evidence about a factual claim: pages that were read and the sentences in them closest to the claim. Never a verdict of "true". */

@@ -11,7 +11,7 @@ import { warmOnce } from "./warmup";
 import { deterministicRoute, needsDecision, type RouteDecision, type SystemOneClient } from "./decision";
 import { enqueueIndex, drainIndexQueue, describeHits, indexFile, searchUploads, type RetrievalDeps, type RetrievalHit } from "./retrieval";
 import { runTool, toolsFor } from "./tools";
-import { finishStudy, prepareStudy, type StudyPrep } from "./study";
+import { finishStudy, planStudy, prepareStudy, type StudyPrep } from "./study";
 import type { ResearchService } from "./research/verify";
 import type { EmbeddingProvider } from "./embeddings";
 
@@ -34,7 +34,7 @@ import type { EmbeddingProvider } from "./embeddings";
 export type ChatErrorCode = "empty" | "too_long" | "rate_limited_minute" | "rate_limited_day" | "busy" | "unavailable" | "timeout" | "budget" | "vision_unavailable" | "no_chat" | "aborted";
 
 /** What the page may show while the server has evidence for it. Never a percentage. */
-export type ChatStatus = "preparing" | "reading" | "thinking";
+export type ChatStatus = "preparing" | "reading" | "researching" | "thinking";
 
 export type ChatEvent =
   | { type: "session"; sessionId: string }
@@ -303,6 +303,8 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
   // A failure here costs the extra checks, never the answer. Spoken turns skip it to stay quick.
   let study: StudyPrep | null = null;
   if (!input.voice) {
+    // Reading sources takes a few seconds: say so, so the wait is not mistaken for a stall.
+    if (deps.research && planStudy(text, history).ground) yield { type: "status", state: "researching" };
     try {
       study = await prepareStudy({ text, material: text + uploadedText, history, research: deps.research ?? null, owner: input.owner.clientId, signal: input.signal });
     } catch {
@@ -463,7 +465,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
     if (study && shown.trim() && !guard.stoppedFor) {
       let extra = "";
       try {
-        extra = finishStudy(study, shown);
+        extra = await finishStudy(study, shown);
       } catch {
         extra = "";
       }
