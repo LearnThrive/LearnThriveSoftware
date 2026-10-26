@@ -16,7 +16,7 @@ import { navigation } from "@/lib/site";
 interface SiteHeaderSession {
   name: string;
   role: string;
-  /** Where "their place" is: the dashboard for staff and enrolled families, Study Buddy or the Library for a subscriber, the account page otherwise. */
+  /** Where "their place" is: the dashboard for staff and enrolled families, LearnThrive AI or the Library for a subscriber, the account page otherwise. */
   home: string;
   homeLabel: string;
 }
@@ -188,7 +188,7 @@ export function SiteHeader() {
             })}
           </nav>
           {/* Someone already signed in has no use for a "Login" link — send them to their
-              place instead (plan6 sections 14 and 78): the dashboard, or Study Buddy for a Library member. */}
+              place instead (plan6 sections 14 and 78): the dashboard, or LearnThrive AI for a Library member. */}
           {session ? (
             <Link
               href={session.home}

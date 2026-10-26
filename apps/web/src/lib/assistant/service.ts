@@ -21,7 +21,7 @@ import { modelLabel } from "./models";
 import { defaultTarget, type GenerationTarget } from "./selection";
 
 /**
- * One question to Study Buddy, from the signed-in family's request to the stored answer (plan19 phase F, three-model brief).
+ * One question to LearnThrive AI, from the signed-in family's request to the stored answer (plan19 phase F, three-model brief).
  *
  * The order is the security order, and it is tested without a network:
  *

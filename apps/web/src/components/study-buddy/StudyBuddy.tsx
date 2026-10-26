@@ -174,7 +174,7 @@ let counter = 0;
 const nextId = () => `local-${(counter += 1)}`;
 
 /**
- * Study Buddy. The chats live in the member sidebar (one navigation, not a second column); the page is the conversation: a short
+ * LearnThrive AI. The chats live in the member sidebar (one navigation, not a second column); the page is the conversation: a short
  * header, ONE scrolling conversation, and the box, which stays on screen. Answers stream in as newline-delimited JSON events; Stop
  * ends one (what was shown is kept). Everything an answer shows goes through the safe Markdown renderer, maths is drawn by KaTeX
  * loaded only when needed, and the AI and privacy notice is said once, beside the box, not stamped on every answer. Screen readers

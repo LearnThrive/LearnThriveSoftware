@@ -30,8 +30,10 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const NAME_MAX = 80;
 
 export const LEARNER_CONSENT_TEXT =
-  "I am this learner's parent or guardian. I agree that they may use Study Buddy, LearnThrive's AI study helper. I understand it is an AI that can make mistakes, that their conversations are private to them (I cannot read them, but I can delete them), and that I can withdraw this agreement at any time.";
-export const LEARNER_CONSENT_VERSION = "1";
+  "I am this learner's parent or guardian. I agree that they may use LearnThrive AI, LearnThrive's AI study helper. I understand it is an AI that can make mistakes, that their conversations are private to them (I cannot read them, but I can delete them), and that I can withdraw this agreement at any time.";
+// Bumped from "1" on 26 October 2026, when the product was renamed to LearnThrive AI: the text is hashed into every recorded
+// consent (see consentHash below), so a consent given against "1" must not be read as agreement to "2".
+export const LEARNER_CONSENT_VERSION = "2";
 const consentHash = () => createHash("sha256").update(`${LEARNER_CONSENT_VERSION}\n${LEARNER_CONSENT_TEXT}`).digest("hex");
 
 const limits = {
@@ -199,7 +201,7 @@ export async function handleLearnerStatus(request: Request, deps: LearnerDeps, s
   return ok ? jsonResponse(200, { status }, NO_STORE) : refuse(404, "not_found", "We could not find that learner's login.");
 }
 
-/** POST /api/learners/<id>/consent { granted: boolean }: the guardian's agreement that Study Buddy may be used. */
+/** POST /api/learners/<id>/consent { granted: boolean }: the guardian's agreement that LearnThrive AI may be used. */
 export async function handleConsent(request: Request, deps: LearnerDeps, studentId: string): Promise<Response> {
   const g = await guardianGate(request, deps, "learners-consent", true);
   if (!g.ok) return g.response;

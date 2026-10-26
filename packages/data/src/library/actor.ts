@@ -23,12 +23,12 @@ import type { AccessFacts, Account } from "./types";
 export type ActorMode = "staff" | "guardian" | "learner" | "supervised";
 
 export type AssistantDenial =
-  | "no_access" // nothing entitles them to Study Buddy
+  | "no_access" // nothing entitles them to LearnThrive AI
   | "adult_required" // an adult account that has not declared it is 18 or over
   | "learner_inactive" // the learner's login is suspended or revoked
   | "guardian_inactive" // the family's guardian link or the student record is not active
   | "learner_not_enabled" // the guardian has not enabled this way in (access mode)
-  | "consent_needed" // a minor, and no open guardian consent for Study Buddy
+  | "consent_needed" // a minor, and no open guardian consent for LearnThrive AI
   | "minors_closed"; // a minor, and the deployment has not approved the assistant for children
 
 export interface AssistantEligibility {

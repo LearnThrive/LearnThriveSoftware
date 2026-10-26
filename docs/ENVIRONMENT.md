@@ -111,13 +111,13 @@ Set these in Render's environment, as secrets where the table says so, and nowhe
 | `STRIPE_AUTOMATIC_TAX` | true asks Stripe Tax to calculate tax at checkout. | optional | optional | no | n/a | unset |
 | `STRIPE_FAKE` | Development and tests only: swaps in a fake Stripe. Refused when NODE_ENV=production. | optional | unset | no | n/a | unset |
 
-## Study Buddy, voice and the Paper Tutor
+## LearnThrive AI, voice and the Paper Tutor
 
 | Variable | What it does | Local | Render production | Secret | Where you get it | If unset |
 | --- | --- | --- | --- | --- | --- | --- |
-| `ASSISTANT_ENABLED` | The Study Buddy kill switch. In production it is on only if exactly true. | optional | unset until the owner flips it | no | n/a | on in development, off in production |
+| `ASSISTANT_ENABLED` | The LearnThrive AI kill switch. In production it is on only if exactly true. | optional | unset until the owner flips it | no | n/a | on in development, off in production |
 | `ASSISTANT_PRODUCTION_APPROVED` | true only after plan19 section 6 (provider contract, safeguarding, privacy, terms) is complete and recorded. | optional | unset until approved | no | n/a | unset |
-| `ASSISTANT_MINORS_APPROVED` | true only after the safeguarding lead approves in writing. Until then Study Buddy is for adult account holders. | optional | unset until approved | no | n/a | unset |
+| `ASSISTANT_MINORS_APPROVED` | true only after the safeguarding lead approves in writing. Until then LearnThrive AI is for adult account holders. | optional | unset until approved | no | n/a | unset |
 | `ASSISTANT_PROVIDER` | ollama (development), nim (evaluation only), custom (the production slot), mock (tests), or a comma list in development. | optional | custom, only when approved | no | n/a | ollama |
 | `ASSISTANT_MODEL` | The tutor model: vision, tools and thinking. The measured profile is in docs/OLLAMA_THREE_MODEL.md; rollback is qwen3.5:9b. | optional | optional | no | n/a | bonsai-2:9b |
 | `ASSISTANT_VISION_MODEL` | The model used when a message has images (may be the tutor). | optional | optional | no | n/a | the text model if it can see |
@@ -185,7 +185,7 @@ Set these in Render's environment, as secrets where the table says so, and nowhe
 | `LEARNER_INVITE_HOURS` | How long a guardian's learner invitation link works, in hours. | optional | optional | no | n/a | 72 |
 | `LEARNER_INVITES_PER_DAY` | Learner invitations one student may be sent in a day (re-inviting counts). | optional | optional | no | n/a | 5 |
 | `LEARNER_DIRECT_MIN_YEAR` | The school year from which a minor may have a sign-in of their own (below it: the guardian's supervised view). A conservative staging default; the production rule is the owner's. | optional | optional | no | n/a | 9 |
-| `PAPER_MAX_PAGES` | Pages a PDF may have for Study Buddy and the Paper Tutor (one limit for the upload check, the reader and the paper). | optional | optional | no | n/a | 60 |
+| `PAPER_MAX_PAGES` | Pages a PDF may have for LearnThrive AI and the Paper Tutor (one limit for the upload check, the reader and the paper). | optional | optional | no | n/a | 60 |
 | `PAPER_MAX_QUESTIONS` | Question parts one paper may list. Beyond it the rest are named in the job's notice, never dropped silently. | optional | optional | no | n/a | 150 |
 | `PAPER_RENDER_BATCH` | Pages drawn at a time while measuring answer space (memory stays flat however long the paper is). | optional | optional | no | n/a | 6 |
 | `PAPER_CONTEXT` | The model's context (tokens) for solving a paper: a page picture, the written-out working and a reasoning retry do not fit 4096. A value different from ASSISTANT_CONTEXT reloads the model once when the work changes between chat and paper. | optional | optional | no | n/a | 8192 |
@@ -198,7 +198,7 @@ Set these in Render's environment, as secrets where the table says so, and nowhe
 | `ASSISTANT_CONCURRENCY` | Answers generated at once on this server. | optional | optional | no | n/a | 1 |
 | `ASSISTANT_PICTURE_FIRST_TOKEN_MS` | Deprecated alias for ASSISTANT_STAGE_FIRST_ANSWER_IMAGE_MS (kept so an existing .env.local keeps working). | optional | optional | no | n/a | ASSISTANT_STAGE_FIRST_ANSWER_IMAGE_MS |
 | `ASSISTANT_PICTURE_TOTAL_MS` | Deprecated alias for ASSISTANT_STAGE_TURN_IMAGE_MS. | optional | optional | no | n/a | ASSISTANT_STAGE_TURN_IMAGE_MS |
-| `ASSISTANT_SAFEGUARDING_EMAIL` | The safeguarding lead's mailbox for flags (an opaque reference and a category, never the pupil's name). Needed before Study Buddy opens. | optional | optional | no | the safeguarding lead | unset |
+| `ASSISTANT_SAFEGUARDING_EMAIL` | The safeguarding lead's mailbox for flags (an opaque reference and a category, never the pupil's name). Needed before LearnThrive AI opens. | optional | optional | no | the safeguarding lead | unset |
 | `ASSISTANT_NIM_MODEL` | Evaluation only: the model when the provider is nim. | optional | unset | no | n/a | meta/llama-3.2-11b-vision-instruct |
 | `ASSISTANT_NIM_VISION_MODEL` | Evaluation only: the vision model when the provider is nim. | optional | unset | no | n/a | unset |
 | `NVIDIA_API_KEY` | Evaluation only (nim, synthetic prompts only): NVIDIA's hosted catalogue key. Never used in production. | optional | unset | **yes** | NVIDIA build catalogue | unset |
@@ -208,7 +208,7 @@ Set these in Render's environment, as secrets where the table says so, and nowhe
 | `ASSISTANT_NIM_DAILY_REQUESTS` | Evaluation only: requests per account per day to the picker's hosted models (a tool round or a repair is a request). | optional | unset | no | n/a | 300 |
 | `ASSISTANT_NIM_UPLOADS` | Evaluation only: on lets uploaded files be sent to the picker's hosted trial models. Synthetic test files only: NVIDIA's trial is not cleared for real student material. | optional | unset | no | n/a | off |
 | `ASSISTANT_NIM_REASONING_TOKENS` | Evaluation only: the hidden-reasoning allowance (tokens, on top of the answer) for every picker model. Unset: each model's own (12000 MiniMax, 16000 Step). | optional | unset | no | n/a | unset |
-| `PAPER_TUTOR_ENABLED` | The Paper Tutor switch inside Study Buddy's own. Development: on unless false. Production: on only if exactly true. | optional | unset until the owner flips it | no | n/a | on in development, off in production |
+| `PAPER_TUTOR_ENABLED` | The Paper Tutor switch inside LearnThrive AI's own. Development: on unless false. Production: on only if exactly true. | optional | unset until the owner flips it | no | n/a | on in development, off in production |
 | `PAPER_MARKER_ENABLED` | Checking a student's own completed paper (the Paper Tutor's marking). Not yet measured on real handwriting or marked scripts, so it is opt-in everywhere: on only if exactly true, and only where the Paper Tutor is on. | optional | unset until the owner flips it | no | n/a | off |
 | `PAPER_MARKS_RELEASED` | Whether marking shows numeric marks (awards, estimates, totals). Automatic marking is not validated against work marked by a qualified person, so this is its own flag: development on unless false, production only if exactly true. Off, the work still gets feedback and no mark is shown. | optional | unset until the owner flips it | no | n/a | on in development, off in production |
 | `VOICE_ENABLED` | false turns voice off. Ignored in production, where voice is closed. | optional | unset | no | n/a | unset |

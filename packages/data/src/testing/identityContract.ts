@@ -297,7 +297,7 @@ export function identityContract(name: string, make: () => Promise<{ harness: Id
       assert.equal((await store.accounts.getAccount(learner))?.learner?.guardianActive, true);
     });
 
-    test("guardian consent for Study Buddy: given by a linked guardian, withdrawn at once, and void when that guardian's link is revoked", async () => {
+    test("guardian consent for LearnThrive AI: given by a linked guardian, withdrawn at once, and void when that guardian's link is revoked", async () => {
       const f = await family();
       assert.equal(await store.identity.hasLearnerConsent(f.studentId), false);
       const stranger = await family();

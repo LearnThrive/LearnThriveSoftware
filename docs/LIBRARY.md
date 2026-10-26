@@ -1,6 +1,6 @@
 # The LearnThrive Library
 
-Living document for the Library programme (`plan19.md`). Built so far: the public information pages and the waitlist (B2), the account and database foundations (C) and the Library for enrolled families (D: catalogue, search, resource pages, watermarked downloads, the import tool). Billing, the Study Buddy and voice are not built yet. Extend this file as you go, and keep it true.
+Living document for the Library programme (`plan19.md`). Built so far: the public information pages and the waitlist (B2), the account and database foundations (C) and the Library for enrolled families (D: catalogue, search, resource pages, watermarked downloads, the import tool). Billing, the LearnThrive AI and voice are not built yet. Extend this file as you go, and keep it true.
 
 ## Purpose
 
@@ -32,7 +32,7 @@ Also decided by the plan (`plan19.md`, sections 3 and 9), none of which is built
 | C | Backend foundations (Supabase schema + RLS, accounts, the route carve-out) | Built, proven on PGlite and a faked Supabase; **not run against a real Supabase project** |
 | **D** | **Library with enrolled access first** | **Built**, same caveat |
 | E | Subscriptions and billing (Stripe) | Not yet |
-| F | Study Buddy (text and uploads), development only | Not yet |
+| F | LearnThrive AI (text and uploads), development only | Not yet |
 | G | Voice mode | Not yet |
 | H | Answers grounded in the Library (optional) | Not yet |
 | I | Hardening, accessibility, deployment notes | Not yet |

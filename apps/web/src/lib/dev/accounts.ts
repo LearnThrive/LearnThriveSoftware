@@ -7,8 +7,8 @@ import type { Role } from "@/lib/auth/types";
  * reads the same ids, so a person has ONE id whichever way the code looks them up and notifications stay addressed to the right place.
  *
  * `library` is what the Library store is told about each account, so every kind of person behind the one sign-in can be tried:
- *   enrolled    an active tuition assignment: the dashboard, the Library and Study Buddy
- *   subscriber  an active subscription and no enrolment: the Library and Study Buddy, not the dashboard
+ *   enrolled    an active tuition assignment: the dashboard, the Library and LearnThrive AI
+ *   subscriber  an active subscription and no enrolment: the Library and LearnThrive AI, not the dashboard
  *   none        signed in but entitled to nothing (staff accounts hold their rights through their role)
  *
  * `domainId` links an account to its record in the development domain data (packages/data's SEED_IDS), which is what the dashboard

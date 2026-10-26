@@ -46,7 +46,7 @@ test.describe('LIBRARY_ENABLED=true opens the account and Library routes and not
     expect(login.headers()['set-cookie']).toBeUndefined();
   });
 
-  test('Study Buddy and voice are closed in production: every route refuses, the page is a 404, and the status says why', async ({ request }) => {
+  test('LearnThrive AI and voice are closed in production: every route refuses, the page is a 404, and the status says why', async ({ request }) => {
     for (const path of ['/api/assistant/chat', '/api/assistant/files', '/api/assistant/voice/transcribe', '/api/assistant/voice/speak']) {
       const refused = await request.post(path, { data: { text: 'hello' } });
       expect(refused.status(), path).toBe(503);

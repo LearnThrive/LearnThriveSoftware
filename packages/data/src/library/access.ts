@@ -31,9 +31,9 @@ export function canAccess(account: Pick<Account, "role">, resource: Pick<Resourc
  * is decided here, from their role and the same facts `canAccess` reads. Pure, so every combination is a table test.
  *
  *   staff     ADMIN and TUTOR accounts: the dashboard, the lessons and the classroom. Administrators also reach the whole Library and
- *             Study Buddy (as `canAccess` already lets them); a tutor's own account holds no Library right unless the facts give one.
- *   enrolled  an active tuition assignment links the family: everything. The dashboard, lessons, classroom, the Library and Study Buddy.
- *   library   a paid subscription or an administrator grant, and no enrolment: the Library and Study Buddy only, never the dashboard.
+ *             LearnThrive AI (as `canAccess` already lets them); a tutor's own account holds no Library right unless the facts give one.
+ *   enrolled  an active tuition assignment links the family: everything. The dashboard, lessons, classroom, the Library and LearnThrive AI.
+ *   library   a paid subscription or an administrator grant, and no enrolment: the Library and LearnThrive AI only, never the dashboard.
  *   none      signed in, entitled to nothing yet: the account page (and the free samples), with the way to subscribe.
  *
  * Enrolment beats a subscription: an enrolled family that also subscribes simply has everything.
@@ -54,7 +54,7 @@ export function platformAccess(role: AccountRole, facts: AccessFacts): PlatformA
   const libraryRight = role === "ADMIN" || facts.enrolled || facts.subscription || facts.adminGrant;
   if (role === "ADMIN" || role === "TUTOR") return { tier: "staff", dashboard: true, library: libraryRight, studyBuddy: libraryRight };
   // A learner's own login: the tuition routes follow THEIR OWN enrolment (never a sibling's); the household's Library benefit
-  // (the family is enrolled, subscribed or granted) gives the Library and Study Buddy and nothing else.
+  // (the family is enrolled, subscribed or granted) gives the Library and LearnThrive AI and nothing else.
   if (role === "STUDENT") {
     if (facts.ownTuition) return { tier: "enrolled", dashboard: true, library: true, studyBuddy: true };
     if (libraryRight) return { tier: "library", dashboard: false, library: true, studyBuddy: true };
@@ -65,7 +65,7 @@ export function platformAccess(role: AccountRole, facts: AccessFacts): PlatformA
   return { tier: "none", dashboard: false, library: false, studyBuddy: false };
 }
 
-/** What the front door can currently offer: Study Buddy only where the assistant is open, the dashboard only where the signed-in app is open. */
+/** What the front door can currently offer: LearnThrive AI only where the assistant is open, the dashboard only where the signed-in app is open. */
 export interface HomeOptions {
   studyBuddyOpen: boolean;
   /** Default true. False while the signed-in app is closed (production before the portal opens): the dashboard is then nobody's home. */

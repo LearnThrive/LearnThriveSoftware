@@ -10,7 +10,7 @@ The following references are retained for attribution and licence traceability:
 - Testimonial quote hierarchy: [Alex Maracinaru](https://uiverse.io/alexmaracinaru/tender-fly-40) — Copyright (c) 2026 alexmaracinaru (Alex Maracinaru).
 - Persistent outlined form labels: [kameHame HA](https://uiverse.io/kamehame-ha/lovely-fly-87) — Copyright (c) 2026 kamehame-ha (kameHame HA).
 - Static dotted surface: [kotsu](https://uiverse.io/kennyotsu/short-warthog-33) — credited to kennyotsu (kotsu).
-- Study Buddy input and voice orb (`AiInput`, `VoiceOrb`): [Cobp](https://uiverse.io/Cobp) — rebuilt as React with CSS Modules from the Uiverse "Chat" component (plan19). Copyright (c) Cobp.
+- LearnThrive AI input and voice orb (`AiInput`, `VoiceOrb`): [Cobp](https://uiverse.io/Cobp) — rebuilt as React with CSS Modules from the Uiverse "Chat" component (plan19). Copyright (c) Cobp.
 - Library menu (`HubNav`): [Admin12121](https://uiverse.io/Admin12121) — icon artwork and the expanding-label idea from the Uiverse "Radio" menu, with newly written CSS. Copyright (c) Admin12121.
 - Sign-in card (`AuthCard`): [JohnnyCSilva](https://uiverse.io/JohnnyCSilva) — rebuilt from the Uiverse login card. Copyright (c) JohnnyCSilva.
 - Pricing card (`PricingCard`): [emmanuelh-dev](https://uiverse.io/emmanuelh-dev) — rebuilt from the Uiverse subscription card without Tailwind. Copyright (c) emmanuelh-dev.
@@ -26,7 +26,7 @@ The above copyright notices and this permission notice shall be included in all 
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-## Software added for the Library, Study Buddy and voice mode (plan19)
+## Software added for the Library, LearnThrive AI and voice mode (plan19)
 
 Runtime dependencies of the site (installed from npm, listed in `package.json`; each adds a few hundred kilobytes at most and none runs on a public marketing page):
 
@@ -34,7 +34,7 @@ Runtime dependencies of the site (installed from npm, listed in `package.json`; 
 | --- | --- | --- | --- |
 | `pdf-lib` | 1.17.1 | MIT | Stamps the account holder's name and the time on a PDF download (and reads the pages of a PDF a student uploads). Writing a PDF writer is not a sensible use of time. |
 | `postgres` | 3.4.9 | Unlicense | The database driver for the Library, billing and chat tables (Supabase's pooled connection), used only on the server. |
-| `katex` and `@types/katex` | 0.19.0, 0.16.8 | MIT | Draws maths in Study Buddy answers. It is loaded only on the Study Buddy screen, only when an answer contains maths. |
+| `katex` and `@types/katex` | 0.19.0, 0.16.8 | MIT | Draws maths in LearnThrive AI answers. It is loaded only on the LearnThrive AI screen, only when an answer contains maths. |
 | `pdfjs-dist` | 5.4.394 | Apache-2.0 | Reads the text of an uploaded PDF in reading order, with page numbers, and draws its pages as pictures for scans and diagrams (server only). |
 | `@napi-rs/canvas` | 0.1.84 | MIT | The canvas pdf.js draws pages on, on the server, and the JPEG encoder for those pictures. Prebuilt native binary; no system libraries. |
 | `jpeg-js`, `pngjs` (`@types/pngjs` 6.0.5, MIT) | 0.4.4, 7.0.0 | BSD-3-Clause, MIT | Decode uploaded photos in plain JavaScript, so a damaged file is a clear error rather than a crash of the native decoder; then turned upright and shrunk, with all metadata dropped. |

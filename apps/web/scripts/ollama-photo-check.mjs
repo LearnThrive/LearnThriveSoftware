@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * The end-to-end proof of the owner's original failure (brief section 13/14): a photo of a worked arithmetic-sequence question
- * sent through the REAL Study Buddy service, provider, document reader and deadlines, once with the model evicted (cold) and once
+ * sent through the REAL LearnThrive AI service, provider, document reader and deadlines, once with the model evicted (cold) and once
  * warm. It is the same code path the chat route runs; only the HTTP framing and the sign-in are left out, so no cookie or account
  * is needed to reproduce a model-timeout.
  *

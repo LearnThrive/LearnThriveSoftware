@@ -1,6 +1,6 @@
-# Study Buddy voice mode
+# LearnThrive AI voice mode
 
-Voice mode lets a student talk to Study Buddy and hear the answer. It is **development only**: in production the code keeps it closed (`voiceClosed()` returns `production`), because a hosted speech service is a processor for a child's voice and plan19 section 6 has not chosen one. The model choice and the measured speeds are in [VOICE_BENCHMARK.md](VOICE_BENCHMARK.md); the assistant itself is in [ASSISTANT.md](ASSISTANT.md).
+Voice mode lets a student talk to LearnThrive AI and hear the answer. It is **development only**: in production the code keeps it closed (`voiceClosed()` returns `production`), because a hosted speech service is a processor for a child's voice and plan19 section 6 has not chosen one. The model choice and the measured speeds are in [VOICE_BENCHMARK.md](VOICE_BENCHMARK.md); the assistant itself is in [ASSISTANT.md](ASSISTANT.md).
 
 ## How it works
 
@@ -13,12 +13,12 @@ Talking is meant to be quicker than typing: the student speaks, and the question
 5. Then, exactly once per turn (each turn has a number; a late result from a cancelled turn is ignored):
    - no words, or mostly silence: "I did not catch any words", and it listens again (twice at most, then waits for a press);
    - confidence under 0.55: **"Did I hear that right?"** with the words and **Send**, **Try again** and **Edit** (Edit puts them in the text box);
-   - otherwise the words are **sent automatically** as an ordinary Study Buddy message, shown in the conversation like a typed one.
+   - otherwise the words are **sent automatically** as an ordinary LearnThrive AI message, shown in the conversation like a typed one.
 6. The question goes through the normal chat route with `voice: true`, which adds a short instruction to that turn's system prompt (at most four sentences, maths in words, no lists). All the usual safety applies; voice adds no way around it.
 7. The answer is read aloud a sentence at a time as it streams (`src/lib/assistant/speech.ts` turns maths into words; `POST /api/assistant/voice/speak` returns each clip). **Read aloud** can be switched off, **Stop speaking** silences it, and pressing the button while it speaks **talks over it**: the speech stops, the answer stops arriving, and a new turn starts.
 8. With **Keep listening** on (the default while the panel is open), the next turn starts by itself when the answer has been spoken; off, the panel waits for a press. Closing the panel switches everything off.
 
-The states, always written out in the panel and announced politely: Tap to talk, Allow the microphone, Listening, Getting your words, Did I hear that right?, Study Buddy is answering, Speaking, Microphone blocked, Voice stopped. The microphone stops when a turn ends, the panel closes, the page is hidden (no recording in a background tab) or the page goes away.
+The states, always written out in the panel and announced politely: Tap to talk, Allow the microphone, Listening, Getting your words, Did I hear that right?, LearnThrive AI is answering, Speaking, Microphone blocked, Voice stopped. The microphone stops when a turn ends, the panel closes, the page is hidden (no recording in a background tab) or the page goes away.
 
 If the speech service is unreachable the browser's own `speechSynthesis` reads the rest (the text never leaves the device that way). If the service is not configured at all, `/api/assistant/status` says `voice: false` and the microphone button is not shown: the screen is the full text experience.
 

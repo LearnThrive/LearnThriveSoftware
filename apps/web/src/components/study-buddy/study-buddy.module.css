@@ -1,5 +1,5 @@
 /*
- * Study Buddy. The brand system on a working screen: the warm canvas, navy ink, the green accent, the heading face for the two
+ * LearnThrive AI. The brand system on a working screen: the warm canvas, navy ink, the green accent, the heading face for the two
  * headings that matter, and the product sidebar (MemberShell) holding the chats. One scrolling conversation; the box never leaves
  * the screen. Motion is limited to colour changes (and the pencil and the orb, which carry their own reduced-motion rules).
  */
@@ -45,7 +45,7 @@
   color: var(--app-on-dark);
 }
 
-/* The far column: what Study Buddy can do, so the width is used for something. */
+/* The far column: what LearnThrive AI can do, so the width is used for something. */
 .tools {
   display: flex;
   flex-direction: column;

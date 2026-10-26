@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Screenshots and layout measurements of Study Buddy at the widths the redesign must hold (1440, 1024, 768, 390, 320), for before and
+ * Screenshots and layout measurements of LearnThrive AI at the widths the redesign must hold (1440, 1024, 768, 390, 320), for before and
  * after comparisons. Needs a development server with the mock assistant (the "study-buddy-mock" launch configuration, port 3110):
  *
  *   node scripts/study-buddy-shots.mjs --label before          writes docs/screenshots/study-buddy/before/*.png and a JSON of checks

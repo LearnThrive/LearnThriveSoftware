@@ -1,5 +1,5 @@
 /**
- * Study Buddy records (plan19 phase F). The schema is supabase/migrations/0004_assistant.sql: chat text is kept 30 days,
+ * LearnThrive AI records (plan19 phase F). The schema is supabase/migrations/0004_assistant.sql: chat text is kept 30 days,
  * uploads 7 days or until the chat is deleted, and nothing here is ever logged. Plain data only; behaviour is in the stores.
  */
 export type ChatRole = "user" | "assistant";

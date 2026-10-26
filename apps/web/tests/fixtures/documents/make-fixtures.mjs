@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Builds the document regression fixtures for Study Buddy (the PDF/image ingestion tests). Run once; the outputs are committed so the
+ * Builds the document regression fixtures for LearnThrive AI (the PDF/image ingestion tests). Run once; the outputs are committed so the
  * tests are deterministic:   node tests/fixtures/documents/make-fixtures.mjs
  *
  * Real producers on purpose: the text PDFs are printed by Chromium (subset CID fonts with ToUnicode maps, exactly what browsers, Word

@@ -17,10 +17,10 @@ export const metadata: Metadata = {
 };
 
 /**
- * The one front door (plan: Study Buddy inside the platform). Everybody signs in here with the same account (the Library's real
+ * The one front door (plan: LearnThrive AI inside the platform). Everybody signs in here with the same account (the Library's real
  * sign-in: verified email, lockout, Supabase in production): tutors, administrators, enrolled families and Library members alike. What a
  * person finds after signing in is decided by `destinationFor` from their role and their Library standing, not by which page they used:
- * staff and enrolled families open the dashboard, a subscriber opens Study Buddy, and the page they originally asked for is kept when
+ * staff and enrolled families open the dashboard, a subscriber opens LearnThrive AI, and the page they originally asked for is kept when
  * their access includes it. Someone already signed in who arrives here is sent on at once.
  */
 export default async function LoginPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined | string[]>> }) {

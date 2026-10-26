@@ -111,7 +111,7 @@ export interface BillingRepository {
 }
 
 /**
- * Study Buddy chats, uploads and usage counters (plan19 phase F). Every read and write that belongs to a family names its
+ * LearnThrive AI chats, uploads and usage counters (plan19 phase F). Every read and write that belongs to a family names its
  * `clientId` and is checked against it, so a session id from another family finds nothing. Server only.
  */
 export interface ChatRepository {

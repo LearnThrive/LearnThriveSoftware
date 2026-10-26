@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Study Buddy document check against a REAL model (the Gate 1 check): every fixture in tests/fixtures/documents is uploaded through
+ * LearnThrive AI document check against a REAL model (the Gate 1 check): every fixture in tests/fixtures/documents is uploaded through
  * the same code the site uses (inspectChatUpload, then the chat service's sendMessage), sent to Ollama, and the answer is checked for
  * the one known answer the document's question has. Prints what reached the model (pages, pictures) and the verdict.
  *

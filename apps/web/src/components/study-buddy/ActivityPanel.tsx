@@ -6,7 +6,7 @@ import type { ActivityStep } from "@/lib/assistant/activity";
 import styles from "./activity.module.css";
 
 /**
- * What Study Buddy is doing for an answer, drawn from the real steps the server reports, inside the answer's own message. While it works it is the one
+ * What LearnThrive AI is doing for an answer, drawn from the real steps the server reports, inside the answer's own message. While it works it is the one
  * visible indicator (a small ring and the current step); when it has finished it folds into a single row that can be opened again to see which
  * sources were read and what was checked. It never shows the model's reasoning, only work that was done.
  *

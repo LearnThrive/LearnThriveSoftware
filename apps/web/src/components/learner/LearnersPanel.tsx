@@ -34,7 +34,7 @@ const message = (data: Record<string, unknown> | null, fallback: string) => (typ
 
 /**
  * A guardian's view of their learners (docs/IDENTITY.md): add a student, choose how each gets in (their own login by invitation, or a
- * supervised view under the guardian's own session), say that Study Buddy may be used, suspend or remove a login, and delete (never
+ * supervised view under the guardian's own session), say that LearnThrive AI may be used, suspend or remove a login, and delete (never
  * read) a learner's conversations. Every decision is made by the server for the signed-in guardian; this only asks.
  */
 export function LearnersPanel() {

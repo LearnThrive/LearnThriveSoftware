@@ -46,14 +46,14 @@ For tutors with identity documents on file, add a row when they start and **a du
 
 The website does not collect DBS certificate information. The application only asks whether an applicant already holds a suitable certificate and uses the Update Service, and tells them not to upload a certificate. The check itself is arranged through the DBS process. Do not store certificates in the mailbox either.
 
-## Library accounts, downloads and Study Buddy (plan19)
+## Library accounts, downloads and LearnThrive AI (plan19)
 
 These live in the database and in a private storage bucket, not in the mailbox, and a job deletes them; nobody has to remember.
 
 | Data | Kept | Removed by |
 | --- | --- | --- |
-| Study Buddy chat text | 30 days after the chat's last message | `npm run assistant:retention` (run daily) |
-| Pictures and PDFs sent to Study Buddy (`chat-uploads` bucket) | 7 days, or when the chat is deleted | the same job, **storage objects first**, then the rows (if any object fails to delete, nothing is purged and the next run retries) |
+| LearnThrive AI chat text | 30 days after the chat's last message | `npm run assistant:retention` (run daily) |
+| Pictures and PDFs sent to LearnThrive AI (`chat-uploads` bucket) | 7 days, or when the chat is deleted | the same job, **storage objects first**, then the rows (if any object fails to delete, nothing is purged and the next run retries) |
 | Paper Tutor jobs (`paper_jobs`: the questions found, one checkpoint per finished question, the marking assessments) and every version of a marked question (`paper_assessment_versions`, append-only: the AI's, each correction, each tutor review) | 7 days from the start of the job (the uploads' retention), or with the chat when it is deleted (cascade) | `purgeDue` in the same retention run; the marked PDF is a chat file and follows the uploads. **Owner decision:** a tutor's review is removed with the job after 7 days; if it should be kept longer, that is a new retention rule |
 | A chat a family deleted | hidden at once | the same job |
 | Download records (who downloaded which resource, when) | counts and timestamps for abuse limits and entitlement checks | as the Library rules in [LIBRARY.md](LIBRARY.md) |
@@ -63,4 +63,4 @@ These live in the database and in a private storage bucket, not in the mailbox, 
 
 **Backups (plan20).** The deadlines above apply to the **live** database and to Storage. A database backup keeps what the job removed until the backup ages out (the plan's backup retention in days, and point-in-time recovery if it is on: the owner confirms both in the dashboard and states them on the privacy page, `apps/web/LEGAL_REVIEW.md`). Uploaded **files are not in database backups** (confirm on the day), so a file removed by the job is gone for good. **A restore must not undo a deletion:** after any restore, before reopening the site, run the retention job and re-apply every deletion request since the backup's date (`docs/SUPABASE_RUNBOOK.md`, section 2). The retention job's order, storage objects first and then rows, is proved on a real Supabase stack, including that a storage failure purges nothing.
 
-A family can delete one chat or all chats and export everything from the Study Buddy screen. **Erasing a whole family record:** the chat rows cascade with the record, but uploaded files in storage do not, so first use "Delete all my chats" for that family (or call the delete-all route as them), run the retention job once, and only then erase the record; otherwise files whose rows are gone will not be found by the job. The monthly check should also confirm the job ran: its output is counters only (files removed, chats purged), never content.
+A family can delete one chat or all chats and export everything from the LearnThrive AI screen. **Erasing a whole family record:** the chat rows cascade with the record, but uploaded files in storage do not, so first use "Delete all my chats" for that family (or call the delete-all route as them), run the retention job once, and only then erase the record; otherwise files whose rows are gone will not be found by the job. The monthly check should also confirm the job ran: its output is counters only (files removed, chats purged), never content.

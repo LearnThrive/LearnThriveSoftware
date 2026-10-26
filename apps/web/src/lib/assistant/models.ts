@@ -3,7 +3,7 @@ import type { StageBudgets } from "./config";
 type Env = Record<string, string | undefined>;
 
 /**
- * The hosted models a developer may choose for a Study Buddy turn (docs/ASSISTANT.md, "Model picker"), and everything that is particular
+ * The hosted models a developer may choose for a LearnThrive AI turn (docs/ASSISTANT.md, "Model picker"), and everything that is particular
  * to each of them. Nothing outside the provider layer knows a model's quirks: the service asks for an effort ("off", "low", "medium",
  * "high") and a profile turns that into the request fields its model documents.
  *

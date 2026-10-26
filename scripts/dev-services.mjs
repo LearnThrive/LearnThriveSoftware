@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * Starts the services Study Buddy needs (config/compose.yaml: Ollama and the speech sidecar) before the website, so `npm run dev`
+ * Starts the services LearnThrive AI needs (config/compose.yaml: Ollama and the speech sidecar) before the website, so `npm run dev`
  * runs everything together. Runs as apps/web's `predev`, and as `npm run services:up`.
  *
- * - Never blocks the website: without Docker, or if a service fails, it says so and the site starts anyway (Study Buddy then
+ * - Never blocks the website: without Docker, or if a service fails, it says so and the site starts anyway (LearnThrive AI then
  *   says it is unavailable, as before).
  * - The model server is the NATIVE Ollama runtime when it is installed (`scripts/ollama-local.mjs`: the GPU tutor on 11434, a
  *   CPU-only helper on 11435). Docker's Ollama is only the fallback: its bind mount of D:\OllamaModels through WSL made a cold
@@ -43,7 +43,7 @@ else say(`The native Ollama runtime did not start (${(native.stderr ?? "").trim(
 
 const dockerUp = docker(["info", "--format", "{{.ServerVersion}}"]).status === 0;
 if (!nativeOk && !dockerUp) {
-  say("No native Ollama runtime answered and Docker is not running, so Study Buddy's model is not started. Install the runtime (docs/OLLAMA_THREE_MODEL.md) or start Docker Desktop, then run `npm run services:up`.");
+  say("No native Ollama runtime answered and Docker is not running, so LearnThrive AI's model is not started. Install the runtime (docs/OLLAMA_THREE_MODEL.md) or start Docker Desktop, then run `npm run services:up`.");
 }
 
 const running = dockerUp ? new Set(docker([...compose, "ps", "--status", "running", "--services"]).stdout?.split(/\s+/).filter(Boolean) ?? []) : new Set();
@@ -75,7 +75,7 @@ for (const model of [...new Set(models)]) {
   if (!tags || have.has(model) || have.has(`${model}:latest`)) continue;
   say(`Downloading ${model} (once)…`);
   const pull = wanted.includes("ollama") ? docker([...compose, "exec", "ollama", "ollama", "pull", model], { stdio: "inherit" }) : spawnSync(process.execPath, [nativeScript, "pull", model], { stdio: "inherit" });
-  if (pull.status !== 0) say(`Could not download ${model}. Study Buddy needs it: run \`node scripts/ollama-local.mjs pull ${model}\`.`);
+  if (pull.status !== 0) say(`Could not download ${model}. LearnThrive AI needs it: run \`node scripts/ollama-local.mjs pull ${model}\`.`);
 }
 for (const s of services) say(`${s.label}: ${(await answers(s.url)) ? `ready on ${new URL(s.url).origin}` : "NOT answering"}`);
 

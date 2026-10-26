@@ -46,7 +46,7 @@ export interface Deps {
   rt: AccountRuntime | null;
   jar: CookieJar;
   env?: Record<string, string | undefined>;
-  /** Whether Study Buddy is open (the assistant is configured and approved): where a Library subscriber lands. Default closed. */
+  /** Whether LearnThrive AI is open (the assistant is configured and approved): where a Library subscriber lands. Default closed. */
   studyBuddyOpen?: boolean;
   /** Whether the signed-in app (dashboard) is open: false in production until the portal opens. Default open. */
   dashboardOpen?: boolean;
@@ -147,7 +147,7 @@ async function shownName(rt: AccountRuntime, user: { id: string; displayName: st
 
 /**
  * Where a person goes after signing in: the page they asked for (`next`, reduced to a path on this site) if their access includes it,
- * otherwise their home: the dashboard for staff and enrolled families, Study Buddy (or the Library) for a subscriber, the account page
+ * otherwise their home: the dashboard for staff and enrolled families, LearnThrive AI (or the Library) for a subscriber, the account page
  * for someone with nothing yet. The one rule, `destinationFor`, is the same one the navigation and the assistant's routes use.
  * If their access cannot be read, the page asked for or the account page: signing in never fails over this.
  */

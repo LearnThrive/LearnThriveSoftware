@@ -13,7 +13,7 @@ import { toPlatformUser } from "./platformUser";
  * Who is signed in, and what the one LearnThrive sign-in gives them (`platformAccess` holds the rule).
  *
  * There is a single front door (/login, the account sign-in). Behind it a person finds the signed-in app (the dashboard, the lessons,
- * the classroom) only if they are staff or an enrolled family; a Library subscriber finds the Library and Study Buddy; anyone else
+ * the classroom) only if they are staff or an enrolled family; a Library subscriber finds the Library and LearnThrive AI; anyone else
  * finds their account page. Everything that used to ask the development sign-in "who is this?" (`getSession`, 87 call sites) now gets
  * its answer from here when there is no development session, so none of those pages changed.
  */

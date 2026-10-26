@@ -170,7 +170,7 @@ The same adversarial cases as `rls.test.ts` run **over HTTP with real user token
 - Keys: the **service role key and the database password live only in the server environment** (Render environment variables), never in the repo, logs or a browser bundle. Rotate them if exposed.
 
 **Storage**
-- Create two buckets, both **private** (Public bucket **off**): `library` (Library PDFs) and `chat-uploads` (Study Buddy uploads, later phase).
+- Create two buckets, both **private** (Public bucket **off**): `library` (Library PDFs) and `chat-uploads` (LearnThrive AI uploads, later phase).
 - `library`: file size limit set to the import tool's maximum (for example 25 MB), allowed MIME types `application/pdf`. `chat-uploads`: limit 15 MB, allowed `image/jpeg`, `image/png`, `application/pdf`.
 - **Add no storage policies** for `anon` or `authenticated`. With RLS enabled on `storage.objects` and no policy, only the service role can read or write objects: the server issues 60 second signed URLs after `canAccess`. Do not use public URLs anywhere.
 

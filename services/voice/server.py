@@ -1,4 +1,4 @@
-"""Local speech sidecar for Study Buddy voice mode (plan19 section 5.4). DEVELOPMENT SERVICE: one process on one machine.
+"""Local speech sidecar for LearnThrive AI voice mode (plan19 section 5.4). DEVELOPMENT SERVICE: one process on one machine.
 
     POST /stt   body: a 16 kHz mono 16-bit WAV (at most 60 s, 4 MB)   ->  {"text", "audioMs", "processingMs"}
     POST /tts   body: {"text": "..."}  (one sentence or two)          ->  audio/wav

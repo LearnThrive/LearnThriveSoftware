@@ -2,7 +2,7 @@ import { test, expect, type Locator, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { hydrated } from './careers-support';
 
-// The Study Buddy activity panel (the one indicator inside an answer). Runs against the development bench /dev/ui-components/activity-panel:
+// The LearnThrive AI activity panel (the one indicator inside an answer). Runs against the development bench /dev/ui-components/activity-panel:
 // every state of the panel as a fixture, and one live turn that is moved along one event at a time with the same functions the page uses, so the
 // panel can be looked at between any two events. Nothing here touches a server.
 

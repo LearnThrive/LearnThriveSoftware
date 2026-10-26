@@ -17,19 +17,19 @@ const nav = (role, f, over = {}) => {
   return platformNavigation({ role, tuition: access.dashboard, studyBuddy: access.studyBuddy, library: access.library, account: true, ...over });
 };
 
-test("a guardian with active family tuition: the family's tuition areas, Study Buddy and the Library, in ONE menu", () => {
+test("a guardian with active family tuition: the family's tuition areas, LearnThrive AI and the Library, in ONE menu", () => {
   const sections = nav("CLIENT", facts({ enrolled: true }));
   assert.deepEqual(labels(sections), ["Home", "Children", "Calendar", "Lesson reports", "Notifications", "Settings", "LearnThrive AI", "Library"]);
   assert.deepEqual(titles(sections), ["Learning"]);
   assert.ok(!labels(sections).includes("Account"), "the account is in the account menu, keeping this sidebar short");
 });
 
-test("an invited learner with their OWN active tuition: their lessons and progress, Study Buddy, the Library, no billing area", () => {
+test("an invited learner with their OWN active tuition: their lessons and progress, LearnThrive AI, the Library, no billing area", () => {
   const sections = nav("STUDENT", facts({ enrolled: true, ownTuition: true }));
   assert.deepEqual(labels(sections), ["Home", "Calendar", "Lessons", "Feedback", "Notifications", "Settings", "LearnThrive AI", "Library"]);
 });
 
-test("a Library-only adult subscriber: Study Buddy and the Library, their own account, no tuition", () => {
+test("a Library-only adult subscriber: LearnThrive AI and the Library, their own account, no tuition", () => {
   const sections = nav("CLIENT", facts({ subscription: true }));
   assert.deepEqual(labels(sections), ["LearnThrive AI", "Library", "Search", "Account"]);
   assert.ok(!labels(sections).some((l) => ["Home", "Children", "Calendar", "Lessons", "Notifications"].includes(l)));
@@ -47,7 +47,7 @@ test("no current entitlement: only the account (and its recovery actions), nothi
   assert.deepEqual(labels(nav("STUDENT", facts({}))), ["Account"]);
 });
 
-test("tutors and administrators keep their staff areas; an administrator also holds Study Buddy and the Library, a tutor only what the facts give", () => {
+test("tutors and administrators keep their staff areas; an administrator also holds LearnThrive AI and the Library, a tutor only what the facts give", () => {
   const admin = labels(nav("ADMIN", facts({})));
   assert.ok(admin.includes("Assignments") && admin.includes("LearnThrive AI") && admin.includes("Library"));
   const tutor = labels(nav("TUTOR", facts({})));
@@ -61,7 +61,7 @@ test("inside a supervised view the menu is the learner's: learning only, no dash
   assert.deepEqual(labels(sections), ["LearnThrive AI", "Library", "Search"]);
 });
 
-test("a page that is closed gets no link: Study Buddy and the Library appear only where they are open", () => {
+test("a page that is closed gets no link: LearnThrive AI and the Library appear only where they are open", () => {
   const closed = platformNavigation({ role: "CLIENT", tuition: true, studyBuddy: false, library: false, account: true });
   assert.ok(!labels(closed).includes("LearnThrive AI") && !labels(closed).includes("Library"));
   assert.deepEqual(platformNavigation({ role: "CLIENT", tuition: false, studyBuddy: false, library: false, account: false }), []);

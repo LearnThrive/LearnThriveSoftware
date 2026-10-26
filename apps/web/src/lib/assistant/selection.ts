@@ -70,7 +70,7 @@ export interface PickerChoice {
 export function pickerChoices(lab: ModelLab | null, config: AssistantConfig): PickerChoice[] {
   if (!lab?.settings.available) return [];
   const hosted = lab.settings.models.filter((m) => lab.providers.has(m.choice)).map((m) => ({ id: m.choice, label: m.label, description: m.description, efforts: effortChoices(m.efforts) }));
-  return lab.settings.local ? [...hosted, { id: "local", label: "Local model", description: `Study Buddy's own tutor on this machine (${config.model})`, efforts: [] }] : hosted;
+  return lab.settings.local ? [...hosted, { id: "local", label: "Local model", description: `LearnThrive AI's own tutor on this machine (${config.model})`, efforts: [] }] : hosted;
 }
 
 export type Selection = { ok: true; target: GenerationTarget } | { ok: false; reason: "model_not_allowed" | "bad_model" | "model_unavailable" | "bad_effort" };

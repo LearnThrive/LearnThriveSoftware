@@ -1,4 +1,4 @@
-# Study Buddy's local models: measured, and the selection
+# LearnThrive AI's local models: measured, and the selection
 
 This is the readable result of the three-model brief's benchmark (section 13). The numbers themselves are **generated**, never
 hand-written: [`docs/benchmarks/ollama-summary.md`](benchmarks/ollama-summary.md) and

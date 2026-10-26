@@ -141,7 +141,7 @@ export function navigationFor(role: Role, extras: NavExtras = {}): AppNavSection
  * The ONE navigation of the signed-in product, built from capabilities, never from a hard-coded role list (docs/IDENTITY.md, "One shell"):
  *
  *   tuition      the dashboard areas for this role (families, learners with their own enrolment, tutors, administrators)
- *   studyBuddy   Study Buddy, where the assistant is open and this person's access includes it
+ *   studyBuddy   LearnThrive AI, where the assistant is open and this person's access includes it
  *   library      the Library and its search, where the catalogue is open and this person's access includes it
  *   account      the account page (adult account holders and learners; closed inside a supervised view)
  *

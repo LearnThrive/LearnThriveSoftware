@@ -13,7 +13,7 @@ import { supabaseKeyHeaders } from "../supabaseKeys";
  * tool's dry runs), and memory (tests).
  */
 export const LIBRARY_BUCKET = "library";
-/** Study Buddy uploads live in their own private bucket, with the same rules. */
+/** LearnThrive AI uploads live in their own private bucket, with the same rules. */
 export const CHAT_UPLOADS_BUCKET = "chat-uploads";
 export const SIGNED_URL_SECONDS = 60;
 
@@ -172,7 +172,7 @@ export function libraryStorage(env: Env = process.env): LibraryStorage | null {
   return storage;
 }
 
-/** Study Buddy's private upload bucket (same backend as the Library's, a different bucket and, in development, folder). */
+/** LearnThrive AI's private upload bucket (same backend as the Library's, a different bucket and, in development, folder). */
 export function chatUploadStorage(env: Env = process.env): LibraryStorage | null {
   if (g.__learnthriveChatStorage) return g.__learnthriveChatStorage;
   const url = env.SUPABASE_URL?.trim();

@@ -1,4 +1,4 @@
-# Study Buddy activity panel: audit against the acceptance requirements
+# LearnThrive AI activity panel: audit against the acceptance requirements
 
 Audit of [the implementation requirements](STUDY_BUDDY_ACTIVITY_REQUIREMENTS.md), carried out 26 October 2026 on `main` at `a2099f8`.
 Method: read the implementation, ran the focused test suites, the typecheck/lint gates and the project's own browser suites (Playwright, dev
@@ -39,7 +39,7 @@ No other confirmed defect was found. The duplicate "Thinking" animation is gone 
 
 ### 2. Architecture
 
-Complete. The work extends the files the prompt names — `service.ts`, `study.ts`, `handlers.ts`, `StudyBuddy.tsx` and the Study Buddy components —
+Complete. The work extends the files the prompt names — `service.ts`, `study.ts`, `handlers.ts`, `StudyBuddy.tsx` and the LearnThrive AI components —
 with a typed contract rather than invented status strings: `activity.ts` defines `ActivityKind`, `ActivitySource`, `ActivityStep`, `ActivityEvent`
 and the `ActivityLog`. Structured `activity` events are added to the `ChatEvent` union (`service.ts:65-73`), the real operations are instrumented
 (SearXNG search, page fetch through Crawl4AI or direct, evidence retrieval, verification, repair, generation, upload reading), and progress reaches

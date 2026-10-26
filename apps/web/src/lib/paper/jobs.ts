@@ -510,7 +510,7 @@ export class PaperJobs {
         const path = `${job.sessionId}/${randomUUID()}.pdf`;
         await deps.uploads.put(path, pdf, "application/pdf");
         const record = await deps.store.chat.addFile(who, job.sessionId, { storagePath: path, bytes: pdf.length, contentType: "application/pdf" }, now);
-        // The summary goes into the chat as Study Buddy's message, with the paper and its result attached, so follow-up questions
+        // The summary goes into the chat as LearnThrive AI's message, with the paper and its result attached, so follow-up questions
         // ("explain question 3", "where did I lose marks?") have the answers and the document without any of it being redone.
         const message = await deps.store.chat.appendMessage(who, job.sessionId, "assistant", markdown, now);
         const attach = [record.id];

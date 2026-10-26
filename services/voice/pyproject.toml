@@ -1,7 +1,7 @@
 [project]
 name = "learnthrive-voice"
 version = "0.1.0"
-description = "Local speech sidecar for Study Buddy voice mode (development). Speech recognition and speech output behind two HTTP endpoints."
+description = "Local speech sidecar for LearnThrive AI voice mode (development). Speech recognition and speech output behind two HTTP endpoints."
 requires-python = ">=3.12,<3.14"
 dependencies = [
   "faster-whisper>=1.1.0",

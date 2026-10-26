@@ -1,6 +1,6 @@
 -- 0015_chat_message_model.sql — which model wrote an answer (the developer model picker, docs/ASSISTANT.md "Model picker").
 --
--- When a developer chooses the model for a Study Buddy turn, the answer is stored with the model that actually produced it, so a
+-- When a developer chooses the model for a LearnThrive AI turn, the answer is stored with the model that actually produced it, so a
 -- reopened chat still says "Answered by DeepSeek V4.1 Flash" or "Answered by Step 5 Preview" next to the right reply. It is the
 -- identifier the provider reported for that request ("nim:deepseek-ai/deepseek-v4.1-flash"), never the one that was merely asked for.
 --

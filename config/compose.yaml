@@ -1,4 +1,4 @@
-# The services Study Buddy needs beside the website, for development: the local language model (Ollama, on the GPU) and the
+# The services LearnThrive AI needs beside the website, for development: the local language model (Ollama, on the GPU) and the
 # speech sidecar. `npm run dev` starts them (scripts/dev-services.mjs) and then the website on the host, as before.
 # Both listen on 127.0.0.1 only, on the addresses the website already uses by default (11434 and 8765). Never deployed.
 name: learnthrive
@@ -42,7 +42,7 @@ services:
       start_period: 300s
     restart: unless-stopped
 
-  # Web research for Study Buddy (docs/RESEARCH.md). Always started with the other services; the website looks for it on 127.0.0.1:8888.
+  # Web research for LearnThrive AI (docs/RESEARCH.md). Always started with the other services; the website looks for it on 127.0.0.1:8888.
   # The secret below is a development value, safe only because the port is published on 127.0.0.1. Set SEARXNG_SECRET if that ever changes.
   searxng:
     # Pin a released tag before relying on it (SEARXNG_IMAGE), and read its release notes before upgrading.
@@ -61,7 +61,7 @@ services:
       retries: 20
     restart: unless-stopped
 
-  # Page extraction for Study Buddy (docs/RESEARCH.md): Crawl4AI, the open-source self-hosted browser crawler. SearXNG finds the pages; this
+  # Page extraction for LearnThrive AI (docs/RESEARCH.md): Crawl4AI, the open-source self-hosted browser crawler. SearXNG finds the pages; this
   # reads them in a real browser so pages built with JavaScript come back as readable text. CPU only (no GPU, nothing shared with Ollama).
   # It needs about 4 GB of memory while crawling. The token below is a development value, safe only because the port is published on
   # 127.0.0.1; set CRAWL4AI_API_TOKEN to a long random value anywhere else (the website refuses to use the development one in production).

@@ -16,6 +16,6 @@ export async function nextJar(): Promise<CookieJar> {
 }
 
 export async function nextDeps(): Promise<Deps> {
-  // What the front door can offer right now: Study Buddy where the assistant is open, the dashboard where the signed-in app is open.
+  // What the front door can offer right now: LearnThrive AI where the assistant is open, the dashboard where the signed-in app is open.
   return { rt: await accountRuntime(), jar: await nextJar(), studyBuddyOpen: assistantClosed(process.env, true) === null, dashboardOpen: PORTAL_ENABLED };
 }

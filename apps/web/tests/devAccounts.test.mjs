@@ -64,7 +64,7 @@ test("seeding: every account signs in (the disabled one is refused as disabled) 
   assert.equal(student.learner.familyClientId, (await store.accounts.getAccount(byEmail("client@learnthrive.dev").id)).clientId, "of the development client's family");
   const member = await store.accounts.getAccount(byEmail("member@learnthrive.dev").id);
   const memberAccess = platformAccess("CLIENT", await store.access.facts(member.clientId));
-  assert.deepEqual(memberAccess, { tier: "library", dashboard: false, library: true, studyBuddy: true }, "a subscriber has Study Buddy and the Library, and no dashboard");
+  assert.deepEqual(memberAccess, { tier: "library", dashboard: false, library: true, studyBuddy: true }, "a subscriber has LearnThrive AI and the Library, and no dashboard");
 });
 
 test("the staff development provider uses the same ids and domain links as the one sign-in", async () => {

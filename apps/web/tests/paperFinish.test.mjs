@@ -3,7 +3,7 @@ import test from "node:test";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { loadTsFrom } from "./_tsLoader.mjs";
 
-// The review findings on the Study Buddy brief, each reproduced as a failing test before the fix:
+// The review findings on the LearnThrive AI brief, each reproduced as a failing test before the fix:
 //   1. correct, complete working labelled "partial" because a machine-readable comparison field was missing, and internal field names in the note
 //   2. (in paperContext.test.mjs) an old answer overriding a correction
 //   3. two model opinions that both say "Yes" counted as agreement though one used a floor of 68 m² and the other 100 m²

@@ -79,7 +79,7 @@ comment on table public.resource_files is
 
 -- ============================== PHASE H PLACEHOLDER (do not create yet) ==============================
 -- The pgvector chunk table for answers grounded in the Library arrives with plan19 phase H, as its own
--- later migration (for example 0006_library_embeddings.sql), only if Study Buddy passes its gates:
+-- later migration (for example 0006_library_embeddings.sql), only if LearnThrive AI passes its gates:
 --   create extension if not exists vector with schema extensions;
 --   create table public.resource_chunks (resource_id, chunk_index, content, embedding vector(1024), ...);
 -- It must copy resources.access_tier, and its RLS must be service-role only: retrieval filters by the

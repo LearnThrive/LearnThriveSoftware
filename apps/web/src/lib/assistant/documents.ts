@@ -2,7 +2,7 @@ import { createCanvas, ImageData, type Canvas } from "@napi-rs/canvas";
 import type { FileProblem } from "@/lib/careers-files";
 
 /**
- * Reads what a student uploads so the model sees what the student sees (Study Buddy document understanding).
+ * Reads what a student uploads so the model sees what the student sees (LearnThrive AI document understanding).
  *
  * PDFs go through pdf.js (Apache-2.0, the reader Firefox uses), page by page:
  *   - the text layer is read WITH positions and rebuilt into lines in reading order, page by page, so nothing loses its page;

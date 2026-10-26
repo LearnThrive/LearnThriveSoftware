@@ -1,6 +1,6 @@
-# Study Buddy: subject-aware answers, exam accuracy and web research
+# LearnThrive AI: subject-aware answers, exam accuracy and web research
 
-This is how Study Buddy decides what a student is doing, checks what it can check before and after it answers, and uses your own
+This is how LearnThrive AI decides what a student is doing, checks what it can check before and after it answers, and uses your own
 [SearXNG](https://docs.searxng.org/) (to find pages) and [Crawl4AI](https://github.com/unclecode/crawl4ai) (to read them in a real browser) to look things up.
 Both are free, open source and self-hosted. It is a layer around the model, not a replacement for it.
 

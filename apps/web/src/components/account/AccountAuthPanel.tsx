@@ -33,7 +33,7 @@ const NOT_READY = "The check that you are a person has not finished yet. Please 
  */
 /**
  * `next` is the page the person asked for before signing in ("" if none). The server decides where they land (`next` in its reply:
- * their dashboard, Study Buddy or account page, or the page asked for when their access includes it); this only passes the request on.
+ * their dashboard, LearnThrive AI or account page, or the page asked for when their access includes it); this only passes the request on.
  */
 export function AccountAuthPanel({ initialMode = "sign-in", next = "", termsHref = "/terms" }: { initialMode?: Exclude<AuthMode, "verify-sent">; next?: string; termsHref?: string }) {
   const [mode, setMode] = useState<AuthMode>(initialMode);

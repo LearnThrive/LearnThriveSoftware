@@ -2,7 +2,7 @@
 
 ## Status: one sign-in (the account layer), plus a development-only staff provider
 
-There is **one sign-in page, `/login`**, and it is the Library's account sign-in (the one Study Buddy always used): real sign-up with a verified email, lockout, Supabase Auth in production, an in-memory stand-in in development. Tutors, administrators, enrolled families and Library members all use it; what a person finds afterwards follows from who they are ("One sign-in" below). The development provider described under "The abstraction" still exists for local work, but nothing in the UI posts to it any more.
+There is **one sign-in page, `/login`**, and it is the Library's account sign-in (the one LearnThrive AI always used): real sign-up with a verified email, lockout, Supabase Auth in production, an in-memory stand-in in development. Tutors, administrators, enrolled families and Library members all use it; what a person finds afterwards follows from who they are ("One sign-in" below). The development provider described under "The abstraction" still exists for local work, but nothing in the UI posts to it any more.
 
 Everything from "The abstraction" down to "Route protection" describes the **development-only** provider. It is not production-ready, and the code itself refuses to run as production auth — see "Production safety" below. The real thing is the account layer under "Library accounts"; what is still missing for the signed-in app in production is its *data* (the dashboard runs on in-memory demo records), not its sign-in — see "One sign-in" below.
 
@@ -60,26 +60,26 @@ Three helpers in `apps/web/src/lib/auth/guard.ts`, used from Server Components a
 
 ## One sign-in
 
-`/login` is the account sign-in. A person signs in once and the same session serves the dashboard, the classroom, the Library and Study Buddy.
+`/login` is the account sign-in. A person signs in once and the same session serves the dashboard, the classroom, the Library and LearnThrive AI.
 
 | Who | What they find | Lands on |
 | --- | --- | --- |
-| `ADMIN`, `TUTOR` | the dashboard, lessons, classroom. An administrator also holds the whole Library and Study Buddy by role; a tutor only what their own standing gives | `/dashboard` |
-| Enrolled family (an active tuition assignment) | **everything**: the dashboard, lessons, classroom, the Library, Study Buddy | `/dashboard` |
-| Library subscriber, or a granted account, not enrolled | the Library and Study Buddy **only**, never the dashboard | `/library/study-buddy` (`/library` where Study Buddy is closed) |
-| Signed in with nothing yet | their account page; Study Buddy says what it is included with | `/account` |
+| `ADMIN`, `TUTOR` | the dashboard, lessons, classroom. An administrator also holds the whole Library and LearnThrive AI by role; a tutor only what their own standing gives | `/dashboard` |
+| Enrolled family (an active tuition assignment) | **everything**: the dashboard, lessons, classroom, the Library, LearnThrive AI | `/dashboard` |
+| Library subscriber, or a granted account, not enrolled | the Library and LearnThrive AI **only**, never the dashboard | `/library/study-buddy` (`/library` where LearnThrive AI is closed) |
+| Signed in with nothing yet | their account page; LearnThrive AI says what it is included with | `/account` |
 
-**One rule decides it:** `platformAccess(role, facts)` in `packages/data/src/library/access.ts`, over the same facts `canAccess` reads (enrolled, subscription, admin grant). It is pure and has a table test, including a test that it agrees with `canAccess` for every role and combination of facts. The sign-in routes (`destinationFor`/`homePath`), the dashboard and member navigation, the Study Buddy page and the assistant's routes all call it, so what a menu offers and what a route allows cannot drift. Enrolment beats a subscription: an enrolled family that also subscribes simply has everything.
+**One rule decides it:** `platformAccess(role, facts)` in `packages/data/src/library/access.ts`, over the same facts `canAccess` reads (enrolled, subscription, admin grant). It is pure and has a table test, including a test that it agrees with `canAccess` for every role and combination of facts. The sign-in routes (`destinationFor`/`homePath`), the dashboard and member navigation, the LearnThrive AI page and the assistant's routes all call it, so what a menu offers and what a route allows cannot drift. Enrolment beats a subscription: an enrolled family that also subscribes simply has everything.
 
 **How the dashboard gets its user.** `getSession()` (`lib/auth/session.ts`, behind `requireSession`/`requireRole` and all 87 call sites) answers from the development provider's session first, then from the account session (`lib/access/current.ts`), and only for someone whose access includes the dashboard. A Library subscriber therefore has an account session but no dashboard session, whatever URL they type. The account's id is the user's id; `profileId` (the link to the tutor, parent or student record the dashboard looks people up by) is the development seed record for the development accounts and **nothing in production** until the domain data is real and carries its own link (`docs/SUPABASE_MIGRATION.md`).
 
 **Where you land.** `handleSignIn` returns `next`: the page asked for (`/login?next=`, reduced to a path on this site) if the person's access includes it, otherwise their home. A signed-in person who opens `/login` is sent on at once. `requireSession` redirects a signed-out visitor to `/login?next=<the page they asked for>` (the proxy stamps the path on the request, since a Server Component cannot read its own URL); a lapsed access token (about an hour) goes through `/api/account/refresh` and comes straight back.
 
-**Closed doors stay closed.** The dashboard session exists only where the signed-in app is open: always in development and tests, in production only once `NEXT_PUBLIC_APP_PORTAL_ENABLED=true` (`PORTAL_ENABLED`). Until then a real sign-in cannot reach the in-memory demo data, and an enrolled family lands on Study Buddy or the Library instead of the "Portal opening soon" page. Opening the portal is still the owner's decision, and it still needs the domain data behind the dashboard to be real (`docs/PRODUCTION_GAPS.md`).
+**Closed doors stay closed.** The dashboard session exists only where the signed-in app is open: always in development and tests, in production only once `NEXT_PUBLIC_APP_PORTAL_ENABLED=true` (`PORTAL_ENABLED`). Until then a real sign-in cannot reach the in-memory demo data, and an enrolled family lands on LearnThrive AI or the Library instead of the "Portal opening soon" page. Opening the portal is still the owner's decision, and it still needs the domain data behind the dashboard to be real (`docs/PRODUCTION_GAPS.md`).
 
 **Sign-out** (`lib/access/signout.ts`, behind both buttons) ends every kind of session this browser holds and revokes the account tokens at the provider. **A disabled account** gets its own answer only from the in-memory sign-in (after a correct password). With Supabase a banned user reads as any wrong password, deliberately: its docs do not say whether `user_banned` is reported only after a correct password, and a distinct message before that would show a guesser which addresses are banned.
 
-**Navigation.** The dashboard menu gains a "Learning" section (Study Buddy, Library) for anyone whose access includes them, shown only where the page behind the link is open (Study Buddy configured and approved; the Library catalogue open). The member area (`/library/**`, `/account`) gains a "Dashboard" link for staff and enrolled families. They are two frames over one account, not one embedded in the other. The Library's old address, `/account/sign-in`, redirects to `/login` and keeps `next`.
+**Navigation.** The dashboard menu gains a "Learning" section (LearnThrive AI, Library) for anyone whose access includes them, shown only where the page behind the link is open (LearnThrive AI configured and approved; the Library catalogue open). The member area (`/library/**`, `/account`) gains a "Dashboard" link for staff and enrolled families. They are two frames over one account, not one embedded in the other. The Library's old address, `/account/sign-in`, redirects to `/login` and keeps `next`.
 
 ## Library accounts (plan19 phase C)
 

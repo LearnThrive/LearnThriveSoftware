@@ -2,7 +2,7 @@ import { isPrivateAddress } from "./research/safeUrl";
 import { isIP } from "node:net";
 
 /**
- * What Study Buddy is genuinely doing while it prepares an answer, as typed events the page can show live and a reopened chat can show again.
+ * What LearnThrive AI is genuinely doing while it prepares an answer, as typed events the page can show live and a reopened chat can show again.
  *
  * Nothing here is narration. A step exists only because the server started that piece of work: a search that was sent, a page that was fetched, a
  * quotation that was checked, a draft that was rewritten. The labels are short, fixed wording chosen here; a step never carries a search query, a

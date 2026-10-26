@@ -1,6 +1,6 @@
 /**
  * Turning a fetched page into plain text, and noticing text that is trying to give the model orders. A page is untrusted material: nothing in it is an
- * instruction to Study Buddy, whatever it says. Markup that can run or hide things is dropped, hidden characters are removed, and phrases that look like
+ * instruction to LearnThrive AI, whatever it says. Markup that can run or hide things is dropped, hidden characters are removed, and phrases that look like
  * an attempt to take over the assistant are reported (so they can be shown to the model as a warning, never followed) and then defused.
  */
 const DROPPED = ["script", "style", "noscript", "template", "svg", "iframe", "object", "embed", "canvas", "form", "nav", "footer", "header", "aside", "select", "button", "head"];

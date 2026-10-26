@@ -35,7 +35,7 @@ end $$;
 comment on column public.client_students.status is
   'active, suspended or revoked. Only active links give a guardian anything: access, enrolment benefit and billing relationships all ignore the others.';
 comment on column public.client_students.can_view_progress is
-  'May this guardian see the learner''s reports and progress. There is deliberately NO permission to read the learner''s Study Buddy conversations.';
+  'May this guardian see the learner''s reports and progress. There is deliberately NO permission to read the learner''s LearnThrive AI conversations.';
 
 -- ---------------------------------------------------------------------------------------------
 -- How a student gets in

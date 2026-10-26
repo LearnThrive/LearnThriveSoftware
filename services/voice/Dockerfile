@@ -1,4 +1,4 @@
-# Study Buddy's speech sidecar (development): speech recognition (faster-whisper) and speech output (Piper) behind HTTP.
+# LearnThrive AI's speech sidecar (development): speech recognition (faster-whisper) and speech output (Piper) behind HTTP.
 # Started by `npm run dev` through config/compose.yaml. The voices are mounted from services/voice/models, not baked in.
 FROM python:3.13-slim-bookworm
 

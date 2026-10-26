@@ -32,7 +32,7 @@ Open **`http://localhost:3000`** — that one origin serves the public site, the
 
 Under the hood, `npm run dev` runs `apps/web`'s own `dev` script, `tsx server.ts` — a custom Node HTTP server that hosts Next.js's request handler and an attached Socket.IO server side by side (see `docs/ARCHITECTURE.md`). There is no second process, no second port, and nothing else to start manually: the classroom's real-time signalling logic (`apps/realtime/server/signalling.ts`, unchanged) is imported as a library and wired to that same server, and its React UI (`apps/web/src/features/classroom/`, ported from the original `apps/classroom`) is lazy-loaded only when a Lesson's classroom route is actually opened.
 
-### Study Buddy's three models and voice
+### LearnThrive AI's three models and voice
 
 `npm run dev` starts, before the site, the local Ollama runtime natively ([scripts/ollama-local.mjs](scripts/ollama-local.mjs)) and the speech sidecar in Docker ([config/compose.yaml](config/compose.yaml), started by [scripts/dev-services.mjs](scripts/dev-services.mjs)):
 
