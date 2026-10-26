@@ -62,6 +62,8 @@ export function strategyBlock(ctx: StudyContext, options: { researchAvailable?: 
   if (frame) lines.push(`Marking frame: ${describeFrame(frame)}`);
   else if (ctx.activity === "mark_essay") lines.push("- The exam board or the question's mark total is not known, so give feedback by the general assessment objectives and ask which board and mark total apply before giving a mark.");
   if (ctx.board && !options.researchAvailable) lines.push(`- You cannot look up ${ctx.board}'s documents in this chat. Do not quote or paraphrase a specification or mark scheme as if you had read it.`);
+  // The page shows the student its own record of what was searched, read and checked, apart from the answer. The answer is the answer only.
+  if (options.researchAvailable) lines.push("- Write only the answer. The page already shows the student what was searched and read, in its own panel, so do not describe your searching, reading or checking in the answer (no \"I'll now search\", \"let me check\", \"I looked at\"). Name a source only where citing it helps the student.");
   lines.push("- Accuracy first: if you are not sure of a fact, a date, a quotation or a figure, say so plainly instead of guessing. A shorter correct answer beats a longer one with an invented detail.");
   return lines.join("\n");
 }

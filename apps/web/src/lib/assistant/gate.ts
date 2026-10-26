@@ -136,8 +136,17 @@ export function checkCalculations(text: string): { issues: Issue[]; checked: num
   return { issues, checked: working.checked + equations.checked };
 }
 
+/**
+ * The events-and-characters check reads a draft as a story ("X marries Y", "a woman called Z"). It is run where that is what the answer is about: a set
+ * text, or a period of history. A held answer in another subject (a biology explanation, a geography case study) is checked for its quotations and its
+ * working, and its names against the pages read (finishStudy), but no sentence of it is cut by a check written for narratives.
+ */
+const NARRATIVE: ReadonlySet<string> = new Set(["english_literature", "history"]);
+export const isNarrative = (subject: string | null | undefined): boolean => NARRATIVE.has(subject ?? "");
+
 export async function findIssues(prep: StudyPrep, text: string, deadline: number): Promise<Issue[]> {
-  return [...(await checkQuotations(prep, text, deadline)), ...(await checkEvents(prep, text, deadline)), ...checkCalculations(text).issues];
+  const events = isNarrative(prep.ctx.subject) ? await checkEvents(prep, text, deadline) : [];
+  return [...(await checkQuotations(prep, text, deadline)), ...events, ...checkCalculations(text).issues];
 }
 
 export function repairInstruction(issues: readonly Issue[]): string {
@@ -197,7 +206,9 @@ export async function reviewAnswer(prep: StudyPrep, draft: string, options: Revi
   // What the draft contains decides which checks are real work for this answer: only those are shown.
   const hasQuotes = extractQuotations(draft).length > 0;
   const hasWorking = checkCalculations(draft).checked > 0;
-  const verifying = log && (hasQuotes || (prep.session && prep.willGround)) ? log.start("verify", prep.willGround ? "Checking quotations and facts against the sources" : "Checking the answer") : null;
+  // The label names the checks that really run: facts (events and characters) only for a set text or history, quotations wherever there are any.
+  const factsChecked = Boolean(prep.session && prep.willGround && isNarrative(prep.ctx.subject));
+  const verifying = log && (hasQuotes || factsChecked) ? log.start("verify", factsChecked ? "Checking quotations and facts against the sources" : "Checking the quotations against the sources") : null;
   const calculating = log && hasWorking ? log.start("calculate", "Checking the working by calculation") : null;
   let repairStep: string | null = null;
   for (let attempt = 0; attempt <= maxRepairs; attempt += 1) {

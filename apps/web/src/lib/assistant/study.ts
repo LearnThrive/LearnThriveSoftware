@@ -6,7 +6,7 @@ import { defuseMarkers } from "./research/htmlText";
 import { groundTurn, groundingBlock, shouldGround, unsupportedNames, type Grounding } from "./research/ground";
 import { extractQuotations } from "./research/quotations";
 import type { ActivityLog } from "./activity";
-import { checkCalculations, type GateResult } from "./gate";
+import { checkCalculations, isNarrative, type GateResult } from "./gate";
 import { claimedSpeaker } from "./research/playText";
 import { boardName, needsResearch, type QuoteStatus, type QuoteVerdict, type ResearchService, type ResearchSession } from "./research/verify";
 
@@ -28,8 +28,13 @@ export interface StudyPrep {
   grounding: Grounding | null;
   /** Whether this turn is one that should have been grounded in sources. */
   willGround: boolean;
-  /** Whether the draft is held and verified before the student sees it (see gate.ts). */
+  /** Whether the draft is held until every check has finished, and then shown whole (`holdsDraft`). */
   gated: boolean;
+  /**
+   * Whether the held draft also goes through the gate's repair-and-cut review (gate.ts): a set text or a period of history read up on, or a hard STEM
+   * problem's working. Other held answers are checked and their problems named under the answer, never cut.
+   */
+  review: boolean;
   /** Text of the student's uploaded files: evidence of what they were given, never of what an edition says. */
   extracts: string[];
   /** Quotation checks already made this turn, by quotation and claimed speaker. */
@@ -98,13 +103,21 @@ function describe(v: QuoteVerdict): string {
 }
 
 /**
- * Answers the student is going to learn from or copy, where one wrong quotation or invented event does real harm, are held and verified before
- * they are shown. Ordinary chat, calculations and other subjects stream as before.
+ * Answers the student is going to learn from or copy, where one wrong quotation or invented event does real harm. For these the gate also checks the
+ * draft's events and characters against what was read (gate.ts), which only makes sense for a story or a period of history.
  */
 export function needsGate(ctx: Pick<StudyContext, "subject" | "activity" | "mode">, willGround: boolean): boolean {
   if (ctx.subject === "english_literature" && (willGround || ctx.activity === "quote_check" || ctx.activity === "mark_essay")) return true;
   return ctx.subject === "history" && willGround && (ctx.mode === "answer" || ctx.activity === "exam_answer" || ctx.activity === "mark_essay");
 }
+
+/**
+ * Whether the draft is held until every check has finished and then shown whole: every answer that is not ordinary chat. A question answered from
+ * sources (any subject that is read up on: literature, history, the sciences, geography, RS...) and a hard problem or a substantial exam task are
+ * shown only once their checks are done, with what the checks found; small talk and simple questions stream at once. Decided from the message and
+ * the response mode, never from the model. (Which held answers are also repaired and cut by the gate is `review`, a narrower rule.)
+ */
+export const holdsDraft = (mode: ResponseMode): boolean => mode !== "fast";
 
 /** What a turn is, decided before any work starts, so the page can say "checking sources" while the server reads. */
 export function planStudy(text: string, history: readonly HistoryItem[], settings?: ContextSettings): { ctx: StudyContext; ground: boolean } {
@@ -169,8 +182,40 @@ export async function prepareStudy(input: StudyInput): Promise<StudyPrep> {
 
   const frame = ctx.activity === "mark_essay" ? markFrame(ctx, input.material) : null;
   const mode = responseMode(ctx, input.text, willGround);
-  const gated = (Boolean(session) && needsGate(ctx, willGround)) || holdsWorking(ctx, mode);
-  return { ctx, system: strategyBlock(ctx, { researchAvailable: Boolean(session), essay: input.material }), evidence, session, verdicts, grounding, willGround, gated, extracts: input.extracts ?? [], quoteChecks, gate: null, frame, material: input.material, question, mode };
+  const review = (Boolean(session) && needsGate(ctx, willGround)) || holdsWorking(ctx, mode);
+  const gated = review || holdsDraft(mode);
+  return { ctx, system: strategyBlock(ctx, { researchAvailable: Boolean(session), essay: input.material }), evidence, session, verdicts, grounding, willGround, gated, review, extracts: input.extracts ?? [], quoteChecks, gate: null, frame, material: input.material, question, mode };
+}
+
+/**
+ * What a turn is when `prepareStudy` itself failed. The classification is deterministic and cannot fail the same way, so a turn that must be verified
+ * is STILL held and checked (by calculation, and against the student's own material), and its note says that no sources could be read. A failure in
+ * the preparation never turns an answer that should be verified into one streamed unchecked.
+ */
+export function fallbackStudy(input: Pick<StudyInput, "text" | "material" | "history" | "settings" | "extracts">): StudyPrep {
+  const ctx = detectStudyContext(input.text, { history: input.history, settings: input.settings });
+  const willGround = shouldGround(ctx, input.text);
+  const mode = responseMode(ctx, input.text, willGround);
+  const grounding: Grounding | null = willGround ? { status: "unavailable", queries: [], sources: [], note: "the research could not be started" } : null;
+  return {
+    ctx,
+    system: strategyBlock(ctx, { researchAvailable: false, essay: input.material }),
+    evidence: willGround ? groundingBlock(grounding, false, { searches: 0, fetches: 0 }) : "",
+    session: null,
+    verdicts: new Map(),
+    grounding,
+    willGround,
+    gated: holdsWorking(ctx, mode) || holdsDraft(mode),
+    // Without sources only the working can be reviewed (by calculation); there is nothing to check a quotation or an event against.
+    review: holdsWorking(ctx, mode),
+    extracts: input.extracts ?? [],
+    quoteChecks: new Map(),
+    gate: null,
+    frame: ctx.activity === "mark_essay" ? markFrame(ctx, input.material) : null,
+    material: input.material,
+    question: input.text,
+    mode,
+  };
 }
 
 /**
@@ -178,23 +223,38 @@ export async function prepareStudy(input: StudyInput): Promise<StudyPrep> {
  * that can be proved, and which sources were read. Quotations the reply introduced are checked here against the pages already read, and (budget
  * allowing) by a search. Empty when there is nothing to say. Never throws into the caller's turn.
  */
-export async function finishStudy(prep: StudyPrep, answer: string, options: { deadlineMs?: number } = {}): Promise<string> {
+export async function finishStudy(prep: StudyPrep, answer: string, options: { deadlineMs?: number; activity?: ActivityLog } = {}): Promise<string> {
   const deadline = Date.now() + (options.deadlineMs ?? 20_000);
   const session = prep.session;
   const parts: string[] = [];
 
-  // Quotations the model added to its own reply: judged against what was read, then looked up if there is budget left.
+  // Quotations the model added to its own reply: judged against what was read, then looked up if there is budget left. Only a quotation that is
+  // really looked up here is shown as a step (one the gate or the preparation already checked costs nothing and is not shown again).
   if (session && (prep.ctx.subject === "english_literature" || prep.ctx.activity === "quote_check")) {
+    const fresh = extractQuotations(answer).filter((q) => !prep.verdicts.has(quoteKey(q))).slice(0, 3);
+    const step = fresh.length ? options.activity?.start("verify", "Checking the quotations in the answer", `${fresh.length} to check`) : undefined;
     let looked = 0;
-    for (const quotation of extractQuotations(answer)) {
-      const key = quoteKey(quotation);
-      if (prep.verdicts.has(key) || looked >= 3 || Date.now() > deadline) continue;
+    let found = 0;
+    let unchecked = 0;
+    for (const quotation of fresh) {
+      if (Date.now() > deadline) {
+        unchecked += 1;
+        continue;
+      }
       looked += 1;
       try {
-        prep.verdicts.set(key, (await session.verifyQuotation({ quotation, work: prep.ctx.work })).status);
+        const status = (await session.verifyQuotation({ quotation, work: prep.ctx.work })).status;
+        prep.verdicts.set(quoteKey(quotation), status);
+        if (status === "verified_exact" || status === "verified_variant") found += 1;
+        if (status === "unverifiable") unchecked += 1;
       } catch {
         // an unchecked quotation is reported as unchecked below
+        unchecked += 1;
       }
+    }
+    if (step) {
+      if (looked === 0 || unchecked === fresh.length) options.activity?.fail(step, "they could not be looked up");
+      else options.activity?.done(step, { detail: `${found} of ${fresh.length} confirmed in the text` });
     }
   }
 
@@ -221,7 +281,11 @@ export async function finishStudy(prep: StudyPrep, answer: string, options: { de
     notes.push(note);
   }
   if (session && gotSources) {
+    // In a subject other than a set text or history this is the answer's check against the sources, so it is shown as a step (for those two the
+    // facts check before release already stands for it).
+    const step = isNarrative(prep.ctx.subject) ? undefined : options.activity?.start("verify", "Checking names and terms against the sources");
     const names = unsupportedNames(answer, session.pageTexts(), `${prep.question} ${prep.material}`);
+    if (step) options.activity?.done(step, { detail: names.length ? `${names.length} not found in the sources` : "all found in the sources" });
     if (names.length) notes.push(`${names.length === 1 ? "This name or term does" : "These names or terms do"} not appear in the sources I read or in your message: ${names.join(", ")}. ${names.length === 1 ? "It" : "They"} may be a mistake, so check before using.`);
   }
   if (prep.gate && (prep.gate.removed.length || prep.gate.firstDraft.length)) {

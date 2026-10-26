@@ -1,4 +1,4 @@
-import { safeSource, type ActivityLog } from "../activity";
+import { publicHost, safeSource, type ActivityLog } from "../activity";
 import { TtlCache } from "./cache";
 import { fetchSource, type FetchedSource, type FetchOptions } from "./fetchSource";
 import { workOf } from "./works";
@@ -242,17 +242,18 @@ export class ResearchSession {
       return { ok: false, code: "unavailable", reason: `page-read limit for one answer reached (${this.limits.maxFetches})` };
     }
     this.fetches += 1;
-    let host = "";
-    try {
-      host = new URL(url).hostname.replace(/^www\./, "");
-    } catch {
-      host = "";
-    }
-    const step = this.activity?.start("read", host ? `Reading ${host}` : "Reading a page");
+    // A page is named in the step only once its address has passed the same public-address check its link must pass: an address the fetcher will
+    // refuse (a local or internal one, an address with a login in it) never appears, not even while it is being refused.
+    const named = (raw: string) => publicHost(raw)?.replace(/^www\./, "") ?? null;
+    const asked = named(url);
+    const step = this.activity?.start("read", asked ? `Reading ${asked}` : "Reading a page");
     const got = await this.service.page(url, this.signal);
     if (step) {
-      if (got.ok) this.activity?.done(step, { label: `Read ${host || "a page"}`, source: safeSource({ url: got.url, title: got.title, tier: tierOf(got.url), via: got.via === "direct" ? "direct" : "browser" }), detail: got.via === "crawl4ai" ? "in a browser" : undefined });
-      else this.activity?.fail(step, got.code === "timeout" ? "took too long" : got.code === "blocked" ? "not a page that can be read" : got.code === "unsupported_type" ? "not a readable page" : "could not be read");
+      if (got.ok) {
+        // The page that was read, after any redirect: that is the one linked, and only if it is itself public.
+        const source = safeSource({ url: got.url, title: got.title, tier: tierOf(got.url), via: got.via === "direct" ? "direct" : "browser" });
+        this.activity?.done(step, { label: source ? `Read ${named(got.url) ?? "a page"}` : "Read a page", source, detail: got.via === "crawl4ai" ? "in a browser" : undefined });
+      } else this.activity?.fail(step, got.code === "timeout" ? "took too long" : got.code === "blocked" ? "not a page that can be read" : got.code === "unsupported_type" ? "not a readable page" : "could not be read");
     }
     this.read.set(key, got);
     if (got.ok && got.injection.length) this.notes.push(`A page (${new URL(got.url).hostname}) contained text that looked like instructions to an AI (${got.injection.join(", ")}). It was ignored.`);
