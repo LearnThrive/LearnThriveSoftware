@@ -174,16 +174,22 @@ def build_set(phrases, work: Path, log):
 # ---- recognition ----------------------------------------------------------------------------------------------------------
 
 STT_CONFIGS = [
-    {"model": "base.en", "device": "cpu", "compute": "int8", "voices": "all"},
-    {"model": "small.en", "device": "cpu", "compute": "int8", "voices": "all"},
-    {"model": "small", "device": "cpu", "compute": "int8", "voices": "all"},
-    {"model": "medium.en", "device": "cpu", "compute": "int8", "voices": "one"},
-    {"model": "base.en", "device": "cuda", "compute": "float16", "voices": "all"},
-    {"model": "small.en", "device": "cuda", "compute": "float16", "voices": "all"},
+    {"engine": "whisper", "model": "base.en", "device": "cpu", "compute": "int8", "voices": "all"},
+    {"engine": "whisper", "model": "small.en", "device": "cpu", "compute": "int8", "voices": "all"},
+    {"engine": "whisper", "model": "small", "device": "cpu", "compute": "int8", "voices": "all"},
+    {"engine": "whisper", "model": "medium.en", "device": "cpu", "compute": "int8", "voices": "one"},
+    {"engine": "whisper", "model": "base.en", "device": "cuda", "compute": "float16", "voices": "all"},
+    {"engine": "whisper", "model": "small.en", "device": "cuda", "compute": "float16", "voices": "all"},
+    # The migration's target: the shipped Parakeet adapter (services/voice/speech/parakeet.py) against a real NeMo-Speech.cpp
+    # runtime, so these numbers are the code path the sidecar uses, not a separate script.
+    {"engine": "parakeet", "model": "parakeet-ctc-1.1b.q8_0.gguf", "device": "cuda", "compute": "q8_0", "voices": "all"},
+    {"engine": "parakeet", "model": "parakeet-ctc-1.1b.q8_0.gguf", "device": "cpu", "compute": "q8_0", "voices": "one"},
 ]
 
 
 def run_stt(cfg, clips, phrases, terms, log):
+    if cfg.get("engine") == "parakeet":
+        return run_stt_parakeet(cfg, clips, phrases, terms, log)
     from faster_whisper import WhisperModel
 
     if cfg["device"] == "cuda":
@@ -242,6 +248,73 @@ def run_stt(cfg, clips, phrases, terms, log):
     result["errorExamples"] = samples_out
     log(f"  {cfg['model']} {cfg['device']} {cfg['compute']}: WER clean {result['wer']['clean']}% noisy {result['wer']['noisy']}%, median {result['msMedian']} ms, RTF {result['rtfMedian']}")
     del model
+    return result
+
+
+def run_stt_parakeet(cfg, clips, phrases, terms, log):
+    """Parakeet CTC 1.1B through the sidecar's own adapter task: it spawns the runtime, keeps it loaded and reports its device."""
+    from speech import select as speech_select
+
+    refs = {p["id"]: normalise(p["text"]) for p in phrases}
+    result = {**cfg}
+    before_rss, before_vram = rss_mb(), vram_mb()
+    t = time.perf_counter()
+    try:
+        engine = speech_select._parakeet({"VOICE_STT_DEVICE": cfg["device"], "VOICE_STT_MODEL": cfg["model"]}, log)
+    except Exception as error:  # noqa: BLE001
+        result["error"] = f"{type(error).__name__}: {str(error)[:160]}"
+        log(f"  parakeet {cfg['device']}: not run ({result['error']})")
+        return result
+    result["loadSeconds"] = round(time.perf_counter() - t, 2)
+    result["deviceReported"] = engine.device  # what the runtime said, never what was asked for
+    result["detail"] = engine.detail
+    result["rssMb"] = round(rss_mb() - before_rss)
+    after_vram = vram_mb()
+    result["vramMb"] = round(after_vram - before_vram) if after_vram is not None and before_vram is not None else None
+    stats = {"clean": [0, 0], "noisy": [0, 0]}
+    per_voice: dict[str, list[int]] = {}
+    term_hits = [0, 0]
+    rtfs, times, confidences = [], [], []
+    samples_out = []
+    seen_source = "none"
+    for voice, by_phrase in clips.items():
+        for pid, audio in by_phrase.items():
+            for cond in ("clean", "noisy"):
+                x = audio if cond == "clean" else add_noise(audio, 15, zlib.crc32(f"{voice}{pid}".encode()))
+                started = time.perf_counter()
+                heard = engine.transcribe(x)
+                took = time.perf_counter() - started
+                errors, total = wer(refs[pid], normalise(heard.text))
+                stats[cond][0] += errors
+                stats[cond][1] += total
+                pv = per_voice.setdefault(voice, [0, 0])
+                pv[0] += errors
+                pv[1] += total
+                hyp = set(normalise(heard.text))
+                for term in terms:
+                    if term in refs[pid]:
+                        term_hits[1] += 1
+                        term_hits[0] += term in hyp
+                rtfs.append(took / (len(audio) / 16000))
+                times.append(took * 1000)
+                seen_source = heard.confidence_source
+                if heard.confidence is not None:
+                    confidences.append(heard.confidence)
+                if len(samples_out) < 3 and cond == "clean" and errors:
+                    samples_out.append({"voice": voice, "said": " ".join(refs[pid]), "heard": " ".join(normalise(heard.text))})
+    result["wer"] = {c: round(100 * e / max(1, n), 1) for c, (e, n) in stats.items()}
+    result["werByVoice"] = {v: round(100 * e / max(1, n), 1) for v, (e, n) in per_voice.items()}
+    result["termsFoundPercent"] = round(100 * term_hits[0] / max(1, term_hits[1]), 1)
+    result["rtfMedian"] = round(statistics.median(rtfs), 3)
+    result["msMedian"] = round(statistics.median(times))
+    result["msP95"] = round(float(np.percentile(times, 95)))
+    result["clips"] = len(times)
+    # Whether the runtime handed over confidence scores at all: the frontend's confirmation rule must not invent them.
+    result["confidenceSource"] = seen_source
+    result["confidenceMedian"] = round(statistics.median(confidences), 3) if confidences else None
+    result["errorExamples"] = samples_out
+    log(f"  parakeet {cfg['device']} ({result['deviceReported']}): WER clean {result['wer']['clean']}% noisy {result['wer']['noisy']}%, median {result['msMedian']} ms, RTF {result['rtfMedian']}, confidence {seen_source}")
+    engine.stop()
     return result
 
 

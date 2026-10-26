@@ -52,6 +52,9 @@ CAREERS_PROMPT.md
 services/voice/.venv/
 services/voice/models/
 services/voice/__pycache__/
+services/voice/speech/__pycache__/
+# The NVIDIA NeMo-Speech.cpp runtime (the verified Windows release archive is downloaded, not committed) and its logs.
+services/voice/vendor/
 LearnThrive_Study_Buddy_Master_Prompt.md
 
 # scripts/ollama-local.mjs runtime state: PIDs, logs and the warm-up marker for the two local Ollama processes (never source).
@@ -61,3 +64,7 @@ LearnThrive_Production_Completion_Claude_Code_Prompt.md
 LearnThrive_Study_Buddy_Fixes_Claude_Prompt.md
 LearnThrive_Study_Buddy_Finish_Brief_Claude_Prompt.md
 .gitignore
+
+# Python bytecode caches (the voice sidecar runs from source)
+__pycache__/
+*.pyc

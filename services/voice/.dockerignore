@@ -1,4 +1,6 @@
 .venv
 models
+vendor
 __pycache__
 bench.py
+tests

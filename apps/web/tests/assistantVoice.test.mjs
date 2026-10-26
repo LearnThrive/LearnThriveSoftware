@@ -10,6 +10,7 @@ const vh = loadTsFrom(import.meta.url, "../src/lib/assistant/voiceHandlers.ts");
 const voice = loadTsFrom(import.meta.url, "../src/lib/assistant/voice.ts");
 const cfgLib = loadTsFrom(import.meta.url, "../src/lib/assistant/config.ts");
 const speech = loadTsFrom(import.meta.url, "../src/lib/assistant/speech.ts");
+const trust = loadTsFrom(import.meta.url, "../src/lib/assistant/voiceTrust.ts");
 const audio = loadTsFrom(import.meta.url, "../src/lib/assistant/audio.ts");
 const { MockProvider } = loadTsFrom(import.meta.url, "../src/lib/assistant/mock.ts");
 const { GenerationQueue } = loadTsFrom(import.meta.url, "../src/lib/assistant/queue.ts");
@@ -81,7 +82,7 @@ test("transcribe: a transcript comes back, bad audio is 422, and nothing is logg
   const p = await w.person();
   const ok = await vh.handleTranscribe(w.audio(wav({ seconds: 2 })), w.deps(p.jar));
   assert.equal(ok.status, 200);
-  assert.deepEqual(await ok.json(), { text: "Factorise x squared plus five x plus six", confidence: 0.92, noSpeech: 0.02 });
+  assert.deepEqual(await ok.json(), { text: "Factorise x squared plus five x plus six", confidence: 0.92, confidenceSource: "tokens", noSpeech: 0.02 });
   const short = await vh.handleTranscribe(w.audio(wav({ seconds: 0.5 })), w.deps(p.jar));
   assert.equal((await short.json()).confidence, 0.3, "the mock is unsure of a very short recording, so the confirm path can be tested");
   assert.equal(ok.headers.get("cache-control"), "no-store");
@@ -138,6 +139,24 @@ test("each family has an hourly cap, counted per hour", async (t) => {
   assert.equal((await vh.handleSpeak(w.speak({ text: "Still allowed." }), w.deps(p.jar))).status, 200, "speaking has its own counter");
 });
 
+test("a transcript is sent by itself only when it is neither unsure nor easy to mishear", () => {
+  // A measured confidence decides first, exactly as the panel always did.
+  assert.deepEqual(trust.judgeTranscript({ text: "What is a fraction?", confidence: 0.9 }), { send: true, ask: false, why: null });
+  assert.deepEqual(trust.judgeTranscript({ text: "What is a fraction?", confidence: 0.4 }), { send: false, ask: true, why: "unsure" });
+  // Maths that could be the wrong member of a pair (the brief's list) is held to the higher bar...
+  assert.deepEqual(trust.judgeTranscript({ text: "Factorise x cubed plus five x", confidence: 0.7 }), { send: false, ask: true, why: "ambiguous" });
+  // ...and passes only with a high measured confidence.
+  assert.deepEqual(trust.judgeTranscript({ text: "Factorise x cubed plus five x", confidence: 0.95 }), { send: true, ask: false, why: null });
+  // With no measured confidence at all, an ambiguous maths question is never sent unseen.
+  assert.deepEqual(trust.judgeTranscript({ text: "Solve two x minus seven equals nineteen", confidence: null }), { send: false, ask: true, why: "ambiguous" });
+  assert.deepEqual(trust.judgeTranscript({ text: "Find the sine of thirty", confidence: null }), { send: false, ask: true, why: "ambiguous" });
+  // An ordinary sentence with no score still goes (the silence check has already passed).
+  assert.deepEqual(trust.judgeTranscript({ text: "Explain photosynthesis in simple words", confidence: null }), { send: true, ask: false, why: null });
+  assert.equal(trust.ambiguousMaths("What is fifteen times fifty?"), "a number that sounds like another");
+  assert.equal(trust.ambiguousMaths("What is a denominator?"), "a fraction read aloud");
+  assert.equal(trust.ambiguousMaths("Where is my homework?"), null);
+});
+
 test("config: voice is development only, needs the assistant, and names its provider", () => {
   assert.equal(voice.voiceClosed(ENV), null);
   assert.equal(voice.voiceClosed({ ...ENV, VOICE_ENABLED: "false" }), "disabled");
@@ -155,9 +174,14 @@ test("the speech-service client sends the token, maps its errors and never throw
     return new Response(body, { status, headers });
   };
   const ok = new voice.SidecarSpeech("http://voice.local:8765/", "secret", reply(200, JSON.stringify({ text: " two plus two ", audioMs: 1200, processingMs: 300 })));
-  assert.deepEqual(await ok.transcribe(wav()), { text: "two plus two", audioMs: 1200, processingMs: 300, confidence: 1, noSpeech: 0 }, "an older service without scores is trusted");
-  const scored = new voice.SidecarSpeech("http://voice.local:8765", null, reply(200, JSON.stringify({ text: "hm", audioMs: 400, processingMs: 90, confidence: 0.41, noSpeech: 0.7 })));
-  assert.deepEqual(await scored.transcribe(wav()), { text: "hm", audioMs: 400, processingMs: 90, confidence: 0.41, noSpeech: 0.7 });
+  assert.deepEqual(await ok.transcribe(wav()), { text: "two plus two", audioMs: 1200, processingMs: 300, confidence: 1, confidenceSource: "tokens", noSpeech: 0 }, "an older service without scores is trusted");
+  const scored = new voice.SidecarSpeech("http://voice.local:8765", null, reply(200, JSON.stringify({ text: "hm", audioMs: 400, processingMs: 90, confidence: 0.41, confidenceSource: "words", noSpeech: 0.7 })));
+  assert.deepEqual(await scored.transcribe(wav()), { text: "hm", audioMs: 400, processingMs: 90, confidence: 0.41, confidenceSource: "words", noSpeech: 0.7 });
+  // A recogniser that says it cannot measure a confidence (Parakeet without per-word scores) must not be turned into a confident 1.
+  const unscored = new voice.SidecarSpeech("http://voice.local:8765", null, reply(200, JSON.stringify({ text: "what is x cubed", audioMs: 900, processingMs: 120, confidence: null, confidenceSource: "none", noSpeech: 0 })));
+  const heard = await unscored.transcribe(wav());
+  assert.equal(heard.confidence, null);
+  assert.equal(heard.confidenceSource, "none");
   assert.equal(calls[0].url, "http://voice.local:8765/stt");
   assert.equal(calls[0].init.headers["x-voice-token"], "secret");
   assert.equal(calls[0].init.headers["Content-Type"], "audio/wav");

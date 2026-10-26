@@ -24,7 +24,10 @@ services:
   voice:
     build: ../services/voice
     image: learnthrive-voice:dev
-    # Recognition on the GPU beside the model (small.en, about 1 GB more; both fit in 8 GB), as the voice timings were measured.
+    # Kokoro 82M speaks on this container's CPU. Recognition is Parakeet CTC 1.1B, which is a NATIVE Windows program (NeMo-Speech.cpp,
+    # set up by docs/VOICE.md) and cannot run in here: the container talks to the runtime started on the host by `npm run dev`
+    # (scripts/parakeet-local.mjs) at host.docker.internal. With no host runtime it falls back to faster-whisper on the GPU and says
+    # so in /health; VOICE_FALLBACK_ENABLED=false makes that a hard failure instead.
     gpus: all
     ports:
       - "127.0.0.1:8765:8765"
@@ -33,12 +36,17 @@ services:
       - whisper-cache:/root/.cache/huggingface
     environment:
       VOICE_TOKEN: ${VOICE_TOKEN:-}
+      VOICE_STT_ENGINE: ${VOICE_STT_ENGINE:-parakeet}
+      VOICE_PARAKEET_URL: ${VOICE_PARAKEET_URL:-http://host.docker.internal:8791}
+      VOICE_TTS_ENGINE: ${VOICE_TTS_ENGINE:-kokoro}
+      VOICE_TTS_VOICE: ${VOICE_TTS_VOICE:-bf_emma}
+      VOICE_FALLBACK_ENABLED: ${VOICE_FALLBACK_ENABLED:-true}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/health', timeout=3)"]
       interval: 5s
       timeout: 5s
       retries: 12
-      # The first start downloads the recognition model (about 150 MB) and loads both models.
+      # The first start downloads the Whisper model (about 150 MB) when it is the fallback, and loads the voices.
       start_period: 300s
     restart: unless-stopped
 

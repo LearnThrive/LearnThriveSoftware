@@ -91,9 +91,18 @@ if (!flag("--skip-engines") && !flag("--report-only")) {
 // ---- 2. the pipeline --------------------------------------------------------------------------------------------------------
 
 async function startSidecar([model, device]) {
-  const env = { ...process.env, VOICE_PORT: String(PORT), VOICE_STT_MODEL: model, VOICE_STT_DEVICE: device, VOICE_STT_COMPUTE: device === "cuda" ? "float16" : "int8", PYTHONUNBUFFERED: "1" };
+  // `parakeet/cuda` runs the migration's recogniser through the shipped adapter; `base.en/cpu` the pre-migration whisper path.
+  const parakeet = model === "parakeet" || model.endsWith(".gguf");
+  const env = { ...process.env, VOICE_PORT: String(PORT), VOICE_STT_ENGINE: parakeet ? "parakeet" : "whisper", VOICE_STT_DEVICE: device, PYTHONUNBUFFERED: "1" };
+  if (parakeet) {
+    delete env.VOICE_STT_COMPUTE;
+    if (model !== "parakeet") env.VOICE_STT_MODEL = model;
+  } else {
+    env.VOICE_STT_MODEL = model;
+    env.VOICE_STT_COMPUTE = device === "cuda" ? "float16" : "int8";
+  }
   const child = spawn("uv", ["run", "--project", voiceDir, "python", join(voiceDir, "server.py")], { env, stdio: "ignore", cwd: voiceDir });
-  for (let i = 0; i < 120; i += 1) {
+  for (let i = 0; i < 180; i += 1) {
     await sleep(1000);
     try {
       const health = await (await fetch(`http://127.0.0.1:${PORT}/health`)).json();
@@ -197,12 +206,12 @@ const gpu = (() => {
 
 const ok = engines.stt.filter((c) => c.wer);
 const bestClean = Math.min(...ok.map((c) => c.wer.clean));
-// The recogniser: close to the best word error rate (within a point), quick on a short clip (under 700 ms), and on the CPU if it can be (the GPU stays free for the language model).
-const fit = ok.filter((c) => c.wer.clean <= bestClean + 1 && c.msMedian <= 700);
-const pickStt = [...fit].sort((a, b) => (a.device === "cpu" ? 0 : 1) - (b.device === "cpu" ? 0 : 1) || a.msMedian - b.msMedian)[0] ?? [...ok].sort((a, b) => a.wer.clean - b.wer.clean)[0];
+// The migration's default is Parakeet CTC 1.1B; the whisper rows stay in the table as the measured rollback path.
+const para = ok.find((c) => c.engine === "parakeet");
+const whisperBest = [...ok.filter((c) => c.engine !== "parakeet")].sort((a, b) => a.wer.clean - b.wer.clean || a.msMedian - b.msMedian)[0];
 const ttsOk = engines.tts.filter((t) => t.first);
-const ttsFit = ttsOk.filter((t) => t.first.msMedian < 500);
-const pickTts = [...ttsFit].sort((a, b) => a.first.msMedian - b.first.msMedian)[0];
+const kokoro = ttsOk.find((t) => t.engine === "kokoro" && t.voice === "bf_emma") ?? ttsOk.find((t) => t.engine === "kokoro");
+const piperFastest = [...ttsOk.filter((t) => t.engine === "piper")].sort((a, b) => a.first.msMedian - b.first.msMedian)[0];
 const best = pipeline ? [...pipeline.results].sort((a, b) => a.totalMedian - b.totalMedian)[0] : null;
 
 const L = [];
@@ -213,12 +222,13 @@ L.push("## Machine", "", "| | |", "| --- | --- |", `| CPU | ${cpus[0]?.model?.tr
 
 L.push("## The set", "", `${engines.phrases} phrases of the kind a student says (maths and science vocabulary: x squared, quadratic, denominator, photosynthesis…), each spoken by ${engines.voices.length} synthetic voices (${engines.voices.join(", ")}), once clean and once with white noise added at 15 dB signal-to-noise. Word error rate is computed after folding digits to words ("5x" and "five x" are the same) and punctuation away. "Terms found" is the share of the maths and science words that were recognised correctly.`, "");
 
-L.push("## Speech recognition (faster-whisper)", "", "| Model | Device | Compute | WER clean | WER noisy | Terms found | Median ms per clip | p95 ms | Real-time factor | Memory (RAM / VRAM) | Load (s) |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+L.push("## Speech recognition", "", "| Engine | Model | Device | Compute | WER clean | WER noisy | Terms found | Median ms per clip | p95 ms | Real-time factor | Memory (RAM / VRAM) | Load (s) |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
 for (const c of engines.stt) {
-  if (c.error) L.push(`| ${c.model} | ${c.device} | ${c.compute} | not run: ${c.error.replace(/\|/g, "/")} | | | | | | | |`);
-  else L.push(`| ${c.model} | ${c.device} | ${c.compute} | ${c.wer.clean}% | ${c.wer.noisy}% | ${c.termsFoundPercent}% | ${c.msMedian} | ${c.msP95} | ${c.rtfMedian} | ${c.rssMb} MB / ${c.vramMb ?? "n/a"} MB | ${c.loadSeconds} |`);
+  const engine = c.engine ?? "whisper";
+  if (c.error) L.push(`| ${engine} | ${c.model} | ${c.device} | ${c.compute} | not run: ${c.error.replace(/\|/g, "/")} | | | | | | | |`);
+  else L.push(`| ${engine} | ${c.model} | ${c.device}${c.deviceReported ? ` (${c.deviceReported})` : ""} | ${c.compute} | ${c.wer.clean}% | ${c.wer.noisy}% | ${c.termsFoundPercent}% | ${c.msMedian} | ${c.msP95} | ${c.rtfMedian} | ${c.rssMb} MB / ${c.vramMb ?? "n/a"} MB | ${c.loadSeconds} |`);
 }
-L.push("", "Clips are 2 to 6 seconds long. `medium.en` was run on one voice only, because it is slow. whisper.cpp was **not run**: it needs a separate native build, and faster-whisper runs the same Whisper weights through CTranslate2, so recognition quality is the same family and only speed differs. NVIDIA's hosted speech models were **not run** (they need gRPC function access that was not set up, and are development comparison only in any case).", "");
+L.push("", "A Parakeet row measures the sidecar's own adapter against a real NeMo-Speech.cpp runtime (its device column repeats what that runtime's `/ready` reported). The whisper rows are the pre-migration engine, kept for rollback. Clips are 2 to 6 seconds long. `medium.en` and the CPU Parakeet row were run on one voice only, because they are the slow ones.", "");
 const worst = ok.flatMap((c) => c.errorExamples.map((e) => ({ model: `${c.model}/${c.device}`, ...e }))).slice(0, 4);
 if (worst.length) {
   L.push("Examples of what went wrong (clean audio):", "");
@@ -241,13 +251,23 @@ if (pipeline) {
 }
 
 L.push("## Decision", "");
-L.push(pickStt ? `- **Recognition: faster-whisper \`${pickStt.model}\`, ${pickStt.device}, ${pickStt.compute}**: within a point of the best clean word error rate (${bestClean}%), median ${pickStt.msMedian} ms a clip, and ${pickStt.device === "cpu" ? "on the CPU, so the GPU stays free for the language model" : "on the GPU"}.` : "- No recogniser met the rule.");
-const cpuFit = ok.filter((c) => c.device === "cpu" && c.msMedian <= 700).sort((a, b) => a.wer.clean - b.wer.clean)[0];
-if (pickStt?.device === "cuda" && cpuFit) L.push(`- **Without a usable GPU: \`${cpuFit.model}\` on the CPU, ${cpuFit.compute}**: the most accurate CPU configuration under 700 ms a clip (${cpuFit.wer.clean}% word error, ${cpuFit.msMedian} ms). The sidecar chooses between the two itself (\`VOICE_STT_DEVICE=auto\`, the default): the GPU one if CUDA loads, the CPU one if not. The pipeline table shows the language model's first token is unchanged by the recogniser sharing the GPU (about 0.6 GB of VRAM).`);
-L.push(pickTts ? `- **Speech output: Piper.** Every Piper voice synthesises its first chunk in ${Math.min(...ttsFit.filter((t) => t.engine === "piper").map((t) => t.first.msMedian))} to ${Math.max(...ttsFit.filter((t) => t.engine === "piper").map((t) => t.first.msMedian))} ms against a target of 500, so the speed difference between them is noise; the default stays \`en_GB-alba-medium\` and the choice of voice is the owner's, by ear. ${ttsOk.some((t) => t.engine === "kokoro" && t.first.msMedian >= 500) ? "Kokoro is often judged more natural but misses the 500 ms target on this CPU (" + Math.min(...ttsOk.filter((t) => t.engine === "kokoro").map((t) => t.first.msMedian)) + " ms and up)." : ""}` : "- No speech engine met the 500 ms first-chunk target.");
-L.push("- The browser's `speechSynthesis` stays as the automatic fallback when the speech service is unreachable.", "- Push-to-talk only. Hands-free voice-activity detection was not built: it needs a measured false-trigger rate in a real room, and the first version should not listen when nobody pressed anything.", "");
+if (para) {
+  const versus = whisperBest ? ` The best whisper row here is \`${whisperBest.model}\` (${whisperBest.device}) at ${whisperBest.wer.clean}% / ${whisperBest.wer.noisy}% and ${whisperBest.msMedian} ms.` : "";
+  L.push(`- **Recognition: Parakeet CTC 1.1B (\`${para.model}\`), the local default.** ${para.wer.clean}% clean and ${para.wer.noisy}% noisy word error, ${para.termsFoundPercent}% of the maths and science terms found, ${para.msMedian} ms median a clip (p95 ${para.msP95}), real-time factor ${para.rtfMedian}, ${para.loadSeconds} s to load, ${para.vramMb ?? "n/a"} MB of VRAM while it ran.${versus} The runtime reported confidence per ${para.confidenceSource === "none" ? "nothing: the frontend must not invent a score (it decides on silence, length and risky maths alone)" : `${para.confidenceSource}`}.`);
+} else {
+  L.push("- No Parakeet row ran (no runtime or no GGUF): the whisper rows above are what the sidecar falls back to, and `/health` says so.");
+}
+const cpuFit = ok.filter((c) => c.device === "cpu" && (c.engine !== "parakeet" ? c.msMedian <= 700 : true)).sort((a, b) => a.wer.clean - b.wer.clean)[0];
+if (whisperBest) L.push(`- **Rollback: \`VOICE_STT_ENGINE=whisper\`** restores the pre-migration faster-whisper path (\`${whisperBest.model}\` on ${whisperBest.device}, ${whisperBest.msMedian} ms). The sidecar also falls back to it by itself when the runtime or the GGUF is missing, and names the reason in \`/health\`.`);
+if (kokoro && piperFastest) {
+  const ratio = kokoro.first.msMedian / piperFastest.first.msMedian;
+  L.push(`- **Speech output: Kokoro 82M \`${kokoro.voice}\`, the local default.** Its first chunk takes ${kokoro.first.msMedian} ms against Piper's ${piperFastest.first.msMedian} ms (${ratio >= 1 ? `${ratio.toFixed(1)}x slower` : "faster"}), paid once per spoken segment; later chunks queue behind playback, so the voice is rarely the limit. \`VOICE_TTS_ENGINE=piper\` restores Piper, and the browser's \`speechSynthesis\` remains the automatic fallback when the sidecar is unreachable.`);
+} else {
+  L.push("- Speech output: see the table above; `VOICE_TTS_ENGINE` chooses between Kokoro and Piper (rollback).");
+}
+L.push("- Push-to-talk only. Hands-free voice-activity detection was not built: it needs a measured false-trigger rate in a real room, and the first version should not listen when nobody pressed anything.", "");
 L.push("### What would change it", "", "- A real child's voice and a real room: rerun with recordings. If word error rate is much worse than here, the next step is `medium.en` on the GPU (on the CPU it took 4.7 s a clip; it was not measured on the GPU here).", "- A different machine: the CPU timings are for this CPU. A slower school-lab or hosted machine needs the numbers again.", "- A hosted speech provider (a processor for a child's voice) is a plan19 section 6 decision; this report does not cover one.", "- Running the language model and the recogniser on one 8 GB GPU is possible (see the VRAM column: the whole GPU, desktop included, was at about 7.3 of 8 GB with the recogniser on it) but leaves little room, so a second large program on the GPU would push the language model into system memory and slow it. CPU recognition (`VOICE_STT_DEVICE=cpu`) avoids the contest at a cost in accuracy.", "");
-L.push("## Reproduce", "", "```bash", "cd services/voice && uv sync && uv run python -m piper.download_voices --download-dir models en_GB-alba-medium en_GB-jenny_dioco-medium en_GB-northern_english_male-medium", "cd ../../apps/web && npm run voice:bench -- --stt base.en/cpu,base.en/cuda", "```", "", "Kokoro needs `kokoro-v1.0.onnx` and `voices-v1.0.bin` from the kokoro-onnx release in `services/voice/models`; the CUDA runs need `uv pip install nvidia-cublas-cu12 nvidia-cudnn-cu12`. Models are downloaded from their publishers' hosts and are not committed.", "");
+L.push("## Reproduce", "", "```bash", "cd services/voice && uv sync", "node ../../scripts/parakeet-local.mjs          # verifies and extracts the NeMo-Speech.cpp runtime and the Parakeet GGUF", "uv run python -m piper.download_voices --download-dir models en_GB-alba-medium en_GB-jenny_dioco-medium en_GB-northern_english_male-medium", "cd ../../apps/web && npm run voice:bench -- --stt parakeet/cuda,small.en/cuda", "```", "", "Kokoro needs `kokoro-v1.0.onnx` and `voices-v1.0.bin` from the kokoro-onnx release in `services/voice/models`; the CUDA runs need `uv pip install nvidia-cublas-cu12 nvidia-cudnn-cu12`. Models are downloaded from their publishers' hosts and are not committed. `--stt parakeet/cuda` drives the shipped adapter (it spawns the runtime itself); `base.en/cpu` drives the whisper path.", "");
 
 writeFileSync(reportFile, `${L.join("\n")}\n`);
 console.log(`\nWrote ${reportFile}`);
