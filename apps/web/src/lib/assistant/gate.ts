@@ -3,7 +3,9 @@ import { checkEquations } from "./checks/chemistry";
 import { claimEvidence, quoteEvidence, type EvidenceStatus } from "./checks/evidence";
 import { checkWorkingLines } from "./checks/maths";
 import { quoteKey } from "./exam/qa";
+import { parseCitations, type ParsedCitation } from "./research/citations";
 import { checkEventClaims, inventedCharacters, type EventClaim } from "./research/claims";
+import { acceptSupports, type RecallClaim, type RecallPassage } from "./research/entail";
 import { claimedSpeaker } from "./research/playText";
 import { extractQuotations } from "./research/quotations";
 import type { QuoteVerdict } from "./research/verify";
@@ -53,15 +55,54 @@ export interface GateResult {
 
 const BAD_QUOTE = new Set(["paraphrase_or_misquote", "unsupported", "incorrect_attribution"]);
 
+/** Why a quotation failed, in plain words. One wording for every route to the same verdict (searched for, or checked against a cited source). */
+const quoteProblem = (verdict: QuoteVerdict): string =>
+  verdict.status === "incorrect_attribution" ? verdict.note : verdict.status === "paraphrase_or_misquote" ? "something close is in the sources, but not these words, so it may be a misquotation or a paraphrase" : "these words were not found in the sources that were read";
+
 export const sentencesWithOffsets = (text: string): string[] => text.split(/(?<=[.!?])\s+|\n+/).map((s) => s.trim()).filter(Boolean);
 
-async function checkQuotations(prep: StudyPrep, text: string, deadline: number): Promise<Issue[]> {
+async function checkQuotations(prep: StudyPrep, text: string, deadline: number, citations: readonly ParsedCitation[] = []): Promise<Issue[]> {
   const session = prep.session;
   if (!session) return [];
   const issues: Issue[] = [];
   const sentences = sentencesWithOffsets(text);
+  const handled = new Set<string>();
   let looked = 0;
+
+  // The reply's own citations go first. A marker names the source, so those words are checked against THAT page (already read this turn) and usually need no
+  // search at all — which is what makes a long answer's later quotations checkable within the same budget. The number is the model's claim about where the
+  // words came from; a number the server never listed is reported rather than followed.
+  for (const citation of citations) {
+    const quotation = citation.quotation;
+    if (!quotation) continue;
+    const sentence = sentences.find((s) => s.includes(quotation)) ?? citation.sentence;
+    const source = prep.grounding?.sources[citation.number - 1] ?? null;
+    if (!source) {
+      handled.add(quotation);
+      issues.push({ kind: "quotation", span: quotation, sentence, status: "UNSUPPORTED", problem: `it is attributed to source ${citation.number}, which was not one of the sources given` });
+      continue;
+    }
+    const speaker = claimedSpeaker(sentence, quotation);
+    const key = `${quoteKey(quotation)}|${speaker ?? ""}|${source.url}`;
+    let verdict: QuoteVerdict | undefined = prep.quoteChecks.get(key);
+    if (!verdict) {
+      if (Date.now() > deadline || looked >= 6) continue;
+      looked += 1;
+      try {
+        verdict = await session.verifyQuotation({ quotation, work: prep.ctx.work, claimedSpeaker: speaker, extracts: prep.extracts, sourceUrl: source.url });
+      } catch {
+        continue;
+      }
+      prep.quoteChecks.set(key, verdict);
+    }
+    handled.add(quotation);
+    prep.verdicts.set(quoteKey(quotation), verdict.status);
+    if (BAD_QUOTE.has(verdict.status)) issues.push({ kind: "quotation", span: quotation, sentence, status: quoteEvidence(verdict.status), problem: quoteProblem(verdict!) });
+  }
+
+  // Quotations without a marker: unchanged. The words are looked for in the pages already read, then on the web, and judged by what was found there.
   for (const quotation of extractQuotations(text).slice(0, 8)) {
+    if (handled.has(quotation)) continue;
     const sentence = sentences.find((s) => s.includes(quotation)) ?? quotation;
     const speaker = claimedSpeaker(sentence, quotation);
     const key = `${quoteKey(quotation)}|${speaker ?? ""}`;
@@ -77,21 +118,38 @@ async function checkQuotations(prep: StudyPrep, text: string, deadline: number):
       prep.quoteChecks.set(key, verdict);
     }
     prep.verdicts.set(quoteKey(quotation), verdict.status);
-    if (BAD_QUOTE.has(verdict.status))
-      issues.push({
-        kind: "quotation",
-        span: quotation,
-        sentence,
-        status: quoteEvidence(verdict.status),
-        problem:
-          verdict.status === "incorrect_attribution"
-            ? verdict.note
-            : verdict.status === "paraphrase_or_misquote"
-              ? "something close is in the sources, but not these words, so it may be a misquotation or a paraphrase"
-              : "these words were not found in the sources that were read",
-      });
+    if (BAD_QUOTE.has(verdict.status)) issues.push({ kind: "quotation", span: quotation, sentence, status: quoteEvidence(verdict.status), problem: quoteProblem(verdict) });
   }
   return issues;
+}
+
+/**
+ * Asks the recall stage where in the pages read a claim IS settled (research/entail.ts), and keeps only what the code can stand behind: a span that really
+ * appears in the page it names, about the claim's own character. Only "supports" is acted on here — a claim the sources contradict is already an issue, and
+ * a claim that was supported must not become a problem because a model read the pages differently. Returns the promoted claims, keyed as the check keys them.
+ */
+async function recallSupports(prep: StudyPrep, claims: readonly EventClaim[]): Promise<Set<string>> {
+  const session = prep.session;
+  const recall = session?.recall ?? null;
+  if (!session || !recall || !claims.length) return new Set();
+  const pages = session.pagesRead().slice(0, 3);
+  if (!pages.length) return new Set();
+  const passages: RecallPassage[] = pages.map((page, i) => ({ id: `p${i + 1}`, label: page.title, text: page.text }));
+  const wanted: RecallClaim[] = claims.slice(0, 4).map((claim, i) => ({ id: `c${i + 1}`, subject: claim.subject, event: claim.event, sentence: claim.sentence }));
+  let proposals;
+  try {
+    proposals = await recall.findSupport({ claims: wanted, passages });
+  } catch {
+    return new Set();
+  }
+  const accepted = acceptSupports(proposals, wanted, passages);
+  const byId = new Map(wanted.map((claim) => [claim.id, claim]));
+  const promoted = new Set<string>();
+  for (const support of accepted) {
+    const claim = byId.get(support.claim);
+    if (claim && support.relation === "supports") promoted.add(`${claim.subject}|${claim.event}`);
+  }
+  return promoted;
 }
 
 const claimProblem = (c: EventClaim): string =>
@@ -116,6 +174,14 @@ async function checkEvents(prep: StudyPrep, text: string, deadline: number): Pro
     evidence = [...session.pageTexts(), ...prep.extracts];
     claims = checkEventClaims(text, evidence, prep.question);
     bad = claims.filter((c) => c.status !== "supported");
+  }
+  // Then the recall stage (research/entail.ts). The exact check reads the pages with a short list of event patterns, and cannot see "Eric is dismissed from
+  // the works" as the claim "Eric is sent to prison": a page that says it in other words leaves the claim looking unsupported, which is actionable, so the
+  // gate would repair or cut a sentence the sources do support. The stage is asked where the statement IS settled, by meaning.
+  const unsupported = bad.filter((c) => c.status === "unsupported");
+  if (unsupported.length && Date.now() < deadline) {
+    const promoted = await recallSupports(prep, unsupported);
+    if (promoted.size) bad = bad.filter((c) => !promoted.has(`${c.subject}|${c.event}`));
   }
   const issues: Issue[] = bad.map((c) => ({ kind: "event" as const, span: c.sentence, sentence: c.sentence, problem: claimProblem(c), status: claimEvidence(c.status) }));
   for (const name of inventedCharacters(text, evidence, prep.question)) {
@@ -144,9 +210,9 @@ export function checkCalculations(text: string): { issues: Issue[]; checked: num
 const NARRATIVE: ReadonlySet<string> = new Set(["english_literature", "history"]);
 export const isNarrative = (subject: string | null | undefined): boolean => NARRATIVE.has(subject ?? "");
 
-export async function findIssues(prep: StudyPrep, text: string, deadline: number): Promise<Issue[]> {
+export async function findIssues(prep: StudyPrep, text: string, deadline: number, citations: readonly ParsedCitation[] = []): Promise<Issue[]> {
   const events = isNarrative(prep.ctx.subject) ? await checkEvents(prep, text, deadline) : [];
-  return [...(await checkQuotations(prep, text, deadline)), ...events, ...checkCalculations(text).issues];
+  return [...(await checkQuotations(prep, text, deadline, citations)), ...events, ...checkCalculations(text).issues];
 }
 
 export function repairInstruction(issues: readonly Issue[]): string {
@@ -212,7 +278,11 @@ export async function reviewAnswer(prep: StudyPrep, draft: string, options: Revi
   const calculating = log && hasWorking ? log.start("calculate", "Checking the working by calculation") : null;
   let repairStep: string | null = null;
   for (let attempt = 0; attempt <= maxRepairs; attempt += 1) {
-    issues = await findIssues(prep, text, deadline);
+    // The reply's citation markers (research/citations.ts) are read and removed in the same step: the checks below need to know WHICH source a quotation was
+    // attributed to, and the student never sees a marker. A repair that writes them again is handled the same way on the next pass.
+    const parsed = parseCitations(text);
+    text = parsed.text;
+    issues = await findIssues(prep, text, deadline, parsed.citations);
     if (attempt === 0) {
       firstDraft = issues;
       const unsupported = issues.filter(cuttable).length;

@@ -1,4 +1,4 @@
-import type { HostedModelProfile, ReasoningEffort } from "./models";
+import { EFFORT_LEVELS, type EffortLevel, type HostedModelProfile, type ReasoningEffort } from "./models";
 import { ProviderError, hasImages, type ChatProvider, type ProviderCapabilities, type ProviderHealth, type ProviderMessage, type ProviderToolCall, type StreamChunk, type StreamOptions } from "./types";
 
 /**
@@ -130,11 +130,11 @@ export class OpenAiCompatibleProvider implements ChatProvider {
     });
   }
 
-  /** The effort the caller asked for, in the profile's terms. */
+  /** The effort the caller asked for, in the profile's terms: no reasoning, one of the levels the endpoints name, or the caller's boolean. */
   private effort(options: StreamOptions): ReasoningEffort {
     if (options.think === false) return "off";
-    if (options.think === "low" || options.think === "medium" || options.think === "high") return options.think;
     if (options.think === true) return "high";
+    if (typeof options.think === "string" && EFFORT_LEVELS.includes(options.think as EffortLevel)) return options.think as EffortLevel;
     return options.reasoning ? "medium" : "off";
   }
 

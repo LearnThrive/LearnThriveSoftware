@@ -796,6 +796,18 @@
     max-width: 44vw;
     padding-inline: var(--space-2);
   }
+
+  /* Two pickers and a button cannot share a phone's width: the header wraps into a second line rather than scrolling sideways.
+     The group has to be allowed to shrink, or it demands its full content width and overflows the bar instead. */
+  .bar,
+  .barEnd {
+    flex-wrap: wrap;
+  }
+
+  .barEnd {
+    flex: 1 1 auto;
+    justify-content: flex-end;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

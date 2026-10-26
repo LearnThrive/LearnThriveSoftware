@@ -1,5 +1,5 @@
 import { FallbackProvider } from "./chain";
-import type { AssistantConfig, ProviderId } from "./config";
+import { ASSISTANT_DEFAULTS, type AssistantConfig, type ProviderId } from "./config";
 import { MockProvider } from "./mock";
 import { profileForModel, type HostedModelProfile } from "./models";
 import { NIM_BASE_URL, OpenAiCompatibleProvider } from "./openai";
@@ -8,7 +8,8 @@ import type { ChatProvider } from "./types";
 
 type Env = Record<string, string | undefined>;
 
-export const OLLAMA_DEFAULT_URL = "http://127.0.0.1:11434";
+// One literal for the tutor's own address: config.ts declares it (it may not import this file, which imports it), and the recall stage defaults to it too.
+export const OLLAMA_DEFAULT_URL = ASSISTANT_DEFAULTS.tutorBaseUrl;
 export const NIM_DEFAULT_MODEL = "meta/llama-3.2-11b-vision-instruct";
 
 /**

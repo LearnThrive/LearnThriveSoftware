@@ -36,7 +36,7 @@ import { RenderedAnswer } from "./RenderedAnswer";
 import { useVoice, type Speaker } from "./useVoice";
 import { VoicePanel } from "./VoicePanel";
 import { PaperTutor } from "./PaperTutor";
-import { ModelPicker, type ModelChoice } from "./ModelPicker";
+import { EffortPicker, ModelPicker, type ModelChoice } from "./ModelPicker";
 import { ActivityPanel, hasNotableWork, type ActivityView, type PanelStep } from "./ActivityPanel";
 import { settle, withStep, withoutWaiting } from "./activityView";
 import type { ActivityStep } from "@/lib/assistant/activity";
@@ -103,6 +103,11 @@ interface Status {
 }
 
 const PICKED_KEY = (scope: string) => `learnthrive:sb-model:${scope}`;
+// The reasoning effort is remembered the same way, under its own key: a model's levels differ, so it is re-resolved whenever the model changes.
+const EFFORT_KEY = (scope: string) => `learnthrive:sb-effort:${scope}`;
+
+/** The reasoning efforts a model's picker offers (empty: that model takes no effort setting, so no effort picker is shown). */
+const effortsFor = (choices: readonly ModelChoice[], id: string | null) => choices.find((c) => c.id === id)?.efforts ?? [];
 
 /** A picked model's failure, said with its name and the cause the server reported, so the developer knows what to change. */
 const DETAIL_TEXT: Record<string, string> = {
@@ -204,6 +209,8 @@ export function StudyBuddy() {
   // The developer's chosen model (only when the server offers a choice). It stays for every question until changed, and is kept in this
   // browser under the account's own opaque key.
   const [picked, setPicked] = useState<string | null>(null);
+  // "Auto" until the developer chooses: the question then decides, exactly as it did before the picker existed.
+  const [effort, setEffort] = useState<string>("auto");
   const [paper, setPaper] = useState<{
     file: File;
     fileId: string;
@@ -285,7 +292,15 @@ export function StudyBuddy() {
           saved = null;
         }
         const choices = loaded.models.choices;
-        setPicked(choices.some((c) => c.id === saved) ? saved : (loaded.models.default ?? choices[0]?.id ?? null));
+        const next = choices.some((c) => c.id === saved) ? saved : (loaded.models.default ?? choices[0]?.id ?? null);
+        setPicked(next);
+        let savedEffort: string | null = null;
+        try {
+          savedEffort = window.localStorage.getItem(EFFORT_KEY(loaded.models.scope));
+        } catch {
+          savedEffort = null;
+        }
+        setEffort(effortsFor(choices, next).some((e) => e.id === savedEffort) ? (savedEffort as string) : "auto");
       }
       void refresh();
     })();
@@ -332,10 +347,25 @@ export function StudyBuddy() {
 
   function choose(id: string) {
     setPicked(id);
+    // A model's levels are its own: an effort the new model does not offer goes back to Auto rather than being silently changed.
+    const next = effortsFor(status?.models?.choices ?? [], id).some((e) => e.id === effort) ? effort : "auto";
+    setEffort(next);
     const scope = status?.models?.scope;
     if (!scope) return;
     try {
       window.localStorage.setItem(PICKED_KEY(scope), id);
+      window.localStorage.setItem(EFFORT_KEY(scope), next);
+    } catch {
+      // Not kept in this browser: it still applies for this visit.
+    }
+  }
+
+  function chooseEffort(id: string) {
+    setEffort(id);
+    const scope = status?.models?.scope;
+    if (!scope) return;
+    try {
+      window.localStorage.setItem(EFFORT_KEY(scope), id);
     } catch {
       // Not kept in this browser: it still applies for this visit.
     }
@@ -566,6 +596,8 @@ export function StudyBuddy() {
           adultAck: needsAck ? true : undefined,
           voice: viaVoice || undefined,
           model: model ?? undefined,
+          // Only with a picked model, and only when the developer chose one: "Auto" leaves it to the question, on the server.
+          effort: model && effort !== "auto" ? effort : undefined,
         }),
       });
       if (!response.ok || !response.body) {
@@ -960,12 +992,20 @@ export function StudyBuddy() {
           </div>
           <div className={styles.barEnd}>
             {status.models && status.models.choices.length > 0 ? (
-              <ModelPicker
-                choices={status.models.choices}
-                value={picked}
-                onChange={choose}
-                disabled={busy}
-              />
+              <>
+                <ModelPicker
+                  choices={status.models.choices}
+                  value={picked}
+                  onChange={choose}
+                  disabled={busy}
+                />
+                <EffortPicker
+                  options={effortsFor(status.models.choices, picked)}
+                  value={effort}
+                  onChange={chooseEffort}
+                  disabled={busy}
+                />
+              </>
             ) : null}
             {!first ? (
               <button

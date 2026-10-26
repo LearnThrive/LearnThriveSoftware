@@ -5,6 +5,7 @@ import { workOf } from "./works";
 import { cleanQuery, quotationQuery } from "./privacy";
 import { isPlayTextHost, isPublicDomainPlay, locateQuotation, parseSpeeches, sameSpeaker, type Speech } from "./playText";
 import { matchQuotation, words } from "./quotations";
+import type { ClaimRecall } from "./entail";
 import { isOfficialExamHost, rankResults, tierOf, type RankedResult, type SearchPurpose, type SourceTier } from "./ranking";
 import type { SearchOutcome, SearchStatus } from "./searxng";
 
@@ -39,6 +40,8 @@ export interface ResearchDeps {
   fetchOptions?: Pick<FetchOptions, "fetcher" | "resolve" | "pdfText" | "crawler">;
   cacheTtlSeconds?: number;
   now?: () => number;
+  /** The entailment-for-recall stage (research/entail.ts), when it is switched on. Absent or null: only the exact checks run. */
+  recall?: ClaimRecall | null;
 }
 
 export type QuoteStatus = "verified_exact" | "verified_variant" | "supported_secondary" | "paraphrase_or_misquote" | "incorrect_attribution" | "unsupported" | "unverifiable";
@@ -179,6 +182,11 @@ export class ResearchSession {
     return this.service.available;
   }
 
+  /** The recall stage, when one is configured for this server. */
+  get recall(): ClaimRecall | null {
+    return this.service.deps.recall ?? null;
+  }
+
   private get limits(): ResearchLimits {
     return this.service.deps.limits;
   }
@@ -217,7 +225,14 @@ export class ResearchSession {
 
   /** The text of every page read this turn, for checking a reply against what was actually read. */
   pageTexts(): string[] {
-    return [...this.read.values()].filter((p): p is Extract<FetchedSource, { ok: true }> => p.ok).map((p) => p.text);
+    return this.pagesRead().map((p) => p.text);
+  }
+
+  /** The pages read this turn, with where each came from: what the recall stage is pointed at, and what a citation is resolved against. */
+  pagesRead(): Array<{ url: string; title: string; text: string; html: string }> {
+    return [...this.read.values()]
+      .filter((p): p is Extract<FetchedSource, { ok: true }> => p.ok)
+      .map((p) => ({ url: p.url, title: p.title || p.url, text: p.text, html: p.html }));
   }
 
   /** Whether this page has already been read this turn. */
@@ -266,7 +281,21 @@ export class ResearchSession {
   }
 
   /** Whether a quotation is in the work it is said to come from. See QuoteStatus for what each answer means and does not mean. */
-  async verifyQuotation(input: { quotation: string; work?: string | null; author?: string | null; claimedSpeaker?: string | null; claimedAct?: number | null; claimedScene?: number | null; extracts?: readonly string[] }): Promise<QuoteVerdict> {
+  async verifyQuotation(input: {
+    quotation: string;
+    work?: string | null;
+    author?: string | null;
+    claimedSpeaker?: string | null;
+    claimedAct?: number | null;
+    claimedScene?: number | null;
+    extracts?: readonly string[];
+    /**
+     * The source the reply itself pointed at (a citation marker, research/citations.ts). That page was read this turn, so it is checked FIRST: an exact
+     * match in a primary text settles the quotation with no search spent, which is the whole point of the marker. When it does not settle it, the
+     * ordinary path below runs unchanged — so a citation can make a quotation easer to check, never harder.
+     */
+    sourceUrl?: string | null;
+  }): Promise<QuoteVerdict> {
     const quotation = input.quotation.replace(/\s+/g, " ").trim();
     const work = input.work || workOf(`${input.quotation} ${input.work ?? ""} ${input.author ?? ""}`) || null;
     const base = { quotation, work, evidence: [] as Evidence[] };
@@ -306,8 +335,14 @@ export class ResearchSession {
     };
     const done = () => found.best?.kind === "exact" && strongTier(found.best.tier);
 
-    // Pages already read this turn (the research done before the reply) are checked first: no new search if one of them settles it.
-    for (const [key, page] of this.read) if (page.ok) consider(page.url, page.title || key, tierOf(page.url), page.text, page.html);
+    // Pages already read this turn (the research done before the reply) are checked first: no new search if one of them settles it. A page the reply
+    // cited is moved to the front of that order.
+    const read = [...this.read.entries()];
+    if (input.sourceUrl) {
+      const cited = input.sourceUrl.replace(/#.*$/, "");
+      read.sort((a, b) => Number(b[0] === cited) - Number(a[0] === cited));
+    }
+    for (const [key, page] of read) if (page.ok) consider(page.url, page.title || key, tierOf(page.url), page.text, page.html);
 
     if (!done()) {
       const search = await this.searchWeb(quotationQuery({ quotation, work: work ?? undefined, author: input.author ?? undefined }), "quotation");

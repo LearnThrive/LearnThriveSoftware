@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Actor } from "@learnthrive/data/library";
 import type { AssistantConfig, StageBudgets } from "./config";
-import { hostedProfile, type HostedModelProfile, type ModelChoiceId, type ModelLabSettings } from "./models";
+import { effortChoices, EFFORT_LEVELS, hostedProfile, type EffortAsk, type EffortLevel, type HostedModelProfile, type ModelChoiceId, type ModelLabSettings } from "./models";
 import type { ChatProvider } from "./types";
 
 /**
@@ -33,6 +33,8 @@ export interface GenerationTarget {
   profile: HostedModelProfile | null;
   /** Uploaded files may be sent to this target. */
   uploads: boolean;
+  /** The reasoning effort this turn asks for: "auto" (the question decides, the ordinary behaviour) or the developer's own choice. */
+  effort: EffortAsk;
   /** Per-account daily limits for a picked hosted model (every request counts: a tool round or a repair is a request). Null: the ordinary limits. */
   quota: { tokens: number; requests: number } | null;
 }
@@ -60,16 +62,29 @@ export interface PickerChoice {
   id: ModelChoiceId;
   label: string;
   description: string;
+  /** The effort options this model's picker offers (auto first). Empty: the model takes none, so no effort picker is shown for it. */
+  efforts: Array<{ id: EffortAsk; label: string }>;
 }
 
 /** The choices the page may show this actor (empty when it may not choose). The local tutor is listed only when it IS the configured default. */
 export function pickerChoices(lab: ModelLab | null, config: AssistantConfig): PickerChoice[] {
   if (!lab?.settings.available) return [];
-  const hosted = lab.settings.models.filter((m) => lab.providers.has(m.choice)).map((m) => ({ id: m.choice, label: m.label, description: m.description }));
-  return lab.settings.local ? [...hosted, { id: "local", label: "Local model", description: `Study Buddy's own tutor on this machine (${config.model})` }] : hosted;
+  const hosted = lab.settings.models.filter((m) => lab.providers.has(m.choice)).map((m) => ({ id: m.choice, label: m.label, description: m.description, efforts: effortChoices(m.efforts) }));
+  return lab.settings.local ? [...hosted, { id: "local", label: "Local model", description: `Study Buddy's own tutor on this machine (${config.model})`, efforts: [] }] : hosted;
 }
 
-export type Selection = { ok: true; target: GenerationTarget } | { ok: false; reason: "model_not_allowed" | "bad_model" | "model_unavailable" };
+export type Selection = { ok: true; target: GenerationTarget } | { ok: false; reason: "model_not_allowed" | "bad_model" | "model_unavailable" | "bad_effort" };
+
+/**
+ * The effort a request named, in the vocabulary the endpoints use. Absent, empty or "auto": the question decides, as before. Null: a value
+ * that is not a level at all. Whether the CHOSEN model offers it is a separate question (its profile's own list), so a page can never ask one
+ * model for another model's settings.
+ */
+function namedEffort(requested: unknown): EffortAsk | null {
+  if (requested === undefined || requested === null || requested === "" || requested === "auto") return "auto";
+  if (typeof requested !== "string" || requested.length > 12) return null;
+  return EFFORT_LEVELS.includes(requested as EffortLevel) ? (requested as EffortLevel) : null;
+}
 
 /** The ordinary target: the configured provider, its configured limits, no label. Unchanged behaviour for everyone who cannot choose. */
 export function defaultTarget(config: AssistantConfig, provider: ChatProvider, hosted: boolean): GenerationTarget {
@@ -87,6 +102,7 @@ export function defaultTarget(config: AssistantConfig, provider: ChatProvider, h
     profile: null,
     uploads: true,
     quota: null,
+    effort: "auto",
   };
 }
 
@@ -96,6 +112,8 @@ export function defaultTarget(config: AssistantConfig, provider: ChatProvider, h
  */
 export function resolveSelection(input: {
   requested: unknown;
+  /** The reasoning effort the request named (docs/ASSISTANT.md, "Model picker"): absent or "auto" leaves the decision with the question. */
+  effort?: unknown;
   actor: Pick<Actor, "role" | "mode" | "studentId">;
   lab: ModelLab | null;
   config: AssistantConfig;
@@ -103,16 +121,24 @@ export function resolveSelection(input: {
   hosted: boolean;
 }): Selection {
   const base = defaultTarget(input.config, input.provider, input.hosted);
-  if (input.requested === undefined || input.requested === null || input.requested === "") return { ok: true, target: base };
+  const wanted = namedEffort(input.effort);
+  if (wanted === null) return { ok: false, reason: "bad_effort" };
+  if (input.requested === undefined || input.requested === null || input.requested === "") {
+    // An effort belongs to a picked model: with none, only the ordinary "auto" is meaningful.
+    if (wanted !== "auto") return { ok: false, reason: "bad_effort" };
+    return { ok: true, target: base };
+  }
   if (!mayChooseModel(input.actor, input.lab)) return { ok: false, reason: "model_not_allowed" };
   if (typeof input.requested !== "string" || input.requested.length > 40) return { ok: false, reason: "bad_model" };
   const lab = input.lab!;
   if (input.requested === "local") {
     if (!lab.settings.local) return { ok: false, reason: "bad_model" };
+    if (wanted !== "auto") return { ok: false, reason: "bad_effort" };
     return { ok: true, target: { ...base, choice: "local", label: `Local model (${input.config.model})` } };
   }
   const profile = hostedProfile(input.requested);
   if (!profile || !lab.settings.models.some((m) => m.choice === profile.choice)) return { ok: false, reason: "bad_model" };
+  if (wanted !== "auto" && !profile.efforts.includes(wanted)) return { ok: false, reason: "bad_effort" };
   const provider = lab.providers.get(profile.choice);
   if (!provider) return { ok: false, reason: "model_unavailable" };
   return {
@@ -131,6 +157,7 @@ export function resolveSelection(input: {
       profile,
       uploads: lab.settings.uploads,
       quota: { tokens: lab.settings.dailyTokens, requests: lab.settings.dailyRequests },
+      effort: wanted,
     },
   };
 }

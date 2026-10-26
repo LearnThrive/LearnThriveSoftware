@@ -13,6 +13,7 @@ import { enqueueIndex, drainIndexQueue, describeHits, indexFile, searchUploads, 
 import { runTool, toolsFor } from "./tools";
 import { fallbackStudy, finishStudy, planStudy, prepareStudy, type StudyPrep } from "./study";
 import { reviewAnswer, UNCHECKED_WITHHELD } from "./gate";
+import { hasCitations, stripCitations } from "./research/citations";
 import { ActivityLog, drainActivity, serializeActivity, withActivity, type ActivityEvent, type ActivityOutcome } from "./activity";
 import type { ResearchService } from "./research/verify";
 import type { EmbeddingProvider } from "./embeddings";
@@ -456,7 +457,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
   const st: {
     firstTokenMs: number | null;
     providerId: string | null;
-    /** The provider and model that reported finishing ("nim:deepseek-ai/deepseek-v4.1-flash"): what the answer is attributed to. */
+    /** The provider and model that reported finishing ("nim:minimaxai/minimax-m3.1-flash"): what the answer is attributed to. */
     generatedBy: string | null;
     failure: ChatErrorCode | null;
     failureDetail: string | undefined;
@@ -501,9 +502,14 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
     }
 
     const tools = caps.toolUse && config.maxToolRounds > 0 ? toolsFor(study?.session) : [];
-    // A picked hosted model reasons by the turn's mode (fast chat, a sourced answer, a hard problem); the local tutor keeps its own policy.
+    // A picked hosted model reasons by the turn's mode (fast chat, a sourced answer, a hard problem) UNLESS the developer chose an effort for it
+    // in the picker, which is then what is asked for; the local tutor keeps its own policy.
     const mode = study?.mode ?? (thinkingFor("auto", text, images.length > 0).reasoning ? "advanced" : "fast");
-    const thinking: { reasoning: boolean; think?: boolean | string } = target.profile ? hostedEffort(mode) : thinkingFor(config.thinking, text, images.length > 0);
+    const thinking: { reasoning: boolean; think?: boolean | string } = target.profile
+      ? target.effort === "auto"
+        ? hostedEffort(mode)
+        : { reasoning: target.effort !== "none", think: target.effort }
+      : thinkingFor(config.thinking, text, images.length > 0);
     let announcedThinking = false;
     const turnStartedAt = Date.now();
     const turnDeadline = turnStartedAt + stage.turnMs;
@@ -689,6 +695,10 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
       }
       // Still held: the length note and the server's own notes join the approved text first, and then it is shown whole (below).
     }
+    // The model's citation markers (research/citations.ts) are bookkeeping between it and the server: the number names the source a quotation was checked
+    // against. They are removed here, once, before a length note or a check note is added and before anything is stored. A held answer that the gate did not
+    // review (a biology explanation, say) is covered by the same line, and an answer that never had a marker is not touched at all.
+    if (hasCitations(shown)) shown = stripCitations(shown);
     // An answer that hit the length limit says so, instead of stopping mid-sentence as if it had finished. "Continue" carries on from it.
     if (st.cutOff && shown.trim() && !guard.stoppedFor && !withheldUnchecked) {
       const note = `\n\n(This answer reached its length limit, so it stops here. Say "continue" and I will carry on from where it stopped.)`;

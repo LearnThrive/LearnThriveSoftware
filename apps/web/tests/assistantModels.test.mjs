@@ -26,11 +26,11 @@ const { SignInLockout } = loadTsFrom(import.meta.url, "../src/lib/account/lockou
 const session = loadTsFrom(import.meta.url, "../src/lib/account/session.ts");
 const { InMemoryLibraryStore } = loadTsFrom(import.meta.url, "../../../packages/data/src/library/memory.ts");
 
-const DEEPSEEK = "deepseek-ai/deepseek-v4.1-flash";
+const MINIMAX = "minimaxai/minimax-m3.1-flash";
 const STEP = "stepfun-ai/step-5-preview";
 const OPTS = { maxTokens: 1000, temperature: 0.4, contextSize: 8192, firstTokenTimeoutMs: 2000, totalTimeoutMs: 5000 };
 const MSGS = [{ role: "system", content: "S" }, { role: "user", content: "What is 6 x 7?" }];
-const LAB_ENV = { NODE_ENV: "development", ASSISTANT_PROVIDER: "mock", NVIDIA_API_KEY: "nvapi-TEST-KEY", ASSISTANT_NIM_MODELS: `${DEEPSEEK},${STEP}` };
+const LAB_ENV = { NODE_ENV: "development", ASSISTANT_PROVIDER: "mock", NVIDIA_API_KEY: "nvapi-TEST-KEY", ASSISTANT_NIM_MODELS: `${MINIMAX},${STEP}` };
 
 const sse = (parts, { done = true } = {}) =>
   new Response(new ReadableStream({ start(c) { for (const p of parts) c.enqueue(new TextEncoder().encode(`data: ${typeof p === "string" ? p : JSON.stringify(p)}\n\n`)); if (done) c.enqueue(new TextEncoder().encode("data: [DONE]\n\n")); c.close(); } }));
@@ -50,7 +50,7 @@ async function drain(iterable) {
 }
 
 /** A fake NVIDIA endpoint: records every request, answers /models with a listing and /chat/completions with `answer(body, n)`. */
-function nvidia(answer, { listed = [DEEPSEEK, STEP] } = {}) {
+function nvidia(answer, { listed = [MINIMAX, STEP] } = {}) {
   const requests = [];
   const fetchImpl = async (url, init = {}) => {
     const path = new URL(String(url)).pathname;
@@ -76,9 +76,9 @@ test("selection defect: a model name that is not the provider's own (an Ollama t
 
   // The default NIM provider built from configuration: ASSISTANT_MODEL (Ollama's) is ignored, ASSISTANT_NIM_MODEL is used.
   const config = cfgLib.assistantConfig({ NODE_ENV: "development", ASSISTANT_PROVIDER: "nim", ASSISTANT_MODEL: "bonsai-2:9b" });
-  const built = buildProvider(config, { NVIDIA_API_KEY: "k", ASSISTANT_NIM_MODEL: DEEPSEEK }, fake.fetchImpl);
+  const built = buildProvider(config, { NVIDIA_API_KEY: "k", ASSISTANT_NIM_MODEL: MINIMAX }, fake.fetchImpl);
   await drain(built.stream(MSGS, { ...OPTS, model: config.model }));
-  assert.equal(fake.requests[1].body.model, DEEPSEEK);
+  assert.equal(fake.requests[1].body.model, MINIMAX);
 });
 
 test("selection defect: in an Ollama-then-NIM fallback chain, the NIM step sends its own model, never Ollama's", async () => {
@@ -95,21 +95,31 @@ test("selection defect: in an Ollama-then-NIM fallback chain, the NIM step sends
 
 // ---- the two hosted models ---------------------------------------------------------------------------------------------------------------
 
-test("DeepSeek V4.1 Flash: its id, its recommended sampling, and thinking with a numeric effort only when the turn asks for it", async () => {
+test("MiniMax M3.1 Flash: its id, its recommended sampling, and the effort the endpoint names, only when the turn asks for it", async () => {
   openaiLib.resetAcceptedFields();
   const fake = nvidia(() => sse([content("x")]));
-  const p = hosted("deepseek-v4.1-flash", fake.fetchImpl);
+  const p = hosted("minimax-m3.1-flash", fake.fetchImpl);
   await drain(p.stream(MSGS, { ...OPTS, reasoning: true, think: "high" }));
   await drain(p.stream(MSGS, { ...OPTS, reasoning: false, think: "off" }));
-  const [hard, quick] = fake.requests.map((r) => r.body);
-  assert.equal(hard.model, DEEPSEEK);
+  // A level the developer picked in the picker travels through exactly as the endpoint names it (service.ts passes it as `think`).
+  await drain(p.stream(MSGS, { ...OPTS, reasoning: true, think: "xhigh" }));
+  const [hard, quick, chosen] = fake.requests.map((r) => r.body);
+  assert.equal(chosen.reasoning_effort, "xhigh", "a chosen level is sent as it is named");
+  assert.equal(hard.model, MINIMAX);
   assert.equal(hard.temperature, 1);
   assert.equal(hard.top_p, 0.95);
-  assert.deepEqual(hard.chat_template_kwargs, { thinking: true, reasoning_effort: 90 });
-  assert.deepEqual(quick.chat_template_kwargs, { thinking: false });
+  assert.equal(hard.reasoning_effort, "high");
+  assert.equal(quick.reasoning_effort, "none", "ordinary chat asks for the endpoint's own least-effort setting");
   assert.equal(quick.max_tokens, 1000, "no reasoning allowance added when it is not asked to reason");
   assert.equal(fake.requests[0].headers.Authorization, "Bearer nvapi-TEST-KEY");
   assert.ok(!JSON.stringify(fake.requests[0].body).includes("nvapi-TEST-KEY"), "the key is only in the header");
+});
+
+test("each hosted model declares the effort levels its picker offers, weakest first, and Step 5 leaves out the one it cannot honour", () => {
+  assert.deepEqual(models.hostedProfile("minimax-m3.1-flash").efforts, ["none", "minimal", "low", "medium", "high", "xhigh", "max"]);
+  assert.deepEqual(models.hostedProfile("step-5-preview").efforts, ["minimal", "low", "medium", "high", "xhigh", "max"], "no none: it reasons whatever it is asked");
+  assert.deepEqual(models.effortChoices(models.EFFORT_LEVELS).map((c) => c.id), ["auto", "none", "minimal", "low", "medium", "high", "xhigh", "max"], "auto comes first: it is the default");
+  assert.equal(models.effortChoices([]).length, 1, "a model that takes no levels still has the auto option, so its picker shows just that");
 });
 
 test("Step 5 Preview: its id, no reliance on enable_thinking, and a reasoning allowance even when the turn did not ask it to reason", async () => {
@@ -152,7 +162,7 @@ test("tool calls: offered in OpenAI form, assembled from fragments, and their re
         ])
       : sse([content("42")]),
   );
-  const p = hosted("deepseek-v4.1-flash", fake.fetchImpl);
+  const p = hosted("minimax-m3.1-flash", fake.fetchImpl);
   const tools = [{ name: "check_calc", description: "d", parameters: { type: "object", properties: { expression: { type: "string" } } } }];
   const first = await drain(p.stream(MSGS, { ...OPTS, tools }));
   assert.deepEqual(first.calls, [{ id: "call_abc", name: "check_calc", arguments: { expression: "6*7" } }]);
@@ -167,11 +177,11 @@ test("tool calls: offered in OpenAI form, assembled from fragments, and their re
 
 test("an option the endpoint refuses is dropped once, then remembered; other errors are named, not retried", async () => {
   openaiLib.resetAcceptedFields();
-  const fake = nvidia((body) => (body.chat_template_kwargs && typeof body.chat_template_kwargs.reasoning_effort === "number" ? new Response("{}", { status: 400 }) : sse([content("ok")])));
-  const p = hosted("deepseek-v4.1-flash", fake.fetchImpl);
+  const fake = nvidia((body) => (body.reasoning_effort ? new Response("{}", { status: 400 }) : sse([content("ok")])));
+  const p = hosted("minimax-m3.1-flash", fake.fetchImpl);
   await drain(p.stream(MSGS, { ...OPTS, think: "high" }));
-  assert.equal(fake.requests.length, 2, "the numeric effort was refused, the named one accepted");
-  assert.equal(fake.requests[1].body.chat_template_kwargs.reasoning_effort, "high");
+  assert.equal(fake.requests.length, 2, "the named effort was refused, the plain request accepted");
+  assert.equal(fake.requests[1].body.reasoning_effort, undefined);
   await drain(p.stream(MSGS, { ...OPTS, think: "high" }));
   assert.equal(fake.requests.length, 3, "the next turn goes straight to the accepted form");
 
@@ -185,7 +195,7 @@ test("an option the endpoint refuses is dropped once, then remembered; other err
 
 test("cancellation: stopping mid-answer aborts the request and is reported as aborted", async () => {
   openaiLib.resetAcceptedFields();
-  const p = hosted("deepseek-v4.1-flash", async (_url, init) =>
+  const p = hosted("minimax-m3.1-flash", async (_url, init) =>
     new Response(new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(content("Partial"))}\n\n`)); init.signal.addEventListener("abort", () => c.error(new Error("aborted"))); } })),
   );
   const controller = new AbortController();
@@ -236,9 +246,9 @@ test("selection: only an administrator acting as themselves may choose; anything
   assert.equal(step.target.provider, lab.providers.get("step-5-preview"));
   assert.equal(step.target.uploads, false);
   assert.ok(step.target.quota.requests > 0);
-  const deepseek = resolve("deepseek-v4.1-flash");
-  assert.notEqual(deepseek.target.provider, step.target.provider, "two models, two providers");
-  assert.equal(deepseek.target.model, DEEPSEEK);
+  const minimax = resolve("minimax-m3.1-flash");
+  assert.notEqual(minimax.target.provider, step.target.provider, "two models, two providers");
+  assert.equal(minimax.target.model, MINIMAX);
 });
 
 // ---- a whole turn ------------------------------------------------------------------------------------------------------------------------
@@ -269,16 +279,16 @@ async function turnWorld(t, providerFetch) {
 test("a turn: the chosen model answers, the answer is labelled and stored with the model the provider reported; switching changes the provider", async (t) => {
   const fake = nvidia((body) => sse([content(`Answer from ${body.model}.`), usage(12)]));
   const w = await turnWorld(t, fake.fetchImpl);
-  const first = await w.send("deepseek-v4.1-flash", "hello there");
+  const first = await w.send("minimax-m3.1-flash", "hello there");
   const sessionId = first[0].sessionId;
   assert.equal(first.at(-1).type, "done");
-  assert.equal(first.at(-1).model, "DeepSeek V4.1 Flash");
+  assert.equal(first.at(-1).model, "MiniMax M3.1 Flash");
   const second = await w.send("step-5-preview", "hello there", sessionId);
   assert.equal(second.at(-1).model, "Step 5 Preview");
-  assert.deepEqual(fake.requests.map((r) => r.body.model), [DEEPSEEK, STEP], "one request per question, to the chosen model only");
+  assert.deepEqual(fake.requests.map((r) => r.body.model), [MINIMAX, STEP], "one request per question, to the chosen model only");
   assert.equal(w.fallback.requests.length, 0, "the default provider was never asked");
   const stored = await w.store.chat.listMessages(own(w.clientId), sessionId);
-  assert.deepEqual(stored.map((m) => m.generatedBy ?? null), [null, `nim:${DEEPSEEK}`, null, `nim:${STEP}`], "earlier answers keep their own label");
+  assert.deepEqual(stored.map((m) => m.generatedBy ?? null), [null, `nim:${MINIMAX}`, null, `nim:${STEP}`], "earlier answers keep their own label");
   assert.match(stored[3].content, /stepfun-ai\/step-5-preview/);
   assert.ok(stored[2].content === "hello there", "the conversation carries on across the switch");
   assert.equal(fake.requests[1].body.messages.filter((m) => m.role === "assistant").length, 1, "the second model sees the first model's answer in the history");
@@ -295,7 +305,7 @@ test("a turn: a chosen model that fails is reported as that model's failure, wit
   assert.ok(!events.some((e) => e.type === "delta"), "no answer was made up");
   assert.equal(w.fallback.requests.length, 0);
   const limited = await turnWorld(t, nvidia(() => new Response("{}", { status: 429, headers: { "retry-after": "1" } })).fetchImpl);
-  const r = await limited.send("deepseek-v4.1-flash", "hello there");
+  const r = await limited.send("minimax-m3.1-flash", "hello there");
   assert.equal(r.at(-1).code, "model_rate_limited");
   const empty = await turnWorld(t, nvidia(() => sse([thought("hmm"), { choices: [{ delta: {}, finish_reason: "length" }] }])).fetchImpl);
   const e = await empty.send("step-5-preview", "hello there");
@@ -307,12 +317,12 @@ test("a turn: the hosted allowance counts every request and stops further ones, 
   const fake = nvidia(() => sse([content("ok"), usage(5)]));
   const w = await turnWorld(t, fake.fetchImpl);
   const day = new Date("2026-10-21T00:00:00Z");
-  await w.send("deepseek-v4.1-flash", "hello there");
+  await w.send("minimax-m3.1-flash", "hello there");
   assert.equal(await w.store.chat.usageCount(w.clientId, svc.USAGE_HOSTED_REQUESTS_DAY, day), 1);
   assert.equal(await w.store.chat.usageCount(w.clientId, svc.USAGE_HOSTED_TOKENS_DAY, day), 5);
   assert.equal(await w.store.chat.usageCount(w.clientId, svc.USAGE_TOKENS_DAY, day), 0, "kept apart from the ordinary budget");
   await w.store.chat.incrementUsage(w.clientId, svc.USAGE_HOSTED_REQUESTS_DAY, day, 10_000);
-  const blocked = await w.send("deepseek-v4.1-flash", "hello again");
+  const blocked = await w.send("minimax-m3.1-flash", "hello again");
   assert.equal(blocked.at(-1).code, "model_budget");
   assert.equal(fake.requests.length, 1, "no request once the allowance is used");
 });
@@ -329,16 +339,16 @@ test("a turn: a hard maths answer is held and its working checked; a wrong step 
     ]),
   );
   const w = await turnWorld(t, fake.fetchImpl);
-  const events = await w.send("deepseek-v4.1-flash", "Solve the simultaneous equations x + y = 10 and x - y = 2");
+  const events = await w.send("minimax-m3.1-flash", "Solve the simultaneous equations x + y = 10 and x - y = 2");
   const order = events.map((e) => (e.type === "status" ? e.state : e.type));
   assert.ok(order.indexOf("verifying") >= 0 && order.indexOf("verifying") < order.indexOf("delta"), "checked before any text is released");
   const shown = events.filter((e) => e.type === "delta").map((e) => e.text).join("");
   assert.doesNotMatch(shown, /x = 7/, "the wrong step never reached the student");
   assert.match(shown, /x = 6/);
   assert.equal(fake.requests.length, 2, "one draft and one repair, by the same model");
-  assert.deepEqual(fake.requests.map((r) => r.body.model), [DEEPSEEK, DEEPSEEK]);
+  assert.deepEqual(fake.requests.map((r) => r.body.model), [MINIMAX, MINIMAX]);
   assert.match(fake.requests[1].body.messages.at(-1).content, /working that a calculation shows is wrong/);
-  assert.deepEqual(fake.requests[0].body.chat_template_kwargs, { thinking: true, reasoning_effort: 90 }, "a hard problem: full reasoning");
+  assert.equal(fake.requests[0].body.reasoning_effort, "high", "a hard problem: full reasoning");
   assert.match(shown, /did not check out by calculation/);
 });
 
@@ -394,8 +404,8 @@ test("routes: an administrator sees the choices with readiness, may choose, is r
   const w = await routeWorld(t);
   const dev = await w.person("ADMIN");
   const s = await w.status(dev);
-  assert.deepEqual(s.models.choices.map((c) => [c.id, c.ready]), [["deepseek-v4.1-flash", true], ["step-5-preview", true]]);
-  assert.equal(s.models.default, "deepseek-v4.1-flash");
+  assert.deepEqual(s.models.choices.map((c) => [c.id, c.ready]), [["minimax-m3.1-flash", true], ["step-5-preview", true]]);
+  assert.equal(s.models.default, "minimax-m3.1-flash");
   assert.match(s.models.scope, /^[0-9a-f]{16}$/);
   assert.ok(!JSON.stringify(s).includes("nvapi"), "no key in what the page is sent");
   assert.equal((await w.chat(dev, { text: "hello", adultAck: true, model: "gpt-4" })).body.code, "bad_model");
@@ -418,9 +428,53 @@ test("the picker needs only the key on a development server: unset ASSISTANT_NIM
   const base = { NODE_ENV: "development", NVIDIA_API_KEY: "nvapi-TEST-KEY" };
   const open = models.modelLabSettings(base, ["ollama"]);
   assert.equal(open.available, true);
-  assert.deepEqual(open.models.map((m) => m.choice), ["deepseek-v4.1-flash", "step-5-preview"]);
+  assert.deepEqual(open.models.map((m) => m.choice), ["minimax-m3.1-flash", "step-5-preview"]);
   assert.equal(models.modelLabSettings({ ...base, ASSISTANT_NIM_MODELS: "" }).available, false);
   assert.equal(models.modelLabSettings({ NODE_ENV: "development" }).available, false, "no key, no picker");
   assert.equal(models.modelLabSettings({ ...base, NODE_ENV: "production" }).available, false, "never in production");
   assert.equal(models.modelLabSettings({ ...base, ASSISTANT_MODEL_PICKER: "off" }).available, false);
+});
+
+// ---- the reasoning-effort picker ------------------------------------------------------------------------------------------------------
+
+test("routes: the effort list is the chosen model's own, and the level a developer picked reaches that model's request", async (t) => {
+  const w = await routeWorld(t);
+  const dev = await w.person("ADMIN");
+  const s = await w.status(dev);
+  const choice = (id) => s.models.choices.find((c) => c.id === id);
+  assert.deepEqual(choice("minimax-m3.1-flash").efforts.map((e) => e.id), ["auto", "none", "minimal", "low", "medium", "high", "xhigh", "max"]);
+  assert.deepEqual(choice("step-5-preview").efforts.map((e) => e.id), ["auto", "minimal", "low", "medium", "high", "xhigh", "max"]);
+  assert.equal(choice("minimax-m3.1-flash").efforts[0].label, "Auto", "the page shows the level names the server sends");
+
+  const picked = await w.chat(dev, { text: "hello", adultAck: true, model: "minimax-m3.1-flash", effort: "xhigh" });
+  assert.equal(picked.response.status, 200, JSON.stringify(picked.body));
+  const sent = w.fake.requests.at(-1).body;
+  assert.equal(sent.reasoning_effort, "xhigh");
+  assert.ok(sent.max_tokens > models.hostedProfile("minimax-m3.1-flash").maxOutputTokens, "a reasoning turn gets its allowance on top of the answer's budget");
+
+  await w.chat(dev, { text: "hello", adultAck: true, model: "minimax-m3.1-flash", effort: "none" });
+  const none = w.fake.requests.at(-1).body;
+  assert.equal(none.reasoning_effort, "none");
+  assert.equal(none.max_tokens, models.hostedProfile("minimax-m3.1-flash").maxOutputTokens, "asked not to reason, it gets no extra room to");
+
+  // Auto is the default and may be sent explicitly: the question decides, as it did before the picker existed.
+  const auto = await w.chat(dev, { text: "hello", adultAck: true, model: "step-5-preview", effort: "auto" });
+  assert.equal(auto.response.status, 200);
+  assert.equal(w.fake.requests.at(-1).body.reasoning_effort, "low", "Step 5's fast chat asks for the least it allows (its profile's own mapping)");
+});
+
+test("routes: an effort another model offers, an unknown one, a bare effort and one for the local tutor are all refused", async (t) => {
+  const w = await routeWorld(t, { ...LAB_ENV, ASSISTANT_PROVIDER: "ollama" });
+  const dev = await w.person("ADMIN");
+  const choices = (await w.status(dev)).models.choices;
+  assert.deepEqual(choices.map((c) => c.id), ["minimax-m3.1-flash", "step-5-preview", "local"]);
+  assert.deepEqual(choices.at(-1).efforts, [], "the local tutor takes no effort setting, so its picker shows none");
+
+  const asked = async (body) => (await w.chat(dev, { text: "hello", adultAck: true, ...body })).body.code;
+  assert.equal(await asked({ model: "step-5-preview", effort: "none" }), "bad_effort", "Step 5 does not offer none");
+  assert.equal(await asked({ model: "minimax-m3.1-flash", effort: "enormous" }), "bad_effort");
+  assert.equal(await asked({ model: "minimax-m3.1-flash", effort: "off" }), "bad_effort", "the service's own \"off\" is not a level the picker offers");
+  assert.equal(await asked({ effort: "high" }), "bad_effort", "an effort belongs to a picked model");
+  assert.equal(await asked({ model: "local", effort: "high" }), "bad_effort");
+  assert.equal(w.fake.requests.length, 0, "nothing reached NVIDIA, and the local tutor was not asked either");
 });

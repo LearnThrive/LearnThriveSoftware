@@ -29,6 +29,9 @@ type Env = Record<string, string | undefined>;
  *   ASSISTANT_RETRIEVAL_TOP_K       chunks given to the tutor (default 4)   ASSISTANT_RETRIEVAL_MIN_SCORE   default 0.35
  *   ASSISTANT_EMBED_MODEL / _BASE_URL / _KEEP_ALIVE / _BATCH   the embedding role (CPU helper by default)
  *   ASSISTANT_DECISION_MODEL / _BASE_URL / _KEEP_ALIVE / _TIMEOUT_MS / _MIN_CONFIDENCE / _MIN_MARGIN / ASSISTANT_DECISION   the routing role
+ *   ASSISTANT_CLAIM_RECALL           off (default) | on: a model is asked WHERE in the pages that were read a statement is settled, so a claim is
+ *                                    judged by meaning and not only by shared words. Every span it proposes is checked in code (research/entail.ts)
+ *   ASSISTANT_RECALL_MODEL / _BASE_URL / _KEEP_ALIVE / _TIMEOUT_MS / _MAX_CLAIMS / _PASSAGE_CHARS   that stage (the tutor's own model and endpoint by default)
  *   ASSISTANT_THINKING_TOKENS       extra output tokens for thinking, on top of the answer's budget (default 600)
  *   ASSISTANT_IMAGE_*               photo/page long side, pictures per message: the measured image budget
  *   ASSISTANT_VRAM_HEADROOM_MIB     the headroom target the benchmark checks (default 1536: brief section 5); not a runtime limit
@@ -82,6 +85,9 @@ export const ASSISTANT_DEFAULTS = {
   retrievalTopK: 4,
   retrievalMinScore: 0.35,
   embedModel: "embeddinggemma-2:270m-q8_0-text",
+  // The tutor's own endpoint (11434), where a model able to judge a sentence against a passage runs. NOT the CPU helper: that serves a 270m embedder
+  // and a 421m typed-decision model, neither of which can read prose. Declared here because config.ts may not import providers.ts (which imports this).
+  tutorBaseUrl: "http://127.0.0.1:11434",
   helperBaseUrl: "http://127.0.0.1:11435",
   searxngUrl: "http://127.0.0.1:8888",
   crawl4aiUrl: "http://127.0.0.1:11235",
@@ -96,6 +102,10 @@ export const ASSISTANT_DEFAULTS = {
   // 0.55 abstains on everything. The margin over the runner-up is the honest discriminator; below either, routing is deterministic.
   decisionMinConfidence: 0.3,
   decisionMinMargin: 0.12,
+  recallKeepAlive: "10m",
+  recallTimeoutMs: 8_000,
+  recallMaxClaims: 4,
+  recallPassageChars: 3_000,
   thinkingTokens: 1500,
   photoLongSide: 1400,
   renderLongSide: 1200,
@@ -132,6 +142,23 @@ export interface DecisionConfig {
   minConfidence: number;
   /** The floor for (top probability - runner-up): a five-way tie is not a decision. */
   minMargin: number;
+}
+
+/**
+ * The entailment-for-recall stage (research/entail.ts): where a model is asked which passage of the pages that were read settles a statement. Its answer
+ * is only ever a proposal; the code that accepts it checks the span against the page word for word. Off unless asked for: it is a model call, and it has
+ * not been measured on real answers yet, so the shipped behaviour is the exact check alone.
+ */
+export interface RecallConfig {
+  enabled: boolean;
+  model: string;
+  baseUrl: string;
+  keepAlive: string;
+  timeoutMs: number;
+  /** How many claims one call may carry. */
+  maxClaims: number;
+  /** The most characters of one page handed to it. */
+  passageChars: number;
 }
 
 export interface ResearchConfig {
@@ -184,6 +211,7 @@ export interface AssistantConfig {
   maxToolRounds: number;
   retrieval: RetrievalConfig;
   decision: DecisionConfig;
+  recall: RecallConfig;
   research: ResearchConfig;
   crawler: CrawlerConfig;
   images: ImageConfig;
@@ -248,11 +276,12 @@ export function assistantConfig(env: Env = process.env): AssistantConfig {
   const flag = pick(env.ASSISTANT_ENABLED);
   const thinking = (pick(env.ASSISTANT_THINKING)?.toLowerCase() ?? ASSISTANT_DEFAULTS.thinking) as ThinkingPolicy;
   const helper = pick(env.ASSISTANT_HELPER_BASE_URL) ?? ASSISTANT_DEFAULTS.helperBaseUrl;
+  const model = pick(env.ASSISTANT_MODEL) ?? ASSISTANT_DEFAULTS.model;
   return {
     enabled: production ? flag === "true" : flag !== "false",
     production,
     providers: providers.length === asked.length ? providers : [],
-    model: pick(env.ASSISTANT_MODEL) ?? ASSISTANT_DEFAULTS.model,
+    model,
     visionModel: pick(env.ASSISTANT_VISION_MODEL) ?? null,
     baseUrl: pick(env.ASSISTANT_BASE_URL) ?? null,
     contextSize: whole(env.ASSISTANT_CONTEXT, ASSISTANT_DEFAULTS.contextSize, 1024, 131072),
@@ -288,6 +317,17 @@ export function assistantConfig(env: Env = process.env): AssistantConfig {
       timeoutMs: whole(env.ASSISTANT_DECISION_TIMEOUT_MS, ASSISTANT_DEFAULTS.decisionTimeoutMs, 500, 30_000),
       minConfidence: ratio(env.ASSISTANT_DECISION_MIN_CONFIDENCE, ASSISTANT_DEFAULTS.decisionMinConfidence, 0, 1),
       minMargin: ratio(env.ASSISTANT_DECISION_MIN_MARGIN, ASSISTANT_DEFAULTS.decisionMinMargin, 0, 1),
+    },
+    recall: {
+      // A helper role like the router: development only, and off unless asked for. Nothing is lost when it is off: the exact checks run as before.
+      enabled: !production && toggle(env.ASSISTANT_CLAIM_RECALL, false),
+      // The tutor's own model by default: it is the one resident model that can read a sentence against a passage.
+      model: pick(env.ASSISTANT_RECALL_MODEL) ?? model,
+      baseUrl: pick(env.ASSISTANT_RECALL_BASE_URL) ?? pick(env.ASSISTANT_BASE_URL) ?? ASSISTANT_DEFAULTS.tutorBaseUrl,
+      keepAlive: pick(env.ASSISTANT_RECALL_KEEP_ALIVE) ?? ASSISTANT_DEFAULTS.recallKeepAlive,
+      timeoutMs: whole(env.ASSISTANT_RECALL_TIMEOUT_MS, ASSISTANT_DEFAULTS.recallTimeoutMs, 500, 60_000),
+      maxClaims: whole(env.ASSISTANT_RECALL_MAX_CLAIMS, ASSISTANT_DEFAULTS.recallMaxClaims, 1, 12),
+      passageChars: whole(env.ASSISTANT_RECALL_PASSAGE_CHARS, ASSISTANT_DEFAULTS.recallPassageChars, 500, 20_000),
     },
     research: {
       baseUrl: pick(env.SEARXNG_BASE_URL) ?? ASSISTANT_DEFAULTS.searxngUrl,
