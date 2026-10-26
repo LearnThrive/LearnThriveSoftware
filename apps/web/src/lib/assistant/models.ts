@@ -138,7 +138,8 @@ const whole = (value: string | undefined, fallback: number, min: number, max: nu
 };
 
 /**
- *   ASSISTANT_NIM_MODELS              the hosted models the picker offers: NVIDIA ids from HOSTED_MODELS, comma separated. Unset or empty: the picker is off
+ *   ASSISTANT_NIM_MODELS              the hosted models the picker offers: NVIDIA ids from HOSTED_MODELS, comma separated. UNSET: every model in the table is
+ *                                     offered whenever NVIDIA_API_KEY is set (so a key in the environment is enough). Set but empty: the picker is off
  *   ASSISTANT_MODEL_PICKER            off: hide the picker even when models are listed (default on where it is allowed)
  *   ASSISTANT_NIM_DAILY_TOKENS        completion tokens per account per day across the hosted models (default 600000)
  *   ASSISTANT_NIM_DAILY_REQUESTS      hosted requests per account per day (default 300)
@@ -150,7 +151,8 @@ const whole = (value: string | undefined, fallback: number, min: number, max: nu
  */
 export function modelLabSettings(env: Env = process.env, defaultProviders: readonly string[] = []): ModelLabSettings {
   const production = env.NODE_ENV === "production";
-  const listed = (env.ASSISTANT_NIM_MODELS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  // Unset means "all of them" (a developer who has the key wants the picker); an empty value is how it is switched off by listing nothing.
+  const listed = (env.ASSISTANT_NIM_MODELS ?? HOSTED_MODELS.map((m) => m.model).join(",")).split(",").map((s) => s.trim()).filter(Boolean);
   // Only models in the table: an unknown id is ignored, never passed through.
   const models = HOSTED_MODELS.filter((m) => listed.includes(m.model) || listed.includes(m.choice));
   const switchedOff = ["off", "false", "0"].includes((env.ASSISTANT_MODEL_PICKER ?? "").trim().toLowerCase());

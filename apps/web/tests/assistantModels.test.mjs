@@ -413,3 +413,14 @@ test("routes: in production there is no picker at all, whatever the settings say
   assert.equal(rt.buildModelLab(cfgLib.assistantConfig(env), env), null);
   assert.equal(models.modelLabSettings(env).available, false);
 });
+
+test("the picker needs only the key on a development server: unset ASSISTANT_NIM_MODELS offers both models, an empty value offers none, no key offers none", () => {
+  const base = { NODE_ENV: "development", NVIDIA_API_KEY: "nvapi-TEST-KEY" };
+  const open = models.modelLabSettings(base, ["ollama"]);
+  assert.equal(open.available, true);
+  assert.deepEqual(open.models.map((m) => m.choice), ["deepseek-v4.1-flash", "step-5-preview"]);
+  assert.equal(models.modelLabSettings({ ...base, ASSISTANT_NIM_MODELS: "" }).available, false);
+  assert.equal(models.modelLabSettings({ NODE_ENV: "development" }).available, false, "no key, no picker");
+  assert.equal(models.modelLabSettings({ ...base, NODE_ENV: "production" }).available, false, "never in production");
+  assert.equal(models.modelLabSettings({ ...base, ASSISTANT_MODEL_PICKER: "off" }).available, false);
+});
