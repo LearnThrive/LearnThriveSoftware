@@ -41,6 +41,14 @@ const nativeOk = native.status === 0 && (await answers("http://127.0.0.1:11434/a
 if (native.status === 0) for (const line of (native.stdout ?? "").trim().split(/\r?\n/).filter(Boolean)) say(line.replace(/^\[ollama-local\] /, ""));
 else say(`The native Ollama runtime did not start (${(native.stderr ?? "").trim().split(/\r?\n/).at(-1) ?? "see above"}).`);
 
+// The Parakeet recogniser runtime (native, on the host): the speech sidecar in Docker cannot start a Windows binary, so it reaches
+// this one at host.docker.internal:8791 (config/compose.yaml). It starts nothing when a runtime already answers, and says so plainly
+// when there is none to start - voice then falls back to Whisper and /health says it did.
+const parakeetScript = join(dirname(fileURLToPath(import.meta.url)), "parakeet-local.mjs");
+const parakeet = spawnSync(process.execPath, [parakeetScript, "start"], { encoding: "utf8", timeout: 180_000 });
+for (const line of (parakeet.stdout ?? "").trim().split(/\r?\n/).filter(Boolean)) say(line.replace(/^\[parakeet\] /, ""));
+if (parakeet.status !== 0) say("The Parakeet recogniser did not start (see above). Voice falls back to Whisper and says so in /health.");
+
 const dockerUp = docker(["info", "--format", "{{.ServerVersion}}"]).status === 0;
 if (!nativeOk && !dockerUp) {
   say("No native Ollama runtime answered and Docker is not running, so LearnThrive AI's model is not started. Install the runtime (docs/OLLAMA_THREE_MODEL.md) or start Docker Desktop, then run `npm run services:up`.");

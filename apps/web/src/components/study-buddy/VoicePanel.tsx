@@ -54,6 +54,7 @@ export function VoicePanel({ voice, onEdit, onTalkOver }: { voice: VoiceControls
         {phase === "confirm" ? (
           <div className={styles.confirm}>
             <p className={styles.heard}>“{heard}”</p>
+            {message ? <p className={styles.hint}>{message}</p> : null}
             <div className={styles.confirmActions}>
               <button type="button" className={styles.primaryAction} onClick={confirm}>
                 Send

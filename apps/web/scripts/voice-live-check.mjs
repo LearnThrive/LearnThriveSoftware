@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
  * Voice chat end to end with the REAL pieces: Chromium's fake microphone plays a spoken question (synthesised by the speech sidecar's
- * own Piper voice, then silence), the page's detector ends the turn, the sidecar's Whisper transcribes it, the question is sent by
- * itself, the local model answers on Ollama, and the answer is spoken back. Prints what was heard, the answer, and the timings.
+ * own voice, then silence), the page's detector ends the turn, the sidecar's recogniser transcribes it (Parakeet by default,
+ * `VOICE_STT_ENGINE=whisper` for the old path), the question is sent by itself, the local model answers on Ollama, and the answer is
+ * spoken back (Kokoro by default, `VOICE_TTS_ENGINE=piper` for the old voice). Prints what was heard, the answer, and the timings.
  *
  *   npm run voice:dev                       (the sidecar, in one terminal)
  *   npm run dev -- -p 3111                  (LIBRARY_PHASE=enrolled; Ollama running; in another)

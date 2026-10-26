@@ -58,7 +58,7 @@ test("every environment variable the code reads is in the registry (so it is doc
 test("every registry entry is read somewhere, or is an operator-only or test-only setting that says so", () => {
   const read_ = variablesRead();
   // Read by shell scripts, the CLI, the Playwright config or by hand rather than by a source file this scan covers.
-  const elsewhere = new Set(["CAREERS_OPEN_FOR_TESTING", "SUPABASE_DB_PASSWORD", "DATABASE_ADMIN_URL", "LEARNTHRIVE_SERVER_PASSWORD", "SUPABASE_LOCAL", "SUPABASE_LOCAL_SERIAL", "CHECK_ENV_ALLOW_HOSTED", "VITE_TURN_URL", "VITE_TURN_USERNAME", "VITE_TURN_CREDENTIAL", "LEARNTHRIVE_DOCKER", "OLLAMA_MODELS", "VOICE_HOST", "VOICE_PORT", "VOICE_STT_DEVICE", "VOICE_STT_MODEL", "VOICE_STT_COMPUTE", "VOICE_TTS_VOICE", "NEXT_PUBLIC_MOTION_DEBUG", "NEXT_PUBLIC_THEME_TOGGLE", "NEXT_PUBLIC_SMOOTH_SCROLL", "DISCONNECT_GRACE_MS", "CHROME_PATH", "CI", "STRIPE_API_VERSION"]);
+  const elsewhere = new Set(["CAREERS_OPEN_FOR_TESTING", "SUPABASE_DB_PASSWORD", "DATABASE_ADMIN_URL", "LEARNTHRIVE_SERVER_PASSWORD", "SUPABASE_LOCAL", "SUPABASE_LOCAL_SERIAL", "CHECK_ENV_ALLOW_HOSTED", "VITE_TURN_URL", "VITE_TURN_USERNAME", "VITE_TURN_CREDENTIAL", "LEARNTHRIVE_DOCKER", "OLLAMA_MODELS", "VOICE_HOST", "VOICE_PORT", "VOICE_STT_DEVICE", "VOICE_STT_MODEL", "VOICE_STT_COMPUTE", "VOICE_TTS_VOICE", "VOICE_PARAKEET_HOME", "VOICE_PARAKEET_PORT", "VOICE_TTS_DEVICE", "NEXT_PUBLIC_MOTION_DEBUG", "NEXT_PUBLIC_THEME_TOGGLE", "NEXT_PUBLIC_SMOOTH_SCROLL", "DISCONNECT_GRACE_MS", "CHROME_PATH", "CI", "STRIPE_API_VERSION"]);
   const unused = REGISTRY.map((v) => v.name).filter((name) => !read_.has(name) && !elsewhere.has(name));
   assert.deepEqual(unused, [], "a variable nothing reads should be removed from the registry");
 });

@@ -28,7 +28,41 @@ const SYMBOLS: Array<[RegExp, string]> = [
   [/\\[,;:! ]/g, " "],
   [/\\(?:quad|qquad)\b/g, " "],
   [/\\ldots|\\dots|\\cdots/g, " and so on "],
+  [/\\int\b/g, " the integral "],
+  [/\\sum\b/g, " the sum "],
+  [/\\prod\b/g, " the product "],
+  [/\\partial\b/g, " partial "],
+  [/\\angle\b/g, " angle "],
+  [/\\equiv\b/g, " is equivalent to "],
 ];
+
+/** Function names read as words. Without this, `\sin \theta` lost its "sine" and said only "theta" (the unknown-command rule). */
+const FUNCTIONS: Record<string, string> = {
+  arcsin: "arc sine",
+  arccos: "arc cosine",
+  arctan: "arc tangent",
+  sinh: "hyperbolic sine",
+  cosh: "hyperbolic cosine",
+  tanh: "hyperbolic tangent",
+  sin: "sine",
+  cos: "cosine",
+  tan: "tangent",
+  sec: "secant",
+  csc: "cosecant",
+  cot: "cotangent",
+  log: "log",
+  ln: "natural log",
+  exp: "e to the power of",
+  lim: "the limit",
+  max: "maximum",
+  min: "minimum",
+  det: "determinant",
+  gcd: "highest common factor",
+  lcm: "lowest common multiple",
+};
+
+/** The integral, the sum and the product, for the constructs that carry limits. */
+const ACCUMULATORS: Record<string, string> = { int: "integral", sum: "sum", prod: "product" };
 
 /** The power in `x^n`: squared, cubed, to the power of n. */
 function power(exp: string): string {
@@ -42,6 +76,17 @@ function power(exp: string): string {
 /** Reads one stretch of LaTeX maths aloud. */
 export function mathToSpeech(math: string): string {
   let s = ` ${math} `;
+  // Constructs whose limits and arguments ARE the meaning, read from the raw LaTeX before braces are stripped: a derivative's
+  // fraction is "d y by d x", not "d y over d x"; a limit is "the limit as x approaches 0", not "the limit sub ...".
+  s = s.replace(/\\[dt]?frac\s*\{\s*d\s*([A-Za-z])\s*\}\s*\{\s*d\s*([A-Za-z])\s*\}/g, (_m, a: string, b: string) => ` d ${a} by d ${b} `);
+  s = s.replace(/\\lim\s*_\s*\{([^{}]*)\}/g, (_m, inner: string) => ` the limit as ${inner.replace(/\\to\b/g, "approaches").trim()} `);
+  s = s.replace(/\\(int|sum|prod)\s*_\s*\{([^{}]*)\}\s*\^\s*\{([^{}]*)\}/g, (_m, kind: string, from: string, to: string, offset: number, whole: string) => {
+    // "the sum from n equals 1 to 10 of n": the thing being summed is read with an "of" when one follows, never left dangling.
+    const body = whole.slice(offset + _m.length).replace(/^[\s$]+/, "");
+    return ` the ${ACCUMULATORS[kind]} from ${from.trim()} to ${to.trim()}${body ? " of " : " "}`;
+  });
+  s = s.replace(/\\log\s*_\s*\{([^{}]*)\}/g, (_m, base: string) => ` log base ${base.trim()} `);
+
   // Fractions and roots first, innermost first, so nested braces resolve from the inside out.
   for (let pass = 0; pass < 6; pass += 1) {
     const before = s;
@@ -56,6 +101,10 @@ export function mathToSpeech(math: string): string {
   }
   s = s.replace(/\^\s*(-?[A-Za-z0-9])/g, (_m, e: string) => power(e));
   s = s.replace(/_\s*([A-Za-z0-9])/g, (_m, e: string) => ` sub ${e} `);
+  s = s.replace(/\\(arcsin|arccos|arctan|sinh|cosh|tanh|sin|cos|tan|sec|csc|cot|log|ln|exp|lim|max|min|det|gcd|lcm)\b/g, (_m, name: string) => ` ${FUNCTIONS[name]} `);
+  // A prime is a derivative: f' is "f prime", f'' is "f double prime" (the space before the tick is how it is typed).
+  s = s.replace(/([A-Za-z])''/g, "$1 double prime ");
+  s = s.replace(/([A-Za-z])'/g, "$1 prime ");
   for (const [pattern, words] of SYMBOLS) s = s.replace(pattern, words);
   s = s.replace(/\\[A-Za-z]+/g, " "); // any command not known above: say nothing rather than a backslash
   s = s.replace(/[{}]/g, " ");
@@ -95,18 +144,51 @@ export function toSpeech(markdown: string): string {
 }
 
 /**
- * Splits speech into sentences, then joins very short ones so the voice is not asked for a clip of two words. The first chunk is
- * allowed to be short (the sooner the first audio, the better); later ones are padded towards `target` characters. `ready` are chunks
- * that will not change however much text follows; `rest` is a remainder that later sentences may still join.
+ * Where the first chunk may be cut when a sentence is long: a comma or dash (the pause a speaker would take). A sentence with no
+ * such pause is spoken whole unless it is longer than `hard`, where a mid-clause break is less bad than seconds of silence. Returns
+ * `null` rather than chopping a clause with no natural pause in it.
  */
-export function speechChunksPartial(speech: string, { first = 24, target = 90, max = 300 }: { first?: number; target?: number; max?: number } = {}): { ready: string[]; rest: string } {
+function firstCut(chunk: string, min: number, cap: number, hard: number): [string, string] | null {
+  let at = -1;
+  for (const m of chunk.matchAll(/[,;:—–-]\s+/g)) {
+    const end = (m.index ?? 0) + m[0].length;
+    if (end >= min && end <= cap + 24) at = end;
+  }
+  if (at < 0 && chunk.length > hard) {
+    const space = chunk.lastIndexOf(" ", cap);
+    if (space >= min) at = space + 1;
+  }
+  if (at < 0) return null;
+  const head = chunk.slice(0, at).trim();
+  const tail = chunk.slice(at).trim();
+  return head && tail ? [head, tail] : null;
+}
+
+/**
+ * Splits speech into sentences, then joins very short ones so the voice is not asked for a clip of two words. The first chunk is
+ * allowed to be short (the sooner the first audio, the better) and is **capped** (`firstMax`): Kokoro synthesises at roughly real
+ * time on this CPU, so a first clip of two and a half seconds of audio is a two-and-a-half-second wait before the student hears
+ * anything. Cutting the first sentence short at a natural pause is not a wording change: the rest follows as the next clip. Later
+ * chunks are padded towards `target` characters. `ready` are chunks that will not change however much text follows; `rest` is a
+ * remainder that later sentences may still join.
+ */
+export type ChunkOptions = { first?: number; firstMax?: number; target?: number; max?: number };
+
+export function speechChunksPartial(speech: string, { first = 24, firstMax = 64, target = 90, max = 300 }: ChunkOptions = {}): { ready: string[]; rest: string } {
   const sentences = speech.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
   const ready: string[] = [];
   let current = "";
   for (const raw of sentences) {
     const sentence = raw.length > max ? raw.slice(0, max).replace(/\s+\S*$/, "") : raw;
-    const want = ready.length === 0 ? first : target;
     current = current ? `${current} ${sentence}` : sentence;
+    if (ready.length === 0 && current.length > firstMax) {
+      const cut = firstCut(current, first, firstMax, firstMax + 40);
+      if (cut) {
+        ready.push(cut[0]);
+        current = cut[1];
+      }
+    }
+    const want = ready.length === 0 ? first : target;
     if (current.length >= want) {
       ready.push(current);
       current = "";
@@ -115,7 +197,7 @@ export function speechChunksPartial(speech: string, { first = 24, target = 90, m
   return { ready, rest: current };
 }
 
-export function speechChunks(speech: string, options?: { first?: number; target?: number; max?: number }): string[] {
+export function speechChunks(speech: string, options?: ChunkOptions): string[] {
   const { ready, rest } = speechChunksPartial(speech, options);
   return rest ? [...ready, rest] : ready;
 }

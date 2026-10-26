@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createEndpointer, encodeWav16k, peak, resampleTo16k, rms } from "@/lib/assistant/audio";
 import { settledPrefix, speechChunks, speechChunksPartial, toSpeech } from "@/lib/assistant/speech";
+import { judgeTranscript } from "@/lib/assistant/voiceTrust";
 
 /**
  * Voice chat in the browser: talk, and the question is sent when you stop. One turn is a small state machine:
@@ -34,8 +35,6 @@ export interface Speaker {
   cancel: () => void;
 }
 
-/** The recogniser's confidence below which the student is asked before anything is sent. */
-export const CONFIRM_BELOW = 0.55;
 const NO_SPEECH_ABOVE = 0.6;
 const MIN_RECORDING_MS = 400;
 
@@ -179,7 +178,7 @@ export function useVoice({ onUtterance }: VoiceOptions): VoiceControls {
     request.current = controller;
     try {
       const response = await fetch("/api/assistant/voice/transcribe", { method: "POST", headers: { "Content-Type": "audio/wav" }, body: encodeWav16k(samples) as BodyInit, signal: controller.signal });
-      const data = (await response.json().catch(() => null)) as { text?: string; confidence?: number; noSpeech?: number; error?: string } | null;
+      const data = (await response.json().catch(() => null)) as { text?: string; confidence?: number | null; confidenceSource?: string; noSpeech?: number; error?: string } | null;
       if (turn.current !== which || phaseRef.current !== "finalising") return; // cancelled or closed meanwhile
       if (!response.ok) {
         setMessage(data?.error ?? "Voice is not available right now. You can still type your question.");
@@ -198,9 +197,13 @@ export function useVoice({ onUtterance }: VoiceOptions): VoiceControls {
       }
       misses.current = 0;
       setHeard(text);
-      if ((data?.confidence ?? 1) < CONFIRM_BELOW) {
+      // Confidence as measured (a number, or null when the recogniser cannot say), and the maths check on top of it: a question
+      // with a confusable power, sign or number is shown before it is sent. See voiceTrust.ts.
+      const confidence = typeof data?.confidence === "number" ? data.confidence : null;
+      const verdict = judgeTranscript({ text, confidence });
+      if (verdict.ask) {
         pending.current = text;
-        setMessage("");
+        setMessage(verdict.why === "ambiguous" ? "That is easy to mishear. Please check it, especially any signs or powers." : "");
         return setPhase("confirm");
       }
       setPhase("sending");

@@ -268,6 +268,98 @@
           "heard": "what is the difference between mitosis and meosis"
         }
       ]
+    },
+    {
+      "engine": "parakeet",
+      "model": "parakeet-ctc-1.1b.q8_0.gguf",
+      "device": "cuda",
+      "compute": "q8_0",
+      "voices": "all",
+      "loadSeconds": 5.68,
+      "deviceReported": "cuda:0",
+      "detail": "nemo-speech 0.2.0 (cuda:0), model parakeet-ctc-1.1b.q8_0.gguf, as a child process on 127.0.0.1:8791",
+      "rssMb": 3,
+      "vramMb": 1655,
+      "wer": {
+        "clean": 1.6,
+        "noisy": 3.0
+      },
+      "werByVoice": {
+        "piper-en_GB-alba-medium": 3.1,
+        "piper-en_GB-jenny_dioco-medium": 3.9,
+        "piper-en_GB-northern_english_male-medium": 2.5,
+        "kokoro-bf_emma": 1.2,
+        "kokoro-bm_george": 1.4,
+        "sapi-hazel": 2.7,
+        "sapi-zira": 1.4
+      },
+      "termsFoundPercent": 94.2,
+      "rtfMedian": 0.011,
+      "msMedian": 29,
+      "msP95": 56,
+      "clips": 420,
+      "confidenceSource": "words",
+      "confidenceMedian": 0.996,
+      "errorExamples": [
+        {
+          "voice": "piper-en_GB-alba-medium",
+          "said": "i am stuck on question four of my homework",
+          "heard": "i'm stuck on question four of my homework"
+        },
+        {
+          "voice": "piper-en_GB-alba-medium",
+          "said": "how do i round four point six seven to one decimal place",
+          "heard": "how do around four point six seven to one decimal place"
+        },
+        {
+          "voice": "piper-en_GB-alba-medium",
+          "said": "please explain pathetic fallacy",
+          "heard": "please explain prophetic fallacy"
+        }
+      ]
+    },
+    {
+      "engine": "parakeet",
+      "model": "parakeet-ctc-1.1b.q8_0.gguf",
+      "device": "cpu",
+      "compute": "q8_0",
+      "voices": "one",
+      "loadSeconds": 6.79,
+      "deviceReported": "cpu",
+      "detail": "nemo-speech 0.2.0 (cpu), model parakeet-ctc-1.1b.q8_0.gguf, as a child process on 127.0.0.1:8791",
+      "rssMb": 0,
+      "vramMb": 0,
+      "wer": {
+        "clean": 2.5,
+        "noisy": 4.1
+      },
+      "werByVoice": {
+        "piper-en_GB-alba-medium": 3.3
+      },
+      "termsFoundPercent": 90.9,
+      "rtfMedian": 0.147,
+      "msMedian": 423,
+      "msP95": 581,
+      "clips": 60,
+      "confidenceSource": "words",
+      "confidenceMedian": 0.994,
+      "errorExamples": [
+        {
+          "voice": "piper-en_GB-alba-medium",
+          "said": "i am stuck on question four of my homework",
+          "heard": "i'm stuck on question four of my homework"
+        },
+        {
+          "voice": "piper-en_GB-alba-medium",
+          "said": "how do i round four point six seven to one decimal place",
+          "heard": "how do around four point six seven to one decimal place"
+        },
+        {
+          "voice": "piper-en_GB-alba-medium",
+          "said": "please explain pathetic fallacy",
+          "heard": "please explain prophetic fallacy"
+        }
+      ]
     }
   ],
   "tts": [

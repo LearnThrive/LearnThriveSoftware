@@ -18,8 +18,14 @@ export interface Transcript {
   text: string;
   audioMs: number;
   processingMs: number;
-  /** 0 to 1: how sure the recogniser is (the average token probability). Low means "ask before sending". */
-  confidence: number;
+  /**
+   * 0 to 1 when the recogniser can measure it, or **null** when it cannot. Low means "ask before sending".
+   * Parakeet CTC through NVIDIA's runtime gives per-word confidences, which are used; a recogniser with no score must not be
+   * turned into a confident 1.0 (`voiceTrust.ts` decides what to do with null).
+   */
+  confidence: number | null;
+  /** How the confidence was measured: "tokens" (a mean token posterior) or "words" (per-word confidences), or "none". */
+  confidenceSource: "tokens" | "words" | "none";
   /** 0 to 1: the chance the recording held no speech at all. */
   noSpeech: number;
 }
@@ -135,7 +141,12 @@ export class SidecarSpeech implements SpeechToText, TextToSpeech {
     const data = (await response.json().catch(() => null)) as Partial<Transcript> | null;
     if (!data || typeof data.text !== "string") throw new VoiceError("unavailable");
     const unit = (value: unknown, fallback: number) => (typeof value === "number" && value >= 0 && value <= 1 ? value : fallback);
-    return { text: data.text.trim(), audioMs: Number(data.audioMs) || 0, processingMs: Number(data.processingMs) || 0, confidence: unit(data.confidence, 1), noSpeech: unit(data.noSpeech, 0) };
+    const measured = typeof data.confidence === "number" && data.confidence >= 0 && data.confidence <= 1;
+    // An older service that sends no confidence field at all is trusted, as before. One that sends null is saying it cannot measure
+    // it - that stays null. `confidenceSource` is passed through when present, and derived when it is not.
+    const confidence = data.confidence === null ? null : measured ? (data.confidence as number) : 1;
+    const source = data.confidenceSource === "tokens" || data.confidenceSource === "words" || data.confidenceSource === "none" ? data.confidenceSource : confidence === null ? "none" : "tokens";
+    return { text: data.text.trim(), audioMs: Number(data.audioMs) || 0, processingMs: Number(data.processingMs) || 0, confidence, confidenceSource: source, noSpeech: unit(data.noSpeech, 0) };
   }
 
   async speak(text: string, signal?: AbortSignal): Promise<Uint8Array> {
@@ -159,7 +170,7 @@ export class MockSpeech implements SpeechToText, TextToSpeech {
     const info = inspectWav(wav);
     if (!info) throw new VoiceError("bad_audio");
     // A very short recording comes back uncertain, so tests can reach the "did I hear that right?" path.
-    return { text: "Factorise x squared plus five x plus six", audioMs: info.audioMs, processingMs: 5, confidence: info.audioMs >= 1000 ? 0.92 : 0.3, noSpeech: 0.02 };
+    return { text: "Factorise x squared plus five x plus six", audioMs: info.audioMs, processingMs: 5, confidence: info.audioMs >= 1000 ? 0.92 : 0.3, confidenceSource: "tokens", noSpeech: 0.02 };
   }
 
   async speak(): Promise<Uint8Array> {
