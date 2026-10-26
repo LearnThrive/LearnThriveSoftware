@@ -101,7 +101,7 @@ const GHOST_NAME = "((?:Lady |Lord |Mr |Mrs |Miss |Sir |King |Queen )?[A-Z][a-z]
 const SEES = new RegExp(`${GHOST_NAME}\\s+(?:[a-z]+\\s+){0,2}(?:sees?|saw|seeing|sights?|hallucinates?|is haunted by|is visited by|speaks to|talks to|addresses|confronts)\\s+(?:the |a |an )?(?:[A-Z][a-z]+'s |[A-Z][a-z]+’s )?(?:ghost|apparition|spectre)`);
 const APPEARS = new RegExp(`(?:ghost|apparition|spectre)(?: of [A-Z][a-z]+)?(?:'s)?\\s+(?:[a-z]+\\s+){0,2}(?:appears?|reappears?|returns?|visits?|haunts?|comes?)\\s+(?:to|for|before)\\s+${GHOST_NAME}`, "i");
 
-function pairsIn(sentence: string, known: ReadonlySet<string>): Pair[] {
+function pairsIn(sentence: string): Pair[] {
   const names = namesIn(sentence);
   const out: Pair[] = [];
   for (const [event, re] of EVENTS) {
@@ -129,12 +129,11 @@ export function knownNames(texts: readonly string[]): Set<string> {
 }
 
 export function checkEventClaims(reply: string, evidenceTexts: readonly string[], question = ""): EventClaim[] {
-  const known = knownNames([...evidenceTexts, question]);
-  const evidence: Pair[] = evidenceTexts.flatMap((t) => sentencesOf(t).flatMap((s) => pairsIn(s, known)));
+  const evidence: Pair[] = evidenceTexts.flatMap((t) => sentencesOf(t).flatMap((s) => pairsIn(s)));
   const claims: EventClaim[] = [];
   const seen = new Set<string>();
   for (const sentence of sentencesOf(reply)) {
-    for (const p of pairsIn(sentence, known)) {
+    for (const p of pairsIn(sentence)) {
       const key = `${p.subject}|${p.event}`;
       if (seen.has(key)) continue;
       seen.add(key);

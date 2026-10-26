@@ -15,7 +15,7 @@ export interface ActivitySource {
   title: string;
   /** The site, for display ("www.folger.edu"). */
   host: string;
-  /** A sanitised link: http(s) only, no login, no query string, no fragment. */
+  /** A sanitised link: http(s) only, no login, no fragment, and only the query parameters a page needs (see `safeSource`). */
   url: string;
   /** How reliable the kind of site is ("primary text", "reputable education", "revision site"...), as words. */
   tier: string;
@@ -61,11 +61,11 @@ const TIER_WORDS: Record<string, string> = {
   low: "low-trust site",
 };
 
-/** A link safe to show and open: public http(s), no credentials, no query or fragment, never a local or internal address. Null otherwise. */
-export function safeSource(input: { url: string; title?: string; tier?: string; via?: "crawl4ai" | "browser" | "direct" }): ActivitySource | null {
+/** A public web address's host, or null for anything that must never be shown: not http(s), a login in it, a local or internal name, a private address. */
+export function publicHost(raw: string): string | null {
   let url: URL;
   try {
-    url = new URL(input.url);
+    url = new URL(raw);
   } catch {
     return null;
   }
@@ -74,8 +74,36 @@ export function safeSource(input: { url: string; title?: string; tier?: string; 
   const host = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
   if (!host || !host.includes(".") || /(^|\.)(localhost|local|internal|lan|corp|home|home\.arpa)$/.test(host)) return null;
   if (isIP(host) && isPrivateAddress(host)) return null;
+  return host;
+}
+
+/**
+ * Query parameters that are never kept in a link: tracking (they change nothing on the page), and anything that could identify a person, a session or
+ * a search (a site's own search page carries what was searched for). Matched on the parameter's name, case-insensitively.
+ */
+const DROPPED_PARAM = /^(utm(_.*)?|fbclid|gclid|dclid|msclkid|mc_[a-z]+|_ga|_gl|ref|referrer|source|campaign|session(id)?|sess|sid|phpsessid|jsessionid|token|access_token|id_token|auth|key|api_?key|apikey|sig|signature|password|pass|pwd|email|e-?mail|user(name)?|login|q|query|search|s|text|term|keywords?)$/i;
+/** A value that looks like a credential or an identifier of a person rather than an address on a site. */
+const SECRET_VALUE = /@|^[A-Za-z0-9_-]{32,}$|^[a-f0-9]{24,}$/i;
+const MAX_LINK = 300;
+
+/**
+ * A link safe to show and open: public http(s), no credentials, no fragment, never a local or internal address. Null otherwise.
+ *
+ * The query string is kept only where it is part of the address of the page (`?id=12`, `?act=3&scene=1`): tracking parameters and anything that
+ * could carry a person's details, a session or a search are dropped, as is any value that looks like a token. A link is never cut part-way, because a
+ * cut link is a broken one: if it is too long with its query it is given without the query, and if the path alone is too long it points at the site.
+ */
+export function safeSource(input: { url: string; title?: string; tier?: string; via?: "crawl4ai" | "browser" | "direct" }): ActivitySource | null {
+  const host = publicHost(input.url);
+  if (!host) return null;
+  const url = new URL(input.url);
+  const kept = new URLSearchParams();
+  for (const [name, value] of url.searchParams) if (!DROPPED_PARAM.test(name) && !SECRET_VALUE.test(value) && value.length <= 64) kept.append(name, value);
+  const query = kept.toString();
+  const candidates = [`${url.origin}${url.pathname}${query ? `?${query}` : ""}`, `${url.origin}${url.pathname}`, `${url.origin}/`];
+  const link = candidates.find((c) => c.length <= MAX_LINK) ?? `${url.origin}/`;
   const title = plainLabel(input.title, 120) || host;
-  return { title, host: plainLabel(host, 80), url: `${url.origin}${url.pathname}`.slice(0, 300), tier: TIER_WORDS[input.tier ?? ""] ?? (plainLabel(input.tier, 30) || "site"), via: input.via === "direct" ? "direct" : "browser" };
+  return { title, host: plainLabel(host, 80), url: link, tier: TIER_WORDS[input.tier ?? ""] ?? (plainLabel(input.tier, 30) || "site"), via: input.via === "direct" ? "direct" : "browser" };
 }
 
 /**
@@ -188,6 +216,9 @@ const NOTABLE: ReadonlySet<string> = new Set(["document", "search", "read", "ver
 export const worthShowing = (steps: readonly ActivityStep[]): boolean => steps.some((s) => NOTABLE.has(s.kind));
 
 export const ACTIVITY_VERSION = 1;
+/** How a turn ended, kept with its steps so a reopened chat shows a stopped or failed turn as that, not as completed. */
+export type ActivityOutcome = "done" | "failed" | "stopped";
+const OUTCOMES: ReadonlySet<string> = new Set(["done", "failed", "stopped"]);
 const withoutDetail = (step: { detail?: string }) => {
   const copy: Record<string, unknown> = { ...step };
   delete copy.detail;
@@ -196,33 +227,48 @@ const withoutDetail = (step: { detail?: string }) => {
 const MAX_STEPS = 24;
 const MAX_CHARS = 6000;
 
-/** The record stored with an answer: the finished steps only, bounded, or null if there is nothing worth keeping. */
-export function serializeActivity(steps: readonly ActivityStep[]): string | null {
+/**
+ * The record stored with an answer: the finished steps only, bounded, or null if there is nothing worth keeping. `outcome` is stored only when the
+ * turn did not complete (a record without one reads as completed, which is also how records written before it existed read).
+ */
+export function serializeActivity(steps: readonly ActivityStep[], outcome: ActivityOutcome = "done"): string | null {
   const kept = steps
     .filter((s) => s.state !== "running" && s.kind !== "write")
     .slice(0, MAX_STEPS)
     .map((s) => ({ id: s.id, kind: s.kind, state: s.state, label: s.label, ...(s.detail ? { detail: s.detail } : {}), ...(s.source ? { source: s.source } : {}) }));
   if (!worthShowing(kept as ActivityStep[])) return null;
-  let text = JSON.stringify({ v: ACTIVITY_VERSION, steps: kept });
+  const head = { v: ACTIVITY_VERSION, ...(outcome !== "done" ? { outcome } : {}) };
+  let text = JSON.stringify({ ...head, steps: kept });
   // Over the bound: shed the details first, then the later steps, so a record is always whole JSON.
-  if (text.length > MAX_CHARS) text = JSON.stringify({ v: ACTIVITY_VERSION, steps: kept.map(withoutDetail) });
+  if (text.length > MAX_CHARS) text = JSON.stringify({ ...head, steps: kept.map(withoutDetail) });
   while (text.length > MAX_CHARS && kept.length > 1) {
     kept.pop();
-    text = JSON.stringify({ v: ACTIVITY_VERSION, steps: kept.map(withoutDetail) });
+    text = JSON.stringify({ ...head, steps: kept.map(withoutDetail) });
   }
   return text.length <= MAX_CHARS ? text : null;
 }
 
 /** Reads a stored record back, checking every field again (a stored value is not trusted just because it was written by us). */
 export function parseActivity(raw: string | null | undefined): ActivityStep[] {
-  if (!raw) return [];
-  let parsed: unknown;
+  return parseActivityRecord(raw).steps;
+}
+
+/** As `parseActivity`, with how the turn ended. Anything unreadable is "done": the steps themselves still say which of them failed. */
+export function parseActivityRecord(raw: string | null | undefined): { steps: ActivityStep[]; outcome: ActivityOutcome } {
+  let parsed: unknown = null;
   try {
-    parsed = JSON.parse(raw);
+    parsed = raw ? JSON.parse(raw) : null;
   } catch {
-    return [];
+    parsed = null;
   }
-  const list = (parsed as { steps?: unknown })?.steps;
+  const stored = (parsed as { outcome?: unknown } | null)?.outcome;
+  const outcome: ActivityOutcome = typeof stored === "string" && OUTCOMES.has(stored) ? (stored as ActivityOutcome) : "done";
+  const steps = readSteps(parsed);
+  return { steps, outcome: steps.length ? outcome : "done" };
+}
+
+function readSteps(parsed: unknown): ActivityStep[] {
+  const list = (parsed as { steps?: unknown } | null)?.steps;
   if (!Array.isArray(list)) return [];
   const out: ActivityStep[] = [];
   for (const item of list.slice(0, MAX_STEPS)) {

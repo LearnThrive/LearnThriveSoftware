@@ -11,9 +11,9 @@ import { warmOnce } from "./warmup";
 import { deterministicRoute, needsDecision, type RouteDecision, type SystemOneClient } from "./decision";
 import { enqueueIndex, drainIndexQueue, describeHits, indexFile, searchUploads, type RetrievalDeps, type RetrievalHit } from "./retrieval";
 import { runTool, toolsFor } from "./tools";
-import { finishStudy, planStudy, prepareStudy, type StudyPrep } from "./study";
+import { fallbackStudy, finishStudy, planStudy, prepareStudy, type StudyPrep } from "./study";
 import { reviewAnswer, UNCHECKED_WITHHELD } from "./gate";
-import { ActivityLog, drainActivity, serializeActivity, withActivity, type ActivityEvent } from "./activity";
+import { ActivityLog, drainActivity, serializeActivity, withActivity, type ActivityEvent, type ActivityOutcome } from "./activity";
 import type { ResearchService } from "./research/verify";
 import type { EmbeddingProvider } from "./embeddings";
 import { modelLabel } from "./models";
@@ -66,7 +66,11 @@ export type ChatEvent =
   | ActivityEvent
   | { type: "queued"; position: number }
   | { type: "status"; state: ChatStatus }
-  | { type: "delta"; text: string }
+  /**
+   * Answer text. An ordinary answer streams as many deltas. A held answer (verified or advanced: study.ts) arrives as ONE delta with `whole: true`,
+   * only after every check has finished: the complete approved text, its notes included, which the page shows in one go.
+   */
+  | { type: "delta"; text: string; whole?: true }
   /** `model`: who answered, in words ("Step 5 Preview"), only for a turn whose model a developer chose. Taken from what the provider reported. */
   | { type: "done"; messageId: string | null; provider: string | null; firstTokenMs: number | null; model?: string | null }
   /** `model` and `detail` (a machine word such as `unauthorised` or `reasoning_exhausted`) only for a turn whose model a developer chose. */
@@ -186,6 +190,14 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
   const log = deps.log ?? (() => {});
   const text = input.text.replace(/\r\n/g, "\n").trim();
   const fileIds = [...new Set(input.fileIds ?? [])].slice(0, 3);
+  // The turn has its own cancellation, joined to the request's: Stop (or the page going away) ends it, and so does this function when whoever is
+  // reading its events stops reading, so work never goes on for a reader who has left (see `settle`, below).
+  const turn = new AbortController();
+  const turnSignal = turn.signal;
+  if (input.signal) {
+    if (input.signal.aborted) turn.abort();
+    else input.signal.addEventListener("abort", () => turn.abort(), { once: true });
+  }
 
   if (!text && fileIds.length === 0) return void (yield { type: "error", code: "empty" });
   if (text.length > config.maxInputChars) return void (yield { type: "error", code: "too_long" });
@@ -362,11 +374,17 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
   const retrievalDeps: RetrievalDeps = { store, embeddings: deps.embeddings ?? null };
   // Retrieval is for text-only turns that refer to earlier material (a direct photo question never waits for the whole index).
   if (config.retrieval.enabled && deps.embeddings && !fresh && attachable.length > 0 && (intent === "search_material" || intent === "explain_question" || intent === "solve_paper" || hasHistory)) {
+    // A real search of the family's own uploads: shown as it starts, and how it went once it has.
+    const looking = activity.start("document", "Looking through your earlier uploads");
+    yield* drainActivity(activity);
     try {
-      retrieved = await searchUploads(retrievalDeps, { owner: input.owner, sessionId, query: text || "the uploaded material", topK: config.retrieval.topK, minScore: config.retrieval.minScore, signal: input.signal });
+      retrieved = await searchUploads(retrievalDeps, { owner: input.owner, sessionId, query: text || "the uploaded material", topK: config.retrieval.topK, minScore: config.retrieval.minScore, signal: turnSignal });
+      activity.done(looking, { detail: retrieved.length ? `${retrieved.length} relevant passage${retrieved.length === 1 ? "" : "s"}` : "nothing relevant found" });
     } catch {
       retrieved = [];
+      activity.fail(looking, "could not be searched");
     }
+    yield* drainActivity(activity);
   }
   const fileNames = new Map(attachable.map((f, i) => [f.id, `upload ${i + 1}`]));
 
@@ -378,9 +396,14 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
     if (deps.research && planStudy(text, history).ground) yield { type: "status", state: "researching" };
     try {
       // The searches, the pages read and the checks are sent to the page WHILE they run, not after this returns.
-      study = yield* withActivity(activity, () => prepareStudy({ text, material: text + uploadedText, history, research: deps.research ?? null, extracts: uploadedText ? [uploadedText] : [], owner: input.owner.clientId, signal: input.signal, activity }));
+      study = yield* withActivity(activity, () => prepareStudy({ text, material: text + uploadedText, history, research: deps.research ?? null, extracts: uploadedText ? [uploadedText] : [], owner: input.owner.clientId, signal: turnSignal, activity }));
     } catch {
-      study = null;
+      // The preparation failed part-way: whatever it had started is over and did not work, and the turn is still classified (deterministically) so
+      // an answer that must be verified is held and checked rather than streamed unchecked. It says no sources could be read.
+      log("study_failed");
+      activity.closeAll("failed");
+      yield* drainActivity(activity);
+      study = fallbackStudy({ text, material: text + uploadedText, history, extracts: uploadedText ? [uploadedText] : [] });
     }
   }
 
@@ -453,9 +476,12 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
   const queuedEvents: ChatEvent[] = [];
   const enqueuedAt = Date.now();
 
-  // Answers where a wrong quotation or invented event does real harm are held, verified and repaired before the student reads a word (gate.ts).
+  // Verified and advanced answers are held until every check has finished and then shown whole; those where a wrong quotation, an invented event or
+  // a wrong step of working does real harm are also repaired (and, if still wrong, cut or flagged) by the gate before the student reads a word.
   const gated = study?.gated === true;
   let heldUndelivered = gated;
+  /** The checking of a held draft failed: the student is told so, and nothing is added to that message as if it were an answer. */
+  let withheldUnchecked = false;
 
   const stream = async function* (): AsyncGenerator<ChatEvent> {
     // The target's own model names (a provider also refuses a name that is not its own, so a chain cannot pass one along).
@@ -465,7 +491,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
     // Prepare the model only when the server says it is not resident, and say so only then (evidence, not a guess).
     if (model && isWarmable(provider) && (await provider.resident(model)) !== true) {
       yield { type: "status", state: "preparing" };
-      const prepared = await warmOnce({ provider, model, contextSize: config.contextSize, keepAlive: config.keepAlive }, { signal: input.signal, budgetMs: stage.loadMs });
+      const prepared = await warmOnce({ provider, model, contextSize: config.contextSize, keepAlive: config.keepAlive }, { signal: turnSignal, budgetMs: stage.loadMs });
       st.timings.prepareMs = Date.now() - enqueuedAt;
       log("prepared", { ok: prepared.ok ? 1 : 0, loadMs: prepared.loadMs ?? -1, detail: prepared.detail });
       if (!prepared.ok) {
@@ -490,7 +516,17 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
       owner: input.owner,
       sessionId,
       fileNames,
-      search: (query: string) => searchUploads(retrievalDeps, { owner: input.owner, sessionId, query, topK: config.retrieval.topK, minScore: config.retrieval.minScore, signal: input.signal }),
+      search: async (query: string) => {
+        const looking = activity.start("document", "Looking through your uploads");
+        try {
+          const hits = await searchUploads(retrievalDeps, { owner: input.owner, sessionId, query, topK: config.retrieval.topK, minScore: config.retrieval.minScore, signal: turnSignal });
+          activity.done(looking, { detail: hits.length ? `${hits.length} relevant passage${hits.length === 1 ? "" : "s"}` : "nothing relevant found" });
+          return hits;
+        } catch (error) {
+          activity.fail(looking, "could not be searched");
+          throw error;
+        }
+      },
       research: study?.session ?? null,
     };
 
@@ -506,7 +542,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
         maxTokens: Math.max(256, Math.min(target.maxOutputTokens + (thinking.reasoning ? target.thinkingTokens : 0), target.contextSize - messages.reduce((n, m) => n + approxTokens(m.content), 0) - 64)),
         temperature: 0.4,
         contextSize: target.contextSize,
-        signal: input.signal,
+        signal: turnSignal,
         keepAlive: config.keepAlive,
         firstTokenTimeoutMs: Math.min(stage.firstActivityMs, remaining(turnDeadline)),
         firstAnswerTimeoutMs: Math.min(stage.firstAnswerMs, remaining(turnDeadline)),
@@ -565,10 +601,16 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
       const used = calls.slice(0, 2);
       for (const call of used) {
         if (Date.now() > turnDeadline) break;
-        const outcome = await Promise.race([
-          runTool(call.name, call.arguments, toolCtx, input.signal),
-          new Promise<{ ok: false; content: string; code: "unavailable" }>((resolve) => setTimeout(() => resolve({ ok: false, content: "That tool took too long. Answer without it.", code: "unavailable" }), Math.min(stage.toolRoundMs, remaining(turnDeadline)))),
-        ]);
+        // A tool's searches and page reads are recorded by the research session; they reach the page while the tool runs.
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const outcome = yield* withActivity(activity, () =>
+          Promise.race([
+            runTool(call.name, call.arguments, toolCtx, turnSignal),
+            new Promise<{ ok: false; content: string; code: "unavailable" }>((resolve) => {
+              timer = setTimeout(() => resolve({ ok: false, content: "That tool took too long. Answer without it.", code: "unavailable" }), Math.min(stage.toolRoundMs, remaining(turnDeadline)));
+            }),
+          ]).finally(() => clearTimeout(timer)),
+        );
         st.timings.tools += 1;
         log("tool", { ok: outcome.ok ? 1 : 0, name: tools.some((t) => t.name === call.name) ? 1 : 0 });
         retryMessages.push({ role: "tool", toolName: call.name, toolCallId: call.id, content: outcome.content });
@@ -589,7 +631,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
     yield* drainActivity(activity);
     // The gate: the draft is checked, repaired by the model (twice at most) and cut by the server if it is still unsupported. Then it is shown.
     if (gated && study && heldUndelivered && !guard.stoppedFor) {
-      if (shown.trim()) {
+      if (shown.trim() && study.review) {
         yield { type: "status", state: "verifying" };
         // A corrected rewrite from the model. Not allowed to think, never allowed to overrun the window: if it cannot fit, the draft is cut instead.
         const rewrite = async (instruction: string, draft: string): Promise<string> => {
@@ -606,7 +648,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
               maxTokens: Math.min(target.maxOutputTokens, room),
               temperature: 0.2,
               contextSize: target.contextSize,
-              signal: input.signal,
+              signal: turnSignal,
               keepAlive: config.keepAlive,
               firstTokenTimeoutMs: stage.firstActivityMs,
               firstAnswerTimeoutMs: stage.firstAnswerMs,
@@ -635,84 +677,101 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
           reviewed = yield* withActivity(activity, () => reviewAnswer(study!, shown, { rewrite, maxRepairs: 2, deadlineMs: target.profile ? 240_000 : 90_000, activity }));
         } catch {
           reviewed = null;
+          // The checks that were under way did not finish.
+          activity.closeAll("failed");
+          yield* drainActivity(activity);
         }
         study.gate = reviewed;
         // If the checking itself failed, the draft is NOT released: an answer that was never verified is not shown as if it had been.
         shown = reviewed ? reviewed.text : UNCHECKED_WITHHELD;
-        for (let at = 0; at < shown.length; at += 240) yield { type: "delta", text: shown.slice(at, at + 240) };
+        withheldUnchecked = !reviewed;
         log("gate", { repairs: reviewed?.repairs ?? -1, firstDraftProblems: reviewed?.firstDraft.length ?? -1, removed: reviewed?.removed.length ?? -1 });
       }
-      heldUndelivered = false;
+      // Still held: the length note and the server's own notes join the approved text first, and then it is shown whole (below).
     }
     // An answer that hit the length limit says so, instead of stopping mid-sentence as if it had finished. "Continue" carries on from it.
-    if (st.cutOff && shown.trim() && !guard.stoppedFor) {
+    if (st.cutOff && shown.trim() && !guard.stoppedFor && !withheldUnchecked) {
       const note = `\n\n(This answer reached its length limit, so it stops here. Say "continue" and I will carry on from where it stopped.)`;
       shown += note;
-      yield { type: "delta", text: note };
+      if (!gated) yield { type: "delta", text: note };
     }
-    // The server's own look at the finished reply: marks the evidence lowers, mistakes it can prove, and the sources that were read.
-    if (study && shown.trim() && !guard.stoppedFor) {
+    // The server's own look at the finished reply: marks the evidence lowers, mistakes it can prove, and the sources that were read. Its own lookups
+    // (a quotation the reply added) reach the page while they run.
+    if (study && shown.trim() && !guard.stoppedFor && !withheldUnchecked) {
       let extra = "";
       try {
-        extra = await finishStudy(study, shown);
+        extra = yield* withActivity(activity, () => finishStudy(study!, shown, { activity }));
       } catch {
         extra = "";
+        activity.closeAll("failed");
+        yield* drainActivity(activity);
       }
       if (extra) {
         shown += extra;
-        yield { type: "delta", text: extra };
+        if (!gated) yield { type: "delta", text: extra };
       }
+    }
+    // The held answer, released: once, whole, after every check. Not if the student pressed Stop while it was being checked.
+    if (gated && heldUndelivered && !guard.stoppedFor) {
+      if (turnSignal.aborted) {
+        st.failure = "aborted";
+        return;
+      }
+      if (shown.trim()) yield { type: "delta", text: shown, whole: true };
+      heldUndelivered = false;
     }
     st.timings.totalMs = Date.now() - turnStartedAt;
   };
 
-  try {
-    // The queue runs the generator inside its slot; events are collected as they are produced and yielded below.
-    const pending: ChatEvent[] = [];
-    let wake: (() => void) | null = null;
-    let finished = false;
-    let crashed: unknown = null;
-    const work = deps.queue
-      .run(
-        async () => {
-          for await (const event of stream()) {
-            pending.push(event);
-            wake?.();
-          }
+  // The queue runs the generator inside its slot; events are collected as they are produced and yielded below.
+  const pending: ChatEvent[] = [];
+  let wake: (() => void) | null = null;
+  let finished = false;
+  let crashed: unknown = null;
+  const work = deps.queue
+    .run(
+      async () => {
+        for await (const event of stream()) {
+          pending.push(event);
+          wake?.();
+        }
+      },
+      {
+        signal: turnSignal,
+        maxWaitMs: stage.queueMs,
+        onWait: (position) => {
+          st.timings.queueMs = Date.now() - enqueuedAt;
+          queuedEvents.push({ type: "queued", position });
+          wake?.();
         },
-        {
-          signal: input.signal,
-          maxWaitMs: stage.queueMs,
-          onWait: (position) => {
-            st.timings.queueMs = Date.now() - enqueuedAt;
-            queuedEvents.push({ type: "queued", position });
-            wake?.();
-          },
-        },
-      )
-      .catch((error) => {
-        crashed = error;
-      })
-      .finally(() => {
-        finished = true;
-        wake?.();
-      });
+      },
+    )
+    .catch((error) => {
+      crashed = error;
+    })
+    .finally(() => {
+      finished = true;
+      wake?.();
+    });
 
-    for (;;) {
-      while (queuedEvents.length) yield queuedEvents.shift()!;
-      while (pending.length) yield pending.shift()!;
-      if (finished) break;
-      await new Promise<void>((resolve) => {
-        wake = resolve;
-        if (pending.length || queuedEvents.length || finished) resolve();
-      });
-      wake = null;
-    }
+  /** The events that close the turn, once the answer has been stored. Null until `settle` has run. */
+  let closing: ChatEvent[] | null = null;
+  let unexpected: unknown = null;
+
+  /**
+   * Everything after the work: how it ended, and keeping what the student was shown. It runs exactly once, and it runs whether or not anyone is
+   * still reading the events. When the page goes away mid-turn (Stop closes the connection) the reader stops, the generator is ended at its next
+   * `yield`, and the `finally` below calls this: so a stopped answer is stored, as the page promises ("Stop ends a long answer and keeps what was
+   * shown"), however the stop and the stream happened to interleave. Nothing in here yields: the events to send are returned, and the caller sends
+   * them only if it is still being read.
+   */
+  const settle = async (): Promise<ChatEvent[]> => {
+    if (closing) return closing;
     await work;
     if (crashed instanceof QueueFull || crashed instanceof QueueTimeout) {
       log("busy", { waitedMs: st.timings.queueMs });
-      yield { type: "error", code: "busy" };
-      return;
+      closing = [{ type: "error", code: "busy" }];
+      return closing;
     }
     if (crashed instanceof QueueAborted) st.failure = "aborted";
     else if (crashed instanceof ProviderError) {
@@ -732,59 +791,97 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
       st.failureDetail = picked ? (crashed.detail ?? crashed.code) : undefined;
       st.retryAfterSeconds = crashed.retryAfterMs ? Math.max(1, Math.ceil(crashed.retryAfterMs / 1000)) : undefined;
       log("provider_error", { code: crashed.code, picked: picked ? 1 : 0 });
-    } else if (crashed) throw crashed;
+    } else if (crashed) {
+      unexpected = crashed;
+      closing = [];
+      return closing;
+    }
+
+    if (study) log("study", { subject: study.ctx.subject ? 1 : 0, activity: study.ctx.activity === "mark_essay" ? 1 : study.ctx.activity === "quote_check" ? 2 : 0, searches: study.session?.searches ?? 0, fetches: study.session?.fetches ?? 0, skipped: study.session?.skipped ?? 0 });
+    log("turn", {
+      intent: intent === "search_material" ? 1 : intent === "explain_question" ? 2 : intent === "solve_paper" ? 3 : intent === "clarify" ? 4 : 0,
+      routedByModel: route?.source === "model" ? 1 : 0,
+      retrieved: retrieved.length,
+      images: images.length,
+      queueMs: st.timings.queueMs,
+      prepareMs: st.timings.prepareMs,
+      firstActivityMs: st.timings.firstActivityMs ?? -1,
+      firstAnswerMs: st.timings.firstAnswerMs ?? -1,
+      cutOff: st.cutOff ? 1 : 0,
+      turnMs: st.timings.totalMs,
+      toolRounds: st.timings.rounds,
+      tools: st.timings.tools,
+      loadMs: st.timings.metrics?.loadMs ?? -1,
+      promptEvalMs: st.timings.metrics?.promptEvalMs ?? -1,
+      evalMs: st.timings.metrics?.evalMs ?? -1,
+      tokensPerSecond: st.timings.metrics?.tokensPerSecond ?? -1,
+    });
+
+    // A held draft that the turn ended before checking (an error, a timeout, the student pressing Stop, a blocked output) is never released: the
+    // student sees the error, not an answer that was not verified.
+    if (heldUndelivered) {
+      shown = "";
+      heldUndelivered = false;
+    }
+    activity.closeAll(st.failure ? "failed" : "done");
+    const outcome: ActivityOutcome = !st.failure ? "done" : st.failure === "aborted" ? "stopped" : "failed";
+    let blockedNote = "";
+    if (guard.stoppedFor) {
+      log("output_blocked", { reason: guard.stoppedFor });
+      blockedNote = `${shown ? "\n\n" : ""}${OUTPUT_BLOCKED_REPLY}`;
+      shown += blockedNote;
+    }
+    // Who wrote it: what the provider reported when it finished. A picked hosted model is one provider (never a chain), so a reply it stopped
+    // part-way through is still truthfully its own; anything else without a report is left unattributed rather than guessed.
+    const generatedBy = picked ? (st.generatedBy ?? (target.profile ? `nim:${target.profile.model}` : null)) : null;
+    const answeredBy = picked ? (modelLabel(generatedBy) ?? null) : null;
+    let messageId: string | null = null;
+    const record = serializeActivity(activity.steps, outcome);
+    if (shown.trim()) messageId = (await store.chat.appendMessage(input.owner, sessionId, "assistant", shown, deps.now ? deps.now() : new Date(), { ...(generatedBy ? { generatedBy } : {}), ...(record ? { activity: record } : {}) })).id;
+
+    // Stored. What the page is told, in order: the last of the activity, the blocked-output note, and how the turn ended.
+    const out: ChatEvent[] = drainSteps(activity);
+    if (blockedNote) out.push({ type: "delta", text: blockedNote });
+    if (st.failure && st.failure !== "aborted") {
+      out.push({
+        type: "error",
+        code: st.failure,
+        ...(st.retryAfterSeconds && (st.failure === "model_rate_limited" || st.failure === "unavailable") ? { retryAfterSeconds: st.retryAfterSeconds } : {}),
+        ...(picked ? { model: answeredBy ?? target.label, ...(st.failureDetail ? { detail: st.failureDetail } : {}) } : {}),
+      });
+    } else out.push({ type: "done", messageId, provider: st.providerId, firstTokenMs: st.firstTokenMs, ...(picked ? { model: answeredBy } : {}) });
+    closing = out;
+    return out;
+  };
+
+  try {
+    for (;;) {
+      while (queuedEvents.length) yield queuedEvents.shift()!;
+      while (pending.length) yield pending.shift()!;
+      if (finished) break;
+      await new Promise<void>((resolve) => {
+        wake = resolve;
+        if (pending.length || queuedEvents.length || finished) resolve();
+      });
+      wake = null;
+    }
+    for (const event of await settle()) yield event;
+    if (unexpected) throw unexpected;
   } finally {
-    // Whatever was shown is stored, even if the person stopped it or the model failed halfway.
+    // Whoever was reading has gone (the generator was ended at a `yield`, or an error left it): end the work and keep what was shown, as for Stop.
+    if (!closing) {
+      turn.abort();
+      try {
+        await settle();
+      } catch {
+        // Nobody is listening for an error, and ending a reader must never raise one: the failure to keep the partial answer is the only loss.
+        log("settle_failed");
+      }
+    }
   }
+}
 
-  if (study) log("study", { subject: study.ctx.subject ? 1 : 0, activity: study.ctx.activity === "mark_essay" ? 1 : study.ctx.activity === "quote_check" ? 2 : 0, searches: study.session?.searches ?? 0, fetches: study.session?.fetches ?? 0, skipped: study.session?.skipped ?? 0 });
-  log("turn", {
-    intent: intent === "search_material" ? 1 : intent === "explain_question" ? 2 : intent === "solve_paper" ? 3 : intent === "clarify" ? 4 : 0,
-    routedByModel: route?.source === "model" ? 1 : 0,
-    retrieved: retrieved.length,
-    images: images.length,
-    queueMs: st.timings.queueMs,
-    prepareMs: st.timings.prepareMs,
-    firstActivityMs: st.timings.firstActivityMs ?? -1,
-    firstAnswerMs: st.timings.firstAnswerMs ?? -1,
-    cutOff: st.cutOff ? 1 : 0,
-    turnMs: st.timings.totalMs,
-    toolRounds: st.timings.rounds,
-    tools: st.timings.tools,
-    loadMs: st.timings.metrics?.loadMs ?? -1,
-    promptEvalMs: st.timings.metrics?.promptEvalMs ?? -1,
-    evalMs: st.timings.metrics?.evalMs ?? -1,
-    tokensPerSecond: st.timings.metrics?.tokensPerSecond ?? -1,
-  });
-
-  // A held draft that the turn ended before checking (an error, a timeout, the student pressing Stop, a blocked output) is never released: the
-  // student sees the error, not an answer that was not verified.
-  if (heldUndelivered) {
-    shown = "";
-    heldUndelivered = false;
-  }
-  activity.closeAll(st.failure ? "failed" : "done");
-  yield* drainActivity(activity);
-  if (guard.stoppedFor) {
-    log("output_blocked", { reason: guard.stoppedFor });
-    const note = `${shown ? "\n\n" : ""}${OUTPUT_BLOCKED_REPLY}`;
-    shown += note;
-    yield { type: "delta", text: note };
-  }
-  // Who wrote it: what the provider reported when it finished. A picked hosted model is one provider (never a chain), so a reply it stopped
-  // part-way through is still truthfully its own; anything else without a report is left unattributed rather than guessed.
-  const generatedBy = picked ? (st.generatedBy ?? (target.profile ? `nim:${target.profile.model}` : null)) : null;
-  const answeredBy = picked ? (modelLabel(generatedBy) ?? null) : null;
-  let messageId: string | null = null;
-  if (shown.trim()) messageId = (await store.chat.appendMessage(input.owner, sessionId, "assistant", shown, deps.now ? deps.now() : new Date(), { ...(generatedBy ? { generatedBy } : {}), ...(serializeActivity(activity.steps) ? { activity: serializeActivity(activity.steps)! } : {}) })).id;
-  if (st.failure && st.failure !== "aborted") {
-    yield {
-      type: "error",
-      code: st.failure,
-      ...(st.retryAfterSeconds && (st.failure === "model_rate_limited" || st.failure === "unavailable") ? { retryAfterSeconds: st.retryAfterSeconds } : {}),
-      ...(picked ? { model: answeredBy ?? target.label, ...(st.failureDetail ? { detail: st.failureDetail } : {}) } : {}),
-    };
-    return;
-  }
-  yield { type: "done", messageId, provider: st.providerId, firstTokenMs: st.firstTokenMs, ...(picked ? { model: answeredBy } : {}) };
+/** The queued activity of a turn as chat events. */
+function drainSteps(log: ActivityLog): ChatEvent[] {
+  return log.take().map((step) => ({ type: "activity" as const, step }));
 }

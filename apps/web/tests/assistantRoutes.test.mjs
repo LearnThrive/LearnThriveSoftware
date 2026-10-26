@@ -14,6 +14,7 @@ const rt = loadTsFrom(import.meta.url, "../src/lib/assistant/runtime.ts");
 const { handleFile } = loadTsFrom(import.meta.url, "../src/lib/paper/handlers.ts");
 const retention = loadTsFrom(import.meta.url, "../src/lib/assistant/retention.ts");
 const prompt = loadTsFrom(import.meta.url, "../src/lib/assistant/prompt.ts");
+const activityLib = loadTsFrom(import.meta.url, "../src/lib/assistant/activity.ts");
 const { MockProvider } = loadTsFrom(import.meta.url, "../src/lib/assistant/mock.ts");
 const { GenerationQueue } = loadTsFrom(import.meta.url, "../src/lib/assistant/queue.ts");
 const { MemoryLibraryStorage } = loadTsFrom(import.meta.url, "../src/lib/library/storage.ts");
@@ -342,4 +343,25 @@ test("retention: storage first, then rows; a storage failure keeps the rows for 
   assert.deepEqual(done, { objectsRemoved: 1, failed: 0, purged: { sessions: 1, messages: 1, files: 1 }, paperJobs: 0 });
   assert.equal(storage.objects.size, 0);
   assert.deepEqual(await retention.runRetention({ store, storage, now: () => later }), { objectsRemoved: 0, failed: 0, purged: { sessions: 0, messages: 0, files: 0 }, paperJobs: 0 });
+});
+
+test("a reopened chat says how a turn ended only when it did not complete, so the panel never calls a stopped or failed turn completed", async (t) => {
+  const w = await world(t);
+  const p = await w.person();
+  const owner = { clientId: p.clientId, studentId: null };
+  const session = await w.store.chat.createSession(owner, { title: "Photosynthesis" }, NOW);
+  const steps = [{ id: "read-1", kind: "read", state: "done", label: "Read bbc.co.uk" }, { id: "verify-2", kind: "verify", state: "failed", label: "Checking", detail: "x" }];
+  await w.store.chat.appendMessage(owner, session.id, "user", "q", NOW);
+  await w.store.chat.appendMessage(owner, session.id, "assistant", "completed answer", NOW, { activity: activityLib.serializeActivity(steps, "done") });
+  await w.store.chat.appendMessage(owner, session.id, "assistant", "stopped answer", NOW, { activity: activityLib.serializeActivity(steps, "stopped") });
+  await w.store.chat.appendMessage(owner, session.id, "assistant", "failed answer", NOW, { activity: activityLib.serializeActivity(steps, "failed") });
+  await w.store.chat.appendMessage(owner, session.id, "assistant", "no activity", NOW);
+  const body = await (await h.handleSession(new Request(`http://localhost:3100/api/assistant/sessions/${session.id}`), w.deps(p.jar), session.id)).json();
+  const by = Object.fromEntries(body.messages.filter((m) => m.role === "assistant").map((m) => [m.content, m]));
+  assert.equal(by["completed answer"].activity.length, 2);
+  assert.equal(by["completed answer"].activityOutcome, undefined, "a completed turn sends no outcome");
+  assert.equal(by["stopped answer"].activityOutcome, "stopped");
+  assert.equal(by["failed answer"].activityOutcome, "failed");
+  assert.equal(by["no activity"].activity, undefined);
+  assert.equal(by["no activity"].activityOutcome, undefined);
 });
