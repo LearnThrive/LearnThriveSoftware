@@ -94,7 +94,7 @@ Add targeted regression coverage before fixing these paths. Exercise Stop during
 
 Confirmed by inspection: `searchUploads` is awaited without an activity wrapper. `runTool` and `finishStudy` can perform research/checks but are also awaited directly. Their activity can remain queued until a later drain rather than reach the browser while work runs. Inspect those paths and add actual-operation instrumentation with live draining and cancellation. Avoid invented steps.
 
-Review source-label safety as well as clickable URLs: `ResearchSession.readPage` builds `Reading <hostname>` from the input URL before `safeSource` is applied to the result. Ensure blocked/internal addresses cannot appear in running or failed labels. Verify behaviour when a source URL requires a query string, since `safeSource` currently strips every query and truncates long URLs. Preserve privacy without presenting misleading or broken source links.
+Review source-label safety as well as clickable URLs: `ResearchSession.fetchPage` builds `Reading <hostname>` from the input URL before `safeSource` is applied to the result. Ensure blocked/internal addresses cannot appear in running or failed labels. Verify behaviour when a source URL requires a query string, since `safeSource` currently strips every query and truncates long URLs. Preserve privacy without presenting misleading or broken source links.
 
 ### 4. Finish browser and provider coverage
 
