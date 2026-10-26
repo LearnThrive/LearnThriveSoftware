@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nemotron VoiceChat experiment — isolated</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="head">
+      <div>
+        <h1>NVIDIA Nemotron VoiceChat — evaluation harness</h1>
+        <p class="sub">
+          An isolated experiment. It shares no route, model or setting with LearnThrive AI's Whisper + Piper voice mode, and it never
+          sends anything to a real student. The microphone is opened only while a conversation is running, and stopped the moment it ends.
+        </p>
+      </div>
+      <div class="badges">
+        <span class="badge" id="endpoint-badge">endpoint unknown</span>
+        <span class="badge" id="standin-badge" hidden>stand-in: not a model</span>
+      </div>
+    </header>
+
+    <p class="note" id="endpoint-note">Loading configuration…</p>
+
+    <section class="controls" aria-label="Conversation controls">
+      <button type="button" id="start" class="primary">Start conversation</button>
+      <button type="button" id="end" class="danger" disabled>End conversation</button>
+      <button type="button" id="probe">Check the endpoint</button>
+      <span class="status" id="status" role="status" aria-live="polite">Idle</span>
+      <label class="toggle">
+        <input type="checkbox" id="ask-cancel" />
+        <span>On barge-in, also ask the server to cancel <em>(event not documented by NVIDIA — client-side stop always happens)</em></span>
+      </label>
+    </section>
+
+    <section class="meters" aria-label="Levels">
+      <div class="meter">
+        <span class="meter-label">Microphone</span>
+        <div class="bar"><i id="mic-bar"></i></div>
+        <span class="meter-read" id="mic-read">0.000</span>
+      </div>
+      <div class="meter">
+        <span class="meter-label">Playback</span>
+        <div class="bar out"><i id="out-bar"></i></div>
+        <span class="meter-read" id="out-read">0.000</span>
+        <span class="interrupt" id="interrupt" hidden>you cut in</span>
+      </div>
+      <div class="meter-meta" id="audio-meta">input — Hz · output — Hz · packets of 80 ms</div>
+    </section>
+
+    <main class="grid">
+      <section class="card" aria-label="Transcript">
+        <h2>Transcript</h2>
+        <p class="hint">Only what the endpoint actually sends. The stand-in cannot transcribe a tone, and says so instead of inventing words.</p>
+        <div class="transcript" id="transcript"></div>
+      </section>
+
+      <section class="card" aria-label="Timings">
+        <h2>Timings</h2>
+        <p class="hint">Measured in the browser, unless the row says the server sent it. Synthetic audio, so these are times of the transport and the harness.</p>
+        <dl class="timings" id="timings"></dl>
+        <h3>Counters</h3>
+        <dl class="timings" id="counters"></dl>
+      </section>
+
+      <section class="card wide" aria-label="Event log">
+        <h2>Event log</h2>
+        <div class="log" id="log"></div>
+        <div class="log-actions">
+          <button type="button" id="export">Export results as JSON</button>
+          <button type="button" id="clear">Clear</button>
+        </div>
+      </section>
+    </main>
+
+    <div class="blocker" id="blocker" hidden>
+      <h2 id="blocker-title">Blocked</h2>
+      <p id="blocker-detail"></p>
+      <p class="hint" id="blocker-hint"></p>
+    </div>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "learnthrive-nemotron-voicechat-experiment",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ISOLATED EXPERIMENT: an evaluation harness for NVIDIA Nemotron VoiceChat, separate from LearnThrive AI's voice pipeline. Zero dependencies on purpose, so it cannot disturb the app it is measuring.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "mock": "node scripts/mock-realtime.mjs",
+    "probe": "node scripts/probe-access.mjs",
+    "bench": "node scripts/bench.mjs"
+  }
+}
