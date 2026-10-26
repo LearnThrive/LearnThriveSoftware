@@ -74,7 +74,7 @@ interface Found {
 }
 
 /** Names in a sentence that could be characters, with where each ends. A possessor ("Banquo's ghost") is not the one who acts and is left out. */
-function namesIn(sentence: string, _known: ReadonlySet<string>): Found[] {
+function namesIn(sentence: string): Found[] {
   const out: Found[] = [];
   for (const m of sentence.matchAll(NAME)) {
     const raw = m[0];
@@ -102,7 +102,7 @@ const SEES = new RegExp(`${GHOST_NAME}\\s+(?:[a-z]+\\s+){0,2}(?:sees?|saw|seeing
 const APPEARS = new RegExp(`(?:ghost|apparition|spectre)(?: of [A-Z][a-z]+)?(?:'s)?\\s+(?:[a-z]+\\s+){0,2}(?:appears?|reappears?|returns?|visits?|haunts?|comes?)\\s+(?:to|for|before)\\s+${GHOST_NAME}`, "i");
 
 function pairsIn(sentence: string, known: ReadonlySet<string>): Pair[] {
-  const names = namesIn(sentence, known);
+  const names = namesIn(sentence);
   const out: Pair[] = [];
   for (const [event, re] of EVENTS) {
     const m = re.exec(sentence);

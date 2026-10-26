@@ -1,3 +1,4 @@
+import { safeSource, type ActivityLog } from "../activity";
 import { TtlCache } from "./cache";
 import { fetchSource, type FetchedSource, type FetchOptions } from "./fetchSource";
 import { workOf } from "./works";
@@ -151,8 +152,8 @@ export class ResearchService {
     return got;
   }
 
-  session(owner: string, signal?: AbortSignal): ResearchSession {
-    return new ResearchSession(this, owner, signal);
+  session(owner: string, signal?: AbortSignal, activity?: ActivityLog): ResearchSession {
+    return new ResearchSession(this, owner, signal, activity);
   }
 }
 
@@ -170,6 +171,8 @@ export class ResearchSession {
     private readonly service: ResearchService,
     private readonly owner: string,
     private readonly signal?: AbortSignal,
+    /** The turn's activity log: every search sent and page read below is recorded in it as it happens, and nothing else is. */
+    private readonly activity?: ActivityLog,
   ) {}
 
   get available(): boolean {
@@ -198,7 +201,14 @@ export class ResearchSession {
       return empty("rate_limited", clean.query, "Too many searches in the last minute. Try again shortly.");
     }
     this.searches += 1;
+    // The step says that a search is being made and how it went. It never says what was searched for.
+    const step = this.activity?.start("search", "Searching the web for sources");
     const outcome = await this.service.deps.searx.search(clean.query, { signal: this.signal, timeRange: options.timeRange });
+    if (step) {
+      if (outcome.status === "ok") this.activity?.done(step, { detail: `${outcome.results.length} results` });
+      else if (outcome.status === "empty") this.activity?.done(step, { detail: "nothing found" });
+      else this.activity?.fail(step, outcome.status === "rate_limited" ? "search is busy" : outcome.status === "timeout" ? "search took too long" : "search was not available");
+    }
     this.queries.set(key, outcome);
     const note = outcome.status === "ok" ? `${outcome.results.length} results.` : STATUS_WORDS[outcome.status];
     if (outcome.status !== "ok" && outcome.status !== "empty") this.notes.push(STATUS_WORDS[outcome.status]);
@@ -232,7 +242,18 @@ export class ResearchSession {
       return { ok: false, code: "unavailable", reason: `page-read limit for one answer reached (${this.limits.maxFetches})` };
     }
     this.fetches += 1;
+    let host = "";
+    try {
+      host = new URL(url).hostname.replace(/^www\./, "");
+    } catch {
+      host = "";
+    }
+    const step = this.activity?.start("read", host ? `Reading ${host}` : "Reading a page");
     const got = await this.service.page(url, this.signal);
+    if (step) {
+      if (got.ok) this.activity?.done(step, { label: `Read ${host || "a page"}`, source: safeSource({ url: got.url, title: got.title, tier: tierOf(got.url), via: got.via === "direct" ? "direct" : "browser" }), detail: got.via === "crawl4ai" ? "in a browser" : undefined });
+      else this.activity?.fail(step, got.code === "timeout" ? "took too long" : got.code === "blocked" ? "not a page that can be read" : got.code === "unsupported_type" ? "not a readable page" : "could not be read");
+    }
     this.read.set(key, got);
     if (got.ok && got.injection.length) this.notes.push(`A page (${new URL(got.url).hostname}) contained text that looked like instructions to an AI (${got.injection.join(", ")}). It was ignored.`);
     return got;

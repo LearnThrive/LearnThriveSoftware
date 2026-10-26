@@ -37,6 +37,8 @@ import { useVoice, type Speaker } from "./useVoice";
 import { VoicePanel } from "./VoicePanel";
 import { PaperTutor } from "./PaperTutor";
 import { ModelPicker, type ModelChoice } from "./ModelPicker";
+import { ActivityPanel, hasNotableWork, type ActivityPhase, type ActivityView, type PanelStep } from "./ActivityPanel";
+import type { ActivityStep } from "@/lib/assistant/activity";
 import styles from "./study-buddy.module.css";
 
 /** A photo or document that went with a message. It is fetched from /api/assistant/files/:id; a reopened chat does not know its name. */
@@ -53,7 +55,29 @@ interface Msg {
   files?: MsgFile[];
   /** Developer view only: the model the server says wrote this answer ("Step 5 Preview"). Never set from the picker's own state. */
   model?: string;
+  /** What was done for this answer, from the server's own steps (live), or kept with it (a reopened chat). Never part of the answer's text. */
+  activity?: ActivityView;
 }
+
+/** A message as the server sends a reopened chat: its activity is a plain list of finished steps. */
+type ApiMsg = Omit<Msg, "activity"> & { activity?: ActivityStep[] };
+const fromApi = (m: ApiMsg): Msg => ({ ...m, activity: m.activity?.length ? { steps: m.activity, phase: "done" } : undefined });
+
+/** Waiting steps the page shows itself (a queue, a model loading). They go as soon as real work or text begins. */
+const WAITING = new Set<string>(["queue", "prepare"]);
+const withoutWaiting = (view: ActivityView): ActivityView => (view.steps.some((s) => WAITING.has(s.kind)) ? { ...view, steps: view.steps.filter((s) => !WAITING.has(s.kind)) } : view);
+/** A step arrives, new or an update of an earlier one with the same id. */
+function withStep(view: ActivityView, step: PanelStep): ActivityView {
+  const base = WAITING.has(step.kind) ? view : withoutWaiting(view);
+  const at = base.steps.findIndex((s) => s.id === step.id);
+  return { ...base, steps: at >= 0 ? base.steps.map((s, i) => (i === at ? step : s)) : [...base.steps, step] };
+}
+/** The turn is over: nothing is left running, and the waiting steps are gone. */
+function settle(view: ActivityView, phase: ActivityPhase): ActivityView {
+  return { phase, steps: withoutWaiting(view).steps.map((s) => (s.state === "running" ? { ...s, state: phase === "done" ? "done" : "failed" } : s)) };
+}
+/** A short phrase for a screen reader when a new KIND of work begins (not every step: the panel itself is not a live region). */
+const SAYS: Partial<Record<PanelStep["kind"], string>> = { document: "Reading what you sent.", search: "Searching the web for sources.", read: "Reading sources.", verify: "Checking the answer against the sources.", calculate: "Checking the working by calculation.", repair: "Correcting the draft." };
 
 const fileUrl = (file: MsgFile) => `/api/assistant/files/${file.id}`;
 const isPicture = (file: MsgFile) => file.contentType.startsWith("image/");
@@ -339,9 +363,9 @@ export function StudyBuddy() {
       cache: "no-store",
     }).catch(() => null);
     if (!response?.ok) return setError("We could not open that chat.");
-    const data = (await response.json()) as { messages: Msg[] };
+    const data = (await response.json()) as { messages: ApiMsg[] };
     setSessionId(id);
-    setMessages(data.messages);
+    setMessages(data.messages.map(fromApi));
     setError("");
     discardAttachments();
     stickToLatest.current = true;
@@ -356,7 +380,7 @@ export function StudyBuddy() {
       cache: "no-store",
     }).catch(() => null);
     if (response?.ok)
-      setMessages(((await response.json()) as { messages: Msg[] }).messages);
+      setMessages(((await response.json()) as { messages: ApiMsg[] }).messages.map(fromApi));
     void refresh();
   }
 
@@ -517,7 +541,11 @@ export function StudyBuddy() {
       content: text,
       files: carried.length > 0 ? carried : undefined,
     };
-    const reply: Msg = { id: nextId(), role: "assistant", content: "" };
+    const reply: Msg = { id: nextId(), role: "assistant", content: "", activity: { steps: [], phase: "running" } };
+    // The panel in the answer is the ONE place progress is shown. Every update goes through here, to this question's own message.
+    const patchActivity = (change: (view: ActivityView) => ActivityView) => setMessages((m) => m.map((x) => (x.id === reply.id && x.activity ? { ...x, activity: change(x.activity) } : x)));
+    const announcedKinds = new Set<string>();
+    let textBegan = false;
     setMessages((m) => [...m, mine, reply]);
     setDraft("");
     stickToLatest.current = true;
@@ -577,6 +605,8 @@ export function StudyBuddy() {
               position?: number;
               /** An honest processing state, only when the server has evidence for it. */
               state?: "preparing" | "reading" | "researching" | "verifying" | "thinking";
+              /** One real step of the work being done (activity.ts). */
+              step?: ActivityStep;
               /** Developer view: who answered (done) or who failed (error), as the server reports it. */
               model?: string | null;
               detail?: string;
@@ -585,23 +615,23 @@ export function StudyBuddy() {
             if (event.type === "session" && event.sessionId)
               setSessionId(event.sessionId);
             else if (event.type === "queued")
-              setWaiting(`You are number ${event.position} in the queue.`);
-            else if (event.type === "status")
-              setWaiting(
-                event.state === "preparing"
-                  ? "Preparing the model (the first answer after a start can take a moment)."
-                  : event.state === "thinking"
-                    ? "Working through it\u2026"
-                    : event.state === "reading"
-                      ? "Reading the picture\u2026"
-                      : event.state === "researching"
-                        ? "Checking sources online\u2026"
-                        : event.state === "verifying"
-                          ? "Checking the answer before showing it\u2026"
-                          : "",
-              );
-            else if (event.type === "delta" && event.text) {
-              setWaiting("");
+              patchActivity((v) => withStep(v, { id: "ui-queue", kind: "queue", state: "running", label: "Waiting in the queue", detail: `You are number ${event.position}` }));
+            else if (event.type === "status") {
+              // Only the model loading is shown from here; reading, researching, checking and thinking arrive as real steps.
+              if (event.state === "preparing") patchActivity((v) => withStep(v, { id: "ui-prepare", kind: "prepare", state: "running", label: "Getting the model ready", detail: "The first answer after a start can take a moment" }));
+            } else if (event.type === "activity" && event.step) {
+              const step = event.step;
+              patchActivity((v) => withStep(v, step));
+              const phrase = SAYS[step.kind];
+              if (phrase && step.state === "running" && !announcedKinds.has(step.kind)) {
+                announcedKinds.add(step.kind);
+                setAnnounce(phrase);
+              }
+            } else if (event.type === "delta" && event.text) {
+              if (!textBegan) {
+                textBegan = true;
+                patchActivity(withoutWaiting);
+              }
               answer += event.text;
               const now = answer;
               setMessages((m) =>
@@ -643,6 +673,8 @@ export function StudyBuddy() {
       setBusy(false);
       setWaiting("");
     }
+    // The turn is over, however it ended: the panel's last state, with no step left running and no waiting step left over.
+    patchActivity((v) => settle(v, controller.signal.aborted ? "stopped" : failed ? "failed" : "done"));
     if (failed) setError(failed);
     // Refused before anything was sent (a limit, a missing tick): the files are still the student's to send, so put them, and the
     // words, back in the box instead of leaving them uploaded but invisible.
@@ -701,8 +733,6 @@ export function StudyBuddy() {
   }
 
   const first = !sessionId && messages.length === 0;
-  const thinking =
-    busy && messages.at(-1)?.role === "assistant" && !messages.at(-1)?.content;
   const currentTitle =
     sessions.find((s) => s.id === sessionId)?.title ||
     (sessionId ? "This chat" : "New chat");
@@ -1027,6 +1057,7 @@ export function StudyBuddy() {
                       LearnThrive AI
                       {m.model ? <span className={styles.modelTag}>Answered by {m.model}</span> : null}
                     </h2>
+                    {m.activity && (m.activity.phase === "running" || hasNotableWork(m.activity.steps)) ? <ActivityPanel view={m.activity} /> : null}
                     {m.content ? <RenderedAnswer text={m.content} /> : null}
                     {m.content && !streaming ? (
                       <div className={styles.actions}>
@@ -1042,12 +1073,6 @@ export function StudyBuddy() {
                   </article>
                 );
               })}
-              {thinking ? (
-                <div className={styles.thinking}>
-                  <PencilLoader size="sm" label="LearnThrive AI is thinking" />
-                  <span>{waiting || "Thinking…"}</span>
-                </div>
-              ) : null}
             </div>
           </div>
 

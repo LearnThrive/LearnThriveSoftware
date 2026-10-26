@@ -100,7 +100,7 @@ test("chat: a new chat needs the adult's confirmation (recorded), a follow-up do
   const first = await w.chat(p, { text: "What is 6 x 7?", adultAck: true });
   assert.equal(first.response.headers.get("content-type"), "application/x-ndjson; charset=utf-8");
   assert.equal(first.response.headers.get("cache-control"), "no-store");
-  assert.deepEqual(first.events.map((e) => e.type).filter((x, i, a) => a.indexOf(x) === i), ["session", "delta", "done"]);
+  assert.deepEqual(first.events.map((e) => e.type).filter((x, i, a) => a.indexOf(x) === i), ["session", "activity", "delta", "done"]);
   const consent = w.store.consents();
   assert.equal(consent.length, 1);
   assert.equal(consent[0].kind, "assistant_adult_use");

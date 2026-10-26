@@ -12,7 +12,8 @@ import { deterministicRoute, needsDecision, type RouteDecision, type SystemOneCl
 import { enqueueIndex, drainIndexQueue, describeHits, indexFile, searchUploads, type RetrievalDeps, type RetrievalHit } from "./retrieval";
 import { runTool, toolsFor } from "./tools";
 import { finishStudy, planStudy, prepareStudy, type StudyPrep } from "./study";
-import { reviewAnswer } from "./gate";
+import { reviewAnswer, UNCHECKED_WITHHELD } from "./gate";
+import { ActivityLog, drainActivity, serializeActivity, withActivity, type ActivityEvent } from "./activity";
 import type { ResearchService } from "./research/verify";
 import type { EmbeddingProvider } from "./embeddings";
 import { modelLabel } from "./models";
@@ -61,6 +62,8 @@ export type ChatStatus = "preparing" | "reading" | "researching" | "verifying" |
 
 export type ChatEvent =
   | { type: "session"; sessionId: string }
+  /** One step of the real work being done for this answer (activity.ts). Updates to a step arrive with the same id. */
+  | ActivityEvent
   | { type: "queued"; position: number }
   | { type: "status"; state: ChatStatus }
   | { type: "delta"; text: string }
@@ -213,6 +216,8 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
     sessionId = (await store.chat.createSession(input.owner, { title }, now)).id;
   }
   yield { type: "session", sessionId };
+  // The real work done for this answer, as it happens: shown live, then kept (sanitised) with the answer. Nothing is added to it for show.
+  const activity = new ActivityLog();
 
   // Fixed replies: the model is not asked.
   if (verdict.action !== "allow") {
@@ -265,6 +270,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
   const wantsPicture = /\b(photo|picture|image|diagram|drawing|look at|see (it|that|the)|show me|page\s*\d+)\b/i.test(text);
   // A fresh upload really is being decoded and read here, so saying so is evidence, not decoration. Once per turn.
   let announcedReading = false;
+  let readingStep: string | null = null;
   let index = 0;
   for (const file of attachable) {
     index += 1;
@@ -286,6 +292,8 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
     if (!announcedReading) {
       announcedReading = true;
       yield { type: "status", state: "reading" };
+      readingStep = activity.start("document", "Reading what you sent");
+      yield* drainActivity(activity);
     }
     const bytes = await deps.uploads.read(file.storagePath);
     if (!bytes) {
@@ -330,6 +338,10 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
       uploadedText += `\n\n<uploaded-file name="${label}" type="photo" note="not shown: too many pictures in one message"></uploaded-file>`;
     }
   }
+  if (readingStep) {
+    activity.done(readingStep, images.length ? { detail: `${images.length} picture${images.length === 1 ? "" : "s"} ready to look at` } : {});
+    yield* drainActivity(activity);
+  }
   // ---- routing and retrieval --------------------------------------------------------------------------------------
   // The explicit action and the file metadata win. Only an ambiguous text-only follow-up spends a decision call, and a helper
   // failure falls back to the deterministic route (a greeting is still answered).
@@ -365,7 +377,8 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
     // Reading sources takes a few seconds: say so, so the wait is not mistaken for a stall.
     if (deps.research && planStudy(text, history).ground) yield { type: "status", state: "researching" };
     try {
-      study = await prepareStudy({ text, material: text + uploadedText, history, research: deps.research ?? null, extracts: uploadedText ? [uploadedText] : [], owner: input.owner.clientId, signal: input.signal });
+      // The searches, the pages read and the checks are sent to the page WHILE they run, not after this returns.
+      study = yield* withActivity(activity, () => prepareStudy({ text, material: text + uploadedText, history, research: deps.research ?? null, extracts: uploadedText ? [uploadedText] : [], owner: input.owner.clientId, signal: input.signal, activity }));
     } catch {
       study = null;
     }
@@ -468,6 +481,10 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
     let announcedThinking = false;
     const turnStartedAt = Date.now();
     const turnDeadline = turnStartedAt + stage.turnMs;
+    // Writing the answer is a step like any other. A held answer is a DRAFT until the checks have passed, and the step says so.
+    const writeStep = activity.start("write", gated ? "Drafting the answer" : "Writing the answer");
+    let wroteText = false;
+    yield* drainActivity(activity);
     const toolCtx = {
       store,
       owner: input.owner,
@@ -505,6 +522,9 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
           if (chunk.kind === "thinking" && !announcedThinking && !shown && st.timings.firstAnswerMs === null) {
             announcedThinking = true;
             yield { type: "status", state: "thinking" };
+            // The provider reported hidden reasoning. Only the fact that the model is working it out is shown, never the reasoning itself.
+            activity.update(writeStep, { label: "Working it out" });
+            yield* drainActivity(activity);
           }
           continue;
         }
@@ -514,6 +534,14 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
         }
         if (chunk.type === "text") {
           if (st.timings.firstAnswerMs === null) st.timings.firstAnswerMs = Date.now() - turnStartedAt;
+          if (!wroteText) {
+            wroteText = true;
+            // Text has begun: the model is no longer only working it out.
+            if (announcedThinking) {
+              activity.update(writeStep, { label: gated ? "Drafting the answer" : "Writing the answer" });
+              yield* drainActivity(activity);
+            }
+          }
           const safe = guard.push(chunk.text);
           if (safe) {
             shown += safe;
@@ -557,6 +585,8 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
       shown += rest;
       if (!gated) yield { type: "delta", text: rest };
     }
+    activity.done(writeStep, { label: gated ? "Drafted the answer" : "Wrote the answer" });
+    yield* drainActivity(activity);
     // The gate: the draft is checked, repaired by the model (twice at most) and cut by the server if it is still unsupported. Then it is shown.
     if (gated && study && heldUndelivered && !guard.stoppedFor) {
       if (shown.trim()) {
@@ -602,12 +632,13 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
         };
         let reviewed: Awaited<ReturnType<typeof reviewAnswer>> | null = null;
         try {
-          reviewed = await reviewAnswer(study, shown, { rewrite, maxRepairs: 2, deadlineMs: target.profile ? 240_000 : 90_000 });
+          reviewed = yield* withActivity(activity, () => reviewAnswer(study!, shown, { rewrite, maxRepairs: 2, deadlineMs: target.profile ? 240_000 : 90_000, activity }));
         } catch {
           reviewed = null;
         }
         study.gate = reviewed;
-        shown = reviewed ? reviewed.text : `${shown}\n\n(This answer could not be checked against the sources, so treat its quotations and facts as unverified.)`;
+        // If the checking itself failed, the draft is NOT released: an answer that was never verified is not shown as if it had been.
+        shown = reviewed ? reviewed.text : UNCHECKED_WITHHELD;
         for (let at = 0; at < shown.length; at += 240) yield { type: "delta", text: shown.slice(at, at + 240) };
         log("gate", { repairs: reviewed?.repairs ?? -1, firstDraftProblems: reviewed?.firstDraft.length ?? -1, removed: reviewed?.removed.length ?? -1 });
       }
@@ -726,15 +757,14 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
     tokensPerSecond: st.timings.metrics?.tokensPerSecond ?? -1,
   });
 
+  // A held draft that the turn ended before checking (an error, a timeout, the student pressing Stop, a blocked output) is never released: the
+  // student sees the error, not an answer that was not verified.
   if (heldUndelivered) {
-    // The reply was held for checking but the turn ended first (an error, a timeout, a stopped output). A blocked reply is never released.
-    if (guard.stoppedFor) shown = "";
-    else if (shown.trim()) {
-      shown += "\n\n(This answer was interrupted before it could be checked against the sources, so treat its quotations and facts as unverified.)";
-      yield { type: "delta", text: shown };
-    }
+    shown = "";
     heldUndelivered = false;
   }
+  activity.closeAll(st.failure ? "failed" : "done");
+  yield* drainActivity(activity);
   if (guard.stoppedFor) {
     log("output_blocked", { reason: guard.stoppedFor });
     const note = `${shown ? "\n\n" : ""}${OUTPUT_BLOCKED_REPLY}`;
@@ -746,7 +776,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
   const generatedBy = picked ? (st.generatedBy ?? (target.profile ? `nim:${target.profile.model}` : null)) : null;
   const answeredBy = picked ? (modelLabel(generatedBy) ?? null) : null;
   let messageId: string | null = null;
-  if (shown.trim()) messageId = (await store.chat.appendMessage(input.owner, sessionId, "assistant", shown, deps.now ? deps.now() : new Date(), generatedBy ? { generatedBy } : undefined)).id;
+  if (shown.trim()) messageId = (await store.chat.appendMessage(input.owner, sessionId, "assistant", shown, deps.now ? deps.now() : new Date(), { ...(generatedBy ? { generatedBy } : {}), ...(serializeActivity(activity.steps) ? { activity: serializeActivity(activity.steps)! } : {}) })).id;
   if (st.failure && st.failure !== "aborted") {
     yield {
       type: "error",

@@ -141,6 +141,7 @@ describe("migrations", () => {
       "0013_paper_assessments.sql",
       "0014_chat_retrieval.sql",
       "0015_chat_message_model.sql",
+      "0016_chat_message_activity.sql",
     ]);
     assert.deepEqual(
       applied.map((f) => Number(f.slice(0, 4))),

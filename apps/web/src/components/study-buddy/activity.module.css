@@ -1,0 +1,235 @@
+/* The activity panel inside an answer: one indicator while Study Buddy works, one folded row when it has finished. */
+
+.panel {
+  max-inline-size: 100%;
+  margin-block: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  color: var(--fg-body);
+  font-size: var(--text-small);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  inline-size: 100%;
+  min-block-size: 2.5rem;
+  padding: var(--space-1) var(--space-3);
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  color: var(--fg-strong);
+  font: inherit;
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+}
+
+.head:hover {
+  background: var(--surface-sunken);
+}
+
+.head:focus-visible {
+  outline: var(--focus-width, 2px) solid var(--focus-colour, currentColor);
+  outline-offset: var(--focus-offset, 2px);
+}
+
+.badge {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  inline-size: 1.375rem;
+  block-size: 1.375rem;
+  border-radius: 50%;
+  background: var(--accent-soft, var(--surface-sunken));
+  color: var(--fg-accent, var(--fg-strong));
+}
+
+.panel[data-phase="failed"] .badge {
+  color: var(--fg-error, var(--fg-strong));
+}
+
+.panel[data-tone="limited"] .badge {
+  background: var(--surface-sunken);
+  color: var(--fg-muted);
+}
+
+.panel[data-phase="stopped"] .badge {
+  color: var(--fg-muted);
+}
+
+/* The one moving thing: a small ring, still when motion is reduced. */
+.ring {
+  inline-size: 0.875rem;
+  block-size: 0.875rem;
+  border: 2px solid currentColor;
+  border-inline-end-color: transparent;
+  border-radius: 50%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :global(html:not([data-motion="reduce"], [data-motion-tier="reduced"])) .ring {
+    animation: spin 0.9s linear infinite;
+  }
+}
+
+.title {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.count {
+  flex: none;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  color: var(--fg-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.chevron {
+  flex: none;
+  color: var(--fg-muted);
+  transition: transform var(--duration-fast, 0.15s) var(--ease-out, ease-out);
+}
+
+.chevron[data-open="true"] {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron {
+    transition: none;
+  }
+}
+
+.body {
+  padding: 0 var(--space-3) var(--space-3);
+  border-block-start: 1px solid var(--border-subtle);
+}
+
+.steps {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+
+.mark {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  inline-size: 1rem;
+  block-size: 1.25rem;
+  color: var(--fg-accent, var(--fg-strong));
+}
+
+.step[data-state="failed"] .mark {
+  color: var(--fg-error, var(--fg-muted));
+}
+
+.dot {
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :global(html:not([data-motion="reduce"], [data-motion-tier="reduced"])) .step[data-state="running"] .dot {
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+}
+
+.text {
+  display: grid;
+  gap: 0.125rem;
+  min-inline-size: 0;
+}
+
+.label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-inline-size: 0;
+  color: var(--fg-strong);
+  overflow-wrap: anywhere;
+}
+
+.step[data-state="running"] .label {
+  font-weight: 600;
+}
+
+.kind {
+  flex: none;
+  color: var(--fg-muted);
+}
+
+.link {
+  color: var(--fg-accent, var(--fg-strong));
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  overflow-wrap: anywhere;
+}
+
+.link:focus-visible {
+  outline: var(--focus-width, 2px) solid var(--focus-colour, currentColor);
+  outline-offset: var(--focus-offset, 2px);
+  border-radius: var(--radius-sm);
+}
+
+.detail {
+  color: var(--fg-muted);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 30rem) {
+  .head {
+    padding-inline: var(--space-2);
+  }
+
+  .body {
+    padding-inline: var(--space-2);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+
+  50% {
+    opacity: 0.95;
+  }
+}
+
+.head:disabled {
+  cursor: default;
+}
+
+.head:disabled:hover {
+  background: none;
+}

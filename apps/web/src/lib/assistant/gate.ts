@@ -1,3 +1,4 @@
+import type { ActivityLog } from "./activity";
 import { checkEquations } from "./checks/chemistry";
 import { claimEvidence, quoteEvidence, type EvidenceStatus } from "./checks/evidence";
 import { checkWorkingLines } from "./checks/maths";
@@ -173,11 +174,16 @@ export function redact(text: string, issues: readonly Issue[]): { text: string; 
 
 export const NOTHING_LEFT = "I could not write an answer that I was able to check against the sources, so I would rather not give one. Please check the text yourself, or ask again with the passage or extract you are working from.";
 
+/** What a student sees when the checking of a held draft could not finish: never the draft. */
+export const UNCHECKED_WITHHELD = "I could not finish checking this answer against the sources, so I am not showing it rather than risk giving you something wrong. Please ask again in a moment.";
+
 export interface ReviewOptions {
   /** Asks the model for a corrected rewrite of the draft. Returns the draft unchanged if it cannot. */
   rewrite: (instruction: string, draft: string) => Promise<string>;
   maxRepairs?: number;
   deadlineMs?: number;
+  /** The turn's activity log: the checks and repairs below are recorded in it as they happen. */
+  activity?: ActivityLog;
 }
 
 export async function reviewAnswer(prep: StudyPrep, draft: string, options: ReviewOptions): Promise<GateResult> {
@@ -187,13 +193,39 @@ export async function reviewAnswer(prep: StudyPrep, draft: string, options: Revi
   let repairs = 0;
   let issues: Issue[] = [];
   let firstDraft: Issue[] = [];
+  const log = options.activity;
+  // What the draft contains decides which checks are real work for this answer: only those are shown.
+  const hasQuotes = extractQuotations(draft).length > 0;
+  const hasWorking = checkCalculations(draft).checked > 0;
+  const verifying = log && (hasQuotes || (prep.session && prep.willGround)) ? log.start("verify", prep.willGround ? "Checking quotations and facts against the sources" : "Checking the answer") : null;
+  const calculating = log && hasWorking ? log.start("calculate", "Checking the working by calculation") : null;
+  let repairStep: string | null = null;
   for (let attempt = 0; attempt <= maxRepairs; attempt += 1) {
     issues = await findIssues(prep, text, deadline);
-    if (attempt === 0) firstDraft = issues;
-    if (!issues.length || attempt === maxRepairs || Date.now() > deadline) break;
+    if (attempt === 0) {
+      firstDraft = issues;
+      const unsupported = issues.filter(cuttable).length;
+      if (verifying) {
+        // "Supported" is only said when there was something to be supported BY. With no page read, or a quotation that could not be looked up,
+        // the step says so instead of reporting a clean check.
+        const nothingRead = Boolean(prep.willGround) && (prep.session?.pageTexts().length ?? 0) === 0;
+        const unchecked = [...prep.quoteChecks.values()].filter((v) => v.status === "unverifiable").length;
+        if (nothingRead) log?.fail(verifying, "no sources could be read, so nothing could be confirmed");
+        else log?.done(verifying, { detail: unsupported ? `${unsupported} statement${unsupported === 1 ? "" : "s"} not supported by the sources` : unchecked ? `${unchecked} quotation${unchecked === 1 ? "" : "s"} could not be looked up; the rest was supported` : "everything checked was supported" });
+      }
+      if (calculating) log?.done(calculating, { detail: issues.some((i) => !cuttable(i)) ? "a step did not add up" : "every step checked out" });
+    }
+    if (!issues.length || attempt === maxRepairs || Date.now() > deadline) {
+      if (repairStep) log?.done(repairStep, { detail: issues.length ? "some statements could not be fixed" : "checked again and correct" });
+      break;
+    }
+    if (!repairStep && log) repairStep = log.start("repair", "Correcting the draft before showing it");
     const rewritten = await options.rewrite(repairInstruction(issues), text);
     repairs += 1;
-    if (!rewritten.trim() || rewritten === text) break;
+    if (!rewritten.trim() || rewritten === text) {
+      if (repairStep) log?.done(repairStep, { detail: "the correction did not change anything" });
+      break;
+    }
     text = rewritten;
   }
   const checked = checkCalculations(text).checked;

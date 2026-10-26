@@ -435,7 +435,8 @@ test("a model answer on a set text is built from pages the server read first, an
   assert.match(sent, /If asked whether you used web search, say what is stated here/);
   assert.ok(sources.queries.some((q) => /An Inspector Calls/.test(q)), "the search named the work");
   assert.ok(sources.queries.every((q) => !/\[30 marks\]|model answer/i.test(q) || true));
-  assert.match(r.answer, /Sources read: .*bbc\.co\.uk\/birling/);
+  assert.doesNotMatch(r.answer, /Sources read/, "the pages are structured activity now, not text in the answer");
+  assert.ok(r.events.some((e) => e.type === "activity" && e.step.kind === "read" && e.step.source?.host === "www.bbc.co.uk"));
   assert.ok(r.events.some((e) => e.type === "status" && e.state === "researching"), "the page is told the server is checking sources");
 });
 

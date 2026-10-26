@@ -409,10 +409,12 @@ test.describe('AiInput: files', () => {
 });
 
 test.describe('AiInput: states', () => {
-  test('busy shows a visible "Thinking" and blocks sending; disabled blocks everything', async ({ page }) => {
+  test('busy blocks sending and shows no indicator of its own; disabled blocks everything', async ({ page }) => {
     await openBench(page);
     const busy = page.locator('#bench-busy');
-    await expect(busy.getByRole('status')).toHaveText('Thinking');
+    // One indicator, inside the answer: the input must not draw a second one (no "Thinking" line, no dots, no status).
+    await expect(busy.getByText('Thinking', { exact: true })).toHaveCount(0);
+    await expect(busy.locator('p[role="status"]')).toHaveCount(0);
     await expect(busy.getByRole('button', { name: 'Send' })).toBeDisabled();
     await expect(busy.locator('form')).toHaveAttribute('aria-busy', 'true');
 
@@ -523,25 +525,6 @@ test.describe('AiInput: motion', () => {
     expect(states.every((value) => value === 'paused')).toBe(true);
     await overlay(page).evaluate((element) => { element.scrollTop = 0; });
     await expect(orb).toHaveAttribute('data-paused', 'false');
-  });
-
-  test('the Thinking dots loop only on the full tier (no infinite animation on standard or light)', async ({ page }) => {
-    await page.emulateMedia({ reducedMotion: 'no-preference' });
-    await openBench(page);
-    const tier = await page.locator('html').getAttribute('data-motion-tier');
-    await expect(page.locator('#bench-busy').getByRole('status')).toHaveText('Thinking');
-    if (tier === 'full') await expect.poll(() => infiniteAnimations(page)).toBeGreaterThan(0);
-    else {
-      await page.waitForTimeout(300);
-      expect(await infiniteAnimations(page)).toBe(0);
-    }
-  });
-
-  test('busy dots do not run under reduced motion', async ({ page }) => {
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    await openBench(page);
-    await expect(page.locator('#bench-busy').getByRole('status')).toHaveText('Thinking');
-    expect(await infiniteAnimations(page)).toBe(0);
   });
 });
 

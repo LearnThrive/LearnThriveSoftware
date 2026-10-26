@@ -39,13 +39,20 @@ export interface ChatMessageRecord {
   deleteAfter: Date;
   /** The provider and model that wrote an assistant message when a developer chose the model (0015_chat_message_model.sql). Null otherwise. */
   generatedBy?: string | null;
+  /** A bounded JSON record of the research and checks done for an assistant message (0016_chat_message_activity.sql). Null otherwise. */
+  activity?: string | null;
 }
 
 /** Extra facts stored with a message. */
 export interface ChatMessageMeta {
   /** Only for an assistant message: the provider and model that actually produced it ("nim:deepseek-ai/deepseek-v4.1-flash"). */
   generatedBy?: string | null;
+  /** Only for an assistant message: the server's own record of the research and checks (JSON, at most ACTIVITY_MAX_CHARS characters). */
+  activity?: string | null;
 }
+
+/** The longest activity record a message may carry. */
+export const ACTIVITY_MAX_CHARS = 6000;
 
 export interface ChatFileRecord {
   id: string;

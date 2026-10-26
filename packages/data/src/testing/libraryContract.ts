@@ -465,6 +465,20 @@ export function libraryContract(name: string, make: () => Promise<{ harness: Con
       assert.deepEqual(listed.map((m) => m.generatedBy ?? null), [null, "nim:deepseek-ai/deepseek-v4.1-flash", null]);
     });
 
+    test("chat: an answer keeps its activity record; a question and an ordinary answer carry none, and an oversized record is dropped", async () => {
+      const now = new Date();
+      const { clientId } = await family();
+      const s = await store.chat.createSession(own({ clientId }), {}, now);
+      const record = JSON.stringify({ v: 1, steps: [{ id: "read-1", kind: "read", state: "done", label: "Read a page" }] });
+      await store.chat.appendMessage(own({ clientId }), s.id, "user", "question", now, { activity: record });
+      await store.chat.appendMessage(own({ clientId }), s.id, "assistant", "with activity", now, { activity: record, generatedBy: "nim:deepseek-ai/deepseek-v4.1-flash" });
+      await store.chat.appendMessage(own({ clientId }), s.id, "assistant", "ordinary", now);
+      await store.chat.appendMessage(own({ clientId }), s.id, "assistant", "too big", now, { activity: "x".repeat(6001) });
+      const listed = await store.chat.listMessages(own({ clientId }), s.id);
+      assert.deepEqual(listed.map((m) => m.activity ?? null), [null, record, null, null]);
+      assert.equal(listed[1]!.generatedBy, "nim:deepseek-ai/deepseek-v4.1-flash", "both optional columns can be written together");
+    });
+
     test("chat: uploads expire in 7 days, attach once, and only to the family's own message", async () => {
       const now = new Date();
       const a = await family();

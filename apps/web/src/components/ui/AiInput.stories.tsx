@@ -70,7 +70,7 @@ export const WithAttachments: Story = {
 
 export const Disabled: Story = { args: { disabled: true } };
 
-/** An answer is on its way: sending is paused and "Thinking" is written out (animated only where motion is allowed). */
+/** An answer is on its way: sending is paused. The input shows no indicator; the page shows progress inside the answer. */
 export const Busy: Story = { args: { busy: true, defaultValue: "Explain photosynthesis" } };
 
 /** The page's own message, here the too-many-files case. It is announced when it appears. */

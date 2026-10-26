@@ -2,8 +2,7 @@
 
 import { ArrowUp, AudioLines, Camera, CircleAlert, ExternalLink, FileText, FolderOpen, Image as ImageIcon, X } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, type ChangeEvent, type FormEvent, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
-import { useMotionCapabilities } from "@/lib/motion/capabilities";
-import { useInView, VoiceOrb, type VoiceState } from "./VoiceOrb";
+import { VoiceOrb, type VoiceState } from "./VoiceOrb";
 import styles from "./AiInput.module.css";
 
 // From Uiverse.io by Cobp (the "Chat" component: pill input, attachment buttons, send and voice orb).
@@ -25,7 +24,7 @@ export interface AiInputProps {
   /** Names of files still being added (uploaded and read), shown beside the attached ones so nothing sent goes unseen. */
   pending?: readonly string[];
   disabled?: boolean;
-  /** An answer is on its way: sending is paused and a visible "Thinking" line is shown. */
+  /** An answer is on its way: sending is paused. The component shows no indicator of its own: the page shows progress in one place, inside the answer. */
   busy?: boolean;
   maxLength?: number;
   /** Comma-separated types, as for `<input accept>`. */
@@ -234,13 +233,8 @@ export function AiInput({
   const cameraRef = useRef<HTMLInputElement>(null);
   const imageRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const busyRef = useRef<HTMLParagraphElement>(null);
   const wasVoiceOpen = useRef(false);
 
-  const { tier } = useMotionCapabilities();
-  // The Thinking dots loop forever, so (like the orb) only on the full tier and only while on screen.
-  const dotsAnimated = busy && tier === "full";
-  const busyInView = useInView(busyRef, dotsAnimated);
   const voiceEnabled = Boolean(onVoiceStart || onVoiceButton);
   const canSend = !disabled && !busy && (text.trim().length > 0 || attached.length > 0);
 
@@ -431,16 +425,6 @@ export function AiInput({
       {maxLength !== undefined && (
         <p role="status" className={styles.visuallyHidden}>{text.length >= maxLength ? "Character limit reached" : ""}</p>
       )}
-
-      {/* Always in the page so the change of its text is announced. */}
-      <p ref={busyRef} role="status" className={styles.busy} data-animated={dotsAnimated} data-paused={dotsAnimated && !busyInView}>
-        {busy && (
-          <>
-            <span className={styles.dots} aria-hidden="true"><i /><i /><i /></span>
-            Thinking
-          </>
-        )}
-      </p>
 
       {voiceOpen && (
         <VoiceOverlay
