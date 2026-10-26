@@ -61,7 +61,7 @@ The speech sidecar and Ollama (`qwen3.5:9b`, voice-mode prompt) as the site uses
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | parakeet/cuda | 124 ms | 567 ms | 1066 ms | 2049 ms | **3241 ms** | 5487 ms | 7952 MB |
 
-Median 3241 ms against a target of 2500 ms: **not met**. Most of it is the model producing a full first sentence, not the speech engines.
+Median 3241 ms against a target of 2500 ms: **not met**. The largest part is the speech engine synthesising the first clip (2049 ms of 3241 ms).
 
 ## Decision
 
@@ -75,7 +75,7 @@ Median 3241 ms against a target of 2500 ms: **not met**. Most of it is the model
 - A real child's voice and a real room: rerun with recordings. If word error rate is much worse than here, the next step is `medium.en` on the GPU (on the CPU it took 4.7 s a clip; it was not measured on the GPU here).
 - A different machine: the CPU timings are for this CPU. A slower school-lab or hosted machine needs the numbers again.
 - A hosted speech provider (a processor for a child's voice) is a plan19 section 6 decision; this report does not cover one.
-- Running the language model and the recogniser on one 8 GB GPU is possible (see the VRAM column: the whole GPU, desktop included, was at about 7.3 of 8 GB with the recogniser on it) but leaves little room, so a second large program on the GPU would push the language model into system memory and slow it. CPU recognition (`VOICE_STT_DEVICE=cpu`) avoids the contest at a cost in accuracy.
+- Running the language model and the recogniser on one 8 GB GPU is possible (see the VRAM column: the whole GPU, desktop included, peaked at 7.8 of 8 GB) but leaves little room, so a second large program on the GPU would push the language model into system memory and slow it. CPU recognition (`VOICE_STT_DEVICE=cpu`) avoids the contest at a cost in accuracy, and puts the speech output's synthesis back in competition with the model.
 
 ## Reproduce
 
