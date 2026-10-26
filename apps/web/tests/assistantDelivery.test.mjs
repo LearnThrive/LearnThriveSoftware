@@ -267,21 +267,21 @@ test("D9. how a turn ended is stored with its steps, and a record without one re
 
 // ---- both hosted models, through the one pipeline -------------------------------------------------------------------------------------------
 
-const DEEPSEEK = "deepseek-ai/deepseek-v4.1-flash";
+const MINIMAX = "minimaxai/minimax-m3.1-flash";
 const STEP = "stepfun-ai/step-5-preview";
-const LAB_ENV = { NODE_ENV: "development", ASSISTANT_PROVIDER: "mock", NVIDIA_API_KEY: "nvapi-TEST-KEY", ASSISTANT_NIM_MODELS: `${DEEPSEEK},${STEP}` };
+const LAB_ENV = { NODE_ENV: "development", ASSISTANT_PROVIDER: "mock", NVIDIA_API_KEY: "nvapi-TEST-KEY", ASSISTANT_NIM_MODELS: `${MINIMAX},${STEP}` };
 const sse = (parts) => new Response(new ReadableStream({ start(c) { for (const p of parts) c.enqueue(new TextEncoder().encode(`data: ${typeof p === "string" ? p : JSON.stringify(p)}\n\n`)); c.enqueue(new TextEncoder().encode("data: [DONE]\n\n")); c.close(); } }));
 const piece = (t) => ({ choices: [{ delta: { content: t } }] });
 const thought = (t) => ({ choices: [{ delta: { reasoning_content: t } }] });
 
-test("D10. DeepSeek and Step 5 go through the same pipeline: the same steps, the same single delivery, and their hidden reasoning is never shown or stored", async (t) => {
+test("D10. MiniMax M3.1 Flash and Step 5 go through the same pipeline: the same steps, the same single delivery, and their hidden reasoning is never shown or stored", async (t) => {
   environment(t, {});
   quiet(t);
   openaiLib.resetAcceptedFields();
   const requests = [];
   const fetchImpl = async (url, init = {}) => {
     const path = new URL(String(url)).pathname;
-    if (path.endsWith("/models")) return Response.json({ object: "list", data: [{ id: DEEPSEEK }, { id: STEP }] });
+    if (path.endsWith("/models")) return Response.json({ object: "list", data: [{ id: MINIMAX }, { id: STEP }] });
     const body = JSON.parse(init.body);
     requests.push(body.model);
     // A reasoning model thinks first (never shown), then writes the answer.
@@ -303,9 +303,9 @@ test("D10. DeepSeek and Step 5 go through the same pipeline: the same steps, the
     for await (const e of svc.sendMessage(deps, { owner, sessionId: null, text: BIOLOGY })) events.push(e);
     return events;
   };
-  const a = await runWith("deepseek-v4.1-flash");
+  const a = await runWith("minimax-m3.1-flash");
   const b = await runWith("step-5-preview");
-  assert.deepEqual(requests, [DEEPSEEK, STEP], "each model answered its own question");
+  assert.deepEqual(requests, [MINIMAX, STEP], "each model answered its own question");
   assert.deepEqual(steps(a).map((s) => `${s.kind}:${s.state}`), steps(b).map((s) => `${s.kind}:${s.state}`), "the same activity, whichever model wrote it");
   for (const events of [a, b]) {
     const sent = deltas(events);
@@ -314,7 +314,7 @@ test("D10. DeepSeek and Step 5 go through the same pipeline: the same steps, the
     assert.doesNotMatch(JSON.stringify(events), /SECRET-CHAIN-OF-THOUGHT/, "no reasoning reached the page");
     assert.equal(events.at(-1).type, "done");
   }
-  assert.equal(a.at(-1).model, "DeepSeek V4.1 Flash");
+  assert.equal(a.at(-1).model, "MiniMax M3.1 Flash");
   assert.equal(b.at(-1).model, "Step 5 Preview");
   const kept = (await store.chat.listMessages(owner, a.find((e) => e.type === "session").sessionId)).map((m) => `${m.content}${m.activity ?? ""}`).join("");
   assert.doesNotMatch(kept, /SECRET-CHAIN-OF-THOUGHT/, "no reasoning was stored");

@@ -95,12 +95,33 @@ tool itself. So the **server** reads before the model writes (`research/ground.t
    quiz or small talk), it builds one or two searches from the work and the question's topic words. The question's wording ("model answer", "30
    marks") and any quoted passage are left out.
 2. It reads the best pages (one per site, best source tier first) and keeps the sentences that say most about the topic.
-3. Those excerpts go to the model in a `<research>` block with a rule: build the answer **only** from facts, events, relationships and
-   quotations in the excerpts or in the student's message; leave out or flag anything else; never invent a quotation, scene or character. The block
-   also states how many searches and pages were used, so "did you use search?" has a true answer. While this runs the page shows "Checking sources
-   online...".
+3. Those excerpts go to the model in a `<research>` block, **numbered** (`- [1] ...`, `- [2] ...`), with a rule: build the answer **only** from facts,
+   events, relationships and quotations in the excerpts or in the student's message; leave out or flag anything else; never invent a quotation, scene
+   or character. The block also states how many searches and pages were used, so "did you use search?" has a true answer. While this runs the page
+   shows "Checking sources online...".
 4. After the reply, quotations the model added are checked against the pages already read (then by a search, budget allowing), and any capitalised
    name in the reply that is in none of the pages and not in the student's message is listed. Both appear under the reply.
+
+### The model's own citations: checking a quotation against the page it names
+
+The excerpts are numbered because the model is asked to write that number beside anything it quotes, in double square brackets
+(`research/citations.ts`):
+
+```
+Lady Macbeth calls on the spirits to "unsex me here" [[cite:1]].
+```
+
+Before this, a quotation was recovered from the reply's prose and then searched for: the server never knew which source the model *meant*, only that
+some page somewhere might carry the words, so a long answer's tenth quotation could only be reported as unchecked — the search budget runs out long
+before an essay does. With a number attached, the quotation is checked against **that page**, which was already read this turn, so usually no search
+is spent at all. `verifyQuotation` is given the cited address and tries the pages already read in that order, cited page first; a number the server
+never listed is reported as UNSUPPORTED ("it is attributed to source 7, which was not one of the sources given") rather than followed.
+
+The marker is only the model's **claim** about where the words came from. Whether the words are really there is still decided by the wording and the
+source's tier, never by the model — a citation can make a quotation easier to check and cheaper to check, never verified on its own authority. A
+quotation with no marker is not an error: it goes through the ordinary path (extract, search, match), so a reply that ignores the rule loses nothing.
+A marker with no quotation in its sentence says nothing and is simply removed. The markers are stripped before the student sees a word of the answer,
+and before anything is stored; an answer that never had one is not touched.
 5. If nothing could be read (SearXNG unreachable, nothing found), the model is told research failed and the student sees "No web sources could be
    read for this answer... treat its facts, events and quotations as unverified". It never silently answers from memory as if it had checked.
 
@@ -160,6 +181,33 @@ Names are compared as people: "Macbeth" is not "Lady Macbeth", "Mr Birling" is n
 ghost is read from the grammar ("appears to Macbeth"), so Lady Macbeth being named in the same sentence does not make her the one who sees it. A character
 introduced as "a character called Bertha" that no source mentions is flagged. Before a claim is called unsupported the gate makes one more targeted
 search for it. The check is deliberately narrow: it cannot judge interpretation, and it can still miss an invented event that is not on the list.
+
+### Entailment for recall: "the sources support this, in other words"
+
+The check above is exact, and it fails in one direction that matters. A page that says **"Eric is dismissed from the works"** produces no event pattern
+for the claim **"Eric is sent to prison"**, so the claim is judged UNSUPPORTED — which the gate acts on, repairing or cutting a sentence the sources do in
+fact support. The wording decided it, not the facts.
+
+So an optional stage (`research/entail.ts`) asks a model to FIND the passage: for each unsupported claim, it proposes a span copied word for word from
+one of the pages that were read, and says whether that span supports the claim or shows it happened to somebody else. It is a **recall** stage, and it
+is allowed to be one, because everything it proposes is checked in code before it counts:
+
+- the span must really be in the page it names, word for word (case, punctuation and accents are not differences), so a model cannot invent support;
+- it must be at least four words — a two-word "support" proves nothing;
+- a `supports` span must NAME the claim's own character. The name proves nothing on its own (that is why the event check exists), but a span that
+  supports "Eric is sent to prison" without mentioning Eric is not evidence about Eric;
+- a `contradicts` span must name somebody else, and it is that other person that is reported;
+- anything else — an unknown page or claim id, a relation it did not offer, an unreachable or slow helper, a malformed answer — is dropped, and the
+  caller keeps exactly the result the exact check produced.
+
+Only `supports` promotes a claim here. A claim the sources contradict is already an issue, and a claim that *was* supported must not become a problem
+because a model read the pages differently: **the stage can only add evidence it can point at.** It cannot make a claim verified — that needs the words
+of a text — and it cannot suppress a problem.
+
+It is off by default, development only (`ASSISTANT_CLAIM_RECALL=on`, with `ASSISTANT_RECALL_MODEL`, `_BASE_URL`, `_KEEP_ALIVE`, `_TIMEOUT_MS`,
+`_MAX_CLAIMS`, `_PASSAGE_CHARS`; the tutor's own model and endpoint by default, since it is the resident model that can read a sentence against a
+passage). Four claims and three pages per call, with its own deadline, and every failure is an empty result. With it off, the exact checks run exactly as
+they did before.
 
 ## The gate: nothing unchecked is shown first
 
@@ -382,10 +430,15 @@ That is why the JavaScript check uses a public practice site.
 
 ```bash
 cd apps/web
-node --test tests/researchCore.test.mjs tests/studyAccuracy.test.mjs   # mock model, fake search, no network
+node --test tests/researchCore.test.mjs tests/studyAccuracy.test.mjs tests/assistantCitationsRecall.test.mjs   # mock model, fake search, no network
 npm run typecheck
 npm run lint
 ```
+
+`assistantCitationsRecall.test.mjs` covers the two stages above with no network and no real model: a citation marker is resolved to the page it names,
+a marker naming a source the server never listed is reported rather than followed, the markers are stripped (and an answer without one is not touched),
+and the recall stage's acceptance rules one by one — a span that is not on the page, a span under four words, a `supports` span about somebody else, an
+unknown claim or page id, a slow or broken helper — each leaving the exact check's result as it was, with the real gate driving the fake stage.
 
 `studyAccuracy.test.mjs` is the 14 regression cases: subject recognition and switching; board/marks/activity; per-subject strategy and the
 no-claim rule; an exact verified quotation (and none with research off); a misquotation; snippets-are-not-proof; an unchecked quotation in the reply; prompt injection through a page;
@@ -404,6 +457,11 @@ privacy and rate limits.
   access restrictions, but it does not read robots.txt either.
 - **Edition differences.** Folger and MIT editions differ in punctuation and some words; those become `verified_variant`, never silently exact.
 
+- **The recall stage is off and unmeasured.** `ASSISTANT_CLAIM_RECALL` is not on by default and has not been run against a real model here, so the
+  shipped behaviour is the exact check alone. It cannot make a claim verified, and everything it proposes is checked against the page in code, so the
+  risk of turning it on is a claim wrongly *kept* (a span that really is on a page and really does name the character), not a fabricated one verified.
+- **The model's citations are followed, not trusted.** A number in the reply decides which already-read page is checked first; it never decides whether
+  the words are there. A fabricated citation therefore costs one wasted check against a page that was read anyway, and is reported under the answer.
 - Nothing here has been run against a live SearXNG instance or a real model in this repository; the code is tested against fakes and a scripted
   model. Run `research-check.mjs` and a few real questions before relying on it.
 - With research off, or SearXNG down, no quotation can be verified. A web check only finds what its sources say, and it is only as good as the pages the instance returns.

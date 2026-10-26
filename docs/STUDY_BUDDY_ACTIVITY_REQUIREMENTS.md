@@ -57,7 +57,7 @@ Support:
 * Responsive layouts without overflowing the chat.
 
 Avoid excessive animations, fabricated percentages, rapidly changing statuses and unnecessary technical jargon.
-The selected DeepSeek or Step model should remain visible through the existing model picker and response attribution.
+The selected MiniMax M3.1 Flash or Step model should remain visible through the existing model picker and response attribution.
 Do not display raw reasoning tokens from either NVIDIA model.
 The panel must show verified actions and concise process information, not pretend to reveal the model's internal thoughts.
 4. Remove the duplicate thinking animation below the composer
@@ -190,7 +190,7 @@ Run technical tests to verify:
 * The complete verified answer appears once.
 * No intermediate draft leaks.
 * The activity panel collapses and expands correctly.
-* Both DeepSeek and Step 5 use the same activity interface.
+* Both MiniMax M3.1 Flash and Step 5 use the same activity interface.
 * The duplicate "Thinking" animation underneath the composer is completely removed.
 * Exactly one visual activity indicator appears during generation.
 * No duplicate screen-reader status announcements occur.

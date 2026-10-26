@@ -88,6 +88,9 @@ function namesIn(sentence: string): Found[] {
   return out;
 }
 
+/** The character names in one sentence, as written. The recall stage (research/entail.ts) uses it to check that a span it was handed is about the claim's own character. */
+export const characterNames = (sentence: string): string[] => namesIn(sentence).map((f) => f.name);
+
 const sentencesOf = (text: string): string[] => text.split(/(?<=[.!?])\s+|\n+/).map((s) => s.trim()).filter((s) => s.length > 12 && s.length < 600);
 
 interface Pair {

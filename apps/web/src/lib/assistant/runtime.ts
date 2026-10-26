@@ -3,6 +3,7 @@ import { chatUploadStorage, type LibraryStorage } from "@/lib/library/storage";
 import { assistantAvailability, assistantConfig, type AssistantConfig, type Closed } from "./config";
 import { SystemOneClient } from "./decision";
 import { OllamaEmbeddingProvider, type EmbeddingProvider } from "./embeddings";
+import { LocalClaimRecall } from "./research/entail";
 import { Crawl4aiClient } from "./research/crawl4ai";
 import { SearxngClient } from "./research/searxng";
 import { ResearchService } from "./research/verify";
@@ -26,6 +27,8 @@ export interface AssistantRuntime {
   embeddings: EmbeddingProvider | null;
   /** The decision role (CPU helper). Null when unavailable: routing stays deterministic. */
   decision: SystemOneClient | null;
+  /** The recall stage (research/entail.ts). Null when it is switched off: only the exact checks run. */
+  recall: LocalClaimRecall | null;
   /** Web research through SearXNG. Always present: if the instance does not answer, a turn says what could not be checked. */
   research: ResearchService;
   flag: ((flag: SafeguardingFlag) => Promise<void>) | undefined;
@@ -92,6 +95,8 @@ export function assistantRuntime(env: Env = process.env): AssistantRuntime | nul
   const local = !config.production && config.providers.includes("ollama");
   const embeddings = local && config.retrieval.enabled ? new OllamaEmbeddingProvider({ ...config.retrieval.embedding }) : null;
   const decision = local && config.decision.enabled ? new SystemOneClient(config.decision) : null;
+  // The recall stage is a helper role like the others: local (development) only, and null unless it was asked for, because it costs a model call.
+  const recall = local && config.recall.enabled ? new LocalClaimRecall(config.recall) : null;
   const r = config.research;
   const research = new ResearchService({
     searx: new SearxngClient({ enabled: true, baseUrl: r.baseUrl, timeoutMs: r.timeoutMs, maxResults: r.maxResults, cacheTtlSeconds: r.cacheTtlSeconds }),
@@ -99,6 +104,7 @@ export function assistantRuntime(env: Env = process.env): AssistantRuntime | nul
     cacheTtlSeconds: r.cacheTtlSeconds,
     // The browser that reads the pages SearXNG finds. If it is off or unreachable, pages are fetched directly and the turn says so.
     fetchOptions: { crawler: config.crawler.enabled ? new Crawl4aiClient(config.crawler) : null },
+    recall,
   });
   g.__learnthriveAssistant = {
     config,
@@ -108,6 +114,7 @@ export function assistantRuntime(env: Env = process.env): AssistantRuntime | nul
     hosted: !config.providers.every((p) => p === "ollama" || p === "mock"),
     embeddings,
     decision,
+    recall,
     research,
     flag,
     lab: buildModelLab(config, env),

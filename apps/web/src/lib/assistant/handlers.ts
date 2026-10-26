@@ -62,6 +62,7 @@ export type Reason =
   | "model_not_allowed"
   | "bad_model"
   | "model_unavailable"
+  | "bad_effort"
   | "uploads_not_sent";
 
 const STATUS: Record<Reason, number> = {
@@ -82,6 +83,7 @@ const STATUS: Record<Reason, number> = {
   model_not_allowed: 403,
   bad_model: 400,
   model_unavailable: 503,
+  bad_effort: 400,
   uploads_not_sent: 422,
 };
 
@@ -103,6 +105,7 @@ const MESSAGE: Record<Reason, string> = {
   model_not_allowed: "Choosing the AI model is not available for this account.",
   bad_model: "That AI model is not one that can be chosen here.",
   model_unavailable: "That AI model is not available right now. Choose another one.",
+  bad_effort: "That reasoning effort is not one the chosen model offers.",
   uploads_not_sent: "Files are not sent to this trial model. Remove the file, or switch to the local model to use it.",
 };
 
@@ -177,7 +180,7 @@ export async function handleChat(request: Request, deps: AssistantDeps): Promise
   const fileIds = Array.isArray(raw.fileIds) ? raw.fileIds.filter((id): id is string => typeof id === "string" && UUID.test(id)).slice(0, UPLOAD_LIMITS.filesPerMessage) : [];
   // A request that names a model is checked here, on the server, every time: who is asking, and whether it is a choice offered here. Refused
   // outright otherwise (never quietly answered by another model), before anything is recorded or sent.
-  const selection = resolveSelection({ requested: raw.model, actor: g.actor, lab: g.assistant.lab ?? null, config: g.assistant.config, provider: g.assistant.provider, hosted: g.assistant.hosted });
+  const selection = resolveSelection({ requested: raw.model, effort: raw.effort, actor: g.actor, lab: g.assistant.lab ?? null, config: g.assistant.config, provider: g.assistant.provider, hosted: g.assistant.hosted });
   if (!selection.ok) {
     logOutcome("assistant-chat", selection.reason);
     return refuse(selection.reason);

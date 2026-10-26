@@ -10,13 +10,45 @@ type Env = Record<string, string | undefined>;
  * Both run on NVIDIA's free hosted catalogue (integrate.api.nvidia.com, OpenAI-compatible). That is a DEVELOPMENT ONLY prototype service:
  * config.ts and providers.ts refuse it in production, and the picker is only offered to an administrator on a development server.
  *
- * The page sends a CHOICE id ("deepseek-v4.1-flash"), never a model name: the server maps it to the model through this table, so no
+ * The page sends a CHOICE id ("minimax-m3.1-flash"), never a model name: the server maps it to the model through this table, so no
  * request can name an arbitrary model or endpoint.
  */
-export type HostedChoiceId = "deepseek-v4.1-flash" | "step-5-preview";
+export type HostedChoiceId = "minimax-m3.1-flash" | "step-5-preview";
 export type ModelChoiceId = "local" | HostedChoiceId;
 
-export type ReasoningEffort = "off" | "low" | "medium" | "high";
+/** The reasoning-effort levels these endpoints name (a refused value comes back as this list). Strongest last. */
+export type EffortLevel = "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+
+/** What is asked of a model: no reasoning at all ("off"), or one of the levels the endpoint names. */
+export type ReasoningEffort = "off" | EffortLevel;
+
+/**
+ * What the PICKER asks for: "auto" lets the question decide (the ordinary behaviour), otherwise a level the chosen model offers. The
+ * service's own "off" is not one of these: it is how a fast chat is expressed internally, and the profiles turn it into the least they allow.
+ */
+export type EffortAsk = "auto" | EffortLevel;
+
+/** The levels in the order the picker shows them, weakest to strongest. */
+export const EFFORT_LEVELS: readonly EffortLevel[] = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
+
+/** What the picker calls each level (the endpoint's own word, capitalised). */
+export const EFFORT_LABELS: Record<EffortLevel, string> = {
+  none: "None",
+  minimal: "Minimal",
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  xhigh: "X-High",
+  max: "Max",
+};
+
+export const EFFORT_AUTO_LABEL = "Auto";
+
+/** The effort options a model's picker offers: auto first, then the levels that model honours. */
+export const effortChoices = (efforts: readonly EffortLevel[]): Array<{ id: EffortAsk; label: string }> => [
+  { id: "auto", label: EFFORT_AUTO_LABEL },
+  ...efforts.map((level) => ({ id: level, label: EFFORT_LABELS[level] })),
+];
 
 export interface HostedModelProfile {
   choice: HostedChoiceId;
@@ -43,27 +75,24 @@ export interface HostedModelProfile {
    * The last set is always the plain request.
    */
   reasoningFields(effort: ReasoningEffort): ReadonlyArray<Record<string, unknown>>;
+  /**
+   * The effort levels the picker offers for this model, weakest first. Only levels this endpoint really honours are listed: a level it
+   * refuses (or handles badly) is left out, and "none" here means "the least it allows", which is what a fast chat asks for.
+   */
+  efforts: readonly EffortLevel[];
   /** Hosted reasoning models are slower to their first visible word than a resident local model. */
   stages: Partial<StageBudgets>;
 }
-
-// DeepSeek V4.1 Flash's model card documents a thinking mode with a numeric reasoning effort from 1 to 100; NVIDIA's own example for the V4
-// family sends it through `chat_template_kwargs` ({ thinking, reasoning_effort: "high" }). The numeric form is tried first, the named one second.
-const DEEPSEEK_EFFORT: Record<Exclude<ReasoningEffort, "off">, { numeric: number; named: string }> = {
-  low: { numeric: 25, named: "low" },
-  medium: { numeric: 60, named: "medium" },
-  high: { numeric: 90, named: "high" },
-};
 
 // Hosted reasoning models: queued at the provider, then reasoning before the answer. The whole turn stays bounded (one absolute deadline).
 const HOSTED_STAGES: Partial<StageBudgets> = { firstActivityMs: 90_000, firstAnswerMs: 240_000, idleMs: 90_000, toolRoundMs: 60_000, turnMs: 360_000 };
 
 export const HOSTED_MODELS: readonly HostedModelProfile[] = [
   {
-    choice: "deepseek-v4.1-flash",
-    model: "deepseek-ai/deepseek-v4.1-flash",
-    label: "DeepSeek V4.1 Flash",
-    description: "Advanced reasoning, mathematics and general tutoring",
+    choice: "minimax-m3.1-flash",
+    model: "minimaxai/minimax-m3.1-flash",
+    label: "MiniMax M3.1 Flash",
+    description: "Multimodal reasoning, coding and detailed explanations",
     contextSize: 65_536,
     maxOutputTokens: 6_144,
     reasoningTokens: 12_000,
@@ -71,14 +100,10 @@ export const HOSTED_MODELS: readonly HostedModelProfile[] = [
     // The model card recommends temperature 1.0 and top_p 0.95.
     temperature: 1.0,
     topP: 0.95,
-    reasoningFields: (effort) =>
-      effort === "off"
-        ? [{ chat_template_kwargs: { thinking: false } }, {}]
-        : [
-            { chat_template_kwargs: { thinking: true, reasoning_effort: DEEPSEEK_EFFORT[effort].numeric } },
-            { chat_template_kwargs: { thinking: true, reasoning_effort: DEEPSEEK_EFFORT[effort].named } },
-            {},
-          ],
+    // The endpoint names its own effort levels (a refused value is answered with the list: none, minimal, low, medium, high, xhigh, max),
+    // so the service's effort is passed through as it stands, and "off" asks for none. The plain request is the fallback.
+    reasoningFields: (effort) => (effort === "off" ? [{ reasoning_effort: "none" }, {}] : [{ reasoning_effort: effort }, {}]),
+    efforts: EFFORT_LEVELS,
     stages: HOSTED_STAGES,
   },
   {
@@ -96,6 +121,9 @@ export const HOSTED_MODELS: readonly HostedModelProfile[] = [
     topP: 0.95,
     // StepFun models on NIM accept a named reasoning effort and return the reasoning separately; "off" asks for the least it allows.
     reasoningFields: (effort) => [{ reasoning_effort: effort === "off" ? "low" : effort }, {}],
+    // No "none": the checkpoint reasons whatever is asked (its card says so), and measured on 26 October 2026 asking for none made it write its
+    // own thinking into the answer instead of dropping it. Every level from minimal up is honoured.
+    efforts: ["minimal", "low", "medium", "high", "xhigh", "max"],
     stages: HOSTED_STAGES,
   },
 ];
@@ -103,7 +131,7 @@ export const HOSTED_MODELS: readonly HostedModelProfile[] = [
 export const hostedProfile = (choice: string): HostedModelProfile | null => HOSTED_MODELS.find((m) => m.choice === choice) ?? null;
 export const profileForModel = (model: string): HostedModelProfile | null => HOSTED_MODELS.find((m) => m.model === model) ?? null;
 
-/** The display name for a stored `generated_by` ("nim:deepseek-ai/deepseek-v4.1-flash", "ollama:bonsai-2:9b"), for the "Answered by" line. */
+/** The display name for a stored `generated_by` ("nim:minimaxai/minimax-m3.1-flash", "ollama:bonsai-2:9b"), for the "Answered by" line. */
 export function modelLabel(generatedBy: string | null | undefined): string | null {
   if (!generatedBy) return null;
   const at = generatedBy.indexOf(":");
