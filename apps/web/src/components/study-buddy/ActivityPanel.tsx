@@ -39,27 +39,32 @@ const ICONS: Record<PanelStep["kind"], typeof Search> = {
 const NOTABLE = new Set(["document", "search", "read", "verify", "calculate", "repair"]);
 export const hasNotableWork = (steps: readonly PanelStep[]): boolean => steps.some((s) => NOTABLE.has(s.kind));
 
-/** The summary row's words, and whether the work really completed ("ok") or only partly ("limited": sources could not be reached). */
+/**
+ * The summary row's words, and whether the work really completed ("ok") or only partly ("limited": sources could not be reached, or a check could not
+ * finish). The words are said only when they are true of the steps: "Research and verification completed" needs a page that was read AND at least one
+ * check that ran, and no check that failed.
+ */
 export function headline(view: ActivityView): { text: string; tone: "ok" | "limited" } {
-  const text = headlineText(view);
-  return { text, tone: text === "Sources could not be reached" ? "limited" : "ok" };
-}
-
-function headlineText(view: ActivityView): string {
   const real = view.steps.filter((s) => s.kind !== "write" || view.phase === "running");
   if (view.phase === "running") {
     const current = [...view.steps].reverse().find((s) => s.state === "running");
-    return current ? `${current.label}…` : "Working through it…";
+    return { text: current ? `${current.label}…` : "Working through it…", tone: "ok" };
   }
-  if (view.phase === "stopped") return "Stopped";
-  if (view.phase === "failed") return hasNotableWork(view.steps) ? "Could not finish checking" : "Could not finish";
-  // "Completed" is said only when it is true: at least one source was actually read, or a calculation check ran.
-  const sourcesRead = real.some((s) => s.kind === "read" && s.state === "done");
+  if (view.phase === "stopped") return { text: "Stopped", tone: "limited" };
+  if (view.phase === "failed") return { text: hasNotableWork(view.steps) ? "Could not finish checking" : "Could not finish", tone: "limited" };
+  const read = real.some((s) => s.kind === "read" && s.state === "done");
   const attemptedSources = real.some((s) => s.kind === "search" || s.kind === "read");
-  if (sourcesRead) return "Research and verification completed";
-  if (attemptedSources) return "Sources could not be reached";
-  if (real.some((s) => s.kind === "calculate" || s.kind === "verify")) return "Checks completed";
-  return "Looked at what you sent";
+  const checks = real.filter((s) => s.kind === "verify" || s.kind === "calculate" || s.kind === "repair");
+  const checkFailed = checks.some((s) => s.state === "failed");
+  const checkDone = checks.some((s) => s.state === "done");
+  if (read) {
+    if (checkFailed) return { text: "Sources read, but some checks could not finish", tone: "limited" };
+    return { text: checkDone ? "Research and verification completed" : "Research completed", tone: "ok" };
+  }
+  if (attemptedSources) return { text: "Sources could not be reached", tone: "limited" };
+  if (checkFailed) return { text: "Some checks could not finish", tone: "limited" };
+  if (checkDone) return { text: "Checks completed", tone: "ok" };
+  return { text: "Looked at what you sent", tone: "ok" };
 }
 
 export function ActivityPanel({ view }: { view: ActivityView }) {

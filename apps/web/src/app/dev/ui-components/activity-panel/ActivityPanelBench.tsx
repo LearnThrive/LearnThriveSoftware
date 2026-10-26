@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { ActivityPanel, type ActivityView, type PanelStep } from "@/components/study-buddy/ActivityPanel";
+import { settle, withStep } from "@/components/study-buddy/activityView";
 
 const src = (host: string, title: string, tier: string, via: "browser" | "direct" = "browser") => ({ title, host, url: `https://${host}/read`, tier, via });
 
@@ -20,14 +22,55 @@ const VIEWS: Array<{ id: string; title: string; view: ActivityView }> = [
   { id: "verifying", title: "Working: checking the draft", view: { phase: "running", steps: [...researched.slice(0, 6), { ...researched[6]!, state: "running", detail: undefined }] } },
   { id: "done", title: "Finished: research and verification", view: { phase: "done", steps: researched } },
   { id: "limited", title: "Finished, but no source could be reached", view: { phase: "done", steps: [researched[0]!, { id: "search-2", kind: "search", state: "failed", label: "Searching the web for sources", detail: "search was not available" }, { id: "verify-3", kind: "verify", state: "failed", label: "Checking quotations and facts against the sources", detail: "no sources could be read, so nothing could be confirmed" }] } },
+  { id: "partial", title: "Finished: sources read, but a check could not finish", view: { phase: "done", steps: [researched[0]!, researched[2]!, { id: "verify-3", kind: "verify", state: "failed", label: "Checking quotations and facts against the sources", detail: "the check did not finish" }] } },
+  { id: "research-only", title: "Finished: sources read, nothing needed checking", view: { phase: "done", steps: [researched[0]!, researched[1]!, researched[2]!] } },
   { id: "failed", title: "Could not finish", view: { phase: "failed", steps: researched.slice(0, 3).map((s) => (s.state === "done" && s.kind === "read" ? s : s)) } },
   { id: "stopped", title: "Stopped by the student", view: { phase: "stopped", steps: [researched[0]!, { ...researched[1]!, state: "failed", detail: "stopped" }] } },
   { id: "calculation", title: "Finished: a calculation was checked", view: { phase: "done", steps: [{ id: "analyse-1", kind: "analyse", state: "done", label: "Understanding your question", detail: "Maths · working something out" }, { id: "calculate-2", kind: "calculate", state: "done", label: "Checking the working by calculation", detail: "every step checked out" }] } },
 ];
 
+/**
+ * The events of one turn, in the order the server sends them, applied by the same functions the page uses (activityView.ts). The buttons move the turn
+ * along one event at a time, so a test can look at the panel between any two of them: nothing here runs on a timer.
+ */
+const SCRIPT: Array<(view: ActivityView) => ActivityView> = [
+  (v) => withStep(v, { id: "analyse-1", kind: "analyse", state: "running", label: "Understanding your question" }),
+  (v) => withStep(v, { id: "analyse-1", kind: "analyse", state: "done", label: "Understanding your question", detail: "Biology · an exam answer" }),
+  (v) => withStep(v, { id: "search-2", kind: "search", state: "running", label: "Searching the web for sources" }),
+  (v) => withStep(v, { id: "search-2", kind: "search", state: "done", label: "Searching the web for sources", detail: "8 results" }),
+  (v) => withStep(v, { id: "read-3", kind: "read", state: "running", label: "Reading www.bbc.co.uk" }),
+  (v) => withStep(v, { id: "read-3", kind: "read", state: "done", label: "Read bbc.co.uk", source: src("www.bbc.co.uk", "Photosynthesis - Bitesize", "education site", "direct") }),
+  (v) => withStep(v, { id: "verify-4", kind: "verify", state: "running", label: "Checking names and terms against the sources" }),
+  (v) => withStep(v, { id: "verify-4", kind: "verify", state: "done", label: "Checking names and terms against the sources", detail: "all found in the sources" }),
+];
+
+function LiveDemo() {
+  const [view, setView] = useState<ActivityView>({ phase: "running", steps: [] });
+  const [at, setAt] = useState(0);
+  const over = view.phase !== "running";
+  const reset = () => {
+    setView({ phase: "running", steps: [] });
+    setAt(0);
+  };
+  return (
+    <section id="bench-live" data-testid="live" aria-labelledby="bench-live-title" style={{ marginBlockEnd: "1.5rem" }}>
+      <h2 id="bench-live-title" style={{ fontSize: "0.95rem" }}>Live: one turn, one event at a time</h2>
+      <p style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        <button type="button" disabled={over || at >= SCRIPT.length} onClick={() => { setView(SCRIPT[at]!(view)); setAt(at + 1); }}>Next event</button>
+        <button type="button" disabled={over} onClick={() => setView((v) => settle(v, "done"))}>Finish</button>
+        <button type="button" disabled={over} onClick={() => setView((v) => settle(v, "failed"))}>Fail</button>
+        <button type="button" disabled={over} onClick={() => setView((v) => settle(v, "stopped"))}>Stop</button>
+        <button type="button" onClick={reset}>Reset</button>
+      </p>
+      <ActivityPanel view={view} />
+    </section>
+  );
+}
+
 export function ActivityPanelBench() {
   return (
     <>
+      <LiveDemo />
       {VIEWS.map(({ id, title, view }) => (
         <section key={id} id={`bench-${id}`} aria-labelledby={`bench-${id}-title`} style={{ marginBlockEnd: "1.5rem" }}>
           <h2 id={`bench-${id}-title`} style={{ fontSize: "0.95rem" }}>{title}</h2>

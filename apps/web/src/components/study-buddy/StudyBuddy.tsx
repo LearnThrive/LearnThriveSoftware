@@ -37,7 +37,8 @@ import { useVoice, type Speaker } from "./useVoice";
 import { VoicePanel } from "./VoicePanel";
 import { PaperTutor } from "./PaperTutor";
 import { ModelPicker, type ModelChoice } from "./ModelPicker";
-import { ActivityPanel, hasNotableWork, type ActivityPhase, type ActivityView, type PanelStep } from "./ActivityPanel";
+import { ActivityPanel, hasNotableWork, type ActivityView, type PanelStep } from "./ActivityPanel";
+import { settle, withStep, withoutWaiting } from "./activityView";
 import type { ActivityStep } from "@/lib/assistant/activity";
 import styles from "./study-buddy.module.css";
 
@@ -59,23 +60,10 @@ interface Msg {
   activity?: ActivityView;
 }
 
-/** A message as the server sends a reopened chat: its activity is a plain list of finished steps. */
-type ApiMsg = Omit<Msg, "activity"> & { activity?: ActivityStep[] };
-const fromApi = (m: ApiMsg): Msg => ({ ...m, activity: m.activity?.length ? { steps: m.activity, phase: "done" } : undefined });
+/** A message as the server sends a reopened chat: its activity is a plain list of finished steps, and how the turn ended if it did not complete. */
+type ApiMsg = Omit<Msg, "activity"> & { activity?: ActivityStep[]; activityOutcome?: "failed" | "stopped" };
+const fromApi = ({ activityOutcome, ...m }: ApiMsg): Msg => ({ ...m, activity: m.activity?.length ? { steps: m.activity, phase: activityOutcome ?? "done" } : undefined });
 
-/** Waiting steps the page shows itself (a queue, a model loading). They go as soon as real work or text begins. */
-const WAITING = new Set<string>(["queue", "prepare"]);
-const withoutWaiting = (view: ActivityView): ActivityView => (view.steps.some((s) => WAITING.has(s.kind)) ? { ...view, steps: view.steps.filter((s) => !WAITING.has(s.kind)) } : view);
-/** A step arrives, new or an update of an earlier one with the same id. */
-function withStep(view: ActivityView, step: PanelStep): ActivityView {
-  const base = WAITING.has(step.kind) ? view : withoutWaiting(view);
-  const at = base.steps.findIndex((s) => s.id === step.id);
-  return { ...base, steps: at >= 0 ? base.steps.map((s, i) => (i === at ? step : s)) : [...base.steps, step] };
-}
-/** The turn is over: nothing is left running, and the waiting steps are gone. */
-function settle(view: ActivityView, phase: ActivityPhase): ActivityView {
-  return { phase, steps: withoutWaiting(view).steps.map((s) => (s.state === "running" ? { ...s, state: phase === "done" ? "done" : "failed" } : s)) };
-}
 /** A short phrase for a screen reader when a new KIND of work begins (not every step: the panel itself is not a live region). */
 const SAYS: Partial<Record<PanelStep["kind"], string>> = { document: "Reading what you sent.", search: "Searching the web for sources.", read: "Reading sources.", verify: "Checking the answer against the sources.", calculate: "Checking the working by calculation.", repair: "Correcting the draft." };
 
@@ -149,6 +137,9 @@ function pickedModelError(event: { code?: string; model?: string | null; detail?
       return null;
   }
 }
+
+/** The connection closed before the answer's closing event: said the same way as a lost connection. */
+const INTERRUPTED = "We lost the connection before the answer was finished. Please try again.";
 
 const ERROR_TEXT: Record<string, string> = {
   rate_limited_minute: "You are asking quickly. Please wait a moment.",
@@ -559,6 +550,8 @@ export function StudyBuddy() {
     abort.current = controller;
     let answer = "";
     let failed = "";
+    /** The server's closing event (`done` or `error`) arrived. Without it the answer is incomplete. */
+    let ended = false;
     // Fixed for this question: the picker is disabled until the answer ends, so nothing changes the model part-way through one.
     const model = status?.models ? picked : null;
     try {
@@ -587,7 +580,12 @@ export function StudyBuddy() {
         let buffer = "";
         for (;;) {
           const { done, value } = await reader.read();
-          if (done) break;
+          if (done) {
+            // A stream that ends without its closing event (`done` or `error`) was cut off, however cleanly the connection closed: the answer
+            // is not complete and the panel must not say it was.
+            if (!ended && !controller.signal.aborted) failed = INTERRUPTED;
+            break;
+          }
           buffer += decoder.decode(value, { stream: true });
           for (
             let at = buffer.indexOf("\n");
@@ -607,11 +605,14 @@ export function StudyBuddy() {
               state?: "preparing" | "reading" | "researching" | "verifying" | "thinking";
               /** One real step of the work being done (activity.ts). */
               step?: ActivityStep;
+              /** A held answer (verified, advanced) arrives once, whole, after every check: it replaces, it is not appended. */
+              whole?: boolean;
               /** Developer view: who answered (done) or who failed (error), as the server reports it. */
               model?: string | null;
               detail?: string;
               retryAfterSeconds?: number;
             };
+            if (event.type === "done" || event.type === "error") ended = true;
             if (event.type === "session" && event.sessionId)
               setSessionId(event.sessionId);
             else if (event.type === "queued")
@@ -632,23 +633,26 @@ export function StudyBuddy() {
                 textBegan = true;
                 patchActivity(withoutWaiting);
               }
-              answer += event.text;
+              answer = event.whole ? event.text : answer + event.text;
               const now = answer;
               setMessages((m) =>
                 m.map((x) => (x.id === reply.id ? { ...x, content: now } : x)),
               );
               speech.speaker?.push(now);
-              // A polite announcement a sentence at a time, not every word.
-              const end = Math.max(
-                now.lastIndexOf(". "),
-                now.lastIndexOf("? "),
-                now.lastIndexOf("! "),
-                now.lastIndexOf("\n"),
-              );
+              // A polite announcement a sentence at a time, not every word. A whole answer is announced once, when it is ready (below).
+              const end = event.whole
+                ? now.length
+                : Math.max(
+                    now.lastIndexOf(". "),
+                    now.lastIndexOf("? "),
+                    now.lastIndexOf("! "),
+                    now.lastIndexOf("\n"),
+                  );
               if (end > spoken.current) {
-                setAnnounce(
-                  plainText(parseMarkdown(now.slice(spoken.current, end + 1))),
-                );
+                if (!event.whole)
+                  setAnnounce(
+                    plainText(parseMarkdown(now.slice(spoken.current, end + 1))),
+                  );
                 spoken.current = end + 1;
               }
             } else if (event.type === "done" && event.model) {
