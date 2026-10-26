@@ -1,0 +1,69 @@
+{
+  "note": "The phrases are spoken by a PERSON during the manual evaluation (docs/DEMO_TEST_PLAN.md). They are kept as JSON so the phrases, the order and the expected observations are reproducible, and so a scripted run can send the same turn boundaries.",
+  "consent": "NVIDIA's public trial may record inputs and outputs. Send synthetic or the evaluator's own adult speech only. Never a child's voice, never a real student's record, never anything confidential.",
+  "audio": "Speak these yourself, or feed them through the existing development sidecar (services/voice, Piper) if you prefer synthetic audio. Note which you used when recording results.",
+  "groups": [
+    {
+      "id": "A",
+      "name": "Basic tutoring",
+      "observe": ["Is the question understood as asked?", "Is the spoken answer correct and short enough to listen to?"],
+      "cases": [
+        { "id": "A1", "say": "What is three quarters of twenty-four?", "expect": "18, with the working said briefly" },
+        { "id": "A2", "say": "Explain photosynthesis in simple words.", "expect": "A short spoken explanation, no lists or symbols" },
+        { "id": "A3", "say": "What is the difference between mean and median?", "expect": "Both defined, contrast stated" },
+        { "id": "A4", "say": "How do I factorise x squared plus five x plus six?", "expect": "x plus two, x plus three, and why" }
+      ]
+    },
+    {
+      "id": "B",
+      "name": "GCSE Maths",
+      "observe": ["Does the model hear 'two x' as 2x rather than 'two ex'?", "Is the algebra spoken in words?"],
+      "cases": [
+        { "id": "B1", "say": "Solve two x plus seven equals nineteen.", "expect": "x equals six" },
+        { "id": "B2", "say": "How do I solve simultaneous equations?", "expect": "A method (elimination or substitution) described aloud" },
+        { "id": "B3", "say": "Explain why multiplying two negative numbers gives a positive number.", "expect": "A correct, pupil-level explanation" },
+        { "id": "B4", "say": "Can you explain the quadratic formula step by step?", "expect": "The formula and what each part does, in words" }
+      ]
+    },
+    {
+      "id": "C",
+      "name": "A-level Maths",
+      "observe": ["NeMo SpeechChat is a voice model: is A-level differentiation actually within it?", "Watch for confident but wrong answers."],
+      "cases": [
+        { "id": "C1", "say": "Differentiate three x cubed minus five x squared plus seven.", "expect": "nine x squared minus ten x" },
+        { "id": "C2", "say": "Explain integration by parts.", "expect": "The rule and when to use it" },
+        { "id": "C3", "say": "What is the difference between the chain rule and the product rule?", "expect": "Composition versus product" },
+        { "id": "C4", "say": "Explain why the derivative of sine x is cosine x.", "expect": "A limit or geometric argument" }
+      ]
+    },
+    {
+      "id": "D",
+      "name": "Natural conversation",
+      "observe": ["Does the answer to the follow-up depend on the previous turn?", "Does it wait through a pause instead of interrupting?", "Does a mid-sentence correction get understood?"],
+      "cases": [
+        { "id": "D1", "say": "What is three quarters of twenty-four? ... and what is half of that answer?", "expect": "18, then 9 — the second turn depends on the first", "turns": 2 },
+        { "id": "D2", "say": "Explain photosynthesis ... (pause for four seconds) ... in simple words.", "expect": "It does not answer the fragment, and does not cut in during the pause" },
+        { "id": "D3", "say": "Solve two x plus seven equals nineteen ... sorry, I meant two x minus seven equals nineteen.", "expect": "It answers the correction (x equals thirteen), not the abandoned question" },
+        { "id": "D4", "say": "What is the derivative of x squared?", "expect": "Two x, without talking over the thinking pause before it" }
+      ]
+    },
+    {
+      "id": "E",
+      "name": "Full-duplex interruptions",
+      "observe": ["Does speaking stop the assistant's audio?", "How quickly, as measured by the client's own timer?", "Does the conversation continue naturally afterwards?"],
+      "cases": [
+        { "id": "E1", "say": "(while it answers) Wait, explain that again.", "expect": "It yields, then re-explains" },
+        { "id": "E2", "say": "(while it answers) No, I meant x squared, not x cubed.", "expect": "It accepts the correction mid-answer" },
+        { "id": "E3", "say": "(while it answers) Can you make that simpler?", "expect": "It yields and simplifies" },
+        { "id": "E4", "say": "(while it answers) Stop there. I understand.", "expect": "It stops and does not restart the answer" }
+      ]
+    }
+  ],
+  "record": {
+    "per-case": ["case id", "what was said", "endpoint transcript (if any)", "did it answer correctly (yes/no/partly)", "first spoken response latency", "interruption latency", "notes"],
+    "warnings": [
+      "Do not compare NVIDIA's published ~450 ms turn-taking figure with LearnThrive's 2.55 s end-to-end figure directly: they have different boundaries. See docs/PIPELINE_COMPARISON.md.",
+      "A model that is good at speech is not thereby good at A-level mathematics. Judge the maths separately."
+    ]
+  }
+}
