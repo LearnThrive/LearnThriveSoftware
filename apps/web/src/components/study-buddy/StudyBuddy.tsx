@@ -891,8 +891,8 @@ export function StudyBuddy() {
         <li>
           <ShieldCheck size={18} aria-hidden="true" />
           <div>
-            <strong>Hints first</strong>
-            <p>You get a hint, then the working. Maths answers are checked by calculation where they can be. It can still be wrong, so check anything important.</p>
+            <strong>Answers or step by step</strong>
+            <p>Ask for the answer and you get it; ask to work through it and you go one step at a time. Maths answers are checked by calculation where they can be. It can still be wrong, so check anything important.</p>
           </div>
         </li>
       </ul>
@@ -919,7 +919,7 @@ export function StudyBuddy() {
               <h1 id="sb-heading">LearnThrive AI</h1>
               <p className={styles.barSub}>
                 {first
-                  ? "Maths, English, Science and 11+ · hints first"
+                  ? "Maths, English, Science and 11+"
                   : currentTitle}
               </p>
             </div>

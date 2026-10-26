@@ -52,7 +52,7 @@ A private way for the people building LearnThrive to compare two hosted reasonin
 | Step 5 Preview | `stepfun-ai/step-5-preview` | Always reasons: the documented checkpoint keeps reasoning on even when `enable_thinking=false` is sent, so that flag is never sent or relied on. `reasoning_effort` is sent (low for ordinary chat); its 16,000-token reasoning allowance is always added to `max_tokens`. Temperature 1.0, top_p 0.95. |
 | Local model | the configured `ASSISTANT_MODEL` | Listed only when the default provider is Ollama. |
 
-**Who sees it.** The picker appears, and a chat request may name a model, only when **all** of these hold, checked on the server on every request (`selection.ts`): a development server (never `NODE_ENV=production`), `NVIDIA_API_KEY` set, at least one model in `ASSISTANT_NIM_MODELS`, `ASSISTANT_MODEL_PICKER` not `off`, and the signed-in account is an **ADMIN acting as themselves** (not a tutor, parent, learner, or anyone viewing as a learner). A request from anyone else that names a model is refused with 403 `model_not_allowed`; an unknown choice is refused with 400 `bad_model`. The page sends a choice id, never a model name or an address, and the server maps it through the built-in table. Hiding the button is not the permission.
+**Who sees it.** The picker appears, and a chat request may name a model, only when **all** of these hold, checked on the server on every request (`selection.ts`): a development server (never `NODE_ENV=production`), `NVIDIA_API_KEY` set (in the environment, global or in `.env.local`), at least one model offered (`ASSISTANT_NIM_MODELS` unset offers both; set to an empty value it offers none), `ASSISTANT_MODEL_PICKER` not `off`, and the signed-in account is an **ADMIN acting as themselves** (not a tutor, parent, learner, or anyone viewing as a learner). A request from anyone else that names a model is refused with 403 `model_not_allowed`; an unknown choice is refused with 400 `bad_model`. The page sends a choice id, never a model name or an address, and the server maps it through the built-in table. Hiding the button is not the permission.
 
 **What changes with the choice.** Only the model that generates the answer, its token allowance and its time budgets. Subject detection, SearXNG and Crawl4AI research, quotation and claim checks, the calculation checks, safeguarding, moderation, the output guard, history and formatting are the same code for every choice. Searches and pages are cached for an hour, so asking the same question of the second model reuses the same evidence. One question makes requests to the chosen model only (more only for a tool round or a repair, by the same model). Nothing ever asks both.
 
@@ -69,9 +69,9 @@ A private way for the people building LearnThrive to compare two hosted reasonin
 **Start it.** In `apps/web/.env.local` (never committed):
 
 ```bash
-NVIDIA_API_KEY=<your key from build.nvidia.com>
-ASSISTANT_NIM_MODELS=deepseek-ai/deepseek-v4.1-flash,stepfun-ai/step-5-preview
-# optional: ASSISTANT_PROVIDER stays ollama, so "Local model" is a third choice
+NVIDIA_API_KEY=<your key from build.nvidia.com>      # or set it once in your system environment: then no file is needed
+# optional: ASSISTANT_NIM_MODELS=deepseek-ai/deepseek-v4.1-flash   (only some of the models; unset offers both)
+# ASSISTANT_PROVIDER stays ollama, so "Local model" is a third choice
 ```
 
 Then `npm run dev` from the repository root, and sign in as an administrator (on the in-memory backend, `admin@learnthrive.dev` from [DEVELOPMENT_ACCOUNTS.md](DEVELOPMENT_ACCOUNTS.md)). Changing the model in the picker needs no restart, and it does not restart SearXNG or Crawl4AI. If you use the local Supabase stack, apply migration 0015 first (`npx supabase migration up`, or `npm run supabase:reset` to rebuild).
