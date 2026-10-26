@@ -1,4 +1,4 @@
--- 0004_assistant.sql — Study Buddy chats, uploads and usage counters.
+-- 0004_assistant.sql — LearnThrive AI chats, uploads and usage counters.
 --
 -- Retention (defaults, owner to confirm): chat text 30 days, uploads 7 days, audio never stored.
 -- The delete_after columns are the deadlines; the retention job (plan19 phase F) deletes rows whose
@@ -23,7 +23,7 @@ create index if not exists chat_sessions_delete_after_idx on public.chat_session
 create index if not exists chat_sessions_deletion_requested_idx
   on public.chat_sessions (deletion_requested_at) where deletion_requested_at is not null;
 comment on table public.chat_sessions is
-  'A Study Buddy conversation owned by a family account (optionally for one of its students). delete_after: 30 days.';
+  'A LearnThrive AI conversation owned by a family account (optionally for one of its students). delete_after: 30 days.';
 comment on column public.chat_sessions.deletion_requested_at is
   'Set by public.request_chat_deletion() when the user deletes the chat. Hidden from the user immediately; purged (with its files in storage) by the retention job.';
 

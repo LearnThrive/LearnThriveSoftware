@@ -2,19 +2,19 @@
 
 These are **development-only accounts**. The list lives in one file, `apps/web/src/lib/dev/accounts.ts`, and is seeded in memory every time the dev server starts (and lost every time it restarts — nothing here persists). The credentials themselves are fixed dev-only passwords, not real ones, and this file is safe to have in source control because none of them work anywhere except a local development server (`NODE_ENV=development`) — see `docs/AUTHENTICATION.md`'s "Production safety" section for why that's a hard guarantee, not just a convention.
 
-Sign in at `/login`. It is the one sign-in for everybody (`docs/AUTHENTICATION.md`, "One sign-in"): the same page the Library and Study Buddy use.
+Sign in at `/login`. It is the one sign-in for everybody (`docs/AUTHENTICATION.md`, "One sign-in"): the same page the Library and LearnThrive AI use.
 
 | Role | Name | Email | Password | Library standing | Lands on, and finds |
 | --- | --- | --- | --- | --- | --- |
-| Admin | Alvi Hossain | `admin@learnthrive.dev` | `dev-admin-pass` | (by role: all of it) | `/dashboard`; Study Buddy and the Library in the menu |
-| Tutor | Tahasin Hasan | `tutor@learnthrive.dev` | `dev-tutor-pass` | none | `/dashboard`; no Study Buddy or Library |
-| Client | Abdurrahman Mustafa | `client@learnthrive.dev` | `dev-client-pass` | **enrolled** | `/dashboard`; Study Buddy and the Library in the menu. Parent/guardian role |
-| Student | Brian James Khalawon | `student@learnthrive.dev` | `dev-student-pass` | **enrolled** | `/dashboard`; Study Buddy and the Library in the menu |
+| Admin | Alvi Hossain | `admin@learnthrive.dev` | `dev-admin-pass` | (by role: all of it) | `/dashboard`; LearnThrive AI and the Library in the menu |
+| Tutor | Tahasin Hasan | `tutor@learnthrive.dev` | `dev-tutor-pass` | none | `/dashboard`; no LearnThrive AI or Library |
+| Client | Abdurrahman Mustafa | `client@learnthrive.dev` | `dev-client-pass` | **enrolled** | `/dashboard`; LearnThrive AI and the Library in the menu. Parent/guardian role |
+| Student | Brian James Khalawon | `student@learnthrive.dev` | `dev-student-pass` | **enrolled** | `/dashboard`; LearnThrive AI and the Library in the menu |
 | Library member | Library Member | `member@learnthrive.dev` | `dev-member-pass` | **subscription**, not enrolled | `/library/study-buddy`; the dashboard is closed to them |
-| Visitor | New Visitor | `visitor@learnthrive.dev` | `dev-visitor-pass` | none | `/account`; Study Buddy says what it is included with |
+| Visitor | New Visitor | `visitor@learnthrive.dev` | `dev-visitor-pass` | none | `/account`; LearnThrive AI says what it is included with |
 | (disabled) | Disabled Test Account | `disabled@learnthrive.dev` | `dev-disabled-pass` | none | Deliberately disabled — exists to exercise the "this account has been disabled" sign-in state without any extra setup. |
 
-"Library standing" is what the in-memory Library store is told about the account at start-up (an active tuition assignment, or an open subscription). The Library pages show their contents only when the Library is open (`LIBRARY_PHASE=enrolled` or `live`) and Study Buddy only when the assistant is configured: on a default dev server the menus show neither, honestly.
+"Library standing" is what the in-memory Library store is told about the account at start-up (an active tuition assignment, or an open subscription). The Library pages show their contents only when the Library is open (`LIBRARY_PHASE=enrolled` or `live`) and LearnThrive AI only when the assistant is configured: on a default dev server the menus show neither, honestly.
 
 The tutor, parent and student accounts are linked to the seeded domain records (`packages/data`'s `SEED_IDS`), which is what the dashboard shows them. The administrator, the Library member and the visitor have no such record.
 

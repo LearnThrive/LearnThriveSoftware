@@ -1,7 +1,7 @@
 type Env = Record<string, string | undefined>;
 
 /**
- * Study Buddy settings, all from the environment (plan19 phase F, refreshed by the three-model brief). It is OFF in production
+ * LearnThrive AI settings, all from the environment (plan19 phase F, refreshed by the three-model brief). It is OFF in production
  * by default, and fails closed there.
  *
  * Tutor, embeddings and decisions are three separate settings groups because they are three separate models, on two separate

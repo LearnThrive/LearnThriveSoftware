@@ -1,4 +1,4 @@
--- 0016_chat_message_activity.sql — what Study Buddy did to prepare an answer (the activity panel, docs/ASSISTANT.md "Activity panel").
+-- 0016_chat_message_activity.sql — what LearnThrive AI did to prepare an answer (the activity panel, docs/ASSISTANT.md "Activity panel").
 --
 -- An answer can carry a short record of the real work done for it: that it searched, which pages it read (title, site and a sanitised link), that it
 -- checked quotations and working, and whether it had to correct a draft. A reopened chat shows the same collapsed "Research and verification

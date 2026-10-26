@@ -10,7 +10,7 @@ import { PDFDocument } from "pdf-lib";
 import { loadTsFrom } from "./_tsLoader.mjs";
 import { environment } from "./_routeHelpers.mjs";
 
-// The Library and Study Buddy server paths against the REAL local Supabase stack (plan20): the import tool run as a real child
+// The Library and LearnThrive AI server paths against the REAL local Supabase stack (plan20): the import tool run as a real child
 // process (dry run, apply, re-apply, a new version, with BOTH key formats and through the pooler), the signed-in download route
 // with a real signed URL read from real Storage, the entitlement sync, and the retention job removing rows and storage objects.
 // Skipped unless SUPABASE_LOCAL=1 with the stack running:   SUPABASE_LOCAL=1 node --test tests/realstack.library.test.mjs

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * The local Ollama runtime Study Buddy uses on the owner's Windows laptop (docs/OLLAMA_THREE_MODEL.md).
+ * The local Ollama runtime LearnThrive AI uses on the owner's Windows laptop (docs/OLLAMA_THREE_MODEL.md).
  *
  * Two loopback-only servers, both from the same `ollama` binary and the same model directory:
  *

@@ -1,4 +1,4 @@
--- 0014_chat_retrieval.sql — the authorised chunk index for Study Buddy's retrieval role (three-model brief section 9).
+-- 0014_chat_retrieval.sql — the authorised chunk index for LearnThrive AI's retrieval role (three-model brief section 9).
 --
 -- Two things the tutor needs that a chat's uploads did not store:
 --   1. What a document SAID, once, so a follow-up ("and question 4b?") does not re-read and re-render the whole PDF (and re-send

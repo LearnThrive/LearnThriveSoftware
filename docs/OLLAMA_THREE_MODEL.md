@@ -1,4 +1,4 @@
-# Study Buddy's three local Ollama roles
+# LearnThrive AI's three local Ollama roles
 
 The owner's brief (23 October 2026) asked for three local model roles, a fix for the picture-question timeout that was not
 "raise every timeout", and measurements on the actual laptop. This is the runbook for what was built, what was measured, and how to

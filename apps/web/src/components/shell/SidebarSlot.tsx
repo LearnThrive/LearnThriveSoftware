@@ -4,7 +4,7 @@ import { createContext, useContext, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 /**
- * The shell's page-specific secondary slot: a page renders into the sidebar, under the navigation, with <SidebarSection> (Study Buddy
+ * The shell's page-specific secondary slot: a page renders into the sidebar, under the navigation, with <SidebarSection> (LearnThrive AI
  * puts its conversation history there). There is ONE navigation column for the whole signed-in product: a page never adds a second one.
  * The shell moves one slot element between the sidebar and the mobile drawer, so what a page renders keeps its state (an open search
  * box, a rename in progress) whichever of the two is showing.

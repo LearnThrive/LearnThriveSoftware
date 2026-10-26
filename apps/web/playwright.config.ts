@@ -63,7 +63,7 @@ export default defineConfig({
     // checkout needs. The keys and secrets here are made-up test values, not credentials.
     command: 'npm run dev -- -p 3102',
     env: {
-      // No e2e server needs the real model or voice (Study Buddy's specs use the mock): Docker's services are not started for them.
+      // No e2e server needs the real model or voice (LearnThrive AI's specs use the mock): Docker's services are not started for them.
       LEARNTHRIVE_DOCKER: '0',
       NEXT_PUBLIC_THEME_TOGGLE: '1',
       CAREERS_OPEN_FOR_TESTING: '1',
@@ -91,7 +91,7 @@ export default defineConfig({
     { name: 'chromium', use: { ...devices['Desktop Chrome'] }, testIgnore: /(library-open|library-live|one-sign-in|study-buddy|study-buddy-activity|study-buddy-voice|study-buddy-voice-auto|study-buddy-paper|learner)\.spec\.ts/ },
     // The Library with its catalogue open (phase D onwards): its own server and its own in-memory data.
     { name: 'library-open', use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:3101' }, testMatch: /(library-open|one-sign-in|study-buddy|study-buddy-activity|study-buddy-voice|study-buddy-voice-auto|study-buddy-paper)\.spec\.ts/ },
-    // Learner identity (docs/IDENTITY.md): Study Buddy on the mock model with the children's switch on, so the per-learner rules decide.
+    // Learner identity (docs/IDENTITY.md): LearnThrive AI on the mock model with the children's switch on, so the per-learner rules decide.
     { name: 'learner', use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:3103' }, testMatch: /learner\.spec\.ts/ },
     // Subscriptions open (phase E), with the fake Stripe.
     { name: 'library-live', use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:3102' }, testMatch: /library-live\.spec\.ts/ },

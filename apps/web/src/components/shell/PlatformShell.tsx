@@ -14,12 +14,12 @@ import { platformNavigation } from "@/lib/navigation/appNavigation";
 import { PORTAL_ENABLED } from "@/lib/portal";
 
 /**
- * The one authenticated frame (docs/IDENTITY.md, "One shell"), used by the tuition area AND the Library/Study Buddy/account area, so moving
- * between lessons, the Library and Study Buddy is one product with one sidebar, one top bar and one account menu. It is never nested inside
+ * The one authenticated frame (docs/IDENTITY.md, "One shell"), used by the tuition area AND the Library/LearnThrive AI/account area, so moving
+ * between lessons, the Library and LearnThrive AI is one product with one sidebar, one top bar and one account menu. It is never nested inside
  * another shell. Everything it shows is derived on the server from the signed-in person and `platformAccess`:
  *
  *   - the dashboard areas only for someone whose access includes them (and only where the signed-in app is open);
- *   - Study Buddy and the Library only where open and included;
+ *   - LearnThrive AI and the Library only where open and included;
  *   - inside a guardian's supervised view, the LEARNER's menu only, a banner, and no Account link (the way out needs a password).
  *
  * `requireDashboard` is for the tuition routes: a person without a dashboard session is redirected exactly as before. The Library routes

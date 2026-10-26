@@ -2,7 +2,7 @@
 
 For the owner or whoever is on call. Four situations: **rotating a credential**, **restoring from a backup**, **suspending a user**, **a suspected key leak**. Nothing here needs code changes. Names of environment variables are in `docs/ENVIRONMENT.md`; **never paste a value into a chat, a ticket, a log or this repository.**
 
-The fastest way to stop everything, whatever has happened: in Render, **unset `LIBRARY_ENABLED`** (and `NEXT_PUBLIC_APP_PORTAL_ENABLED` if the portal is open) and redeploy. Every account, Library and Study Buddy route then answers "closed". It does not touch Supabase, so it is safe and reversible while you work out the rest.
+The fastest way to stop everything, whatever has happened: in Render, **unset `LIBRARY_ENABLED`** (and `NEXT_PUBLIC_APP_PORTAL_ENABLED` if the portal is open) and redeploy. Every account, Library and LearnThrive AI route then answers "closed". It does not touch Supabase, so it is safe and reversible while you work out the rest.
 
 ## 1. Rotating credentials
 
@@ -67,7 +67,7 @@ Pick the least that fixes the problem. None of these deletes anything.
 | --- | --- |
 | Stop the person signing in, now | Dashboard, Authentication, Users, the user, **Ban user** (a long duration), then **Sign out** the user so existing sessions end. Or by the admin API: `PUT /auth/v1/admin/users/<id>` with `{"ban_duration":"876000h"}` using the secret key from your shell, and `POST /auth/v1/admin/users/<id>/logout`. |
 | Stop their access to the Library but keep the account | End the entitlement: `npm run library:grant -- --revoke <grant id>` for an administrator grant (`--list --email ...` shows it); a paid subscription ends in Stripe, and a refund ends it (`npm run billing:reconcile` catches up). Enrolment follows the tuition record. |
-| Stop Study Buddy for a family | There is no per-family switch in code today (and an administrator cannot read or delete a family's chats, by design). To block use, ban the user (they then also cannot open their account, so they cannot delete their own chats until you unban them). |
+| Stop LearnThrive AI for a family | There is no per-family switch in code today (and an administrator cannot read or delete a family's chats, by design). To block use, ban the user (they then also cannot open their account, so they cannot delete their own chats until you unban them). |
 | Preserve evidence (a safeguarding or abuse matter) | **Do not delete.** Ban, do not purge, and tell the safeguarding lead: chats are held for 30 days by default, uploads 7. Extending retention is a decision for the lead and the owners; **do not edit `delete_after` casually**: it is a service-role-only column, so it needs the server connection and a written reason. Export first: `GET /api/assistant/export` is the family's own copy; an operator's copy needs a query by the owner. |
 | Remove an administrator | `update public.profiles set role = 'CLIENT' where id = ...` through the dashboard SQL editor (as `postgres`), then ban and sign them out; then check `select count(*) from public.profiles where role = 'ADMIN'`. |
 

@@ -82,7 +82,7 @@ const ticked = async () => {
 };
 await ticked();
 
-const lastSummary = async () => ((await page.locator('article[aria-label="Study Buddy"]').last().textContent().catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
+const lastSummary = async () => ((await page.locator('article[aria-label="LearnThrive AI"]').last().textContent().catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
 
 /** One run through the panel: upload, look at the selection, solve in the chosen mode, download, reopen. */
 async function round(label, name, buffer, mode) {

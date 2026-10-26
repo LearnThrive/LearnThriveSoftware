@@ -497,7 +497,7 @@ const loginAs = async (rt, email, extra = {}, deps = {}) => {
   return { status: response.status, body: await response.json() };
 };
 
-test("sign-in routing: staff and enrolled families open the dashboard, a subscriber Study Buddy, anyone else their account page", async (t) => {
+test("sign-in routing: staff and enrolled families open the dashboard, a subscriber LearnThrive AI, anyone else their account page", async (t) => {
   environment(t, {});
   h.resetAccountLimiters();
   session.resetSessionCache();
@@ -517,7 +517,7 @@ test("sign-in routing: staff and enrolled families open the dashboard, a subscri
   assert.equal(await landing("nobody@example.com", {}, open), "/account");
   assert.equal(await landing("member@example.com", {}, open), "/library/study-buddy");
   assert.equal(await landing("granted@example.com", {}, open), "/library/study-buddy");
-  assert.equal(await landing("member@example.com", {}, {}), "/library", "Study Buddy closed: the Library is home");
+  assert.equal(await landing("member@example.com", {}, {}), "/library", "LearnThrive AI closed: the Library is home");
   assert.equal(await landing("family@example.org", {}, open), "/dashboard");
   assert.equal(await landing("paused@example.com", {}, open), "/account", "a paused assignment is not enrolment");
   assert.equal(await landing("staff@example.com", {}, open), "/dashboard");

@@ -44,7 +44,7 @@ export const hubNavItems: HubNavItem[] = [
 ];
 
 /**
- * Picks the item whose path is the longest match for the page: "/library/study-buddy" is Study Buddy, not Library;
+ * Picks the item whose path is the longest match for the page: "/library/study-buddy" is LearnThrive AI, not Library;
  * "/library/x" is Library; "/" matches only exactly. Query strings and hashes in an item's href are ignored.
  */
 export function matchCurrentHref(items: readonly HubNavItem[], pathname: string | null): string | undefined {

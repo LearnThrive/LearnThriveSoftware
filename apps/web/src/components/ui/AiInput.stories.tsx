@@ -15,7 +15,7 @@ function ForceReducedMotion({ children }: { children: ReactNode }) {
 const sample = (name: string, type: string, bytes: number) => new File([new Uint8Array(bytes)], name, { type });
 
 /**
- * The Study Buddy's input: a pill that grows when used, with take-photo, add-image and add-file buttons, send,
+ * The LearnThrive AI's input: a pill that grows when used, with take-photo, add-image and add-file buttons, send,
  * and a microphone button that opens the voice overlay. Controlled and presentational: the text, the files and
  * the voice state come in through props and go out through callbacks, and nothing is stored or sent from here.
  * Enter sends and Shift+Enter starts a new line. The voice overlay is a modal dialog with a Talk button that

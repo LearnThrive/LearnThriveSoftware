@@ -9,12 +9,12 @@ export const metadata: Metadata = {
 
 /** One page per component, each at /dev/ui-components/<slug> (a page beside this one). */
 const COMPONENTS = [
-  { slug: "ai-input", name: "AiInput", note: "The Study Buddy's input: attachments, send, microphone and the voice overlay." },
+  { slug: "ai-input", name: "AiInput", note: "The LearnThrive AI's input: attachments, send, microphone and the voice overlay." },
   { slug: "hub-nav", name: "HubNav", note: "The signed-in Library area's icon menu." },
   { slug: "auth-card", name: "AuthCard", note: "Sign-in and sign-up." },
   { slug: "pricing-card", name: "PricingCard", note: "The Library's pricing card, coming-soon and live states." },
   { slug: "pencil-loader", name: "PencilLoader", note: "The loading and thinking indicator." },
-  { slug: "activity-panel", name: "ActivityPanel", note: "What Study Buddy is doing for an answer: live, then folded into one row." },
+  { slug: "activity-panel", name: "ActivityPanel", note: "What LearnThrive AI is doing for an answer: live, then folded into one row." },
 ] as const;
 
 /**

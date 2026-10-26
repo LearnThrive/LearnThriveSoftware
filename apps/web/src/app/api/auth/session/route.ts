@@ -11,7 +11,7 @@ import { PORTAL_ENABLED } from "@/lib/portal";
  * The public pages are statically generated for SEO (plan6 section 99), so they cannot read the
  * session cookie during rendering — doing that in the layout would make every marketing page
  * dynamic. Instead the header asks this endpoint after hydration and swaps "Login" for the person's
- * place if there's a session: "Dashboard" for staff and enrolled families, "Study Buddy" or "Library"
+ * place if there's a session: "Dashboard" for staff and enrolled families, "LearnThrive AI" or "Library"
  * for a Library member, "Account" for someone signed in with nothing yet. Returns only a display name,
  * role and a path: never the email, never the session token, nothing an unauthenticated caller could use.
  */

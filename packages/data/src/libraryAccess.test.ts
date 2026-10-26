@@ -52,9 +52,9 @@ const facts = (over: Partial<AccessFacts>): AccessFacts => ({ ...none, ...over }
 const open = { studyBuddyOpen: true };
 const closed = { studyBuddyOpen: false };
 
-test("platformAccess: an enrolled family has everything, a subscriber only the Library and Study Buddy, nobody else anything", () => {
+test("platformAccess: an enrolled family has everything, a subscriber only the Library and LearnThrive AI, nobody else anything", () => {
   assert.deepEqual(platformAccess("CLIENT", facts({ enrolled: true })), { tier: "enrolled", dashboard: true, library: true, studyBuddy: true });
-  // A learner's own login (migration 0010): the household being enrolled gives the Library and Study Buddy, but THEIR lessons need THEIR enrolment.
+  // A learner's own login (migration 0010): the household being enrolled gives the Library and LearnThrive AI, but THEIR lessons need THEIR enrolment.
   assert.deepEqual(platformAccess("STUDENT", facts({ enrolled: true })), { tier: "library", dashboard: false, library: true, studyBuddy: true });
   assert.deepEqual(platformAccess("STUDENT", facts({ enrolled: true, ownTuition: true })), { tier: "enrolled", dashboard: true, library: true, studyBuddy: true });
   assert.deepEqual(platformAccess("STUDENT", facts({ ownTuition: true })), { tier: "enrolled", dashboard: true, library: true, studyBuddy: true });
@@ -93,7 +93,7 @@ test("platformAccess agrees with canAccess for members content, for every role a
         }
 });
 
-test("homePath: the dashboard for staff and enrolled, Study Buddy for subscribers (the Library when it is closed), the account page for the rest", () => {
+test("homePath: the dashboard for staff and enrolled, LearnThrive AI for subscribers (the Library when it is closed), the account page for the rest", () => {
   assert.equal(homePath(platformAccess("CLIENT", facts({ enrolled: true })), open), "/dashboard");
   assert.equal(homePath(platformAccess("ADMIN", none), closed), "/dashboard");
   assert.equal(homePath(platformAccess("CLIENT", facts({ subscription: true })), open), "/library/study-buddy");
@@ -110,7 +110,7 @@ test("destinationFor: a page the person asked for is kept when their access incl
   assert.equal(destinationFor(member, "/dashboard/lessons/abc?x=1", open), "/library/study-buddy");
   assert.equal(destinationFor(member, "/dashboardx", open), "/dashboardx", "a different path that merely starts with the same letters is not the dashboard");
   assert.equal(destinationFor(enrolled, "/dashboard/lessons/abc", open), "/dashboard/lessons/abc");
-  // Study Buddy is closed to someone with no entitlement.
+  // LearnThrive AI is closed to someone with no entitlement.
   assert.equal(destinationFor(nobody, "/library/study-buddy", open), "/account");
   assert.equal(destinationFor(member, "/library/study-buddy", open), "/library/study-buddy");
   // Pages open to every signed-in person are kept.

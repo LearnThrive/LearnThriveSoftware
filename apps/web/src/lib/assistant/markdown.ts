@@ -1,5 +1,5 @@
 /**
- * A small, safe Markdown reader for Study Buddy's answers (plan19 section 5.3): paragraphs, headings, bullet and numbered lists,
+ * A small, safe Markdown reader for LearnThrive AI's answers (plan19 section 5.3): paragraphs, headings, bullet and numbered lists,
  * quotes, code blocks, bold, italic, inline code and LaTeX maths. It produces a plain tree, and the page turns the tree into React
  * elements, so there is NO raw HTML anywhere: an answer that contains `<script>` or `<img onerror=...>` shows those characters as
  * text. Links are not made clickable (the text is kept, the address is dropped): an AI answer must not be a way to send a child

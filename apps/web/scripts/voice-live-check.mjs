@@ -59,7 +59,7 @@ const pressed = Date.now();
 await page.getByRole("button", { name: "Talk instead of typing" }).click();
 const you = page.locator('article[aria-label="You"] p').first();
 await you.waitFor({ timeout: 60_000 });
-const answer = page.locator('article[aria-label="Study Buddy"]').first();
+const answer = page.locator('article[aria-label="LearnThrive AI"]').first();
 await page.getByRole("button", { name: "Copy" }).first().waitFor({ timeout: 120_000 });
 await page.waitForTimeout(4000); // let the spoken answer play
 const panelState = await page.getByRole("region", { name: "Voice chat" }).getByRole("status").innerText();

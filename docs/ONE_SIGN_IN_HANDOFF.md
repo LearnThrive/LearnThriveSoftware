@@ -20,18 +20,18 @@ logging in will just grant them access to the study buddy and whatever else is i
 enrolled students get everything."
 
 ### What it became
-One front door, `/login` (the Library / Study Buddy account sign-in). Behind it, what a person gets depends on one pure
+One front door, `/login` (the Library / LearnThrive AI account sign-in). Behind it, what a person gets depends on one pure
 rule, `platformAccess(role, facts)` in `packages/data/src/library/access.ts`:
 
-| Who | Tier | Dashboard, lessons, classroom | Library | Study Buddy | Lands on after sign-in |
+| Who | Tier | Dashboard, lessons, classroom | Library | LearnThrive AI | Lands on after sign-in |
 | --- | --- | --- | --- | --- | --- |
 | Admin, tutor | `staff` | yes | by role (admin) / grant | same | `/dashboard` |
 | Enrolled family (parent, student) | `enrolled` | yes | yes | yes | `/dashboard` |
-| Library subscriber (or admin grant), not enrolled | `library` | **no** | yes | yes | `/library/study-buddy` (or `/library` if Study Buddy is closed) |
+| Library subscriber (or admin grant), not enrolled | `library` | **no** | yes | yes | `/library/study-buddy` (or `/library` if LearnThrive AI is closed) |
 | Signed in, entitled to nothing | `none` | no | free samples | no | `/account` |
 
 `destinationFor(access, requested, options)` keeps the page the person asked for (`?next=`) only if their access includes it,
-otherwise sends them home. The same rule drives sign-in, the navigation and the Study Buddy routes.
+otherwise sends them home. The same rule drives sign-in, the navigation and the LearnThrive AI routes.
 
 ### Where it lives (read these first)
 | Concern | File |
@@ -49,7 +49,7 @@ otherwise sends them home. The same rule drives sign-in, the navigation and the 
 ### What is on the remote
 `origin/main` and `origin/claude/dreamy-brahmagupta-key3c2` both carry (oldest first):
 `857a061` platformAccess rule → `7940e5d` one sign-in (source) → `0121103` tests → `b0a4273` docs → `cbf517a` Library-nav test
-fix → the commit that adds this file. Parent of all of them is `aa9b754` (the Study Buddy / Supabase work). Plan 11 motion
+fix → the commit that adds this file. Parent of all of them is `aa9b754` (the LearnThrive AI / Supabase work). Plan 11 motion
 work (Tasks 1–6, 8, part of 7) was merged to `main` earlier by the owner (`9bbb462`).
 
 ### Verification already done (cloud sandbox, Linux, final tree)
@@ -129,19 +129,19 @@ Windows path/line-ending problem is a real finding: report it, do not "fix" test
 ```powershell
 $env:LEARNTHRIVE_DOCKER = "0"                      # skip Docker voice/assistant services unless you want them
 $env:LIBRARY_PHASE = "enrolled"                    # Library catalogue open
-$env:ASSISTANT_PROVIDER = "mock"; $env:VOICE_PROVIDER = "mock"   # Study Buddy answers from the mock
+$env:ASSISTANT_PROVIDER = "mock"; $env:VOICE_PROVIDER = "mock"   # LearnThrive AI answers from the mock
 npm run dev --workspace=apps/web                   # http://localhost:3000
 ```
 Sign in at `/login` with these (they only exist on a local dev server; the list is `apps/web/src/lib/dev/accounts.ts`):
 
 | Email | Password | Expected landing | Expected extras |
 | --- | --- | --- | --- |
-| `admin@learnthrive.dev` | `dev-admin-pass` | `/dashboard` | menu has "Learning": Study Buddy, Library |
-| `tutor@learnthrive.dev` | `dev-tutor-pass` | `/dashboard` | no Study Buddy / Library |
-| `client@learnthrive.dev` | `dev-client-pass` | `/dashboard` | "Learning" menu; Study Buddy page shows a "Dashboard" link back |
+| `admin@learnthrive.dev` | `dev-admin-pass` | `/dashboard` | menu has "Learning": LearnThrive AI, Library |
+| `tutor@learnthrive.dev` | `dev-tutor-pass` | `/dashboard` | no LearnThrive AI / Library |
+| `client@learnthrive.dev` | `dev-client-pass` | `/dashboard` | "Learning" menu; LearnThrive AI page shows a "Dashboard" link back |
 | `student@learnthrive.dev` | `dev-student-pass` | `/dashboard` | same as client |
-| `member@learnthrive.dev` | `dev-member-pass` | `/library/study-buddy` | **no** dashboard; typing `/dashboard` in the bar returns them to Study Buddy |
-| `visitor@learnthrive.dev` | `dev-visitor-pass` | `/account` | Study Buddy says what it is included with |
+| `member@learnthrive.dev` | `dev-member-pass` | `/library/study-buddy` | **no** dashboard; typing `/dashboard` in the bar returns them to LearnThrive AI |
+| `visitor@learnthrive.dev` | `dev-visitor-pass` | `/account` | LearnThrive AI says what it is included with |
 | `disabled@learnthrive.dev` | `dev-disabled-pass` | stays on `/login` | "This account has been disabled…" |
 
 Also check: a wrong password gives the generic "Email or password is not right."; `/dashboard` while signed out redirects to
@@ -190,15 +190,15 @@ If `graphify` is installed locally, run `graphify update .` after code changes (
 
 Tick each only with evidence (a passing test name, a command output, or a screenshot):
 
-1. **Study Buddy is part of the main platform for enrolled students.** `client`/`student` land on `/dashboard`; the menu has
-   "Learning → Study Buddy, Library"; Study Buddy opens from there. Evidence: `one-sign-in.spec.ts`, B5 rows 3–4.
-2. **The Study Buddy login page is the platform's login page.** `/login` renders `AccountShell` + `AccountAuthPanel`; `LoginForm.tsx` is
+1. **LearnThrive AI is part of the main platform for enrolled students.** `client`/`student` land on `/dashboard`; the menu has
+   "Learning → LearnThrive AI, Library"; LearnThrive AI opens from there. Evidence: `one-sign-in.spec.ts`, B5 rows 3–4.
+2. **The LearnThrive AI login page is the platform's login page.** `/login` renders `AccountShell` + `AccountAuthPanel`; `LoginForm.tsx` is
    gone; `/account/sign-in` redirects. Evidence: `auth.spec.ts`, `account.spec.ts`, B5.
-3. **A Library subscriber who is not enrolled gets Study Buddy and the Library, and nothing else.** `member` lands on
+3. **A Library subscriber who is not enrolled gets LearnThrive AI and the Library, and nothing else.** `member` lands on
    `/library/study-buddy`; `/dashboard` and every `/dashboard/*` send them home; no Dashboard link in their menu. Evidence:
    `one-sign-in.spec.ts` (subscriber tests), `devAccounts.test.mjs`, `portal.test.mjs`.
 4. **Enrolled students get everything.** Evidence: B5 rows 3–4, `libraryAccess.test.ts` (`enrolled` tier), nav test in
-   `library-open.spec.ts:146` (menu has Study Buddy and Dashboard).
+   `library-open.spec.ts:146` (menu has LearnThrive AI and Dashboard).
 5. **No entitlement → account page, not an error.** `visitor`. Evidence: `one-sign-in.spec.ts`.
 6. **Signing in never fails because access could not be read** (falls back to the page asked for, or `/account`). Evidence:
    fail-safe test in `account.test.mjs`.
@@ -211,11 +211,11 @@ Tick each only with evidence (a passing test name, a command output, or a screen
 
 1. **The dashboard has no production data behind it.** Its data is the in-memory demo set (`packages/data` in-memory provider; no
    SQL domain provider yet, see `docs/PRODUCTION_GAPS.md`). The code enforces "enrolled get everything", but in production
-   the portal flag keeps the dashboard closed, so an enrolled family signing in there lands on Study Buddy / the Library until the portal is
+   the portal flag keeps the dashboard closed, so an enrolled family signing in there lands on LearnThrive AI / the Library until the portal is
    built and opened. Do not "fix" this by turning the portal flag on.
 2. **Under-18 students.** The sign-in shell still says under-18s use a parent's profile, while the dev `STUDENT` role works in
    development. Whether children get their own accounts is a safeguarding/policy call.
-3. **Study Buddy is cross-linked, not embedded** in the dashboard shell: its UI relies on the member shell's sidebar slot. Moving it
+3. **LearnThrive AI is cross-linked, not embedded** in the dashboard shell: its UI relies on the member shell's sidebar slot. Moving it
    inside the dashboard shell is a larger refactor; ask first.
 4. **Banned Supabase users see the generic wrong-password message.** Deliberate: a distinct message could let someone test which emails
    have accounts. Revisit only with Supabase's documented ordering of the password check and the ban check.
@@ -244,7 +244,7 @@ Tick each only with evidence (a passing test name, a command output, or a screen
 | Voice specs fail in milliseconds with "Executable doesn't exist" | Playwright cannot find its headless-shell build. `npx playwright install chromium` (or `--with-deps` on Linux). |
 | Sign-in loops back to `/login` | Cookies not set: check you are on the same origin (`localhost`, not `127.0.0.1`) the dev server printed; `learnthrive_acct` / `learnthrive_acct_r` are the account cookies. |
 | `/dashboard` redirects to `/portal-opening-soon` | You are on a production build without `NEXT_PUBLIC_APP_PORTAL_ENABLED=true`. Use the dev server. |
-| Study Buddy missing from the menu | The assistant is closed: set `ASSISTANT_PROVIDER=mock` (and `VOICE_PROVIDER=mock`) for local work. |
+| LearnThrive AI missing from the menu | The assistant is closed: set `ASSISTANT_PROVIDER=mock` (and `VOICE_PROVIDER=mock`) for local work. |
 | `npm run dev` hangs starting Docker / Supabase | Set `LEARNTHRIVE_DOCKER=0` (and `LEARNTHRIVE_SUPABASE=0` to skip the local Supabase stack). |
 | Everything is "modified" after the pull | CRLF conversion; `git config core.autocrlf false` (B3). |
 | `Another next dev server is already running` | Next locks one dev server per build folder: use `NEXT_DIST_DIR` per port as `playwright.config.ts` does. |

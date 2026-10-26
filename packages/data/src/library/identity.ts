@@ -93,7 +93,7 @@ export interface IdentityAuditEntry {
   studentId: string | null;
 }
 
-/** The kind of consent a guardian gives for a learner to use Study Buddy. Withdrawing it closes the assistant for that learner. */
+/** The kind of consent a guardian gives for a learner to use LearnThrive AI. Withdrawing it closes the assistant for that learner. */
 export const LEARNER_AI_CONSENT = "learner_ai_use";
 
 export interface IdentityRepository {
@@ -128,7 +128,7 @@ export interface IdentityRepository {
   /** Suspends, restores or revokes a SECOND guardian's link. The owning family's link cannot be changed here. False if there is no such link. */
   setGuardianLinkStatus(input: { ownerClientId: string; studentId: string; guardianClientId: string; status: LinkStatus; actor: string; now: Date }): Promise<boolean>;
 
-  /** A guardian (the signed-in adult of an owning or linked family) agrees that this learner may use Study Buddy. */
+  /** A guardian (the signed-in adult of an owning or linked family) agrees that this learner may use LearnThrive AI. */
   grantLearnerConsent(input: { studentId: string; guardianProfileId: string; version: string; textSha256: string; now: Date }): Promise<boolean>;
   /** Withdraws every open learner-AI consent for the student. Returns how many. */
   withdrawLearnerConsent(studentId: string, now: Date): Promise<number>;

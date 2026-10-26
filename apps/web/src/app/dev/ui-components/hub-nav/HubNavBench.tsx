@@ -68,7 +68,7 @@ export function HubNavBench() {
           Library target
         </p>
         <p id="live-study-buddy" tabIndex={-1} className={styles.target}>
-          Study Buddy target
+          LearnThrive AI target
         </p>
         <p id="live-search" tabIndex={-1} className={styles.target}>
           Search target

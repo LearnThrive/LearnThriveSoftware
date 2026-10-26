@@ -198,7 +198,7 @@ test("a too-young learner gets the supervised view, not a login; invitations are
   assert.equal((await w.addStudent(g, { displayName: "mail@example.com" })).status, 422, "a first name, never an address");
 });
 
-test("Study Buddy for a learner: closed until the deployment, the guardian's consent and the login are all in place, and each can close it again at once", async (t) => {
+test("LearnThrive AI for a learner: closed until the deployment, the guardian's consent and the login are all in place, and each can close it again at once", async (t) => {
   const approved = await world(t);
   const g = await approved.guardian();
   const kid = await approved.learnerOf(g);
@@ -259,7 +259,7 @@ test("an adult learner needs no children's approval and no guardian consent, but
   const none = await world(t, { ...ENV, ASSISTANT_MINORS_APPROVED: "false" });
   const g2 = await none.guardian({ subscribed: false });
   const adult2 = await none.learnerOf(g2, { name: "Alex", yearGroup: "A Level", isMinor: false });
-  assert.equal((await none.chat(adult2, { text: "hello", adultAck: true })).code, "no_access", "no household entitlement, no Study Buddy");
+  assert.equal((await none.chat(adult2, { text: "hello", adultAck: true })).code, "no_access", "no household entitlement, no LearnThrive AI");
 });
 
 test("supervised view: the guardian signs in and chooses a young learner; the chat is the learner's; adult operations are closed until they leave with their password", async (t) => {

@@ -6,7 +6,7 @@ import { useMemo } from "react";
 
 /**
  * One piece of maths, drawn by KaTeX. This module (KaTeX and its stylesheet and fonts, all served from this site) is loaded only
- * on the Study Buddy screen and only when an answer contains maths. KaTeX's output is HTML it generates itself from the formula;
+ * on the LearnThrive AI screen and only when an answer contains maths. KaTeX's output is HTML it generates itself from the formula;
  * `trust` is off (no links, no raw HTML, no commands that fetch anything), the size and macro expansion are capped, and a formula
  * it cannot read is shown as plain text instead of an error.
  */

@@ -1,12 +1,12 @@
 # Benchmark protocol: GCSE English Literature essays at 23/30 or better
 
-**Status: NOT TESTED.** Nothing here has been run. This is the protocol for testing the goal that Study Buddy's GCSE English Literature essays reach at least
+**Status: NOT TESTED.** Nothing here has been run. This is the protocol for testing the goal that LearnThrive AI's GCSE English Literature essays reach at least
 23/30 under independent AQA-style assessment. The model's own marks, and this repository's automated tests, are not evidence for that goal.
 
 ## Design
 
 1. **Tasks.** At least 30 previously unseen AQA-style questions (Shakespeare, the modern text, the 19th-century novel), written or chosen by teachers who have not seen
-   Study Buddy's output. Keep a held-out set that is never used to tune prompts or code. Include extract-based and whole-text questions, and "how far" questions
+   LearnThrive AI's output. Keep a held-out set that is never used to tune prompts or code. Include extract-based and whole-text questions, and "how far" questions
    that need development across the text.
 2. **Generation.** For each task, generate the essay through the real application path (a real student request, the real model, research on), three times from a cold
    start. Record the build, the model, the settings, the search engines available, and the gate's report (first-draft problems, repairs, removed statements).

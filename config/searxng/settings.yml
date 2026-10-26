@@ -1,4 +1,4 @@
-# SearXNG settings for Study Buddy's web research (docs/RESEARCH.md). Used by the optional `searxng` service in config/compose.yaml.
+# SearXNG settings for LearnThrive AI's web research (docs/RESEARCH.md). Used by the optional `searxng` service in config/compose.yaml.
 # The ONE setting the website needs is `search.formats` containing `json`: without it SearXNG answers every API request with HTTP 403.
 use_default_settings: true
 
@@ -7,7 +7,7 @@ general:
   debug: false
 
 search:
-  # 1 = moderate filtering. Study Buddy is used by children.
+  # 1 = moderate filtering. LearnThrive AI is used by children.
   safe_search: 1
   formats:
     - html

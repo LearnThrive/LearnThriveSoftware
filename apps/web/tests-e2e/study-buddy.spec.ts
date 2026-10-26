@@ -54,7 +54,7 @@ test('an enrolled adult asks a question: an adult confirmation first, a streamed
   await enrolled(page);
   await open(page);
   await expect(page.getByText('is an AI, not a tutor or a person')).toBeVisible();
-  await expectAxeClean(page, 'study buddy, empty');
+  await expectAxeClean(page, 'LearnThrive AI, empty');
 
   await page.getByLabel('Your message').fill('Factorise x^2 + 3x');
   await page.getByRole('button', { name: /send/i }).click();
@@ -72,7 +72,7 @@ test('an enrolled adult asks a question: an adult confirmation first, a streamed
   await expect(page.locator('article[aria-label="You"]').first()).toContainText('Factorise x^2 + 3x');
   await expect(page.getByRole('status').filter({ hasText: 'The answer is ready.' })).toHaveCount(1);
   await expect(page.getByRole('list').filter({ has: page.getByRole('button', { name: /Factorise x\^2/ }) })).toBeVisible();
-  await expectAxeClean(page, 'study buddy, an answer');
+  await expectAxeClean(page, 'LearnThrive AI, an answer');
 
   // A follow-up in the same chat needs no confirmation.
   await ask(page, 'and x^2 - 9?');
@@ -218,7 +218,7 @@ test('on a phone the navigation is a drawer: it opens, keeps its links and the c
   const nav = page.getByRole('dialog', { name: 'Navigation' }).getByRole('navigation', { name: 'Main navigation' });
   await expect(nav.getByRole('link', { name: 'LearnThrive AI' })).toHaveAttribute('aria-current', 'page');
   await expect(page.getByRole('region', { name: 'Your chats' }).getByRole('button', { name: 'First phone question', exact: true })).toBeVisible();
-  await expectAxeClean(page, 'study buddy, phone drawer');
+  await expectAxeClean(page, 'LearnThrive AI, phone drawer');
   await page.keyboard.press('Escape');
   await expect(nav).toBeHidden();
   await expect(menu).toBeFocused();
@@ -279,5 +279,5 @@ test('long equations and code scroll inside the answer at 320px; the page never 
   // The equation is wider than the screen, so its own line scrolls.
   const display = answer.locator('.katex-display').first();
   expect(await display.evaluate((el) => { const box = el.closest('div'); return box ? box.scrollWidth > box.clientWidth : false; })).toBe(true);
-  await expectAxeClean(page, 'study buddy, long answer at 320px');
+  await expectAxeClean(page, 'LearnThrive AI, long answer at 320px');
 });

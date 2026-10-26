@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "LearnThrive AI | LearnThrive", robot
 export const dynamic = "force-dynamic";
 
 /**
- * Study Buddy (plan19 phase F), for signed-in adult accounts that hold Library access (enrolled, a subscription or a grant). It is
+ * LearnThrive AI (plan19 phase F), for signed-in adult accounts that hold Library access (enrolled, a subscription or a grant). It is
  * a 404 where the assistant is closed (the kill switch, production without the recorded approval), so a link to it never promises
  * what is not there. The page itself holds no chat: the client fetches it from the routes, which check everything again.
  */

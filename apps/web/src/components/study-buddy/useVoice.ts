@@ -74,7 +74,7 @@ export interface VoiceControls {
 }
 
 export interface VoiceOptions {
-  /** Sends the words as a normal Study Buddy message. Called once per turn. */
+  /** Sends the words as a normal LearnThrive AI message. Called once per turn. */
   onUtterance: (text: string) => void;
 }
 

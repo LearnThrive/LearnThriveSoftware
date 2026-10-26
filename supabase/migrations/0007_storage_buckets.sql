@@ -1,7 +1,7 @@
 -- The two private buckets (plan20). Re-runnable: applying it again only restores these settings.
 --
 --   library       the Library's PDFs. Private. PDF only. 25 MB, the import tool's own maximum (LIBRARY_FILE_MAX_BYTES).
---   chat-uploads  Study Buddy's uploads and the Paper Tutor's annotated PDFs. Private. JPEG, PNG or PDF. 15 MB.
+--   chat-uploads  LearnThrive AI's uploads and the Paper Tutor's annotated PDFs. Private. JPEG, PNG or PDF. 15 MB.
 --
 -- NO storage policies are created for anon or authenticated, on purpose. Row level security is on for storage.objects, so with no
 -- policy a browser (with the publishable key, or a signed-in user's token) can neither list nor read nor write an object. Only the

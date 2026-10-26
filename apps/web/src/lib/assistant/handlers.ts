@@ -17,7 +17,7 @@ import { UPLOAD_LIMITS, inspectChatUpload } from "./uploads";
 import { voiceClosed, type VoiceRuntime } from "./voice";
 
 /**
- * The Study Buddy routes' logic (plan19 phase F). Every one starts the same way: Origin check, the assistant open at all (the kill
+ * The LearnThrive AI routes' logic (plan19 phase F). Every one starts the same way: Origin check, the assistant open at all (the kill
  * switch, production approval, a provider), a signed-in ADULT account, and a family that holds Library access (enrolled, a
  * subscription or an administrator grant: not free-samples-only). A chat is only ever found by the family that owns it.
  *
@@ -356,7 +356,7 @@ async function choiceHealth(choice: string, provider: { health(signal?: AbortSig
   return h;
 }
 
-/** Whether Study Buddy is open for this visitor, so the page can say why not. Reveals nothing about who is asking. */
+/** Whether LearnThrive AI is open for this visitor, so the page can say why not. Reveals nothing about who is asking. */
 export async function handleStatus(request: Request, deps: AssistantDeps): Promise<Response> {
   const env = deps.env ?? process.env;
   const config = assistantConfig(env);

@@ -1,5 +1,5 @@
 /**
- * What Study Buddy is told, and the fixed words it says when it must not improvise (plan19 section 5.3). DRAFT WORDING FOR
+ * What LearnThrive AI is told, and the fixed words it says when it must not improvise (plan19 section 5.3). DRAFT WORDING FOR
  * THE OWNERS: the system prompt, the blocked-category replies and the safeguarding reply need the owners' approval and, for
  * anything a child might read, the safeguarding lead's written approval (plan19 section 6) before any minor uses the assistant.
  *
@@ -57,5 +57,8 @@ export const OUTPUT_BLOCKED_REPLY = "I cannot give that answer. Could you ask yo
 export const AI_LABEL = "AI-generated, may be wrong";
 
 /** Shown (unticked) before a first chat while the assistant is for adults only; its hash is recorded with the consent. Owner approval needed. */
-export const ADULT_ACKNOWLEDGEMENT = "I am 18 or over, and I am the person using Study Buddy.";
-export const ADULT_ACK_VERSION = "2026-10-draft-1";
+export const ADULT_ACKNOWLEDGEMENT = "I am 18 or over, and I am the person using LearnThrive AI.";
+// Bumped from "2026-10-draft-1" on 26 October 2026, when the product was renamed to LearnThrive AI: the version and a hash of the
+// exact text are recorded with the acknowledgement (handlers.ts), so a tick given against the old words must not count as agreement
+// to the new ones.
+export const ADULT_ACK_VERSION = "2026-10-draft-2";

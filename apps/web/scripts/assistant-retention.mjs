@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Study Buddy retention job (plan19 section 5.3). Run it daily (a cron job on Render; docs/ASSISTANT.md).
+ * LearnThrive AI retention job (plan19 section 5.3). Run it daily (a cron job on Render; docs/ASSISTANT.md).
  *
  *   npm run assistant:retention
  *

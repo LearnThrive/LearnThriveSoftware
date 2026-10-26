@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Checks the REAL research stack the way Study Buddy uses it (docs/RESEARCH.md): SearXNG, Crawl4AI, then the pipeline that joins them. It makes real
+ * Checks the REAL research stack the way LearnThrive AI uses it (docs/RESEARCH.md): SearXNG, Crawl4AI, then the pipeline that joins them. It makes real
  * searches and real page loads, so run it by hand; no test calls it, and it prints only what it actually observed. A line is never printed as
  * passed unless the check ran and the result was what it should be.
  *

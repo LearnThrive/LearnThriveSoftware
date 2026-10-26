@@ -58,9 +58,9 @@ export function safeguardingEmail(flag: SafeguardingFlag): { subject: string; ht
     ["When", flag.at.toISOString().replace("T", " ").slice(0, 16) + " UTC"],
     ["Excerpt (the least needed)", flag.excerpt],
   ];
-  const note = "Study Buddy answered with the fixed safeguarding message (Childline, the NSPCC and 999). The reference is opaque: to find the account, ask the site's administrator to look it up. Follow the safeguarding procedure.";
-  const html = emailWrapper([htmlHeading("Study Buddy safeguarding flag"), htmlBanner("This message may concern a child's safety.", "critical"), htmlTable(rows), htmlParagraph(note)].join("\n"), "A Study Buddy conversation was flagged.");
-  const text = ["Study Buddy safeguarding flag", "", "This message may concern a child's safety.", "", textTable(rows), "", note].join("\n");
+  const note = "LearnThrive AI answered with the fixed safeguarding message (Childline, the NSPCC and 999). The reference is opaque: to find the account, ask the site's administrator to look it up. Follow the safeguarding procedure.";
+  const html = emailWrapper([htmlHeading("LearnThrive AI safeguarding flag"), htmlBanner("This message may concern a child's safety.", "critical"), htmlTable(rows), htmlParagraph(note)].join("\n"), "A LearnThrive AI conversation was flagged.");
+  const text = ["LearnThrive AI safeguarding flag", "", "This message may concern a child's safety.", "", textTable(rows), "", note].join("\n");
   void escapeHtml;
   return { subject: `Safeguarding flag ${flag.reference}`, html, text };
 }

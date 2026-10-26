@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * The owner's failing case through the REAL website: sign in, open Study Buddy, attach a photo of a worked answer, ask for it to be
+ * The owner's failing case through the REAL website: sign in, open LearnThrive AI, attach a photo of a worked answer, ask for it to be
  * checked, and time what the page shows. Needs the dev server on the Ollama configuration (launch.json "study-buddy-ollama", :3111)
  * and the models running (`npm run ollama:local -- start`).
  *
@@ -107,7 +107,7 @@ await page.evaluate(() => {
 });
 await page.getByRole("button", { name: /^send/i }).first().click();
 
-const answer = page.getByRole("article", { name: "Study Buddy" }).last();
+const answer = page.getByRole("article", { name: "LearnThrive AI" }).last();
 let firstTextMs = null;
 let finalMs = null;
 let error = null;
@@ -116,7 +116,7 @@ let stable = 0;
 while (Date.now() - started < 300_000) {
   await page.waitForTimeout(300);
   const text = ((await answer.textContent().catch(() => "")) ?? "").trim();
-  const real = text.length > 20 && !/^(thinking|study buddy is thinking|preparing|reading|working)/i.test(text);
+  const real = text.length > 20 && !/^(thinking|LearnThrive AI is thinking|preparing|reading|working)/i.test(text);
   if (real && firstTextMs === null) firstTextMs = Date.now() - started;
   if (real && text === last) stable += 1;
   else stable = 0;

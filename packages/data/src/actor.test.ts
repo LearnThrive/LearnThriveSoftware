@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { directLoginAllowed, resolveActor, type AccessFacts, type Account, type LearnerContext } from "./library";
 
-// The one decision about who is acting and whether Study Buddy is open to them. Pure: every combination is a table.
+// The one decision about who is acting and whether LearnThrive AI is open to them. Pure: every combination is a table.
 
 const none: AccessFacts = { enrolled: false, subscription: false, adminGrant: false };
 const facts = (over: Partial<AccessFacts>): AccessFacts => ({ ...none, ...over });
@@ -13,7 +13,7 @@ const guardian = (over: Partial<Account> = {}): Account => ({ profileId: "p-guar
 const student = (l: LearnerContext | null = learner()): Account => ({ profileId: "p-learner", role: "STUDENT", displayName: "K", adultConfirmed: false, clientId: null, learner: l });
 const open = { minorsApproved: true };
 
-test("a guardian acts as themselves: own chats, adult operations, Study Buddy on any Library right", () => {
+test("a guardian acts as themselves: own chats, adult operations, LearnThrive AI on any Library right", () => {
   const a = resolveActor({ account: guardian(), facts: facts({ subscription: true }), ...open });
   assert.equal(a.mode, "guardian");
   assert.deepEqual(a.owner, { clientId: "fam-1", studentId: null });
@@ -30,7 +30,7 @@ test("an adult without the 18+ declaration has no adult operations and no assist
   assert.deepEqual(resolveActor({ account: guardian(), facts: none, ...open }).assistant, { allowed: false, reason: "no_access" });
 });
 
-test("a learner's own login: their chats only, never adult operations, Study Buddy when entitled, active, linked, enabled, and consented if a minor", () => {
+test("a learner's own login: their chats only, never adult operations, LearnThrive AI when entitled, active, linked, enabled, and consented if a minor", () => {
   const library = facts({ subscription: true, ownTuition: false });
   const a = resolveActor({ account: student(), facts: library, learnerConsent: true, ...open });
   assert.equal(a.mode, "learner");
@@ -53,7 +53,7 @@ test("the learner's tuition follows their own enrolment: an enrolled sibling giv
   assert.equal(a.assistant.allowed, true);
 });
 
-test("each way a learner can lose Study Buddy is its own reason, and the same learner with the cause removed gets it back", () => {
+test("each way a learner can lose LearnThrive AI is its own reason, and the same learner with the cause removed gets it back", () => {
   const library = facts({ subscription: true, ownTuition: false });
   const cases: Array<[string, Parameters<typeof resolveActor>[0], string]> = [
     ["suspended login", { account: student(learner({ status: "suspended" })), facts: library, learnerConsent: true, ...open }, "learner_inactive"],

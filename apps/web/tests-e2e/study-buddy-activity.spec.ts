@@ -48,7 +48,7 @@ const READ_ANSWER = `(() => {
   return [...last.querySelectorAll('p, li, pre')].filter((el) => !el.closest('section')).map((el) => el.textContent || '').join(' ').trim();
 })()`;
 
-test.describe('Study Buddy: the activity panel in the real chat', () => {
+test.describe('LearnThrive AI: the activity panel in the real chat', () => {
   test.beforeEach(async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
   });
@@ -154,7 +154,7 @@ test.describe('Study Buddy: the activity panel in the real chat', () => {
     await panel.getByRole('button').first().click();
     await expect(panel.getByRole('list', { name: 'Steps' })).toBeVisible();
     await expect(panel.getByRole('listitem').filter({ hasText: 'Searching the web for sources' })).toContainText('did not work');
-    await expectAxeClean(page, 'study buddy, a researched answer, panel open');
+    await expectAxeClean(page, 'LearnThrive AI, a researched answer, panel open');
   });
 
   test('ordinary chat is not held and not given a panel when it is over: it streams, and leaves nothing behind', async ({ page }) => {
@@ -293,7 +293,7 @@ test.describe('Study Buddy: the activity panel in the real chat', () => {
       await open(page);
       await ask(page, `[slow] ${HELD}`, { first: true });
       await expect(page.locator(`${ANSWER} ${PANEL}`)).toHaveAttribute('data-phase', 'running');
-      await expectAxeClean(page, `study buddy, working (${scheme})`);
+      await expectAxeClean(page, `LearnThrive AI, working (${scheme})`);
       await page.getByRole('button', { name: 'Stop' }).click();
     });
   }

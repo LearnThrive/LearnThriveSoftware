@@ -392,7 +392,7 @@
    did). Genuinely not done, not quietly downgraded — see the plan8 report's Bugs/Remaining
    sections. */
 
-/* One focused working area (Study Buddy's conversation): the whole content column, no padding or width limit, height owned by the page. */
+/* One focused working area (LearnThrive AI's conversation): the whole content column, no padding or width limit, height owned by the page. */
 .app-content.app-content--flush { max-width: none; padding: 0; display: flex; flex-direction: column; }
 .app-content--flush > * { flex: 1; min-height: 0; }
 

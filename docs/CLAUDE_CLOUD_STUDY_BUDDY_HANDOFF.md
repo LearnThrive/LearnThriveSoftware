@@ -1,4 +1,4 @@
-# Claude Cloud handoff: Study Buddy live activity and complete answers
+# Claude Cloud handoff: LearnThrive AI live activity and complete answers
 
 Prepared 26 October 2026. Continue the existing implementation; do not restart it.
 
@@ -67,7 +67,7 @@ All commands below ran on the implementation checkpoint's substantive source con
    - The real `AiInput` busy fixture had no `Thinking` label or extra `p[role=status]`; Send remained disabled and the form retained `aria-busy=true`.
    - A rendered gallery screenshot was inspected. The temporary screenshot and ad-hoc script are local audit artifacts, not repository dependencies.
 
-   **Limit:** this was component-gallery testing, not an authenticated Study Buddy conversation with live generation. It did not prove the full composer layout, one-panel-per-turn, dynamic completion collapse, interruption, conversation switching or actual DeepSeek/Step behaviour in the chat. The dedicated existing Playwright suites and production build were not run.
+   **Limit:** this was component-gallery testing, not an authenticated LearnThrive AI conversation with live generation. It did not prove the full composer layout, one-panel-per-turn, dynamic completion collapse, interruption, conversation switching or actual DeepSeek/Step behaviour in the chat. The dedicated existing Playwright suites and production build were not run.
 
 5. `git diff --cached --check` passed before the implementation commit. The temporary server's generated `tsconfig.json` entries were removed; the temporary server was stopped.
 
@@ -99,7 +99,7 @@ Review source-label safety as well as clickable URLs: `ResearchSession.fetchPage
 ### 4. Finish browser and provider coverage
 
 - `apps/web/src/app/dev/ui-components/activity-panel/page.tsx` references `tests-e2e/ui-activity-panel.spec.ts`, but that test file does not exist in this checkpoint. Add it and test actual running-to-done transitions, not only static fixtures.
-- Extend actual Study Buddy browser tests to inspect a pending assistant message while a controlled backend operation is held open. Assert exactly one progress interface inside that assistant article, no footer indicator, one appropriate screen-reader announcer, and stable composer/disclaimer/privacy layout.
+- Extend actual LearnThrive AI browser tests to inspect a pending assistant message while a controlled backend operation is held open. Assert exactly one progress interface inside that assistant article, no footer indicator, one appropriate screen-reader announcer, and stable composer/disclaimer/privacy layout.
 - Test completed expansion and restored history; errors, Stop and stream disconnects; mobile/light/dark/reduced motion; attachments, camera, voice controls, model picker and send/Stop controls.
 - `A10` in `assistantActivity.test.mjs` runs two scripted mock providers; its name does not establish real DeepSeek and Step 5 coverage. Exercise both provider selections through the common pipeline with suitable mocks, and perform live smoke verification only where credentials/services are available. Do not run answer-quality benchmarks.
 - Check narration leakage in the educational answer. Removing `Sources read` does not itself prevent model-written research narration.
@@ -112,16 +112,16 @@ Review source-label safety as well as clickable URLs: `ResearchSession.fetchPage
 
 ## Practical continuation
 
-Read repository `CLAUDE.md` and `apps/web/AGENTS.md` first. Preserve the existing LearnThrive design and safeguarding rules. Existing scripts are in the root and workspace `package.json` files. `apps/web/playwright.config.ts` defines dev/mock test servers on 3100–3103; the library-open project hosts Study Buddy on 3101. Follow its setup rather than introducing a new testing stack.
+Read repository `CLAUDE.md` and `apps/web/AGENTS.md` first. Preserve the existing LearnThrive design and safeguarding rules. Existing scripts are in the root and workspace `package.json` files. `apps/web/playwright.config.ts` defines dev/mock test servers on 3100–3103; the library-open project hosts LearnThrive AI on 3101. Follow its setup rather than introducing a new testing stack.
 
 Do not treat the local audit's temporary paths, installed browser or credentials as available in Claude Cloud. Install dependencies using the lockfile in the cloud environment, use supported Node as declared in the manifests, and record unavailable live services honestly. Continue from this checkpoint, address the remaining acceptance gaps, run focused verification, and explain the original `AiInput` footer removal in the final report.
 
 ## Original user implementation prompt (verbatim)
 
-LearnThrive Study Buddy — Live AI Activity Panel, Complete Answer Delivery and UI Cleanup
-Implement a polished, ChatGPT/Claude-inspired activity experience in LearnThrive Study Buddy.
+LearnThrive LearnThrive AI — Live AI Activity Panel, Complete Answer Delivery and UI Cleanup
+Implement a polished, ChatGPT/Claude-inspired activity experience in LearnThrive LearnThrive AI.
 The current implementation displays generic loading states such as "Checking sources online..." and may present research narration or an appended "Sources read" section inside the answer.
-Replace this with a proper, live activity timeline that communicates what Study Buddy is genuinely doing while it prepares the answer.
+Replace this with a proper, live activity timeline that communicates what LearnThrive AI is genuinely doing while it prepares the answer.
 Additionally, fix the duplicated thinking animation currently appearing underneath the chat composer.
 1. Required experience
 When a student submits a question:
@@ -144,7 +144,7 @@ Inspect and extend the existing:
 * `apps/web/src/lib/assistant/study.ts`
 * `apps/web/src/lib/assistant/handlers.ts`
 * `apps/web/src/components/study-buddy/StudyBuddy.tsx`
-* Existing Study Buddy CSS modules and research components.
+* Existing LearnThrive AI CSS modules and research components.
 
 The current `ChatEvent` union already supports generic status events.
 Extend it with structured, typed activity events rather than generating artificial progress messages.
@@ -170,7 +170,7 @@ Do not display raw reasoning tokens from either NVIDIA model.
 The panel must show verified actions and concise process information, not pretend to reveal the model's internal thoughts.
 4. Remove the duplicate thinking animation below the composer
 This is a mandatory UI fix based on the attached screenshot.
-Currently, Study Buddy displays two separate indicators during generation:
+Currently, LearnThrive AI displays two separate indicators during generation:
 
 1. A primary animation inside the assistant's message, showing text such as "Working through it...".
 2. A stray secondary thinking animation directly underneath the chat composer, displaying three animated dots and the label "Thinking".
@@ -212,7 +212,7 @@ The privacy disclaimer should remain properly positioned underneath the composer
 When the duplicate indicator is removed, ensure no unnecessary empty space remains.
 The composer must not jump around or shift excessively as generation starts and stops.
 Expected visual layout
-While Study Buddy is working:
+While LearnThrive AI is working:
 
 ```
 LearnThrive AI
@@ -315,8 +315,8 @@ Capture or inspect the real rendered states to confirm that the stray indicator 
 Do not run educational-quality benchmarks. I will manually evaluate the answers.
 Final instructions
 Implement, test and refine this feature directly in the existing LearnThriveSoftware codebase.
-The desired outcome is an AI experience where students can follow Study Buddy's actual research and verification activity inside the assistant message and then receive a clean, complete answer.
+The desired outcome is an AI experience where students can follow LearnThrive AI's actual research and verification activity inside the assistant message and then receive a clean, complete answer.
 There must be no duplicate thinking animation below the chat composer.
 Maintain the existing LearnThrive design language, preserve all current functionality and remove the duplicate at its source rather than relying on superficial CSS hiding.
 Finish by explaining which component produced the stray animation, what was changed, and how its removal was verified.
-One additional UX detail I would keep: the activity panel should remain expandable after Study Buddy finishes. That way, students can revisit which sources it consulted without having the research process clutter the actual educational answer. Implement all of this
+One additional UX detail I would keep: the activity panel should remain expandable after LearnThrive AI finishes. That way, students can revisit which sources it consulted without having the research process clutter the actual educational answer. Implement all of this

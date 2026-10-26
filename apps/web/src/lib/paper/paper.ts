@@ -13,7 +13,7 @@ import { identityOf, matchScheme, readScheme, type Scheme, type SchemeVerdict } 
 import { solveQuestion, type SolveDeps } from "./solve";
 
 /**
- * The Paper Tutor pipeline, start to finish: read the document (the same reader Study Buddy uses), find the questions and their
+ * The Paper Tutor pipeline, start to finish: read the document (the same reader LearnThrive AI uses), find the questions and their
  * answer space, solve and check each question, write the answers onto the paper, and check the result renders.
  *
  *   extract  a list of the questions found, so the student can choose which to solve (and see what was read)

@@ -1,4 +1,4 @@
-// Study Buddy voice mode: hands the microphone's samples to the page in blocks of about 43 ms.
+// LearnThrive AI voice mode: hands the microphone's samples to the page in blocks of about 43 ms.
 // Nothing is kept here and nothing leaves the browser from this file; the page decides what to do with the blocks.
 class LearnThriveCapture extends AudioWorkletProcessor {
   constructor() {

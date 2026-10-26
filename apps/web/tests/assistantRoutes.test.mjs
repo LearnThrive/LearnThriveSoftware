@@ -6,7 +6,7 @@ import { environment, quiet } from "./_routeHelpers.mjs";
 
 const own = (clientId, studentId = null) => ({ clientId, studentId });
 
-// Phase F: the Study Buddy routes (gates, streaming, uploads, deletion, export, status) and the retention job.
+// Phase F: the LearnThrive AI routes (gates, streaming, uploads, deletion, export, status) and the retention job.
 
 const h = loadTsFrom(import.meta.url, "../src/lib/assistant/handlers.ts");
 const cfgLib = loadTsFrom(import.meta.url, "../src/lib/assistant/config.ts");
@@ -281,7 +281,7 @@ test("sessions: listed, read, deleted at once (one or all), never across familie
   assert.equal((await h.handleSessions(get("/x"), w.deps(other.jar))).status, 200);
 });
 
-test("status: says whether Study Buddy is open and why not, without needing a family", async (t) => {
+test("status: says whether LearnThrive AI is open and why not, without needing a family", async (t) => {
   const w = await world(t);
   const p = await w.person();
   const status = await (await h.handleStatus(new Request("http://localhost/x"), w.deps(p.jar))).json();

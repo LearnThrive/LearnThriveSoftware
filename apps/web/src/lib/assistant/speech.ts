@@ -1,5 +1,5 @@
 /**
- * Turns a Study Buddy answer (Markdown with LaTeX) into words a speech voice can say (plan19 section 5.4): the screen keeps the
+ * Turns a LearnThrive AI answer (Markdown with LaTeX) into words a speech voice can say (plan19 section 5.4): the screen keeps the
  * notation, the voice reads "x squared plus five x" and never "dollar x caret two". Pure and dependency-free, so the browser uses it
  * as the answer streams and the tests can pin it. It is a best-effort reader for school maths, not a LaTeX engine: anything it does
  * not know is spoken as plain words with the markup stripped.

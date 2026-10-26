@@ -1,4 +1,4 @@
-"""Engine benchmark for Study Buddy voice mode (plan19 section 5.4). Run through `npm run voice:bench` (apps/web), which also measures the
+"""Engine benchmark for LearnThrive AI voice mode (plan19 section 5.4). Run through `npm run voice:bench` (apps/web), which also measures the
 whole pipeline and writes docs/VOICE_BENCHMARK.md; this file compares the speech engines on their own and writes JSON.
 
 Speech recognition: faster-whisper configurations over a labelled SYNTHETIC set (the phrases in apps/web/tests/fixtures/assistant/voice-phrases.json
