@@ -37,6 +37,30 @@ const sse = (parts, { done = true } = {}) =>
 const content = (t) => ({ choices: [{ delta: { content: t } }] });
 const thought = (t, field = "reasoning_content") => ({ choices: [{ delta: { [field]: t } }] });
 const usage = (completion) => ({ choices: [], usage: { prompt_tokens: 10, completion_tokens: completion } });
+/**
+ * Like `sse`, but its parts arrive spread out in time, so a stream can keep talking for longer than a clock allows. It honours the
+ * request's abort signal the way a real fetch does (its body is cancelled when the caller aborts): without that a fake stream would
+ * answer through a clock that had already fired.
+ */
+const sseOver = (steps, signal) =>
+  new Response(
+    new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+        signal?.addEventListener("abort", () => controller.error(new Error("aborted")), { once: true });
+        try {
+          for (const [delayMs, part] of steps) {
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(part)}\n\n`));
+          }
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          controller.close();
+        } catch {
+          // Aborted while this part was waiting: the reader has already been told.
+        }
+      },
+    }),
+  );
 
 async function drain(iterable) {
   const out = { text: "", chunks: [], done: null, calls: [] };
@@ -149,6 +173,31 @@ test("reasoning is activity, never answer text: it is not yielded, and an answer
   assert.ok(!out.chunks.some((c) => c.type === "text" && /think|so 42/.test(c.text)), "no reasoning in the answer");
   assert.deepEqual(out.done.usage, { promptTokens: 10, completionTokens: 57 });
   await assert.rejects(() => drain(p.stream(MSGS, OPTS)), (e) => e instanceof types.ProviderError && e.code === "empty" && e.detail === "reasoning_exhausted");
+});
+
+test("a model that always reasons is judged by its work, not by time to its first word", async () => {
+  openaiLib.resetAcceptedFields();
+  // Short clocks keep the test quick; the shape is what the turn's own budgets do at 240 s (models.ts).
+  const timed = { ...OPTS, firstTokenTimeoutMs: 5_000, firstAnswerTimeoutMs: 200, idleTimeoutMs: 5_000, totalTimeoutMs: 5_000 };
+  // Step 5 Preview always reasons: its thinking outlasts the window by a wide margin before it writes anything. This is the turn that
+  // failed on 26 October 2026 — 240 s of reasoning, no answer, `provider_error code=timeout` — so it is the case that must answer.
+  const thinking = [
+    [60, thought("weighing the essay")],
+    [60, thought("comparing the two poems")],
+    [140, thought("almost ready")],
+  ];
+  const step = hosted("step-5-preview", nvidia((_b, _n, init) => sseOver([...thinking, [60, content("The answer is 42.")], [10, usage(900)]], init.signal)).fetchImpl);
+  const out = await drain(step.stream(MSGS, timed));
+  assert.equal(out.text, "The answer is 42.", "the answer still comes after more than 260 ms of thinking, with a 200 ms first-answer window");
+  assert.ok(out.chunks.some((c) => c.type === "activity" && c.kind === "thinking"), "and the reasoning was reported as activity, not as text");
+
+  // A model that can be asked not to reason is unchanged: the same stream is still cut off, so nothing was loosened for it.
+  const mini = hosted("minimax-m3.1-flash", nvidia((_b, _n, init) => sseOver([...thinking, [60, content("42")]], init.signal)).fetchImpl);
+  await assert.rejects(() => drain(mini.stream(MSGS, timed)), (e) => e instanceof types.ProviderError && e.code === "timeout");
+
+  // Thinking that STOPS is still a failure, so "always reasons" is not "waits forever": the idle clock ends it.
+  const stalled = hosted("step-5-preview", nvidia((_b, _n, init) => sseOver([[10, thought("one thought")], [400, content("too late")]], init.signal)).fetchImpl);
+  await assert.rejects(() => drain(stalled.stream(MSGS, { ...timed, idleTimeoutMs: 150 })), (e) => e instanceof types.ProviderError && e.code === "timeout");
 });
 
 test("tool calls: offered in OpenAI form, assembled from fragments, and their results sent back paired by call id", async () => {

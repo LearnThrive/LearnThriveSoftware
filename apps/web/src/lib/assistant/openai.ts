@@ -156,6 +156,10 @@ export class OpenAiCompatibleProvider implements ChatProvider {
     const maxTokens = options.maxTokens + (profile?.alwaysReasons && effort === "off" ? reasoningAllowance : 0);
     const firstAnswerMs = options.firstAnswerTimeoutMs ?? options.firstTokenTimeoutMs;
     const idleMs = options.idleTimeoutMs ?? firstAnswerMs;
+    // A model that always reasons (Step 5 Preview) writes nothing until it has finished thinking, so "a visible word within
+    // firstAnswerMs of the request" fails it for working exactly as designed. While its reasoning is still arriving the answer clock
+    // is pushed forward; a stream that goes quiet is still ended by the idle clock, and the whole-turn deadline still bounds the wait.
+    const reasonsByDesign = profile?.alwaysReasons === true;
     const tools = options.tools?.length ? options.tools.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } })) : undefined;
 
     for (let attempt = 0; ; attempt += 1) {
@@ -173,6 +177,14 @@ export class OpenAiCompatibleProvider implements ChatProvider {
         first = null;
         if (idle) clearTimeout(idle);
         idle = setTimeout(stop, idleMs);
+      };
+      /** Reasoning is work: for a model that cannot stop reasoning it also holds the first-answer clock open. */
+      const thinking = () => {
+        activity();
+        if (reasonsByDesign && answer) {
+          clearTimeout(answer);
+          answer = setTimeout(stop, firstAnswerMs);
+        }
       };
       const answered = () => {
         if (answer) clearTimeout(answer);
@@ -282,7 +294,7 @@ export class OpenAiCompatibleProvider implements ChatProvider {
             if (thought) {
               // Hidden reasoning: evidence of work, never the answer. Reported now and then, never yielded as text.
               reasoned = true;
-              sawActivity();
+              thinking();
               if (Date.now() - lastActivity >= ACTIVITY_EVERY_MS) {
                 lastActivity = Date.now();
                 yield { type: "activity", kind: "thinking" };
