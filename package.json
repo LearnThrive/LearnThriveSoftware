@@ -50,5 +50,8 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.70.0",
     "vitest": "^3.2.7"
+  },
+  "dependencies": {
+    "mock": "^0.1.1"
   }
 }
