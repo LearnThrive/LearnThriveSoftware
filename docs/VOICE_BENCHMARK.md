@@ -55,7 +55,7 @@ Memory is what the process grew by when the voice loaded; the first Piper voice 
 
 ## The whole pipeline, end of speech to first audio
 
-The speech sidecar and Ollama (`qwen3.5:9b`, voice-mode prompt) as the site uses them, 6 utterances per configuration after a warm-up. "End of speech" is the moment the recording stops; the clock stops when the first clip of speech has been synthesised (the browser then starts playing it, a few milliseconds). The model's first spoken chunk is the first complete sentence of at least 24 characters, as the page speaks it. The hop through the Next route adds a few milliseconds and is not included.
+The speech sidecar and Ollama (`qwen3.5:9b`, voice-mode prompt) as the site uses them, 6 utterances per configuration after a warm-up. "End of speech" is the moment the recording stops; the clock stops when the first clip of speech has been synthesised (the browser then starts playing it, a few milliseconds). The model's first spoken chunk is what the page speaks first: its first complete sentence, or that sentence cut at a natural pause when it is longer than 64 characters (speech.ts, `speechChunksPartial`). The hop through the Next route adds a few milliseconds and is not included.
 
 | Recogniser | Recognition (target < 700) | First model token (target < 1000) | First sentence ready | First speech clip (target < 500) | **End of speech to first audio (target median < 2500)** | p95 | VRAM in use |
 | --- | --- | --- | --- | --- | --- | --- | --- |
