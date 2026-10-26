@@ -87,6 +87,14 @@ export interface HostedModelProfile {
 // Hosted reasoning models: queued at the provider, then reasoning before the answer. The whole turn stays bounded (one absolute deadline).
 const HOSTED_STAGES: Partial<StageBudgets> = { firstActivityMs: 90_000, firstAnswerMs: 240_000, idleMs: 90_000, toolRoundMs: 60_000, turnMs: 360_000 };
 
+/**
+ * Step 5 Preview reasons whatever it is asked, with a 16,000-token allowance, so its first visible word comes well after its reasoning
+ * starts. Measured 26 October 2026: an essay-marking turn reasoned for the whole 240 s first-answer window and was cut off having written
+ * nothing. Its turn therefore has room for thinking AND a long answer; the idle clock (90 s of silence) still ends a stalled stream, and
+ * the developer can Stop it at any time.
+ */
+const STEP_STAGES: Partial<StageBudgets> = { ...HOSTED_STAGES, firstAnswerMs: 600_000, turnMs: 900_000 };
+
 export const HOSTED_MODELS: readonly HostedModelProfile[] = [
   {
     choice: "minimax-m3.1-flash",
@@ -124,7 +132,7 @@ export const HOSTED_MODELS: readonly HostedModelProfile[] = [
     // No "none": the checkpoint reasons whatever is asked (its card says so), and measured on 26 October 2026 asking for none made it write its
     // own thinking into the answer instead of dropping it. Every level from minimal up is honoured.
     efforts: ["minimal", "low", "medium", "high", "xhigh", "max"],
-    stages: HOSTED_STAGES,
+    stages: STEP_STAGES,
   },
 ];
 
