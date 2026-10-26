@@ -88,9 +88,9 @@ export default defineConfig({
     stdout: 'pipe',
   }],
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] }, testIgnore: /(library-open|library-live|one-sign-in|study-buddy|study-buddy-voice|study-buddy-voice-auto|study-buddy-paper|learner)\.spec\.ts/ },
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] }, testIgnore: /(library-open|library-live|one-sign-in|study-buddy|study-buddy-activity|study-buddy-voice|study-buddy-voice-auto|study-buddy-paper|learner)\.spec\.ts/ },
     // The Library with its catalogue open (phase D onwards): its own server and its own in-memory data.
-    { name: 'library-open', use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:3101' }, testMatch: /(library-open|one-sign-in|study-buddy|study-buddy-voice|study-buddy-voice-auto|study-buddy-paper)\.spec\.ts/ },
+    { name: 'library-open', use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:3101' }, testMatch: /(library-open|one-sign-in|study-buddy|study-buddy-activity|study-buddy-voice|study-buddy-voice-auto|study-buddy-paper)\.spec\.ts/ },
     // Learner identity (docs/IDENTITY.md): Study Buddy on the mock model with the children's switch on, so the per-learner rules decide.
     { name: 'learner', use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:3103' }, testMatch: /learner\.spec\.ts/ },
     // Subscriptions open (phase E), with the fake Stripe.

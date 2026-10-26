@@ -150,10 +150,9 @@
   opacity: 0.55;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  :global(html:not([data-motion="reduce"], [data-motion-tier="reduced"])) .step[data-state="running"] .dot {
-    animation: pulse 1.2s ease-in-out infinite;
-  }
+/* The step in progress is marked by a still dot: the ring in the heading is the one thing that moves, so there is a single moving indicator. */
+.step[data-state="running"] .dot {
+  opacity: 1;
 }
 
 .text {
@@ -212,17 +211,6 @@
 @keyframes spin {
   to {
     transform: rotate(360deg);
-  }
-}
-
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 0.35;
-  }
-
-  50% {
-    opacity: 0.95;
   }
 }
 
