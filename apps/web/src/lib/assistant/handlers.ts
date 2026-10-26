@@ -1,3 +1,4 @@
+import { parseActivity } from "./activity";
 import { createHash, randomUUID } from "node:crypto";
 import { renewSession, type CookieJar } from "@/lib/account/session";
 import type { AccountRuntime } from "@/lib/account/runtime";
@@ -315,7 +316,9 @@ export async function handleSession(request: Request, deps: AssistantDeps, sessi
       title: session.title,
       messages: messages.map((m) => {
         const answeredBy = labels && m.role === "assistant" ? modelLabel(m.generatedBy) : null;
-        return { id: m.id, role: m.role, content: m.content, createdAt: m.createdAt.toISOString(), ...(m.role === "user" && carried(m.id).length > 0 ? { files: carried(m.id) } : {}), ...(answeredBy ? { model: answeredBy } : {}) };
+        // The research and checks done for an answer (activity.ts), read back and checked again. Kept apart from the answer's own text.
+        const activity = m.role === "assistant" ? parseActivity(m.activity) : [];
+        return { id: m.id, role: m.role, content: m.content, createdAt: m.createdAt.toISOString(), ...(m.role === "user" && carried(m.id).length > 0 ? { files: carried(m.id) } : {}), ...(answeredBy ? { model: answeredBy } : {}), ...(activity.length ? { activity } : {}) };
       }),
     },
     { "Cache-Control": "no-store" },

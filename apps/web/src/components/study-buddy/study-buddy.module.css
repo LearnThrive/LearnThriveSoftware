@@ -468,14 +468,6 @@
   color: var(--fg-strong);
 }
 
-.thinking {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  color: var(--fg-muted);
-  font-size: var(--text-small);
-}
-
 .jump {
   position: absolute;
   inset-block-end: var(--space-3);

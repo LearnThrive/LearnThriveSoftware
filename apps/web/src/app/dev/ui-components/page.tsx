@@ -14,6 +14,7 @@ const COMPONENTS = [
   { slug: "auth-card", name: "AuthCard", note: "Sign-in and sign-up." },
   { slug: "pricing-card", name: "PricingCard", note: "The Library's pricing card, coming-soon and live states." },
   { slug: "pencil-loader", name: "PencilLoader", note: "The loading and thinking indicator." },
+  { slug: "activity-panel", name: "ActivityPanel", note: "What Study Buddy is doing for an answer: live, then folded into one row." },
 ] as const;
 
 /**

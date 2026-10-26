@@ -5,6 +5,7 @@ import { strategyBlock } from "./exam/strategies";
 import { defuseMarkers } from "./research/htmlText";
 import { groundTurn, groundingBlock, shouldGround, unsupportedNames, type Grounding } from "./research/ground";
 import { extractQuotations } from "./research/quotations";
+import type { ActivityLog } from "./activity";
 import { checkCalculations, type GateResult } from "./gate";
 import { claimedSpeaker } from "./research/playText";
 import { boardName, needsResearch, type QuoteStatus, type QuoteVerdict, type ResearchService, type ResearchSession } from "./research/verify";
@@ -75,6 +76,8 @@ export interface StudyInput {
   extracts?: string[];
   owner: string;
   signal?: AbortSignal;
+  /** The turn's activity log. The work below is recorded in it as it happens. */
+  activity?: ActivityLog;
 }
 
 const MAX_QUOTES = 6;
@@ -111,7 +114,12 @@ export function planStudy(text: string, history: readonly HistoryItem[], setting
 
 export async function prepareStudy(input: StudyInput): Promise<StudyPrep> {
   const ctx = detectStudyContext(input.text, { history: input.history, settings: input.settings });
-  const session = input.research?.available ? input.research.session(input.owner, input.signal) : null;
+  const session = input.research?.available ? input.research.session(input.owner, input.signal, input.activity) : null;
+  // The question was classified (deterministically, just now): say what it was taken to be, when it was taken to be something.
+  if (input.activity && ctx.subjectLabel) {
+    const what = ctx.activity === "mark_essay" ? "marking an essay" : ctx.activity === "quote_check" ? "checking a quotation" : ctx.activity === "exam_answer" ? "an exam answer" : ctx.activity === "solve" ? "working something out" : ctx.activity === "revise" ? "revision" : "";
+    input.activity.done(input.activity.start("analyse", "Understanding your question", [ctx.subjectLabel, what, ctx.board].filter(Boolean).join(" · ")));
+  }
   // Read first, answer second: for a subject where facts matter, the model is handed excerpts of real pages to build on.
   const willGround = shouldGround(ctx, input.text);
   const grounding = session && willGround ? await groundTurn(session, ctx, input.text).catch((): Grounding => ({ status: "unavailable", queries: [], sources: [], note: "the reading failed" })) : null;
@@ -123,6 +131,7 @@ export async function prepareStudy(input: StudyInput): Promise<StudyPrep> {
   const wantsQuotes = ctx.activity === "quote_check" || ctx.activity === "mark_essay" || ctx.subject === "english_literature";
   if (wantsQuotes) {
     const quotes = extractQuotations(input.material).slice(0, MAX_QUOTES);
+    const checking = session && input.activity && quotes.length ? input.activity.start("verify", "Checking the quotations in your message", `${quotes.length} to check`) : null;
     let beyond = 0;
     for (const quotation of quotes) {
       if (!session || session.searches >= 3) {
@@ -135,6 +144,10 @@ export async function prepareStudy(input: StudyInput): Promise<StudyPrep> {
       quoteChecks.set(`${quoteKey(quotation)}|${claimedSpeaker(sentence, quotation) ?? ""}`, verdict);
       verdicts.set(quoteKey(quotation), verdict.status);
       lines.push(describe(verdict));
+    }
+    if (checking && input.activity) {
+      const good = quotes.filter((q) => ["verified_exact", "verified_variant"].includes(verdicts.get(quoteKey(q)) ?? "")).length;
+      input.activity.done(checking, { detail: `${good} of ${quotes.length} confirmed in the text` });
     }
     if (beyond) lines.push(`${beyond} further quotation${beyond === 1 ? "" : "s"} could not be checked here. Say they are unchecked.`);
   }
@@ -221,9 +234,5 @@ export async function finishStudy(prep: StudyPrep, answer: string, options: { de
   if (notes.length) parts.push(`Check:\n${notes.map((n) => `- ${n}`).join("\n")}`);
   else if (prep.gate && prep.gate.checked >= 2 && prep.mode === "advanced") parts.push(`Checked: ${prep.gate.checked} lines of the working were checked by calculation.`);
 
-  const listed = new Map<string, string>();
-  for (const s of prep.grounding?.sources ?? []) listed.set(s.url, s.title);
-  for (const s of session?.summary().sources ?? []) if (!listed.has(s.url)) listed.set(s.url, s.title);
-  if (listed.size) parts.push(`Sources read: ${[...listed].slice(0, 4).map(([url, title]) => `${title || new URL(url).hostname} (${url})`).join("; ")}.`);
   return parts.length ? `\n\n---\n${parts.join("\n\n")}` : "";
 }

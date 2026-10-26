@@ -93,7 +93,7 @@ function toSession(row: Row): ChatSessionRecord {
 }
 
 function toMessage(row: Row): ChatMessageRecord {
-  return { id: row.id, sessionId: row.session_id, role: row.role, content: row.content, createdAt: new Date(row.created_at), deleteAfter: new Date(row.delete_after), generatedBy: row.generated_by ?? null };
+  return { id: row.id, sessionId: row.session_id, role: row.role, content: row.content, createdAt: new Date(row.created_at), deleteAfter: new Date(row.delete_after), generatedBy: row.generated_by ?? null, activity: row.activity ?? null };
 }
 
 function toChatFile(row: Row): ChatFileRecord {
@@ -674,15 +674,19 @@ export class SqlLibraryStore implements LibraryStore {
     appendMessage: async (owner, sessionId, role, content, now, meta) => {
       // generated_by (0015) is named only when there is one, so ordinary turns do not depend on that migration having been applied.
       const generatedBy = role === "assistant" && meta?.generatedBy ? meta.generatedBy.slice(0, 120) : null;
+      // activity (0016) likewise: named only when there is one, and only for an answer, within its bound.
+      const activity = role === "assistant" && meta?.activity && meta.activity.length >= 2 && meta.activity.length <= 6000 ? meta.activity : null;
+      const extraColumns = [generatedBy ? "generated_by" : null, activity ? "activity" : null].filter(Boolean) as string[];
+      const extraValues = [generatedBy, activity].filter((v): v is string => Boolean(v));
       const rows = await this.db.query<Row>(
         `with s as (select id from public.chat_sessions s where ${OWN} and s.id = $3),
               t as (select greatest($5::timestamptz, coalesce((select max(created_at) + interval '1 millisecond' from public.chat_messages where session_id = $3), $5::timestamptz)) as ts),
-              ins as (insert into public.chat_messages (session_id, role, content, created_at, delete_after${generatedBy ? ", generated_by" : ""})
-                      select s.id, $4, $6, t.ts, t.ts + interval '30 days'${generatedBy ? ", $7" : ""} from s, t returning *),
+              ins as (insert into public.chat_messages (session_id, role, content, created_at, delete_after${extraColumns.map((c) => `, ${c}`).join("")})
+                      select s.id, $4, $6, t.ts, t.ts + interval '30 days'${extraValues.map((_, i) => `, $${7 + i}`).join("")} from s, t returning *),
               upd as (update public.chat_sessions set last_activity_at = (select ts from t), delete_after = (select ts from t) + interval '30 days'
                        where id in (select id from s))
          select * from ins`,
-        generatedBy ? [owner.clientId, owner.studentId, sessionId, role, now, content, generatedBy] : [owner.clientId, owner.studentId, sessionId, role, now, content],
+        [owner.clientId, owner.studentId, sessionId, role, now, content, ...extraValues],
       );
       if (!rows[0]) throw new Error("no such chat");
       return toMessage(rows[0]);
