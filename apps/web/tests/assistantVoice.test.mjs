@@ -297,3 +297,14 @@ test("end of speech: a pause between words does not end the turn, a silence does
   assert.deepEqual(blocks(endless, 0.2, 2100), ["speech_started", "too_long"]);
   assert.ok(Math.abs(audio.rms(Float32Array.from([0.5, -0.5, 0.5, -0.5])) - 0.5) < 1e-9);
 });
+
+test("a whole message is read in pieces the speech route accepts, without losing its last words", () => {
+  // One sentence far longer than one request: the read-aloud button must cut it at word boundaries, not drop its end.
+  const long = `${Array.from({ length: 200 }, () => "word").join(" ")}. Final sentence.`;
+  const pieces = speech.speechChunksWhole(long, 300);
+  assert.ok(pieces.length > 1);
+  assert.ok(pieces.every((p) => p.length <= 300), "each request stays under the route's 600-character limit");
+  assert.equal(pieces.join(" "), long);
+  assert.ok(pieces.at(-1).endsWith("Final sentence."), "the end of the message is still spoken");
+  assert.deepEqual(speech.speechChunksWhole(""), []);
+});

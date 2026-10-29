@@ -33,6 +33,7 @@ import {
 import { ADULT_ACKNOWLEDGEMENT } from "@/lib/assistant/prompt";
 import { parseMarkdown, plainText } from "@/lib/assistant/markdown";
 import { RenderedAnswer } from "./RenderedAnswer";
+import { SpeakButton } from "./SpeakButton";
 import { useVoice, type Speaker } from "./useVoice";
 import { VoicePanel } from "./VoicePanel";
 import { PaperTutor } from "./PaperTutor";
@@ -1085,7 +1086,14 @@ export function StudyBuddy() {
                         ))}
                       </ul>
                     ) : null}
-                    {m.content && !(m.files?.length && FILE_ONLY_TEXT.test(m.content)) ? <p className={styles.plain}>{m.content}</p> : null}
+                    {m.content && !(m.files?.length && FILE_ONLY_TEXT.test(m.content)) ? (
+                      <>
+                        <p className={styles.plain}>{m.content}</p>
+                        <div className={`${styles.actions} ${styles.actionsEnd}`}>
+                          <SpeakButton text={m.content} serverVoice={Boolean(status?.voice)} className={styles.actionButton} />
+                        </div>
+                      </>
+                    ) : null}
                   </article>
                 ) : (
                   <article
@@ -1112,6 +1120,7 @@ export function StudyBuddy() {
                         >
                           {copied === m.id ? "Copied" : "Copy"}
                         </button>
+                        <SpeakButton text={m.content} serverVoice={Boolean(status?.voice)} className={styles.actionButton} />
                       </div>
                     ) : null}
                   </article>

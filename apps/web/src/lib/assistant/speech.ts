@@ -203,6 +203,38 @@ export function speechChunks(speech: string, options?: ChunkOptions): string[] {
 }
 
 /**
+ * Every word of a passage, as chunks the speech route will take: it refuses more than 600 characters, so nothing here is longer
+ * than `max`. A sentence longer than that is cut at a word boundary rather than dropped, which is what `speechChunks` does to a
+ * sentence over its own `max` (it is built for a live answer, where the rest arrives in the next delta). Reading a message that is
+ * already complete must not lose its last words.
+ */
+export function speechChunksWhole(speech: string, max = 300): string[] {
+  const pieces: string[] = [];
+  let current = "";
+  const add = (piece: string) => {
+    if (!piece) return;
+    if (current && `${current} ${piece}`.length > max) {
+      pieces.push(current);
+      current = piece;
+    } else {
+      current = current ? `${current} ${piece}` : piece;
+    }
+  };
+  for (const sentence of speech.split(/(?<=[.!?])\s+/)) {
+    let rest = sentence.trim();
+    while (rest.length > max) {
+      let cut = rest.lastIndexOf(" ", max);
+      if (cut < 40) cut = max; // one word longer than a whole chunk: cut it rather than loop forever
+      add(rest.slice(0, cut).trim());
+      rest = rest.slice(cut).trim();
+    }
+    add(rest);
+  }
+  if (current) pieces.push(current);
+  return pieces;
+}
+
+/**
  * The part of an answer that is safe to speak while it is still arriving: everything up to the last sentence end that is followed by
  * more text and is not inside an unfinished `$...$` or code fence. Anything after it may still change, so it waits.
  */
