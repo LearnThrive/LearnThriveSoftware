@@ -69,3 +69,9 @@ LearnThrive_Study_Buddy_Finish_Brief_Claude_Prompt.md
 __pycache__/
 *.pyc
 experiments/nemotron-voicechat/.env.example
+
+# Generated visual-review output: a 75 MB screenshot tree plus its zip, and the ad-hoc capture script that
+# produced them. Local QA artifacts, regenerable, not source (like the other screenshot scratch scripts above).
+docs/screenshots/website-review/
+docs/screenshots.zip
+apps/web/scripts/website-review.mjs
