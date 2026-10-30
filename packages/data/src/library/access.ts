@@ -78,12 +78,14 @@ const effective = (access: PlatformAccess, options: HomeOptions): PlatformAccess
 export function homePath(access: PlatformAccess, options: HomeOptions): string {
   const open = effective(access, options);
   if (open.dashboard) return "/dashboard";
-  if (open.studyBuddy) return options.studyBuddyOpen ? "/library/study-buddy" : "/library";
+  if (open.studyBuddy) return options.studyBuddyOpen ? "/library/ai" : "/library";
   return "/account";
 }
 
 const GATES: ReadonlyArray<{ base: string; needs: keyof Pick<PlatformAccess, "dashboard" | "studyBuddy"> }> = [
   { base: "/dashboard", needs: "dashboard" },
+  { base: "/library/ai", needs: "studyBuddy" },
+  // The old name for the assistant's page: still gated on the same access, then redirected by next.config.
   { base: "/library/study-buddy", needs: "studyBuddy" },
 ];
 

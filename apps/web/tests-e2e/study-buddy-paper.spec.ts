@@ -17,7 +17,7 @@ async function enrolledAndOpen(page: Page) {
   await signUp(page, email);
   await confirm(page, email);
   expect((await page.request.post('/api/dev/library-seed', { data: { action: 'enrol', email } })).ok()).toBe(true);
-  await page.goto('/library/study-buddy');
+  await page.goto('/library/ai');
   await expect(page.getByRole('heading', { level: 1, name: 'LearnThrive AI' })).toBeVisible();
   await hydrated(page);
 }

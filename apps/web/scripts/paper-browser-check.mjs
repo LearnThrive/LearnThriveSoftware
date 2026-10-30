@@ -71,7 +71,7 @@ const page = await (await browser.newContext({ viewport: { width: 1440, height: 
 await page.goto(`${base}/api/dev/library-seed?action=tester`);
 const login = await page.request.post(`${base}/api/account/login`, { data: { email: "tester@example.com", password: "study-buddy-test-2026" } });
 if (!login.ok()) throw new Error(`sign-in failed: ${login.status()}`);
-await page.goto(`${base}/library/study-buddy`);
+await page.goto(`${base}/library/ai`);
 await page.waitForLoadState("networkidle");
 const status = await (await page.request.get(`${base}/api/assistant/status`)).json();
 const report = { startedAt: stamp(), base, server: { launch: "launch.json study-buddy-ollama (npm run dev -- -p 3111)", storage: "in-memory library store, chat store, job store and upload storage (no LEARNTHRIVE_SUPABASE_USE): nothing here is written to a database", assistantStatus: { open: status.open, paperTutor: status.paperTutor } }, before, rounds: {}, checks: {} };

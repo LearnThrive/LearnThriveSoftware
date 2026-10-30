@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 export default async function LearnersPage() {
   const { rt, account } = await requireAccountPage("/account/learners");
   if (account.role === "STUDENT" || account.learner || !account.adultConfirmed) notFound();
-  if (await inSupervisedView(rt, await nextJar(), account.profileId)) redirect("/library/study-buddy");
+  if (await inSupervisedView(rt, await nextJar(), account.profileId)) redirect("/library/ai");
   return (
     <main id="main-content" className={styles.page} style={{ maxWidth: "52rem" }}>
       <h1>Your learners</h1>

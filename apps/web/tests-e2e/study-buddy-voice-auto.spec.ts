@@ -63,7 +63,7 @@ async function ready(page: Page) {
       return stream;
     };
   });
-  await page.goto('/library/study-buddy');
+  await page.goto('/library/ai');
   await expect(page.getByRole('heading', { level: 1, name: 'LearnThrive AI' })).toBeVisible();
   await hydrated(page);
   await page.getByRole('checkbox', { name: /18 or over/ }).check();

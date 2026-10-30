@@ -70,7 +70,7 @@ test.describe('HubNav', () => {
       expect(await nav.getByRole('link').evaluateAll((links) => links.map((a) => a.tagName + ':' + a.getAttribute('href')))).toEqual([
         'A:/',
         'A:/library',
-        'A:/library/study-buddy',
+        'A:/library/ai',
         'A:/library/search',
         'A:/account',
       ]);

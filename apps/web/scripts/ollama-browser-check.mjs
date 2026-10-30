@@ -85,7 +85,7 @@ await page.addInitScript(() => {
 await page.goto(`${base}/api/dev/library-seed?action=tester`);
 const login = await page.request.post(`${base}/api/account/login`, { data: { email: "tester@example.com", password: "study-buddy-test-2026" } });
 if (!login.ok()) throw new Error(`sign-in failed: ${login.status()}`);
-await page.goto(`${base}/library/study-buddy`);
+await page.goto(`${base}/library/ai`);
 await page.waitForLoadState("networkidle");
 
 await page.locator('input[type="file"]').first().setInputFiles({ name: "question-7.png", mimeType: "image/png", buffer: photo() });

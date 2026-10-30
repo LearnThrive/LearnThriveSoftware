@@ -38,13 +38,13 @@ export interface HubNavItem {
 export const hubNavItems: HubNavItem[] = [
   { href: "/", label: "Home", icon: "home" },
   { href: "/library", label: "Library", icon: "library" },
-  { href: "/library/study-buddy", label: "LearnThrive AI", icon: "study-buddy" },
+  { href: "/library/ai", label: "LearnThrive AI", icon: "study-buddy" },
   { href: "/library/search", label: "Search", icon: "search" },
   { href: "/account", label: "Account", icon: "account" },
 ];
 
 /**
- * Picks the item whose path is the longest match for the page: "/library/study-buddy" is LearnThrive AI, not Library;
+ * Picks the item whose path is the longest match for the page: "/library/ai" is LearnThrive AI, not Library;
  * "/library/x" is Library; "/" matches only exactly. Query strings and hashes in an item's href are ignored.
  */
 export function matchCurrentHref(items: readonly HubNavItem[], pathname: string | null): string | undefined {

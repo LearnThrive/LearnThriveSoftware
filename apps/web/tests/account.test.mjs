@@ -515,8 +515,8 @@ test("sign-in routing: staff and enrolled families open the dashboard, a subscri
 
   const landing = async (email, extra, deps) => (await loginAs(rt, email, extra, deps)).body.next;
   assert.equal(await landing("nobody@example.com", {}, open), "/account");
-  assert.equal(await landing("member@example.com", {}, open), "/library/study-buddy");
-  assert.equal(await landing("granted@example.com", {}, open), "/library/study-buddy");
+  assert.equal(await landing("member@example.com", {}, open), "/library/ai");
+  assert.equal(await landing("granted@example.com", {}, open), "/library/ai");
   assert.equal(await landing("member@example.com", {}, {}), "/library", "LearnThrive AI closed: the Library is home");
   assert.equal(await landing("family@example.org", {}, open), "/dashboard");
   assert.equal(await landing("paused@example.com", {}, open), "/account", "a paused assignment is not enrolment");
@@ -524,17 +524,17 @@ test("sign-in routing: staff and enrolled families open the dashboard, a subscri
   assert.equal(await landing("admin@example.com", {}, open), "/dashboard");
 
   // The signed-in app closed (production before the portal opens): enrolled families land on what is open.
-  assert.equal(await landing("family@example.org", {}, { studyBuddyOpen: true, dashboardOpen: false }), "/library/study-buddy");
+  assert.equal(await landing("family@example.org", {}, { studyBuddyOpen: true, dashboardOpen: false }), "/library/ai");
   assert.equal(await landing("family@example.org", {}, { studyBuddyOpen: false, dashboardOpen: false }), "/library");
 
   // A page asked for is kept when the access includes it, and replaced by home when it does not.
   assert.equal(await landing("family@example.org", { next: "/dashboard/lessons" }, open), "/dashboard/lessons");
-  assert.equal(await landing("member@example.com", { next: "/dashboard/lessons" }, open), "/library/study-buddy");
-  assert.equal(await landing("nobody@example.com", { next: "/library/study-buddy" }, open), "/account");
+  assert.equal(await landing("member@example.com", { next: "/dashboard/lessons" }, open), "/library/ai");
+  assert.equal(await landing("nobody@example.com", { next: "/library/ai" }, open), "/account");
   assert.equal(await landing("member@example.com", { next: "/library/search?q=maths" }, open), "/library/search?q=maths");
   // Anything that is not a plain path on this site is ignored, never followed.
   for (const hostile of ["//evil.example/x", "https://evil.example", "/\\evil", "dashboard", "/a\nb", 5, null, ["/dashboard"]]) {
-    assert.equal(await landing("member@example.com", { next: hostile }, open), "/library/study-buddy", String(hostile));
+    assert.equal(await landing("member@example.com", { next: hostile }, open), "/library/ai", String(hostile));
     assert.equal(await landing("family@example.org", { next: hostile }, open), "/dashboard", String(hostile));
   }
 });

@@ -56,7 +56,7 @@ test.describe('LIBRARY_ENABLED=true opens the account and Library routes and not
     }
     const status = await request.get('/api/assistant/status');
     expect(await status.json()).toEqual({ open: false, reason: 'disabled' });
-    expect((await request.get('/library/study-buddy')).status()).toBe(404);
+    expect((await request.get('/library/ai')).status()).toBe(404);
   });
 
   test('the member account page does not exist without a backend, and a cross-site post is refused first', async ({ request }) => {

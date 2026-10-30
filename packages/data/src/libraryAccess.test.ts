@@ -96,7 +96,7 @@ test("platformAccess agrees with canAccess for members content, for every role a
 test("homePath: the dashboard for staff and enrolled, LearnThrive AI for subscribers (the Library when it is closed), the account page for the rest", () => {
   assert.equal(homePath(platformAccess("CLIENT", facts({ enrolled: true })), open), "/dashboard");
   assert.equal(homePath(platformAccess("ADMIN", none), closed), "/dashboard");
-  assert.equal(homePath(platformAccess("CLIENT", facts({ subscription: true })), open), "/library/study-buddy");
+  assert.equal(homePath(platformAccess("CLIENT", facts({ subscription: true })), open), "/library/ai");
   assert.equal(homePath(platformAccess("CLIENT", facts({ subscription: true })), closed), "/library");
   assert.equal(homePath(platformAccess("CLIENT", none), open), "/account");
 });
@@ -106,13 +106,13 @@ test("destinationFor: a page the person asked for is kept when their access incl
   const enrolled = platformAccess("CLIENT", facts({ enrolled: true }));
   const nobody = platformAccess("CLIENT", none);
   // The dashboard is closed to a subscriber, whatever page of it was asked for.
-  assert.equal(destinationFor(member, "/dashboard", open), "/library/study-buddy");
-  assert.equal(destinationFor(member, "/dashboard/lessons/abc?x=1", open), "/library/study-buddy");
+  assert.equal(destinationFor(member, "/dashboard", open), "/library/ai");
+  assert.equal(destinationFor(member, "/dashboard/lessons/abc?x=1", open), "/library/ai");
   assert.equal(destinationFor(member, "/dashboardx", open), "/dashboardx", "a different path that merely starts with the same letters is not the dashboard");
   assert.equal(destinationFor(enrolled, "/dashboard/lessons/abc", open), "/dashboard/lessons/abc");
   // LearnThrive AI is closed to someone with no entitlement.
-  assert.equal(destinationFor(nobody, "/library/study-buddy", open), "/account");
-  assert.equal(destinationFor(member, "/library/study-buddy", open), "/library/study-buddy");
+  assert.equal(destinationFor(nobody, "/library/ai", open), "/account");
+  assert.equal(destinationFor(member, "/library/ai", open), "/library/ai");
   // Pages open to every signed-in person are kept.
   assert.equal(destinationFor(nobody, "/account/billing", open), "/account/billing");
   assert.equal(destinationFor(member, "/library/search?q=maths", open), "/library/search?q=maths");
@@ -126,9 +126,9 @@ test("destinationFor: nothing asked for, or the login page itself, or something 
 test("a closed signed-in app (production before the portal opens) is nobody's home or destination: enrolled families land on what is open", () => {
   const enrolled = platformAccess("CLIENT", facts({ enrolled: true }));
   const shut = { studyBuddyOpen: true, dashboardOpen: false };
-  assert.equal(homePath(enrolled, shut), "/library/study-buddy");
+  assert.equal(homePath(enrolled, shut), "/library/ai");
   assert.equal(homePath(enrolled, { studyBuddyOpen: false, dashboardOpen: false }), "/library");
-  assert.equal(destinationFor(enrolled, "/dashboard/lessons", shut), "/library/study-buddy");
+  assert.equal(destinationFor(enrolled, "/dashboard/lessons", shut), "/library/ai");
   assert.equal(destinationFor(enrolled, "/library/search", shut), "/library/search");
   // Staff with no Library right and a closed app have nowhere but their account.
   assert.equal(homePath(platformAccess("TUTOR", none), shut), "/account");

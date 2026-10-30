@@ -43,7 +43,7 @@ await ask("Thanks. And what is 3/4 + 1/8?", sid);
 const results = [];
 for (const [width, height] of [[1440, 900], [1024, 768], [768, 1024], [390, 844], [320, 640]]) {
   await page.setViewportSize({ width, height });
-  await page.goto(`${base}/library/study-buddy`);
+  await page.goto(`${base}/library/ai`);
   await page.waitForLoadState("networkidle");
   await page.evaluate(() => document.getAnimations().forEach((a) => a.finish()));
   if (width === 1440 || width === 390) await page.screenshot({ path: join(out, `empty-${width}.png`) });
@@ -96,7 +96,7 @@ for (const [width, height] of [[1440, 900], [1024, 768], [768, 1024], [390, 844]
 // The voice panel, desktop and phone.
 for (const [width, height] of [[1440, 900], [390, 844]]) {
   await page.setViewportSize({ width, height });
-  await page.goto(`${base}/library/study-buddy`);
+  await page.goto(`${base}/library/ai`);
   await page.waitForLoadState("networkidle");
   const talk = page.getByRole("button", { name: /Talk instead|Voice/i }).first();
   if (await talk.isVisible().catch(() => false)) {
@@ -111,7 +111,7 @@ for (const [width, height] of [[1440, 900], [390, 844]]) {
 const worksheet = join(here, "..", "tests", "fixtures", "documents", "text-native.pdf");
 for (const [width, height] of [[1440, 900], [390, 844], [320, 640]]) {
   await page.setViewportSize({ width, height });
-  await page.goto(`${base}/library/study-buddy`);
+  await page.goto(`${base}/library/ai`);
   await page.waitForLoadState("networkidle");
   const ack = page.getByRole("checkbox", { name: /18 or over/ });
   if (await ack.isVisible().catch(() => false)) await ack.check();
