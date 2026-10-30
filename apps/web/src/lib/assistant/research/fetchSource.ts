@@ -1,5 +1,5 @@
 import { checkUrl, type Resolver } from "./safeUrl";
-import type { Crawl4aiClient } from "./crawl4ai";
+import type { CrawlOutcome } from "./crawl4ai";
 import { cleanText, defuseMarkers, htmlToText, scanForInjection } from "./htmlText";
 import { isPlayTextHost } from "./playText";
 
@@ -65,13 +65,19 @@ export type FetchedSource =
       truncated: boolean;
       injection: string[];
       /** How the text was obtained: read in a real browser by Crawl4AI, or fetched directly. */
-      via: "crawl4ai" | "direct";
+      via: "crawl4ai" | "ollama" | "direct";
       /** Why the crawler was not used or failed, when it was tried (never silently dropped). */
       crawlNote: string;
       /** The page's HTML, kept only for known play-text sites so speakers and scenes can be read from its structure. */
       html: string;
     }
   | { ok: false; code: FetchFailure; reason: string };
+
+/** A reader that turns a page address into readable text: the self-hosted browser (Crawl4AI), Ollama's web_fetch, or an ordered set of them. */
+export interface PageReader {
+  readonly available: boolean;
+  crawl(url: string, signal?: AbortSignal): Promise<CrawlOutcome>;
+}
 
 export interface FetchOptions {
   fetcher?: PageFetcher;
@@ -82,7 +88,7 @@ export interface FetchOptions {
   timeoutMs?: number;
   signal?: AbortSignal;
   /** The self-hosted browser reader. Used for HTML pages when it is available; the direct fetch is the fallback. */
-  crawler?: Crawl4aiClient | null;
+  crawler?: PageReader | null;
   /** Reads a PDF's bytes into text. Injected so tests need no PDF library. */
   pdfText?: (bytes: Uint8Array) => Promise<string | null>;
 }
@@ -129,7 +135,7 @@ export async function fetchSource(start: string, options: FetchOptions = {}): Pr
       const maxChars = options.maxChars ?? 30_000;
       let title = "";
       let text: string;
-      let via: "crawl4ai" | "direct" = "direct";
+      let via: "crawl4ai" | "ollama" | "direct" = "direct";
       let crawlNote = "";
       let html = "";
       if (kind === "pdf") {
@@ -152,7 +158,7 @@ export async function fetchSource(start: string, options: FetchOptions = {}): Pr
             if (readable.length >= Math.min(300, text.length)) {
               text = readable;
               title = crawled.title || title;
-              via = "crawl4ai";
+              via = crawled.reader === "ollama" ? "ollama" : "crawl4ai";
               if (isPlayTextHost(new URL(crawled.finalUrl).hostname) && crawled.html) html = crawled.html.slice(0, 1_500_000);
             } else crawlNote = "the browser read less of the page than the direct fetch";
           } else crawlNote = crawled.detail;

@@ -32,16 +32,20 @@ import {
 } from "@/components/shell/SidebarSlot";
 import { ADULT_ACKNOWLEDGEMENT } from "@/lib/assistant/prompt";
 import { parseMarkdown, plainText } from "@/lib/assistant/markdown";
+import dynamic from "next/dynamic";
 import { RenderedAnswer } from "./RenderedAnswer";
+import { isInterfaceMessage, plainTextOf } from "@/lib/openui/format";
 import { SpeakButton } from "./SpeakButton";
 import { useVoice, type Speaker } from "./useVoice";
 import { VoicePanel } from "./VoicePanel";
 import { PaperTutor } from "./PaperTutor";
-import { EffortPicker, ModelPicker, type ModelChoice } from "./ModelPicker";
 import { ActivityPanel, hasNotableWork, type ActivityView, type PanelStep } from "./ActivityPanel";
 import { settle, withStep, withoutWaiting } from "./activityView";
 import type { ActivityStep } from "@/lib/assistant/activity";
 import styles from "./study-buddy.module.css";
+
+// An interactive answer (OpenUI, its parser and the component library) is downloaded only when a conversation actually has one in it.
+const InterfaceMessage = dynamic(() => import("../openui/InterfaceMessage"), { ssr: false, loading: () => <p className={styles.plain}>Opening the interactive answer…</p> });
 
 /** A photo or document that went with a message. It is fetched from /api/assistant/files/:id; a reopened chat does not know its name. */
 interface MsgFile {
@@ -54,9 +58,9 @@ interface Msg {
   id: string;
   role: "user" | "assistant";
   content: string;
+  /** An interactive answer still arriving: the program so far, drawn with its controls off. The server's `final` event replaces it with `content`. */
+  draft?: string;
   files?: MsgFile[];
-  /** Developer view only: the model the server says wrote this answer ("Step 5 Preview"). Never set from the picker's own state. */
-  model?: string;
   /** What was done for this answer, from the server's own steps (live), or kept with it (a reopened chat). Never part of the answer's text. */
   activity?: ActivityView;
 }
@@ -86,62 +90,14 @@ interface Status {
   paperTutor?: boolean;
   paperMarker?: boolean;
   minorsApproved?: boolean;
+  /** Interactive answers are switched on. */
+  interactive?: boolean;
   limits?: {
     dailyMessages: number;
     perMinute: number;
     maxInputChars: number;
     files: number;
   };
-  /** The developer model picker: present only for an account the server lets choose. */
-  models?: {
-    choices: ModelChoice[];
-    default: string | null;
-    /** An opaque per-account key, so a shared browser never carries one person's choice to another. */
-    scope: string;
-    /** Whether uploads may be sent to the hosted models. */
-    uploads: boolean;
-  };
-}
-
-const PICKED_KEY = (scope: string) => `learnthrive:sb-model:${scope}`;
-// The reasoning effort is remembered the same way, under its own key: a model's levels differ, so it is re-resolved whenever the model changes.
-const EFFORT_KEY = (scope: string) => `learnthrive:sb-effort:${scope}`;
-
-/** The reasoning efforts a model's picker offers (empty: that model takes no effort setting, so no effort picker is shown). */
-const effortsFor = (choices: readonly ModelChoice[], id: string | null) => choices.find((c) => c.id === id)?.efforts ?? [];
-
-/** A picked model's failure, said with its name and the cause the server reported, so the developer knows what to change. */
-const DETAIL_TEXT: Record<string, string> = {
-  unauthorised: "the NVIDIA key was refused",
-  model_missing: "NVIDIA does not list this model for the key in use",
-  rate_limited: "NVIDIA is limiting requests",
-  unreachable: "NVIDIA could not be reached",
-  timeout: "it took too long",
-  stream_broken: "the connection broke while it was answering",
-  stream_error: "NVIDIA reported an error part-way through",
-  reasoning_exhausted: "it spent its whole allowance reasoning",
-  reasoning_only: "it reasoned but wrote no answer",
-  no_content: "it returned nothing",
-  too_large: "the request was too large for it",
-};
-
-function pickedModelError(event: { code?: string; model?: string | null; detail?: string; retryAfterSeconds?: number }): string | null {
-  const who = event.model || "The chosen model";
-  const why = event.detail ? (DETAIL_TEXT[event.detail] ?? (event.detail.startsWith("http_") ? `NVIDIA answered with HTTP ${event.detail.slice(5)}` : event.detail.replace(/_/g, " "))) : null;
-  switch (event.code) {
-    case "model_rate_limited":
-      return `${who} is being rate limited by NVIDIA. Wait ${event.retryAfterSeconds ? `${event.retryAfterSeconds} seconds` : "a moment"} and try again, or choose another model.`;
-    case "model_unavailable":
-      return `${who} could not answer${why ? ` (${why})` : ""}. No other model answered in its place. Try again, or choose another model.`;
-    case "no_answer":
-      return `${who} finished without an answer${why ? ` (${why})` : ""}. Try again, or ask a narrower question.`;
-    case "model_budget":
-      return "Today's allowance for the trial models has been used. The local model is still available if it is listed.";
-    case "uploads_not_sent":
-      return `Files are not sent to ${event.model || "the trial models"}. Remove the file, or switch to the local model to use it.`;
-    default:
-      return null;
-  }
 }
 
 /** The connection closed before the answer's closing event: said the same way as a lost connection. */
@@ -154,10 +110,10 @@ const ERROR_TEXT: Record<string, string> = {
   busy: "LearnThrive AI is busy right now. Please try again in a moment.",
   unavailable:
     "LearnThrive AI could not answer just now. Please try again shortly.",
-  timeout: "That took too long. LearnThrive AI may still have been warming up, so please try again. A photo can take a minute or two the first time.",
+  timeout: "That took too long. Please try again, or ask a narrower question.",
   budget: "LearnThrive AI has reached its limit for today.",
   vision_unavailable:
-    "LearnThrive AI cannot look at photos right now. You can type the question instead.",
+    "LearnThrive AI reads text, not photos or scanned pages. Please type the question, or upload a PDF that has text you can select.",
   too_long: "That message is too long. Please shorten it.",
   empty: "Please type a question first.",
   no_chat: "That chat is no longer there. Please start a new one.",
@@ -179,8 +135,7 @@ const nextId = () => `local-${(counter += 1)}`;
  * header, ONE scrolling conversation, and the box, which stays on screen. Answers stream in as newline-delimited JSON events; Stop
  * ends one (what was shown is kept). Everything an answer shows goes through the safe Markdown renderer, maths is drawn by KaTeX
  * loaded only when needed, and the AI and privacy notice is said once, beside the box, not stamped on every answer. Screen readers
- * hear the answer a sentence at a time. Nothing is kept in the browser, except, for a developer who may choose the model, the last choice
- * (under an opaque per-account key).
+ * hear the answer a sentence at a time. Nothing is kept in the browser.
  */
 export function StudyBuddy() {
   const [status, setStatus] = useState<Status | null>(null);
@@ -207,11 +162,6 @@ export function StudyBuddy() {
   } | null>(null);
   const [offline, setOffline] = useState(false);
   const [atLatest, setAtLatest] = useState(true);
-  // The developer's chosen model (only when the server offers a choice). It stays for every question until changed, and is kept in this
-  // browser under the account's own opaque key.
-  const [picked, setPicked] = useState<string | null>(null);
-  // "Auto" until the developer chooses: the question then decides, exactly as it did before the picker existed.
-  const [effort, setEffort] = useState<string>("auto");
   const [paper, setPaper] = useState<{
     file: File;
     fileId: string;
@@ -285,24 +235,6 @@ export function StudyBuddy() {
         ? ((await response.json()) as Status)
         : { open: false, reason: "unreachable" };
       setStatus(loaded);
-      if (loaded.models) {
-        let saved: string | null = null;
-        try {
-          saved = window.localStorage.getItem(PICKED_KEY(loaded.models.scope));
-        } catch {
-          saved = null;
-        }
-        const choices = loaded.models.choices;
-        const next = choices.some((c) => c.id === saved) ? saved : (loaded.models.default ?? choices[0]?.id ?? null);
-        setPicked(next);
-        let savedEffort: string | null = null;
-        try {
-          savedEffort = window.localStorage.getItem(EFFORT_KEY(loaded.models.scope));
-        } catch {
-          savedEffort = null;
-        }
-        setEffort(effortsFor(choices, next).some((e) => e.id === savedEffort) ? (savedEffort as string) : "auto");
-      }
       void refresh();
     })();
   }, [refresh]);
@@ -344,32 +276,6 @@ export function StudyBuddy() {
   function clearAttachments() {
     setFiles([]);
     fileIdsRef.current = new Map();
-  }
-
-  function choose(id: string) {
-    setPicked(id);
-    // A model's levels are its own: an effort the new model does not offer goes back to Auto rather than being silently changed.
-    const next = effortsFor(status?.models?.choices ?? [], id).some((e) => e.id === effort) ? effort : "auto";
-    setEffort(next);
-    const scope = status?.models?.scope;
-    if (!scope) return;
-    try {
-      window.localStorage.setItem(PICKED_KEY(scope), id);
-      window.localStorage.setItem(EFFORT_KEY(scope), next);
-    } catch {
-      // Not kept in this browser: it still applies for this visit.
-    }
-  }
-
-  function chooseEffort(id: string) {
-    setEffort(id);
-    const scope = status?.models?.scope;
-    if (!scope) return;
-    try {
-      window.localStorage.setItem(EFFORT_KEY(scope), id);
-    } catch {
-      // Not kept in this browser: it still applies for this visit.
-    }
   }
 
   // Leaving the chat with files still in the box (a new chat, or another one): they are not going to be sent, so release them.
@@ -583,8 +489,6 @@ export function StudyBuddy() {
     let failed = "";
     /** The server's closing event (`done` or `error`) arrived. Without it the answer is incomplete. */
     let ended = false;
-    // Fixed for this question: the picker is disabled until the answer ends, so nothing changes the model part-way through one.
-    const model = status?.models ? picked : null;
     try {
       const response = await fetch("/api/assistant/chat", {
         method: "POST",
@@ -596,9 +500,6 @@ export function StudyBuddy() {
           fileIds: attached,
           adultAck: needsAck ? true : undefined,
           voice: viaVoice || undefined,
-          model: model ?? undefined,
-          // Only with a picked model, and only when the developer chose one: "Auto" leaves it to the question, on the server.
-          effort: model && effort !== "auto" ? effort : undefined,
         }),
       });
       if (!response.ok || !response.body) {
@@ -640,9 +541,9 @@ export function StudyBuddy() {
               step?: ActivityStep;
               /** A held answer (verified, advanced) arrives once, whole, after every check: it replaces, it is not appended. */
               whole?: boolean;
-              /** Developer view: who answered (done) or who failed (error), as the server reports it. */
-              model?: string | null;
-              detail?: string;
+              /** An interactive answer: `start` clears any draft, `chunk` adds to it, `discard` drops it, `final` is the checked interface to keep. */
+              phase?: "start" | "chunk" | "discard" | "final";
+              content?: string;
               retryAfterSeconds?: number;
             };
             if (event.type === "done" || event.type === "error") ended = true;
@@ -660,6 +561,22 @@ export function StudyBuddy() {
               if (phrase && step.state === "running" && !announcedKinds.has(step.kind)) {
                 announcedKinds.add(step.kind);
                 setAnnounce(phrase);
+              }
+            } else if (event.type === "ui") {
+              if (!textBegan) {
+                textBegan = true;
+                patchActivity(withoutWaiting);
+              }
+              if (event.phase === "start" || event.phase === "discard") {
+                setMessages((m) => m.map((x) => (x.id === reply.id ? { ...x, draft: event.phase === "start" ? "" : undefined } : x)));
+              } else if (event.phase === "chunk" && event.text) {
+                const more = event.text;
+                setMessages((m) => m.map((x) => (x.id === reply.id ? { ...x, draft: (x.draft ?? "") + more } : x)));
+              } else if (event.phase === "final" && event.content) {
+                answer = event.content;
+                const kept = event.content;
+                setMessages((m) => m.map((x) => (x.id === reply.id ? { ...x, content: kept, draft: undefined } : x)));
+                setAnnounce("The interactive answer is ready.");
               }
             } else if (event.type === "delta" && event.text) {
               if (!textBegan) {
@@ -688,16 +605,8 @@ export function StudyBuddy() {
                   );
                 spoken.current = end + 1;
               }
-            } else if (event.type === "done" && event.model) {
-              const by = event.model;
-              setMessages((m) => m.map((x) => (x.id === reply.id ? { ...x, model: by } : x)));
             } else if (event.type === "error") {
-              failed = pickedModelError(event) ?? ERROR_TEXT[event.code ?? ""] ?? ERROR_TEXT.unavailable!;
-              // Part of an answer arrived before the failure: it is still labelled with the model that wrote it.
-              if (event.model && answer) {
-                const by = event.model;
-                setMessages((m) => m.map((x) => (x.id === reply.id ? { ...x, model: by } : x)));
-              }
+              failed = ERROR_TEXT[event.code ?? ""] ?? ERROR_TEXT.unavailable!;
             }
           }
         }
@@ -737,11 +646,12 @@ export function StudyBuddy() {
   useEffect(() => {
     sendRef.current = send;
   });
+  // What an interactive answer may ask: a question sent into the conversation as if the student had typed it (the same route, checks and limits).
+  const askFromInterface = useCallback((message: string) => void sendRef.current(message), []);
 
   async function copy(m: Msg) {
     try {
-      // In the developer view the copy says which model wrote it, so answers compared elsewhere keep their source.
-      await navigator.clipboard.writeText(`${m.model ? `[Answered by ${m.model}]\n\n` : ""}${plainText(parseMarkdown(m.content))}`);
+      await navigator.clipboard.writeText(isInterfaceMessage(m.content) ? plainTextOf(m.content) : plainText(parseMarkdown(m.content)));
       setCopied(m.id);
       setTimeout(() => setCopied((c) => (c === m.id ? null : c)), 2000);
     } catch {
@@ -992,22 +902,6 @@ export function StudyBuddy() {
             </div>
           </div>
           <div className={styles.barEnd}>
-            {status.models && status.models.choices.length > 0 ? (
-              <>
-                <ModelPicker
-                  choices={status.models.choices}
-                  value={picked}
-                  onChange={choose}
-                  disabled={busy}
-                />
-                <EffortPicker
-                  options={effortsFor(status.models.choices, picked)}
-                  value={effort}
-                  onChange={chooseEffort}
-                  disabled={busy}
-                />
-              </>
-            ) : null}
             {!first ? (
               <button
                 type="button"
@@ -1107,10 +1001,15 @@ export function StudyBuddy() {
                         <MessagesSquare size={13} />
                       </span>
                       LearnThrive AI
-                      {m.model ? <span className={styles.modelTag}>Answered by {m.model}</span> : null}
                     </h2>
                     {m.activity && (m.activity.phase === "running" || hasNotableWork(m.activity.steps)) ? <ActivityPanel view={m.activity} /> : null}
-                    {m.content ? <RenderedAnswer text={m.content} /> : null}
+                    {m.draft !== undefined ? (
+                      <InterfaceMessage content={m.draft} streaming busy={busy} onAsk={askFromInterface} maxChars={status.limits?.maxInputChars ?? 1000} />
+                    ) : isInterfaceMessage(m.content) ? (
+                      <InterfaceMessage content={m.content} streaming={false} busy={busy} onAsk={askFromInterface} maxChars={status.limits?.maxInputChars ?? 1000} />
+                    ) : m.content ? (
+                      <RenderedAnswer text={m.content} />
+                    ) : null}
                     {m.content && !streaming ? (
                       <div className={styles.actions}>
                         <button
@@ -1120,7 +1019,7 @@ export function StudyBuddy() {
                         >
                           {copied === m.id ? "Copied" : "Copy"}
                         </button>
-                        <SpeakButton text={m.content} serverVoice={Boolean(status?.voice)} className={styles.actionButton} />
+                        <SpeakButton text={isInterfaceMessage(m.content) ? plainTextOf(m.content) : m.content} serverVoice={Boolean(status?.voice)} className={styles.actionButton} />
                       </div>
                     ) : null}
                   </article>

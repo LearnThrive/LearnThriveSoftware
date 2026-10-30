@@ -17,8 +17,7 @@ const { GenerationQueue } = loadTsFrom(import.meta.url, "../src/lib/assistant/qu
 const { MemoryLibraryStorage } = loadTsFrom(import.meta.url, "../src/lib/library/storage.ts");
 const { InMemoryLibraryStore } = loadTsFrom(import.meta.url, "../../../packages/data/src/library/memory.ts");
 const { ProviderError } = loadTsFrom(import.meta.url, "../src/lib/assistant/types.ts");
-const selection = loadTsFrom(import.meta.url, "../src/lib/assistant/selection.ts");
-const rt = loadTsFrom(import.meta.url, "../src/lib/assistant/runtime.ts");
+const { buildProvider } = loadTsFrom(import.meta.url, "../src/lib/assistant/providers.ts");
 const openaiLib = loadTsFrom(import.meta.url, "../src/lib/assistant/openai.ts");
 const { MockProvider } = loadTsFrom(import.meta.url, "../src/lib/assistant/mock.ts");
 
@@ -265,58 +264,44 @@ test("D9. how a turn ended is stored with its steps, and a record without one re
   assert.deepEqual(act.parseActivityRecord(null).steps, []);
 });
 
-// ---- both hosted models, through the one pipeline -------------------------------------------------------------------------------------------
+// ---- Beam, through the one pipeline -------------------------------------------------------------------------------------------
 
-const MINIMAX = "minimaxai/minimax-m3.1-flash";
-const STEP = "stepfun-ai/step-5-preview";
-const LAB_ENV = { NODE_ENV: "development", ASSISTANT_PROVIDER: "mock", NVIDIA_API_KEY: "nvapi-TEST-KEY", ASSISTANT_NIM_MODELS: `${MINIMAX},${STEP}` };
+const BEAM_ENV = { NODE_ENV: "development", ASSISTANT_PROVIDER: "ollama_cloud", OLLAMA_API_KEY: "ollama-TEST-KEY" };
 const sse = (parts) => new Response(new ReadableStream({ start(c) { for (const p of parts) c.enqueue(new TextEncoder().encode(`data: ${typeof p === "string" ? p : JSON.stringify(p)}\n\n`)); c.enqueue(new TextEncoder().encode("data: [DONE]\n\n")); c.close(); } }));
 const piece = (t) => ({ choices: [{ delta: { content: t } }] });
 const thought = (t) => ({ choices: [{ delta: { reasoning_content: t } }] });
 
-test("D10. MiniMax M3.1 Flash and Step 5 go through the same pipeline: the same steps, the same single delivery, and their hidden reasoning is never shown or stored", async (t) => {
+test("D10. Beam goes through the same pipeline as any provider: the same steps, one delivery, and its hidden reasoning is never shown or stored", async (t) => {
   environment(t, {});
   quiet(t);
   openaiLib.resetAcceptedFields();
   const requests = [];
   const fetchImpl = async (url, init = {}) => {
     const path = new URL(String(url)).pathname;
-    if (path.endsWith("/models")) return Response.json({ object: "list", data: [{ id: MINIMAX }, { id: STEP }] });
+    if (path.endsWith("/models")) return Response.json({ object: "list", data: [{ id: "beam" }] });
     const body = JSON.parse(init.body);
     requests.push(body.model);
     // A reasoning model thinks first (never shown), then writes the answer.
     return sse([thought("SECRET-CHAIN-OF-THOUGHT let me work this out"), piece(BIOLOGY_REPLY.slice(0, 50)), piece(BIOLOGY_REPLY.slice(50)), { choices: [], usage: { prompt_tokens: 10, completion_tokens: 12 } }]);
   };
-  const config = cfgLib.assistantConfig(LAB_ENV);
-  const lab = rt.buildModelLab(config, LAB_ENV, fetchImpl);
-  const fallback = new MockProvider({ delayMs: 0 });
+  const config = cfgLib.assistantConfig(BEAM_ENV);
+  const provider = buildProvider(config, BEAM_ENV, fetchImpl);
   const store = new InMemoryLibraryStore();
   const profile = store.seedProfile({ email: "dev@example.com", role: "ADMIN" });
   const clientId = await store.accounts.ensureClient(profile);
   const owner = { clientId, studentId: null };
   const sources = sourcesFor();
-  const runWith = async (choice) => {
-    const picked = selection.resolveSelection({ requested: choice, actor: { role: "ADMIN", mode: "staff", studentId: null }, lab, config, provider: fallback, hosted: false });
-    assert.ok(picked.ok);
-    const deps = { store, provider: fallback, queue: new GenerationQueue(1, 4), uploads: new MemoryLibraryStorage(), config, target: picked.target, research: sources.service, now: () => new Date("2026-10-21T10:30:00Z"), log: () => {} };
-    const events = [];
-    for await (const e of svc.sendMessage(deps, { owner, sessionId: null, text: BIOLOGY })) events.push(e);
-    return events;
-  };
-  const a = await runWith("minimax-m3.1-flash");
-  const b = await runWith("step-5-preview");
-  assert.deepEqual(requests, [MINIMAX, STEP], "each model answered its own question");
-  assert.deepEqual(steps(a).map((s) => `${s.kind}:${s.state}`), steps(b).map((s) => `${s.kind}:${s.state}`), "the same activity, whichever model wrote it");
-  for (const events of [a, b]) {
-    const sent = deltas(events);
-    assert.equal(sent.length, 1, "one delivery");
-    assert.equal(sent[0].whole, true);
-    assert.doesNotMatch(JSON.stringify(events), /SECRET-CHAIN-OF-THOUGHT/, "no reasoning reached the page");
-    assert.equal(events.at(-1).type, "done");
-  }
-  assert.equal(a.at(-1).model, "MiniMax M3.1 Flash");
-  assert.equal(b.at(-1).model, "Step 5 Preview");
-  const kept = (await store.chat.listMessages(owner, a.find((e) => e.type === "session").sessionId)).map((m) => `${m.content}${m.activity ?? ""}`).join("");
+  const deps = { store, provider, queue: new GenerationQueue(1, 4), uploads: new MemoryLibraryStorage(), config, hosted: true, research: sources.service, now: () => new Date("2026-10-21T10:30:00Z"), log: () => {} };
+  const events = [];
+  for await (const e of svc.sendMessage(deps, { owner, sessionId: null, text: BIOLOGY })) events.push(e);
+  assert.deepEqual(requests, ["beam"], "one question, one request, to Beam");
+  const sent = deltas(events);
+  assert.equal(sent.length, 1, "one delivery");
+  assert.equal(sent[0].whole, true);
+  assert.deepEqual(steps(events).filter((s) => s.kind === "verify").map((s) => s.state).at(-1), "done");
+  assert.doesNotMatch(JSON.stringify(events), /SECRET-CHAIN-OF-THOUGHT/, "no reasoning reached the page");
+  assert.equal(events.at(-1).type, "done");
+  const kept = (await store.chat.listMessages(owner, events.find((e) => e.type === "session").sessionId)).map((m) => `${m.content}${m.activity ?? ""}`).join("");
   assert.doesNotMatch(kept, /SECRET-CHAIN-OF-THOUGHT/, "no reasoning was stored");
 });
 

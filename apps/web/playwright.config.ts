@@ -44,7 +44,7 @@ export default defineConfig({
   },
   {
     command: 'npm run dev -- -p 3101',
-    env: { NEXT_PUBLIC_THEME_TOGGLE: '1', CAREERS_OPEN_FOR_TESTING: '1', LEARNTHRIVE_DOCKER: '0', LIBRARY_PHASE: 'enrolled', NEXT_DIST_DIR: '.next-3101', ASSISTANT_PROVIDER: 'mock', VOICE_PROVIDER: 'mock', PAPER_MARKER_ENABLED: 'true', ASSISTANT_DAILY_MESSAGES: '200', ASSISTANT_PER_MINUTE: '60' },
+    env: { NEXT_PUBLIC_THEME_TOGGLE: '1', CAREERS_OPEN_FOR_TESTING: '1', LEARNTHRIVE_DOCKER: '0', LIBRARY_PHASE: 'enrolled', NEXT_DIST_DIR: '.next-3101', ASSISTANT_PROVIDER: 'mock', OLLAMA_API_KEY: '', VOICE_PROVIDER: 'mock', PAPER_MARKER_ENABLED: 'true', ASSISTANT_DAILY_MESSAGES: '200', ASSISTANT_PER_MINUTE: '60' },
     url: 'http://localhost:3101',
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
@@ -52,7 +52,7 @@ export default defineConfig({
   },
   {
     command: 'npm run dev -- -p 3103',
-    env: { NEXT_PUBLIC_THEME_TOGGLE: '1', CAREERS_OPEN_FOR_TESTING: '1', LEARNTHRIVE_DOCKER: '0', LIBRARY_PHASE: 'enrolled', NEXT_DIST_DIR: '.next-3103', ASSISTANT_PROVIDER: 'mock', VOICE_PROVIDER: 'mock', ASSISTANT_MINORS_APPROVED: 'true', ASSISTANT_DAILY_MESSAGES: '200', ASSISTANT_PER_MINUTE: '60', NEXT_PUBLIC_SITE_URL: 'http://localhost:3103' },
+    env: { NEXT_PUBLIC_THEME_TOGGLE: '1', CAREERS_OPEN_FOR_TESTING: '1', LEARNTHRIVE_DOCKER: '0', LIBRARY_PHASE: 'enrolled', NEXT_DIST_DIR: '.next-3103', ASSISTANT_PROVIDER: 'mock', OLLAMA_API_KEY: '', VOICE_PROVIDER: 'mock', ASSISTANT_MINORS_APPROVED: 'true', ASSISTANT_DAILY_MESSAGES: '200', ASSISTANT_PER_MINUTE: '60', NEXT_PUBLIC_SITE_URL: 'http://localhost:3103' },
     url: 'http://localhost:3103',
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
@@ -88,9 +88,9 @@ export default defineConfig({
     stdout: 'pipe',
   }],
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] }, testIgnore: /(library-open|library-live|one-sign-in|study-buddy|study-buddy-activity|study-buddy-voice|study-buddy-voice-auto|study-buddy-paper|learner)\.spec\.ts/ },
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] }, testIgnore: /(library-open|library-live|one-sign-in|study-buddy|study-buddy-activity|study-buddy-voice|study-buddy-voice-auto|study-buddy-paper|study-buddy-openui|learner)\.spec\.ts/ },
     // The Library with its catalogue open (phase D onwards): its own server and its own in-memory data.
-    { name: 'library-open', use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:3101' }, testMatch: /(library-open|one-sign-in|study-buddy|study-buddy-activity|study-buddy-voice|study-buddy-voice-auto|study-buddy-paper)\.spec\.ts/ },
+    { name: 'library-open', use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:3101' }, testMatch: /(library-open|one-sign-in|study-buddy|study-buddy-activity|study-buddy-voice|study-buddy-voice-auto|study-buddy-paper|study-buddy-openui)\.spec\.ts/ },
     // Learner identity (docs/IDENTITY.md): LearnThrive AI on the mock model with the children's switch on, so the per-learner rules decide.
     { name: 'learner', use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:3103' }, testMatch: /learner\.spec\.ts/ },
     // Subscriptions open (phase E), with the fake Stripe.

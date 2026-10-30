@@ -146,7 +146,7 @@ test("production: required variables, forbidden ones, held switches, the pooler 
   assert.match(status({ ...good, DATABASE_URL: "postgresql://learnthrive_server:pw-pw-pw-pw-pw@db.abcdefghijklmnopqrst.supabase.co:5432/postgres" }, "production", "DATABASE_URL").note, /transaction pooler/);
   assert.match(status({ ...good, DATABASE_URL: "postgresql://u:p@127.0.0.1:5432/db" }, "production", "DATABASE_URL").note, /local address/);
   assert.match(status({ ...good, SUPABASE_URL: "http://127.0.0.1:54321" }, "production", "SUPABASE_URL").note, /local address/);
-  assert.match(status({ ...good, ASSISTANT_PROVIDER: "ollama" }, "production", "ASSISTANT_PROVIDER").note, /only custom qualifies/);
+  assert.match(status({ ...good, ASSISTANT_PROVIDER: "ollama_cloud" }, "production", "ASSISTANT_PROVIDER").note, /only custom qualifies/);
   assert.match(status({ ...good, NEXT_PUBLIC_SITE_URL: "http://example.com" }, "production", "NEXT_PUBLIC_SITE_URL").note, /https/);
 });
 

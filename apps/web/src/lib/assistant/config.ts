@@ -1,40 +1,36 @@
 type Env = Record<string, string | undefined>;
 
 /**
- * LearnThrive AI settings, all from the environment (plan19 phase F, refreshed by the three-model brief). It is OFF in production
- * by default, and fails closed there.
+ * LearnThrive AI settings, all from the environment. It is OFF in production by default, and fails closed there.
  *
- * Tutor, embeddings and decisions are three separate settings groups because they are three separate models, on two separate
- * local endpoints (the GPU tutor on 11434, the CPU helpers on 11435). Nothing here is a server-process setting: OLLAMA_* values
- * belong to `scripts/ollama-local.mjs`, because changing them in `.env.local` does not reconfigure a running Ollama.
+ * During development the ONLY reasoning model is Reflection's Beam, served by Ollama Cloud (https://ollama.com/v1, model `beam`, key in
+ * OLLAMA_API_KEY). Nothing here starts a local model: the tutor no longer needs a GPU. Everything that is not generation (safeguarding,
+ * research, verification, uploads, voice) is unchanged.
  *
  *   ASSISTANT_ENABLED               kill switch. Development: on unless "false". Production: on only if exactly "true"
- *   ASSISTANT_PROVIDER              ollama (default), nim, custom, or mock (tests); a comma list is an ordered fallback chain (development only)
- *   ASSISTANT_MODEL                 tutor model          ASSISTANT_VISION_MODEL   model for images (may be the same)
- *   ASSISTANT_BASE_URL              the provider's address (Ollama default http://127.0.0.1:11434)
- *   ASSISTANT_API_KEY               the production provider's key (`custom`). NVIDIA_API_KEY is read for `nim`. Never logged
- *   ASSISTANT_CONTEXT               context window to ask for, tokens (default 8192: the instructions, the history, a picture and an answer of up to 4096 tokens must all fit)
- *   ASSISTANT_MAX_OUTPUT_TOKENS     most tokens in one answer (default 4096: about 3000 words of plain English, still over 2000 for maths written in LaTeX; the model's hidden thinking has its own extra allowance, ASSISTANT_THINKING_TOKENS)
- *   ASSISTANT_KEEP_ALIVE            how long the tutor stays resident between questions (default 30m)
+ *   ASSISTANT_PROVIDER              ollama_cloud (default, development only), custom (the production slot), or mock (tests)
+ *   ASSISTANT_MODEL                 the model name sent to the provider (default `beam`)
+ *   OLLAMA_CLOUD_BASE_URL           Ollama Cloud's OpenAI-compatible address (default https://ollama.com/v1). ASSISTANT_BASE_URL is used by `custom`
+ *   OLLAMA_API_KEY                  the Ollama Cloud key, read on the server only and never logged or sent to the browser
+ *   ASSISTANT_API_KEY               the production provider's key (`custom`). Never logged
+ *   ASSISTANT_CONTEXT               context window the history is planned against, tokens (default 32768; Beam itself accepts far more)
+ *   ASSISTANT_MAX_OUTPUT_TOKENS     most tokens in one answer (default 4096; the model's hidden thinking has its own extra allowance, ASSISTANT_THINKING_TOKENS)
  *   ASSISTANT_THINKING              off | auto | on | low | medium | high (default auto: only a genuinely hard question may think)
  *   ASSISTANT_DAILY_MESSAGES        messages per account per day (default 40)     ASSISTANT_PER_MINUTE   per minute (default 6)
- *   ASSISTANT_DAILY_TOKEN_BUDGET    hosted providers only: completion tokens per account per day (default 40000); the cost cap
- *   ASSISTANT_CONCURRENCY           answers generated at once on this server (default 1: one local GPU)
- *   ASSISTANT_STAGE_*               the staged budgets (queue, load, first activity, first answer, idle, tool round, whole turn)
+ *   ASSISTANT_DAILY_TOKEN_BUDGET    completion tokens per account per day (default 40000): the cost cap on a hosted provider
+ *   ASSISTANT_CONCURRENCY           answers generated at once on this server (default 2)
+ *   ASSISTANT_STAGE_*               the staged budgets (queue, first activity, first answer, idle, tool round, whole turn)
  *   ASSISTANT_MAX_TOOL_ROUNDS       tool round trips allowed in one turn (default 2)
- *   SEARXNG_BASE_URL / _TIMEOUT_MS / _MAX_RESULTS / _CACHE_TTL_SECONDS   web research through SearXNG, which is always on (default http://127.0.0.1:8888; docs/RESEARCH.md)
- *   CRAWL4AI_ENABLED / _BASE_URL / _API_TOKEN / _TIMEOUT_MS / _MAX_CONCURRENCY   the self-hosted browser that reads the pages SearXNG finds (on by default; falls back to a plain fetch)
+ *   OPENUI_ENABLED                  on (default) | off: let a turn answer with an interactive interface (docs/OPENUI.md)
+ *   OPENUI_MAX_REPAIRS              repair attempts for an interface that does not validate (default 1, at most 2)
+ *   RESEARCH_PROVIDER               auto (default: Ollama web search when OLLAMA_API_KEY is set, SearXNG otherwise) | ollama | searxng
+ *   OLLAMA_WEB_BASE_URL             where Ollama's web_search / web_fetch live (default https://ollama.com)
+ *   SEARXNG_BASE_URL / _TIMEOUT_MS / _MAX_RESULTS / _CACHE_TTL_SECONDS   web research through SearXNG (the fallback; docs/RESEARCH.md)
+ *   CRAWL4AI_ENABLED / _BASE_URL / _API_TOKEN / _TIMEOUT_MS / _MAX_CONCURRENCY   the self-hosted browser that reads the pages a search finds (falls back to a plain fetch)
  *   RESEARCH_MAX_SEARCHES / _MAX_FETCHES / _FETCH_MAX_BYTES / _PER_MINUTE   the per-answer and per-account limits on that research
- *   ASSISTANT_RETRIEVAL             on (default) | off: search the student's own authorised uploads for relevant chunks
- *   ASSISTANT_RETRIEVAL_TOP_K       chunks given to the tutor (default 4)   ASSISTANT_RETRIEVAL_MIN_SCORE   default 0.35
- *   ASSISTANT_EMBED_MODEL / _BASE_URL / _KEEP_ALIVE / _BATCH   the embedding role (CPU helper by default)
- *   ASSISTANT_DECISION_MODEL / _BASE_URL / _KEEP_ALIVE / _TIMEOUT_MS / _MIN_CONFIDENCE / _MIN_MARGIN / ASSISTANT_DECISION   the routing role
- *   ASSISTANT_CLAIM_RECALL           off (default) | on: a model is asked WHERE in the pages that were read a statement is settled, so a claim is
- *                                    judged by meaning and not only by shared words. Every span it proposes is checked in code (research/entail.ts)
- *   ASSISTANT_RECALL_MODEL / _BASE_URL / _KEEP_ALIVE / _TIMEOUT_MS / _MAX_CLAIMS / _PASSAGE_CHARS   that stage (the tutor's own model and endpoint by default)
- *   ASSISTANT_THINKING_TOKENS       extra output tokens for thinking, on top of the answer's budget (default 600)
- *   ASSISTANT_IMAGE_*               photo/page long side, pictures per message: the measured image budget
- *   ASSISTANT_VRAM_HEADROOM_MIB     the headroom target the benchmark checks (default 1536: brief section 5); not a runtime limit
+ *   ASSISTANT_RETRIEVAL             on | off (default off): search the student's own authorised uploads for relevant chunks. It needs an embedding provider,
+ *                                   and none is configured now that the local helper models are gone, so this stays off until a hosted one is chosen
+ *   ASSISTANT_IMAGE_*               photo/page long side, pictures per message (Beam reads text only, so pictures are not sent)
  *   ASSISTANT_PRODUCTION_APPROVED   "true" only after plan19 section 6 is complete and recorded. Required in production
  *   ASSISTANT_MINORS_APPROVED       "true" only after the safeguarding lead has approved in writing. Until then it is for adults
  *   ASSISTANT_SAFEGUARDING_EMAIL    where a safeguarding flag goes (the lead's mailbox). Unset: the static reply is still given
@@ -42,8 +38,6 @@ type Env = Record<string, string | undefined>;
 export interface StageBudgets {
   /** How long a turn may wait for a generation slot. */
   queueMs: number;
-  /** How long the model may take to become resident before the turn starts (only when a warm-up is needed). */
-  loadMs: number;
   /** From sending the request to the first chunk of ANY kind (thinking, a tool call or text). */
   firstActivityMs: number;
   /** From sending the request to the first VISIBLE text. */
@@ -57,112 +51,59 @@ export interface StageBudgets {
 }
 
 export const ASSISTANT_DEFAULTS = {
-  // The candidate profile from the brief (section 12), pending the benchmark in docs/OLLAMA_THREE_MODEL.md.
-  model: "bonsai-2:9b",
-  contextSize: 8192,
+  /** Reflection's Beam, listed by Ollama Cloud's catalogue (https://ollama.com/api/tags) as `beam` with the capabilities completion, thinking and tools. Text in, text out. */
+  model: "beam",
+  cloudBaseUrl: "https://ollama.com/v1",
+  ollamaWebUrl: "https://ollama.com",
+  contextSize: 32_768,
   maxOutputTokens: 4096,
   dailyMessages: 40,
   perMinute: 6,
   dailyTokenBudget: 40_000,
-  concurrency: 1,
-  queueMax: 4,
+  concurrency: 2,
+  queueMax: 8,
   maxInputChars: 4000,
-  keepAlive: "30m",
   thinking: "auto" as const,
   maxToolRounds: 2,
+  // A large reasoning model hosted elsewhere: queued at the provider, then reasoning before the answer. The whole turn stays bounded.
   queueMs: 20_000,
-  loadMs: 180_000,
-  firstActivityMs: 60_000,
-  firstAnswerMs: 45_000,
-  idleMs: 30_000,
+  firstActivityMs: 90_000,
+  firstAnswerMs: 240_000,
+  idleMs: 90_000,
   toolRoundMs: 60_000,
-  turnMs: 180_000,
-  // A photo adds reading time; these are still a whole turn, not a reset per chunk.
-  imageFirstActivityMs: 90_000,
-  imageFirstAnswerMs: 90_000,
-  imageIdleMs: 45_000,
-  imageTurnMs: 240_000,
+  turnMs: 360_000,
   retrievalTopK: 4,
   retrievalMinScore: 0.35,
-  embedModel: "embeddinggemma-2:270m-q8_0-text",
-  // The tutor's own endpoint (11434), where a model able to judge a sentence against a passage runs. NOT the CPU helper: that serves a 270m embedder
-  // and a 421m typed-decision model, neither of which can read prose. Declared here because config.ts may not import providers.ts (which imports this).
-  tutorBaseUrl: "http://127.0.0.1:11434",
-  helperBaseUrl: "http://127.0.0.1:11435",
   searxngUrl: "http://127.0.0.1:8888",
   crawl4aiUrl: "http://127.0.0.1:11235",
   // A public development value so the local container and the website agree without setup. Production must set its own.
   crawl4aiDevToken: "learnthrive-development-only-crawl4ai-token",
-  embedKeepAlive: "10m",
-  embedBatch: 8,
-  decisionModel: "laya:421m-typed-decisions-bf16",
-  decisionKeepAlive: "10m",
-  decisionTimeoutMs: 4_000,
-  // Measured on this laptop (docs/OLLAMA_BENCHMARK.md): five-way calibrated probabilities top out near 0.3-0.5, so a floor of
-  // 0.55 abstains on everything. The margin over the runner-up is the honest discriminator; below either, routing is deterministic.
-  decisionMinConfidence: 0.3,
-  decisionMinMargin: 0.12,
-  recallKeepAlive: "10m",
-  recallTimeoutMs: 8_000,
-  recallMaxClaims: 4,
-  recallPassageChars: 3_000,
   thinkingTokens: 1500,
   photoLongSide: 1400,
   renderLongSide: 1200,
   imagesPerMessage: 3,
-  vramHeadroomMiB: 1536,
+  openuiRepairs: 1,
 } as const;
 
 export type ThinkingPolicy = "off" | "auto" | "on" | "low" | "medium" | "high";
 const THINKING: readonly ThinkingPolicy[] = ["off", "auto", "on", "low", "medium", "high"];
 
-export type ProviderId = "ollama" | "nim" | "custom" | "mock";
-
-export interface EmbeddingConfig {
-  model: string;
-  baseUrl: string;
-  keepAlive: string;
-  batch: number;
-}
+export type ProviderId = "ollama_cloud" | "custom" | "mock";
 
 export interface RetrievalConfig {
   enabled: boolean;
   topK: number;
   minScore: number;
-  embedding: EmbeddingConfig;
 }
 
-export interface DecisionConfig {
-  enabled: boolean;
-  model: string;
-  baseUrl: string;
-  keepAlive: string;
-  timeoutMs: number;
-  /** The floor for the chosen option's own probability. */
-  minConfidence: number;
-  /** The floor for (top probability - runner-up): a five-way tie is not a decision. */
-  minMargin: number;
-}
-
-/**
- * The entailment-for-recall stage (research/entail.ts): where a model is asked which passage of the pages that were read settles a statement. Its answer
- * is only ever a proposal; the code that accepts it checks the span against the page word for word. Off unless asked for: it is a model call, and it has
- * not been measured on real answers yet, so the shipped behaviour is the exact check alone.
- */
-export interface RecallConfig {
-  enabled: boolean;
-  model: string;
-  baseUrl: string;
-  keepAlive: string;
-  timeoutMs: number;
-  /** How many claims one call may carry. */
-  maxClaims: number;
-  /** The most characters of one page handed to it. */
-  passageChars: number;
-}
+export type ResearchProviderChoice = "auto" | "ollama" | "searxng";
 
 export interface ResearchConfig {
-  /** Where SearXNG runs. Research is always on; if nothing answers there, the answer says what could not be checked. */
+  /** Which search provider leads. `auto`: Ollama's web search when OLLAMA_API_KEY is set, SearXNG otherwise. The other is the fallback. */
+  provider: ResearchProviderChoice;
+  /** Where Ollama's web_search and web_fetch are. */
+  ollamaBaseUrl: string;
+  /** Where SearXNG runs. If nothing answers, the answer says what could not be checked. */
   baseUrl: string;
   timeoutMs: number;
   maxResults: number;
@@ -188,11 +129,19 @@ export interface ImageConfig {
   perMessage: number;
 }
 
+export interface OpenUiConfig {
+  /** A turn may answer with an interactive interface. Off: every answer is plain text. */
+  enabled: boolean;
+  /** How many times an interface that did not validate is sent back to the model with its errors (0 to 2). */
+  maxRepairs: number;
+}
+
 export interface AssistantConfig {
   enabled: boolean;
   production: boolean;
   providers: ProviderId[];
   model: string;
+  /** Beam reads text only. Always null: nothing is sent to a vision model. */
   visionModel: string | null;
   baseUrl: string | null;
   contextSize: number;
@@ -203,19 +152,16 @@ export interface AssistantConfig {
   dailyTokenBudget: number;
   concurrency: number;
   queueMax: number;
-  keepAlive: string;
   thinking: ThinkingPolicy;
   /** Extra output tokens allowed for thinking, ON TOP of the answer's budget, so a hard question still gets its answer. */
   thinkingTokens: number;
-  stages: { text: StageBudgets; image: StageBudgets };
+  stages: StageBudgets;
   maxToolRounds: number;
   retrieval: RetrievalConfig;
-  decision: DecisionConfig;
-  recall: RecallConfig;
   research: ResearchConfig;
   crawler: CrawlerConfig;
   images: ImageConfig;
-  vramHeadroomMiB: number;
+  openui: OpenUiConfig;
   productionApproved: boolean;
   minorsApproved: boolean;
   safeguardingEmail: string | null;
@@ -241,95 +187,58 @@ function toggle(value: string | undefined, fallback: boolean): boolean {
   return fallback;
 }
 
-function stageBudgets(env: Env, kind: "text" | "image"): StageBudgets {
-  const image = kind === "image";
-  const firstActivity = whole(env.ASSISTANT_STAGE_FIRST_ACTIVITY_MS, image ? ASSISTANT_DEFAULTS.imageFirstActivityMs : ASSISTANT_DEFAULTS.firstActivityMs, 1_000, 900_000);
-  // The owner's earlier picture variables still work as the image first-answer and whole-turn budgets (documented as deprecated).
-  const firstAnswer = whole(
-    image ? env.ASSISTANT_STAGE_FIRST_ANSWER_IMAGE_MS ?? env.ASSISTANT_PICTURE_FIRST_TOKEN_MS : env.ASSISTANT_STAGE_FIRST_ANSWER_MS,
-    image ? ASSISTANT_DEFAULTS.imageFirstAnswerMs : ASSISTANT_DEFAULTS.firstAnswerMs,
-    1_000,
-    900_000,
-  );
+function stageBudgets(env: Env): StageBudgets {
   return {
     queueMs: whole(env.ASSISTANT_STAGE_QUEUE_MS, ASSISTANT_DEFAULTS.queueMs, 0, 600_000),
-    loadMs: whole(env.ASSISTANT_STAGE_LOAD_MS, ASSISTANT_DEFAULTS.loadMs, 5_000, 1_800_000),
-    // Independent on purpose: a provider arms both timers, and whichever comes first ends the wait. Neither value silently
-    // overrides the other (a deprecated alias therefore still means what it says).
-    firstActivityMs: firstActivity,
-    firstAnswerMs: firstAnswer,
-    idleMs: whole(image ? env.ASSISTANT_STAGE_IDLE_IMAGE_MS : env.ASSISTANT_STAGE_IDLE_MS, image ? ASSISTANT_DEFAULTS.imageIdleMs : ASSISTANT_DEFAULTS.idleMs, 1_000, 600_000),
+    // Independent on purpose: a provider arms both timers, and whichever comes first ends the wait.
+    firstActivityMs: whole(env.ASSISTANT_STAGE_FIRST_ACTIVITY_MS, ASSISTANT_DEFAULTS.firstActivityMs, 1_000, 900_000),
+    firstAnswerMs: whole(env.ASSISTANT_STAGE_FIRST_ANSWER_MS, ASSISTANT_DEFAULTS.firstAnswerMs, 1_000, 900_000),
+    idleMs: whole(env.ASSISTANT_STAGE_IDLE_MS, ASSISTANT_DEFAULTS.idleMs, 1_000, 600_000),
     toolRoundMs: whole(env.ASSISTANT_STAGE_TOOL_MS, ASSISTANT_DEFAULTS.toolRoundMs, 1_000, 600_000),
-    turnMs: whole(
-      image ? env.ASSISTANT_STAGE_TURN_IMAGE_MS ?? env.ASSISTANT_PICTURE_TOTAL_MS : env.ASSISTANT_STAGE_TURN_MS,
-      image ? ASSISTANT_DEFAULTS.imageTurnMs : ASSISTANT_DEFAULTS.turnMs,
-      5_000,
-      1_800_000,
-    ),
+    turnMs: whole(env.ASSISTANT_STAGE_TURN_MS, ASSISTANT_DEFAULTS.turnMs, 5_000, 1_800_000),
   };
 }
 
+const RESEARCH_PROVIDERS: readonly ResearchProviderChoice[] = ["auto", "ollama", "searxng"];
+
 export function assistantConfig(env: Env = process.env): AssistantConfig {
   const production = env.NODE_ENV === "production";
-  const asked = (pick(env.ASSISTANT_PROVIDER) ?? "ollama").toLowerCase().split(",").map((p) => p.trim());
-  const providers = asked.filter((p): p is ProviderId => p === "ollama" || p === "nim" || p === "custom" || p === "mock");
+  const asked = (pick(env.ASSISTANT_PROVIDER) ?? "ollama_cloud").toLowerCase().split(",").map((p) => p.trim());
+  const providers = asked.filter((p): p is ProviderId => p === "ollama_cloud" || p === "custom" || p === "mock");
   const flag = pick(env.ASSISTANT_ENABLED);
   const thinking = (pick(env.ASSISTANT_THINKING)?.toLowerCase() ?? ASSISTANT_DEFAULTS.thinking) as ThinkingPolicy;
-  const helper = pick(env.ASSISTANT_HELPER_BASE_URL) ?? ASSISTANT_DEFAULTS.helperBaseUrl;
-  const model = pick(env.ASSISTANT_MODEL) ?? ASSISTANT_DEFAULTS.model;
+  const researchProvider = (pick(env.RESEARCH_PROVIDER)?.toLowerCase() ?? "auto") as ResearchProviderChoice;
+  // One provider only: a comma list used to be an ordered fallback chain across models, and a different model answering in place of the chosen one is exactly
+  // what this setup no longer does. More than one entry is treated as a mistake and leaves the assistant closed.
+  const single = providers.length === asked.length && providers.length === 1;
   return {
     enabled: production ? flag === "true" : flag !== "false",
     production,
-    providers: providers.length === asked.length ? providers : [],
-    model,
-    visionModel: pick(env.ASSISTANT_VISION_MODEL) ?? null,
+    providers: single ? providers : [],
+    model: pick(env.ASSISTANT_MODEL) ?? ASSISTANT_DEFAULTS.model,
+    visionModel: null,
     baseUrl: pick(env.ASSISTANT_BASE_URL) ?? null,
-    contextSize: whole(env.ASSISTANT_CONTEXT, ASSISTANT_DEFAULTS.contextSize, 1024, 131072),
-    maxOutputTokens: whole(env.ASSISTANT_MAX_OUTPUT_TOKENS, ASSISTANT_DEFAULTS.maxOutputTokens, 16, 8192),
+    contextSize: whole(env.ASSISTANT_CONTEXT, ASSISTANT_DEFAULTS.contextSize, 1024, 1_000_000),
+    maxOutputTokens: whole(env.ASSISTANT_MAX_OUTPUT_TOKENS, ASSISTANT_DEFAULTS.maxOutputTokens, 16, 16384),
     maxInputChars: ASSISTANT_DEFAULTS.maxInputChars,
     dailyMessages: whole(env.ASSISTANT_DAILY_MESSAGES, ASSISTANT_DEFAULTS.dailyMessages, 1, 1000),
     perMinute: whole(env.ASSISTANT_PER_MINUTE, ASSISTANT_DEFAULTS.perMinute, 1, 60),
     dailyTokenBudget: whole(env.ASSISTANT_DAILY_TOKEN_BUDGET, ASSISTANT_DEFAULTS.dailyTokenBudget, 100, 10_000_000),
     concurrency: whole(env.ASSISTANT_CONCURRENCY, ASSISTANT_DEFAULTS.concurrency, 1, 16),
     queueMax: ASSISTANT_DEFAULTS.queueMax,
-    keepAlive: pick(env.ASSISTANT_KEEP_ALIVE) ?? ASSISTANT_DEFAULTS.keepAlive,
     thinking: THINKING.includes(thinking) ? thinking : ASSISTANT_DEFAULTS.thinking,
-    thinkingTokens: whole(env.ASSISTANT_THINKING_TOKENS, ASSISTANT_DEFAULTS.thinkingTokens, 0, 4096),
-    stages: { text: stageBudgets(env, "text"), image: stageBudgets(env, "image") },
+    thinkingTokens: whole(env.ASSISTANT_THINKING_TOKENS, ASSISTANT_DEFAULTS.thinkingTokens, 0, 8192),
+    stages: stageBudgets(env),
     maxToolRounds: whole(env.ASSISTANT_MAX_TOOL_ROUNDS, ASSISTANT_DEFAULTS.maxToolRounds, 0, 4),
     retrieval: {
-      enabled: toggle(env.ASSISTANT_RETRIEVAL, true),
+      // Off unless asked for, and it needs an embedding provider that is no longer configured (see the header).
+      enabled: toggle(env.ASSISTANT_RETRIEVAL, false),
       topK: whole(env.ASSISTANT_RETRIEVAL_TOP_K, ASSISTANT_DEFAULTS.retrievalTopK, 1, 12),
       minScore: ratio(env.ASSISTANT_RETRIEVAL_MIN_SCORE, ASSISTANT_DEFAULTS.retrievalMinScore, 0, 1),
-      embedding: {
-        model: pick(env.ASSISTANT_EMBED_MODEL) ?? ASSISTANT_DEFAULTS.embedModel,
-        baseUrl: pick(env.ASSISTANT_EMBED_BASE_URL) ?? helper,
-        keepAlive: pick(env.ASSISTANT_EMBED_KEEP_ALIVE) ?? ASSISTANT_DEFAULTS.embedKeepAlive,
-        batch: whole(env.ASSISTANT_EMBED_BATCH, ASSISTANT_DEFAULTS.embedBatch, 1, 32),
-      },
-    },
-    decision: {
-      // The router is a helper: enabled in development, never in production (the local profile is development only anyway).
-      enabled: !production && toggle(env.ASSISTANT_DECISION, true),
-      model: pick(env.ASSISTANT_DECISION_MODEL) ?? ASSISTANT_DEFAULTS.decisionModel,
-      baseUrl: pick(env.ASSISTANT_DECISION_BASE_URL) ?? helper,
-      keepAlive: pick(env.ASSISTANT_DECISION_KEEP_ALIVE) ?? ASSISTANT_DEFAULTS.decisionKeepAlive,
-      timeoutMs: whole(env.ASSISTANT_DECISION_TIMEOUT_MS, ASSISTANT_DEFAULTS.decisionTimeoutMs, 500, 30_000),
-      minConfidence: ratio(env.ASSISTANT_DECISION_MIN_CONFIDENCE, ASSISTANT_DEFAULTS.decisionMinConfidence, 0, 1),
-      minMargin: ratio(env.ASSISTANT_DECISION_MIN_MARGIN, ASSISTANT_DEFAULTS.decisionMinMargin, 0, 1),
-    },
-    recall: {
-      // A helper role like the router: development only, and off unless asked for. Nothing is lost when it is off: the exact checks run as before.
-      enabled: !production && toggle(env.ASSISTANT_CLAIM_RECALL, false),
-      // The tutor's own model by default: it is the one resident model that can read a sentence against a passage.
-      model: pick(env.ASSISTANT_RECALL_MODEL) ?? model,
-      baseUrl: pick(env.ASSISTANT_RECALL_BASE_URL) ?? pick(env.ASSISTANT_BASE_URL) ?? ASSISTANT_DEFAULTS.tutorBaseUrl,
-      keepAlive: pick(env.ASSISTANT_RECALL_KEEP_ALIVE) ?? ASSISTANT_DEFAULTS.recallKeepAlive,
-      timeoutMs: whole(env.ASSISTANT_RECALL_TIMEOUT_MS, ASSISTANT_DEFAULTS.recallTimeoutMs, 500, 60_000),
-      maxClaims: whole(env.ASSISTANT_RECALL_MAX_CLAIMS, ASSISTANT_DEFAULTS.recallMaxClaims, 1, 12),
-      passageChars: whole(env.ASSISTANT_RECALL_PASSAGE_CHARS, ASSISTANT_DEFAULTS.recallPassageChars, 500, 20_000),
     },
     research: {
+      provider: RESEARCH_PROVIDERS.includes(researchProvider) ? researchProvider : "auto",
+      ollamaBaseUrl: pick(env.OLLAMA_WEB_BASE_URL) ?? ASSISTANT_DEFAULTS.ollamaWebUrl,
       baseUrl: pick(env.SEARXNG_BASE_URL) ?? ASSISTANT_DEFAULTS.searxngUrl,
       timeoutMs: whole(env.SEARXNG_TIMEOUT_MS, 8000, 500, 60_000),
       maxResults: whole(env.SEARXNG_MAX_RESULTS, 8, 1, 20),
@@ -352,22 +261,21 @@ export function assistantConfig(env: Env = process.env): AssistantConfig {
       renderLongSide: whole(env.ASSISTANT_PAGE_LONG_SIDE, ASSISTANT_DEFAULTS.renderLongSide, 512, 2400),
       perMessage: whole(env.ASSISTANT_IMAGES_PER_MESSAGE, ASSISTANT_DEFAULTS.imagesPerMessage, 1, 6),
     },
-    vramHeadroomMiB: whole(env.ASSISTANT_VRAM_HEADROOM_MIB, ASSISTANT_DEFAULTS.vramHeadroomMiB, 256, 8192),
+    openui: {
+      enabled: toggle(env.OPENUI_ENABLED, true),
+      maxRepairs: whole(env.OPENUI_MAX_REPAIRS, ASSISTANT_DEFAULTS.openuiRepairs, 0, 2),
+    },
     productionApproved: pick(env.ASSISTANT_PRODUCTION_APPROVED) === "true",
     minorsApproved: pick(env.ASSISTANT_MINORS_APPROVED) === "true",
     safeguardingEmail: pick(env.ASSISTANT_SAFEGUARDING_EMAIL) ?? null,
   };
 }
 
-/** The staged budgets for a turn, chosen by whether it carries a picture. */
-export const stageBudgetsFor = (config: AssistantConfig, hasPictures: boolean): StageBudgets => (hasPictures ? config.stages.image : config.stages.text);
-
 export type Closed = "disabled" | "production_not_approved" | "production_provider" | "no_provider" | "no_backend";
 
 /**
  * Whether the assistant may run at all, and the first reason it may not. In production it needs the switch, the recorded
- * approval and a `custom` provider with a key: Ollama (a laptop) and NIM's free catalogue are development only and never
- * qualify (plan19 sections 1 and 6).
+ * approval and a `custom` provider with a key: Ollama Cloud's development access never qualifies (plan19 sections 1 and 6).
  */
 export function assistantAvailability(config: AssistantConfig, env: Env = process.env, backend = true): { open: true } | { open: false; reason: Closed } {
   if (!config.enabled) return { open: false, reason: "disabled" };

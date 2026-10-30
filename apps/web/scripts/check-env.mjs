@@ -81,8 +81,9 @@ const CHECKS = {
   price: (v) => (/^\d+(\.\d{1,2})?$/.test(v) ? null : "pounds as a number, like 9.99, with no currency sign"),
   provider: (v, c) => {
     const list = v.split(",").map((s) => s.trim());
-    if (!list.every((p) => ["ollama", "nim", "custom", "mock"].includes(p))) return "must be ollama, nim, custom, mock or a comma list of them";
-    if (c.mode === "production" && !(list.length === 1 && list[0] === "custom")) return "in production only custom qualifies (ollama, nim and mock never do)";
+    if (!list.every((p) => ["ollama_cloud", "custom", "mock"].includes(p))) return "must be ollama_cloud, custom or mock";
+    if (list.length !== 1) return "exactly one provider: there is no chain and no fallback to another model";
+    if (c.mode === "production" && !(list.length === 1 && list[0] === "custom")) return "in production only custom qualifies (ollama_cloud and mock never do)";
     return null;
   },
   "supabase-url": (v, c) => {

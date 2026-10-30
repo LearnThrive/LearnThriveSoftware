@@ -267,7 +267,7 @@ export class ResearchSession {
       if (got.ok) {
         // The page that was read, after any redirect: that is the one linked, and only if it is itself public.
         const source = safeSource({ url: got.url, title: got.title, tier: tierOf(got.url), via: got.via === "direct" ? "direct" : "browser" });
-        this.activity?.done(step, { label: source ? `Read ${named(got.url) ?? "a page"}` : "Read a page", source, detail: got.via === "crawl4ai" ? "in a browser" : undefined });
+        this.activity?.done(step, { label: source ? `Read ${named(got.url) ?? "a page"}` : "Read a page", source, detail: got.via === "crawl4ai" ? "in a browser" : got.via === "ollama" ? "through Ollama's page reader" : undefined });
       } else this.activity?.fail(step, got.code === "timeout" ? "took too long" : got.code === "blocked" ? "not a page that can be read" : got.code === "unsupported_type" ? "not a readable page" : "could not be read");
     }
     this.read.set(key, got);
@@ -327,7 +327,12 @@ export class ResearchSession {
       // Who says it, and where, from the structure of a play's text: the words being on the page proves nothing about the speaker.
       let speech: Speech | null = null;
       try {
-        if (strongTier(tier) && isPlayTextHost(new URL(url).hostname)) speech = locateQuotation(parseSpeeches({ html, text, url }), quotation)?.speech ?? null;
+        if (strongTier(tier) && isPlayTextHost(new URL(url).hostname)) {
+          // Only a speaker read from an unambiguous layout may say who speaks a line (playText.ts, `structured`). A loose reading is a lead at most: the words are
+          // still verified, and who speaks them is reported as not checked rather than as a mistake the student made.
+          const located = locateQuotation(parseSpeeches({ html, text, url }), quotation)?.speech ?? null;
+          speech = located?.structured ? located : null;
+        }
       } catch {
         speech = null;
       }

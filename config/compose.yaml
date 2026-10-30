@@ -1,26 +1,9 @@
-# The services LearnThrive AI needs beside the website, for development: the local language model (Ollama, on the GPU) and the
-# speech sidecar. `npm run dev` starts them (scripts/dev-services.mjs) and then the website on the host, as before.
-# Both listen on 127.0.0.1 only, on the addresses the website already uses by default (11434 and 8765). Never deployed.
+# The services LearnThrive AI needs beside the website, for development: the speech sidecar, web search (SearXNG) and the page reader
+# (Crawl4AI). `npm run dev` starts them (scripts/dev-services.mjs) and then the website on the host. There is no model server here: the tutor
+# (Reflection's Beam) runs on Ollama Cloud. They listen on 127.0.0.1 only. Never deployed.
 name: learnthrive
 
 services:
-  ollama:
-    image: ollama/ollama:0.35.0
-    ports:
-      - "127.0.0.1:11434:11434"
-    volumes:
-      # The models already downloaded on this machine (OLLAMA_MODELS), so nothing is fetched twice; otherwise a Docker volume.
-      - ${OLLAMA_MODELS_DIR:-ollama-models}:/root/.ollama/models
-    environment:
-      OLLAMA_KEEP_ALIVE: 30m
-    gpus: all
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 5s
-      timeout: 5s
-      retries: 30
-    restart: unless-stopped
-
   voice:
     build: ../services/voice
     image: learnthrive-voice:dev
@@ -93,5 +76,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  ollama-models:
   whisper-cache:

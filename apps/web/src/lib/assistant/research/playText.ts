@@ -11,6 +11,14 @@ export interface Speech {
   act: number | null;
   scene: number | null;
   text: string;
+  /**
+   * Whether the speaker was read from a layout that names speakers unambiguously (the MIT anchors, the Folger line numbers, a bold name in converted
+   * Markdown). The loose plain-text reading ("Name." or "NAME" at the start of a line) can split a page wrongly, for example by taking an abbreviated
+   * stage name as a speaker or by running two speeches together, so a speaker it finds can say who speaks a line only as a lead: it must never be the basis
+   * for telling a student a correct quotation is attributed to the wrong person. Found on a live check (30 October 2026): a correct quotation reported as
+   * "spoken by Doct".
+   */
+  structured: boolean;
 }
 
 /** Sites that publish whole plays as structured text. Only these have their HTML kept for reading speeches. */
@@ -56,7 +64,7 @@ export function parseSpeeches(page: { html?: string; text: string; url: string }
       const body = block.slice(block.search(/<\/b>/i) + 4);
       const lines = [...body.matchAll(/<a\s+name="?(\d+)\.(\d+)\.\d+"?\s*>([\s\S]*?)<\/a>/gi)];
       if (!speaker || !lines.length) continue;
-      out.push({ speaker: speaker.replace(/\.$/, ""), act: Number(lines[0]![1]), scene: Number(lines[0]![2]), text: lines.map((l) => strip(l[3]!)).join(" ") });
+      out.push({ speaker: speaker.replace(/\.$/, ""), act: Number(lines[0]![1]), scene: Number(lines[0]![2]), text: lines.map((l) => strip(l[3]!)).join(" "), structured: true });
     }
     if (out.length) return out;
   }
@@ -86,7 +94,7 @@ export function parseSpeeches(page: { html?: string; text: string; url: string }
     const folger = /^([A-Z][A-Z' ]{1,30}[A-Z])\s+\d{3,5}\s+(.*)$/.exec(line);
     if (folger) {
       flush();
-      current = { speaker: folger[1]!.trim(), act, scene, text: folger[2] ?? "" };
+      current = { speaker: folger[1]!.trim(), act, scene, text: folger[2] ?? "", structured: true };
       continue;
     }
     const numbered = /^\d{3,5}\s+(.*)$/.exec(line);
@@ -98,7 +106,7 @@ export function parseSpeeches(page: { html?: string; text: string; url: string }
     const bold = /^\*\*([^*]{2,40})\*\*$/.exec(raw.trim());
     if (bold) {
       flush();
-      current = { speaker: bold[1]!.trim(), act, scene, text: "" };
+      current = { speaker: bold[1]!.trim(), act, scene, text: "", structured: true };
       continue;
     }
     if (current && raw.trim().startsWith(">")) {
@@ -110,10 +118,10 @@ export function parseSpeeches(page: { html?: string; text: string; url: string }
     const alone = /^([A-Z][A-Z' ]{2,30})$/.exec(line);
     if (speech && (speech[1] === speech[1]!.toUpperCase() || line.includes(":")) && speech[1]!.trim().length > 2) {
       flush();
-      current = { speaker: speech[1]!.trim(), act, scene, text: speech[2] ?? "" };
+      current = { speaker: speech[1]!.trim(), act, scene, text: speech[2] ?? "", structured: false };
     } else if (alone) {
       flush();
-      current = { speaker: alone[1]!.trim(), act, scene, text: "" };
+      current = { speaker: alone[1]!.trim(), act, scene, text: "", structured: false };
     } else if (current && line && !/^\[|^\(?Exit|^Enter|^Re-enter|^Exeunt/i.test(line)) {
       (current as Speech).text += ` ${line}`;
     }
