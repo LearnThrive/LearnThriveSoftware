@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "openui": {
+      "source": "thesysdev/skills",
+      "sourceType": "github",
+      "skillPath": "skills/openui/SKILL.md",
+      "computedHash": "e4f3f38baaf76939dc77ff5ae59ec7fb6ff837319a7223cb8ddb59119885a8a9"
+    },
     "playwright-cli": {
       "source": "microsoft/playwright-cli",
       "sourceType": "github",

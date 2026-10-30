@@ -32,25 +32,34 @@ Open **`http://localhost:3000`** — that one origin serves the public site, the
 
 Under the hood, `npm run dev` runs `apps/web`'s own `dev` script, `tsx server.ts` — a custom Node HTTP server that hosts Next.js's request handler and an attached Socket.IO server side by side (see `docs/ARCHITECTURE.md`). There is no second process, no second port, and nothing else to start manually: the classroom's real-time signalling logic (`apps/realtime/server/signalling.ts`, unchanged) is imported as a library and wired to that same server, and its React UI (`apps/web/src/features/classroom/`, ported from the original `apps/classroom`) is lazy-loaded only when a Lesson's classroom route is actually opened.
 
-### LearnThrive AI's three models and voice
+### LearnThrive AI: Beam, interactive answers and voice
 
-`npm run dev` starts, before the site, the local Ollama runtime natively ([scripts/ollama-local.mjs](scripts/ollama-local.mjs)) and the speech sidecar in Docker ([config/compose.yaml](config/compose.yaml), started by [scripts/dev-services.mjs](scripts/dev-services.mjs)):
+LearnThrive AI's reasoning model is **Reflection's Beam on Ollama Cloud**. It needs an Ollama API key (a free account at ollama.com/settings/keys) in **your own environment**, never in a committed file:
+
+```bash
+# OLLAMA_API_KEY=<your key>     (ASSISTANT_PROVIDER=ollama_cloud and ASSISTANT_MODEL=beam are the defaults)
+npm run dev
+```
+
+There is no model to download and nothing runs on your GPU; the earlier local tutor, embedding and decision models, NVIDIA's hosted catalogue and the developer model picker are gone (a rollback is in [docs/ASSISTANT.md](docs/ASSISTANT.md)). Answers can be **interactive interfaces** (a graph you can move, a quiz marked on the page, flashcards, diagrams, comparisons with checked quotations) as well as text: how it works, what is checked and what is not is in [docs/OPENUI.md](docs/OPENUI.md). With the key set, web research goes through Ollama's own search and page reader first and falls back to SearXNG and Crawl4AI ([docs/RESEARCH.md](docs/RESEARCH.md)).
+
+`npm run dev` also starts, before the site, the supporting services in Docker ([config/compose.yaml](config/compose.yaml), started by [scripts/dev-services.mjs](scripts/dev-services.mjs)); it never blocks the site, and the site starts anyway if Docker is not running:
 
 | Service | Address | What it is |
 | --- | --- | --- |
-| tutor (native) | `http://127.0.0.1:11434` | the GPU model with vision, tools and thinking (`D:\OllamaRuntime\0.40.9`, models in `OLLAMA_MODELS`, here `D:\OllamaModels`) |
-| helpers (native, CPU only) | `http://127.0.0.1:11435` | the embedding model and the typed-decision model, in a second process with the GPU hidden (`CUDA_VISIBLE_DEVICES=-1`, and `OLLAMA_VULKAN=0` because this build reaches the card through Vulkan) so they cannot evict the tutor |
-| `voice` (Docker) | `http://127.0.0.1:8765` | the speech sidecar (`services/voice/Dockerfile`: Kokoro 82M `bf_emma` on the CPU; recognition is Parakeet CTC 1.1B through NVIDIA's NeMo-Speech.cpp runtime on the **host** at `host.docker.internal:8791`, with faster-whisper inside the container as the reported fallback). See [docs/VOICE.md](docs/VOICE.md) for the one-time downloads and [docs/VOICE_PARAKEET_KOKORO_MIGRATION.md](docs/VOICE_PARAKEET_KOKORO_MIGRATION.md) for the measured trade-offs |
+| `voice` (Docker) | `http://127.0.0.1:8765` | the speech sidecar (`services/voice/Dockerfile`: Kokoro 82M `bf_emma` on the CPU; recognition is Parakeet CTC 1.1B through NVIDIA's NeMo-Speech.cpp runtime on the **host** at `host.docker.internal:8791`, with faster-whisper as the fallback; [docs/VOICE.md](docs/VOICE.md)) |
+| `searxng` (Docker) | `http://127.0.0.1:8888` | web search, the fallback behind Ollama's |
+| `crawl4ai` (Docker) | `http://127.0.0.1:11235` | the browser that reads the pages a search finds, the fallback behind Ollama's |
 
-The native runtime replaced Docker's Ollama because the Windows-folder bind mount made a cold load take 215-251 s; the same model now loads in about 8.5 s (measured: [docs/OLLAMA_THREE_MODEL.md](docs/OLLAMA_THREE_MODEL.md), [docs/OLLAMA_BENCHMARK.md](docs/OLLAMA_BENCHMARK.md)). Docker's `ollama/0.35.0` service is kept as the rollback, not as the default. It needs the Piper voices downloaded once ([docs/VOICE.md](docs/VOICE.md)); without Docker the site still starts and voice says it is unavailable. The services keep running when the site stops:
+Live checks, with your key (they make real requests and print no secret):
 
 ```bash
-npm run ollama:local -- start      # the two native servers (or: status / warm / stop / pull)
+npm run assistant:beam-check       # Beam, a tool call, Ollama web search and fetch, one interface (needs OLLAMA_API_KEY)
 npm run services:up                # start or check them without the site
 npm run services:logs              # follow the Docker sidecar's logs
 npm run services:down              # stop the Docker services
 npm run services:rebuild           # after changing services/voice
-npm run ollama:bench               # the three-model benchmark (needs the servers running)
+npm run assistant:openui-bench     # plain Beam against Beam-generated interfaces (needs OLLAMA_API_KEY)
 ```
 
 `LEARNTHRIVE_DOCKER=0` skips the Docker services (the Playwright servers set it), and so do `ASSISTANT_PROVIDER=mock` with `VOICE_PROVIDER=mock`.
