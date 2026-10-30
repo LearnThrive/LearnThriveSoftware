@@ -1,19 +1,15 @@
 import { createMailer, emailWrapper, escapeHtml, htmlBanner, htmlHeading, htmlParagraph, htmlTable, readEmailConfig, sendEmail, textTable } from "@/lib/email";
 import { chatUploadStorage, type LibraryStorage } from "@/lib/library/storage";
 import { assistantAvailability, assistantConfig, type AssistantConfig, type Closed } from "./config";
-import { SystemOneClient } from "./decision";
-import { OllamaEmbeddingProvider, type EmbeddingProvider } from "./embeddings";
-import { LocalClaimRecall } from "./research/entail";
+import type { EmbeddingProvider } from "./embeddings";
 import { Crawl4aiClient } from "./research/crawl4ai";
+import { CompositeReader, CompositeSearch, OllamaWebClient } from "./research/ollamaWeb";
 import { SearxngClient } from "./research/searxng";
 import { ResearchService } from "./research/verify";
-import { modelLabSettings } from "./models";
-import { buildHostedProvider, buildProvider } from "./providers";
+import { buildProvider } from "./providers";
 import { GenerationQueue } from "./queue";
-import type { ModelLab } from "./selection";
 import type { SafeguardingFlag } from "./service";
-import { isWarmable, type ChatProvider } from "./types";
-import { warmOnce } from "./warmup";
+import type { ChatProvider } from "./types";
 
 type Env = Record<string, string | undefined>;
 
@@ -23,29 +19,11 @@ export interface AssistantRuntime {
   queue: GenerationQueue;
   uploads: LibraryStorage;
   hosted: boolean;
-  /** The embedding role (CPU helper). Null when the local stack is not in use: retrieval is then off, not faked. */
+  /** The embedding role. Null: none is configured (the local helper was removed), so retrieval over uploads is off, not faked. */
   embeddings: EmbeddingProvider | null;
-  /** The decision role (CPU helper). Null when unavailable: routing stays deterministic. */
-  decision: SystemOneClient | null;
-  /** The recall stage (research/entail.ts). Null when it is switched off: only the exact checks run. */
-  recall: LocalClaimRecall | null;
-  /** Web research through SearXNG. Always present: if the instance does not answer, a turn says what could not be checked. */
+  /** Web research: Ollama's web search and page reader first when there is a key, SearXNG and Crawl4AI behind them. Always present: if nothing answers, a turn says what could not be checked. */
   research: ResearchService;
   flag: ((flag: SafeguardingFlag) => Promise<void>) | undefined;
-  /** The developer model picker (selection.ts): null where it is not offered (production, no key, no models enabled). */
-  lab: ModelLab | null;
-}
-
-/** The picker's hosted providers, one per enabled model, built once. Null when the picker is not offered on this server. */
-export function buildModelLab(config: AssistantConfig, env: Env = process.env, fetchImpl?: typeof fetch): ModelLab | null {
-  const settings = modelLabSettings(env, config.providers);
-  if (!settings.available) return null;
-  const providers = new Map<string, ChatProvider>();
-  for (const profile of settings.models) {
-    const provider = buildHostedProvider(profile, env, { reasoningTokens: settings.reasoningTokens, fetch: fetchImpl });
-    if (provider) providers.set(profile.choice, provider);
-  }
-  return providers.size ? { settings, providers } : null;
 }
 
 const g = globalThis as unknown as { __learnthriveAssistant?: AssistantRuntime };
@@ -73,6 +51,29 @@ export function assistantClosed(env: Env = process.env, backend = true): Closed 
   return buildProvider(config, env) ? null : "no_provider";
 }
 
+/**
+ * The research stack for a configuration. `RESEARCH_PROVIDER=auto` (the default) leads with Ollama's web search and page reader when OLLAMA_API_KEY is set
+ * and falls back to SearXNG and Crawl4AI; `ollama` and `searxng` use only that one. Nothing here makes a model call.
+ */
+export function buildResearch(config: AssistantConfig, env: Env = process.env, fetchImpl?: typeof fetch): ResearchService {
+  const r = config.research;
+  const key = env.OLLAMA_API_KEY?.trim() ?? "";
+  const ollama = new OllamaWebClient({ baseUrl: r.ollamaBaseUrl, apiKey: key, timeoutMs: Math.max(r.timeoutMs, 10_000), maxResults: r.maxResults, cacheTtlSeconds: r.cacheTtlSeconds }, fetchImpl as never);
+  const searx = new SearxngClient({ enabled: true, baseUrl: r.baseUrl, timeoutMs: r.timeoutMs, maxResults: r.maxResults, cacheTtlSeconds: r.cacheTtlSeconds });
+  const crawler = config.crawler.enabled ? new Crawl4aiClient(config.crawler) : null;
+  const useOllama = r.provider === "ollama" || (r.provider === "auto" && ollama.available);
+  const useSearx = r.provider === "searxng" || r.provider === "auto";
+  const searchers = [...(useOllama ? [ollama] : []), ...(useSearx ? [searx] : [])];
+  const readers = [...(useOllama ? [ollama] : []), ...(crawler && r.provider !== "ollama" ? [crawler] : [])];
+  return new ResearchService({
+    searx: new CompositeSearch(searchers),
+    limits: { maxSearches: r.maxSearches, maxFetches: r.maxFetches, fetchMaxBytes: r.fetchMaxBytes, fetchTimeoutMs: 10_000, perMinute: r.perMinute },
+    cacheTtlSeconds: r.cacheTtlSeconds,
+    // The readers that turn a found page into text. If none is available or all fail, pages are fetched directly and the turn says so.
+    fetchOptions: { crawler: readers.length ? new CompositeReader(readers) : null },
+  });
+}
+
 export function assistantRuntime(env: Env = process.env): AssistantRuntime | null {
   if (g.__learnthriveAssistant) return g.__learnthriveAssistant;
   const config = assistantConfig(env);
@@ -90,42 +91,17 @@ export function assistantRuntime(env: Env = process.env): AssistantRuntime | nul
         if (!sent.ok) throw new Error("send failed");
       }
     : undefined;
-  // The helper roles are part of the LOCAL stack only: a hosted provider keeps its own retrieval/decision story, and production
-  // never uses these loopback endpoints (config.ts refuses ollama there).
-  const local = !config.production && config.providers.includes("ollama");
-  const embeddings = local && config.retrieval.enabled ? new OllamaEmbeddingProvider({ ...config.retrieval.embedding }) : null;
-  const decision = local && config.decision.enabled ? new SystemOneClient(config.decision) : null;
-  // The recall stage is a helper role like the others: local (development) only, and null unless it was asked for, because it costs a model call.
-  const recall = local && config.recall.enabled ? new LocalClaimRecall(config.recall) : null;
-  const r = config.research;
-  const research = new ResearchService({
-    searx: new SearxngClient({ enabled: true, baseUrl: r.baseUrl, timeoutMs: r.timeoutMs, maxResults: r.maxResults, cacheTtlSeconds: r.cacheTtlSeconds }),
-    limits: { maxSearches: r.maxSearches, maxFetches: r.maxFetches, fetchMaxBytes: r.fetchMaxBytes, fetchTimeoutMs: 10_000, perMinute: r.perMinute },
-    cacheTtlSeconds: r.cacheTtlSeconds,
-    // The browser that reads the pages SearXNG finds. If it is off or unreachable, pages are fetched directly and the turn says so.
-    fetchOptions: { crawler: config.crawler.enabled ? new Crawl4aiClient(config.crawler) : null },
-    recall,
-  });
   g.__learnthriveAssistant = {
     config,
     provider,
     queue: new GenerationQueue(config.concurrency, config.queueMax),
     uploads,
-    hosted: !config.providers.every((p) => p === "ollama" || p === "mock"),
-    embeddings,
-    decision,
-    recall,
-    research,
+    // Anything but the mock costs per token, so the daily token budget applies to it.
+    hosted: !config.providers.every((p) => p === "mock"),
+    embeddings: null,
+    research: buildResearch(config, env),
     flag,
-    lab: buildModelLab(config, env),
   };
-  // Warm the tutor and the helpers once, in the background: the first question should not pay for a cold load. The manager
-  // deduplicates, so a hot reload or two requests cannot start two loads.
-  if (local) {
-    if (isWarmable(provider)) void warmOnce({ provider, model: config.model, contextSize: config.contextSize, keepAlive: config.keepAlive }, { budgetMs: config.stages.text.loadMs }).catch(() => {});
-    if (embeddings) void embeddings.embed(["ready"], { kind: "query" }).catch(() => {});
-    if (decision) void decision.health().catch(() => {});
-  }
   return g.__learnthriveAssistant;
 }
 

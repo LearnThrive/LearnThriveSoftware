@@ -1,6 +1,6 @@
 /**
  * The assistant's provider boundary (plan19 section 5.1). Everything above it (the chat service, the routes, the benchmark)
- * talks to `ChatProvider`, never to a concrete model server, so Ollama on a developer's machine, NVIDIA's hosted catalogue
+ * talks to `ChatProvider`, never to a concrete model server, so Ollama Cloud (Beam, in development)
  * (development only) and a production provider chosen later are interchangeable.
  *
  * A turn is not only text: a model may think before it answers and may ask the server to run a read-only tool. Both are

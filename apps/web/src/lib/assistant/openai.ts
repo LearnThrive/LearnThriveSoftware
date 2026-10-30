@@ -1,25 +1,26 @@
-import { EFFORT_LEVELS, type EffortLevel, type HostedModelProfile, type ReasoningEffort } from "./models";
 import { ProviderError, hasImages, type ChatProvider, type ProviderCapabilities, type ProviderHealth, type ProviderMessage, type ProviderToolCall, type StreamChunk, type StreamOptions } from "./types";
 
 /**
- * An OpenAI-compatible chat endpoint (plan19 section 5.1): the shape NVIDIA's hosted catalogue (`nim`, DEVELOPMENT ONLY, synthetic
- * prompts only) and most hosted providers speak. The same class is the production slot (`custom`) once a provider has been chosen
- * under section 6 (a data processing agreement, no training on inputs, a suitable processing location): config.ts refuses `nim` in
- * production and refuses `custom` without `ASSISTANT_PRODUCTION_APPROVED`.
+ * An OpenAI-compatible chat endpoint (plan19 section 5.1): Ollama Cloud's `/v1` (`ollama_cloud`, DEVELOPMENT ONLY, serving Reflection's Beam) and the
+ * production slot (`custom`) once a provider has been chosen under section 6 (a data processing agreement, no training on inputs, a suitable processing
+ * location): config.ts refuses `ollama_cloud` in production and refuses `custom` without `ASSISTANT_PRODUCTION_APPROVED`.
  *
- * The provider owns its model names. A caller may ask for one of THIS provider's models (its text or vision model); any other name
- * (an Ollama tag handed down a fallback chain, say) is ignored and the provider's own model is used, so a request can never reach an
- * endpoint with another provider's model identifier. The `done` chunk reports the model that was actually sent.
+ * The provider owns its model name. A caller may ask for THIS provider's model; any other name is ignored and the provider's own is used, so a request can
+ * never reach an endpoint with another provider's model identifier. The `done` chunk reports the model that was actually sent.
  *
- * A reasoning model's hidden reasoning (`reasoning_content` or `reasoning` on a delta) is ACTIVITY, never answer text: it is not
- * yielded, stored or shown. A stream that ends with reasoning and no answer (the allowance ran out while it was still thinking) is an
- * error (`empty`), never a success with nothing in it. Tool calls arrive in fragments and are assembled, then handed over whole.
+ * A reasoning model's hidden reasoning (`reasoning_content` or `reasoning` on a delta) is ACTIVITY, never answer text: it is not yielded, stored or shown.
+ * A stream that ends with reasoning and no answer (the allowance ran out while it was still thinking) is an error (`empty`), never a success with nothing in
+ * it. Tool calls arrive in fragments and are assembled, then handed over whole.
  *
- * A 429 or 503 is retried with backoff (the server's Retry-After if it sends one, else a doubling wait with jitter), up to `maxRetries`
- * times and only BEFORE any token has been sent: once text is flowing a failure is a failure. A model profile may offer optional request
- * fields (reasoning controls); one the endpoint refuses with a 400 is dropped for the next set, and the set that worked is remembered.
- * The key is in a request header only; nothing the person typed or the model said is ever logged.
+ * A 429 or 503 is retried with backoff (the server's Retry-After if it sends one, else a doubling wait with jitter), up to `maxRetries` times and only BEFORE
+ * any token has been sent: once text is flowing a failure is a failure. An optional request field (the reasoning control) that the endpoint refuses with a
+ * 400 is dropped for the next set, and the set that worked is remembered. The key is in a request header only; nothing the person typed or the model said
+ * is ever logged.
  */
+/** What is asked of a reasoning model: nothing ("off") or a level the endpoint names. */
+export type ReasoningEffort = "off" | "none" | "minimal" | "low" | "medium" | "high";
+const EFFORTS: readonly string[] = ["none", "minimal", "low", "medium", "high"];
+
 export interface OpenAiCompatibleConfig {
   id: string;
   baseUrl: string;
@@ -30,10 +31,15 @@ export interface OpenAiCompatibleConfig {
   vision?: boolean;
   maxContext?: number;
   maxRetries?: number;
-  /** A hosted model's own settings (models.ts): recommended sampling, reasoning controls, its reasoning allowance. */
-  profile?: HostedModelProfile;
-  /** Overrides the profile's reasoning allowance (ASSISTANT_NIM_REASONING_TOKENS). */
+  /**
+   * The request fields that control reasoning for an effort, best first (the last set should be the plain request). An endpoint that refuses one is asked
+   * again with the next, and the set that worked is remembered for the rest of the process. Absent: nothing is sent.
+   */
+  reasoningFields?: (effort: ReasoningEffort) => ReadonlyArray<Record<string, unknown>>;
+  /** Extra output tokens added when reasoning was NOT asked for, because a reasoning model may think anyway and would otherwise run out before answering. */
   reasoningTokens?: number;
+  /** Send `tool_choice: "auto"`. Ollama Cloud's /v1 does not support the field, so it is left out there (the model decides on its own). Default true. */
+  toolChoice?: boolean;
   fetch?: typeof fetch;
   /** Where waits happen, so a test need not really wait. */
   sleep?: (ms: number) => Promise<void>;
@@ -99,7 +105,7 @@ export class OpenAiCompatibleProvider implements ChatProvider {
   }
 
   async capabilities(): Promise<ProviderCapabilities> {
-    return { vision: Boolean(this.config.vision || this.config.visionModel), jsonMode: true, toolUse: true, maxContext: this.config.maxContext ?? 0, thinking: this.config.profile ? true : null };
+    return { vision: Boolean(this.config.vision || this.config.visionModel), jsonMode: true, toolUse: true, maxContext: this.config.maxContext ?? 0, thinking: Boolean(this.config.reasoningFields) || null };
   }
 
   /** Reachable, the key accepted, and (when the server lists its models) this provider's model among them. Costs no generation. */
@@ -134,13 +140,12 @@ export class OpenAiCompatibleProvider implements ChatProvider {
   private effort(options: StreamOptions): ReasoningEffort {
     if (options.think === false) return "off";
     if (options.think === true) return "high";
-    if (typeof options.think === "string" && EFFORT_LEVELS.includes(options.think as EffortLevel)) return options.think as EffortLevel;
+    if (typeof options.think === "string" && EFFORTS.includes(options.think)) return options.think as ReasoningEffort;
     return options.reasoning ? "medium" : "off";
   }
 
   async *stream(messages: readonly ProviderMessage[], options: StreamOptions): AsyncGenerator<StreamChunk> {
     const model = this.modelFor(messages, options.model);
-    const profile = this.config.profile && this.config.profile.model === model ? this.config.profile : undefined;
     const started = Date.now();
     const caller = options.signal;
     if (caller?.aborted) throw new ProviderError("aborted", this.id);
@@ -148,18 +153,17 @@ export class OpenAiCompatibleProvider implements ChatProvider {
 
     // Reasoning controls, best first, starting from the set this endpoint already accepted.
     const effort = this.effort(options);
-    const variants = profile ? profile.reasoningFields(effort) : [{}];
+    const variants = this.config.reasoningFields ? this.config.reasoningFields(effort) : [{}];
     const memo = `${this.config.baseUrl}|${model}|${effort}`;
     let variant = Math.min(accepted.get(memo) ?? 0, variants.length - 1);
-    // A model that always reasons spends part of every request thinking: give it its allowance even when the caller did not ask it to think.
-    const reasoningAllowance = this.config.reasoningTokens ?? profile?.reasoningTokens ?? 0;
-    const maxTokens = options.maxTokens + (profile?.alwaysReasons && effort === "off" ? reasoningAllowance : 0);
+    // A reasoning model may spend part of a request thinking even when it was not asked to: give it room for that, so the answer is not cut off.
+    const maxTokens = options.maxTokens + (effort === "off" ? (this.config.reasoningTokens ?? 0) : 0);
     const firstAnswerMs = options.firstAnswerTimeoutMs ?? options.firstTokenTimeoutMs;
     const idleMs = options.idleTimeoutMs ?? firstAnswerMs;
-    // A model that always reasons (Step 5 Preview) writes nothing until it has finished thinking, so "a visible word within
-    // firstAnswerMs of the request" fails it for working exactly as designed. While its reasoning is still arriving the answer clock
-    // is pushed forward; a stream that goes quiet is still ended by the idle clock, and the whole-turn deadline still bounds the wait.
-    const reasonsByDesign = profile?.alwaysReasons === true;
+    // A reasoning model writes nothing until it has finished thinking, so "a visible word within firstAnswerMs of the request" would fail it for working as
+    // designed. While its reasoning is still arriving the answer clock is pushed forward; a stream that goes quiet is still ended by the idle clock, and the
+    // whole-turn deadline still bounds the wait.
+    const reasonsByDesign = Boolean(this.config.reasoningFields);
     const tools = options.tools?.length ? options.tools.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } })) : undefined;
 
     for (let attempt = 0; ; attempt += 1) {
@@ -206,11 +210,9 @@ export class OpenAiCompatibleProvider implements ChatProvider {
               stream: true,
               stream_options: { include_usage: true },
               max_tokens: maxTokens,
-              // A hosted model's own recommended sampling (its model card); otherwise what the caller asked for.
-              temperature: profile ? profile.temperature : options.temperature,
-              ...(profile ? { top_p: profile.topP } : {}),
+              temperature: options.temperature,
               ...(options.json ? { response_format: { type: "json_object" } } : {}),
-              ...(tools ? { tools, tool_choice: "auto" } : {}),
+              ...(tools ? { tools, ...(this.config.toolChoice === false ? {} : { tool_choice: "auto" }) } : {}),
               ...variants[variant],
               messages: this.wireMessages(messages),
             }),
@@ -253,6 +255,7 @@ export class OpenAiCompatibleProvider implements ChatProvider {
         let reasoned = false;
         let finish: string | null = null;
         let usage = { promptTokens: 0, completionTokens: 0 };
+        let producedChars = 0;
         const calls = new Map<number, PartialCall>();
         let finished = false;
         const sawActivity = () => {
@@ -320,6 +323,7 @@ export class OpenAiCompatibleProvider implements ChatProvider {
                 firstAnswerAt = Date.now() - started;
                 answered();
               }
+              producedChars += text.length;
               yield { type: "text", text };
             }
           }
@@ -351,7 +355,9 @@ export class OpenAiCompatibleProvider implements ChatProvider {
           type: "done",
           provider: this.id,
           model,
-          usage,
+          // Usage is what the endpoint reports. If it reported none, the visible answer's length stands in (about 3.5 characters a token), so the daily
+          // budget still counts the turn; it undercounts hidden reasoning, which is why a missing report is the exception.
+          usage: usage.completionTokens > 0 ? usage : { promptTokens: usage.promptTokens, completionTokens: Math.ceil(producedChars / 3.5) },
           stats: { firstTokenMs: firstTokenMs ?? Date.now() - started, firstAnswerMs: firstAnswerAt, totalMs: Date.now() - started },
           cutOff: finish === "length",
         };
@@ -363,5 +369,3 @@ export class OpenAiCompatibleProvider implements ChatProvider {
     }
   }
 }
-
-export const NIM_BASE_URL = "https://integrate.api.nvidia.com/v1";

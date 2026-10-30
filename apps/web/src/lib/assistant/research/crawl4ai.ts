@@ -22,6 +22,8 @@ export interface CrawlOutcome {
   /** The page's HTML, when the server returned it (for structured reading of known play texts). */
   html: string;
   httpStatus: number | null;
+  /** Which reader produced it, when it is not Crawl4AI itself (Ollama's web_fetch sets "ollama"). */
+  reader?: "ollama";
 }
 
 export interface Crawl4aiConfig {

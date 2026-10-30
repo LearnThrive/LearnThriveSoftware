@@ -34,8 +34,8 @@
     "supabase:reset": "supabase db reset",
     "test:realstack": "npm run test:realstack --workspace=packages/data && npm run test:realstack --workspace=apps/web",
     "dev:supabase": "node scripts/dev-supabase.mjs",
-    "ollama:local": "node scripts/ollama-local.mjs",
-    "ollama:bench": "npm run ollama:bench --workspace=apps/web"
+    "assistant:beam-check": "npm run assistant:beam-check --workspace=apps/web",
+    "assistant:openui-bench": "npm run assistant:openui-bench --workspace=apps/web"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

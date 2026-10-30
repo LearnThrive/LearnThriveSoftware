@@ -294,20 +294,9 @@ test("status: says whether LearnThrive AI is open and why not, without needing a
   assert.deepEqual(prod, { open: false, reason: "disabled" }, "production is off by default");
   const sick = await (await h.handleStatus(new Request("http://localhost/x"), w.deps(p.jar, { assistant: { ...w.assistant, provider: { health: async () => ({ ok: false, detail: "unreachable" }) } } }))).json();
   assert.deepEqual([sick.open, sick.reason], [false, "unreachable"]);
-  // The helper roles are probed, not inferred: one up, one down. Neither closes the chat.
-  const helpers = await (
-    await h.handleStatus(
-      new Request("http://localhost/x"),
-      w.deps(p.jar, {
-        assistant: {
-          ...w.assistant,
-          embeddings: { health: async () => ({ ok: true, detail: "ok" }) },
-          decision: { health: async () => ({ ok: false, detail: "down" }) },
-        },
-      }),
-    )
-  ).json();
-  assert.deepEqual([helpers.open, helpers.retrieval, helpers.decision], [true, true, false]);
+  // There is no model picker and no local helper to report: the page is told whether the assistant is open and that interfaces are on.
+  assert.equal(status.interactive, true);
+  for (const gone of ["models", "retrieval", "decision"]) assert.equal(gone in status, false, gone);
 });
 
 test("the safeguarding email carries a reference, the kind and a short excerpt and nothing that names a family", () => {
@@ -320,7 +309,8 @@ test("the safeguarding email carries a reference, the kind and a short excerpt a
   assert.equal(rt.assistantClosed({ NODE_ENV: "production" }), "disabled");
   assert.equal(rt.assistantClosed({ ASSISTANT_PROVIDER: "mock" }), null);
   assert.equal(rt.assistantClosed({ ASSISTANT_PROVIDER: "mock" }, false), "no_backend");
-  assert.equal(rt.assistantClosed({ ASSISTANT_PROVIDER: "nim" }), "no_provider", "NIM without a key");
+  assert.equal(rt.assistantClosed({ ASSISTANT_PROVIDER: "ollama_cloud" }), "no_provider", "Ollama Cloud without a key");
+  assert.equal(rt.assistantClosed({ ASSISTANT_PROVIDER: "nim" }), "no_provider", "a retired provider");
 });
 
 test("retention: storage first, then rows; a storage failure keeps the rows for the next run", async () => {

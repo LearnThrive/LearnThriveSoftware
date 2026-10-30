@@ -11,7 +11,6 @@ const prompt = loadTsFrom(import.meta.url, "../src/lib/assistant/prompt.ts");
 const types = loadTsFrom(import.meta.url, "../src/lib/assistant/types.ts");
 const { OllamaProvider } = loadTsFrom(import.meta.url, "../src/lib/assistant/ollama.ts");
 const { OpenAiCompatibleProvider } = loadTsFrom(import.meta.url, "../src/lib/assistant/openai.ts");
-const { FallbackProvider } = loadTsFrom(import.meta.url, "../src/lib/assistant/chain.ts");
 const { GenerationQueue, QueueFull, QueueAborted } = loadTsFrom(import.meta.url, "../src/lib/assistant/queue.ts");
 const { buildProvider } = loadTsFrom(import.meta.url, "../src/lib/assistant/providers.ts");
 const { MockProvider } = loadTsFrom(import.meta.url, "../src/lib/assistant/mock.ts");
@@ -33,8 +32,9 @@ test("config: off in production unless exactly true; on in development unless ex
   assert.equal(c.concurrency, 2);
   assert.equal(c.model, "m1");
   assert.equal(cfg.assistantConfig({ ASSISTANT_DAILY_MESSAGES: "55" }).dailyMessages, 55);
-  assert.deepEqual(cfg.assistantConfig({ ASSISTANT_PROVIDER: "ollama, nim" }).providers, ["ollama", "nim"]);
-  assert.deepEqual(cfg.assistantConfig({ ASSISTANT_PROVIDER: "ollama,bogus" }).providers, [], "one unknown provider closes the whole setting");
+  assert.deepEqual(cfg.assistantConfig({ ASSISTANT_PROVIDER: " ollama_cloud " }).providers, ["ollama_cloud"]);
+  assert.deepEqual(cfg.assistantConfig({ ASSISTANT_PROVIDER: "ollama_cloud,bogus" }).providers, [], "one unknown provider closes the whole setting");
+  assert.deepEqual(cfg.assistantConfig({ ASSISTANT_PROVIDER: "ollama_cloud,mock" }).providers, [], "no chain: a second model never answers in place of the first");
   assert.equal(cfg.assistantConfig({ ASSISTANT_MINORS_APPROVED: "true" }).minorsApproved, true);
   assert.equal(cfg.assistantConfig({}).minorsApproved, false);
 });
@@ -47,9 +47,9 @@ test("availability: production needs the switch, the recorded approval and a cus
   assert.deepEqual(open({ ASSISTANT_PROVIDER: "bogus" }), { open: false, reason: "no_provider" });
   const prod = { NODE_ENV: "production", ASSISTANT_ENABLED: "true" };
   assert.equal(open(prod).reason, "production_not_approved");
-  assert.equal(open({ ...prod, ASSISTANT_PRODUCTION_APPROVED: "true" }).reason, "production_provider", "ollama is not a production provider");
-  assert.equal(open({ ...prod, ASSISTANT_PRODUCTION_APPROVED: "true", ASSISTANT_PROVIDER: "nim", NVIDIA_API_KEY: "k" }).reason, "production_provider", "NIM's free catalogue is not either");
-  assert.equal(open({ ...prod, ASSISTANT_PRODUCTION_APPROVED: "true", ASSISTANT_PROVIDER: "ollama,custom", ASSISTANT_BASE_URL: "https://x.example", ASSISTANT_API_KEY: "k" }).reason, "production_provider", "no dev provider in a production chain");
+  assert.equal(open({ ...prod, ASSISTANT_PRODUCTION_APPROVED: "true" }).reason, "production_provider", "Ollama Cloud is not a production provider");
+  assert.equal(open({ ...prod, ASSISTANT_PRODUCTION_APPROVED: "true", OLLAMA_API_KEY: "k" }).reason, "production_provider", "not even with a key");
+  assert.equal(open({ ...prod, ASSISTANT_PRODUCTION_APPROVED: "true", ASSISTANT_PROVIDER: "ollama_cloud,custom", ASSISTANT_BASE_URL: "https://x.example", ASSISTANT_API_KEY: "k" }).reason, "no_provider", "no chain: more than one provider closes it");
   assert.equal(open({ ...prod, ASSISTANT_PRODUCTION_APPROVED: "true", ASSISTANT_PROVIDER: "custom" }).reason, "production_provider", "no address or key");
   assert.equal(open({ ...prod, ASSISTANT_PRODUCTION_APPROVED: "true", ASSISTANT_PROVIDER: "mock" }).reason, "production_provider", "the mock never");
   assert.deepEqual(open({ ...prod, ASSISTANT_PRODUCTION_APPROVED: "true", ASSISTANT_PROVIDER: "custom", ASSISTANT_BASE_URL: "https://x.example/v1", ASSISTANT_API_KEY: "k" }), { open: true });
@@ -57,12 +57,10 @@ test("availability: production needs the switch, the recorded approval and a cus
 
 test("buildProvider: dev providers are refused in production even if asked for, and a missing key is no provider", () => {
   const dev = (env) => buildProvider(cfg.assistantConfig(env), env);
-  assert.equal(dev({}).id, "ollama");
-  assert.equal(dev({ ASSISTANT_PROVIDER: "nim" }), null, "no key");
-  assert.equal(dev({ ASSISTANT_PROVIDER: "nim", NVIDIA_API_KEY: "k" }).id, "nim");
-  assert.equal(dev({ ASSISTANT_PROVIDER: "ollama,nim", NVIDIA_API_KEY: "k" }).id, "ollama+nim");
+  assert.equal(dev({}), null, "Ollama Cloud with no key is no provider");
+  assert.equal(dev({ OLLAMA_API_KEY: "k" }).id, "ollama_cloud");
   assert.equal(dev({ ASSISTANT_PROVIDER: "mock" }).id, "mock");
-  for (const provider of ["ollama", "nim", "mock"]) assert.equal(dev({ NODE_ENV: "production", ASSISTANT_PROVIDER: provider, NVIDIA_API_KEY: "k" }), null, provider);
+  for (const provider of ["ollama_cloud", "mock"]) assert.equal(dev({ NODE_ENV: "production", ASSISTANT_PROVIDER: provider, OLLAMA_API_KEY: "k" }), null, provider);
   assert.equal(dev({ NODE_ENV: "production", ASSISTANT_PROVIDER: "custom", ASSISTANT_BASE_URL: "https://x.example/v1", ASSISTANT_API_KEY: "k" }).id, "custom");
 });
 
@@ -283,40 +281,6 @@ class Scripted {
     yield { type: "done", provider: this.id, model: "m", usage: { promptTokens: 1, completionTokens: 1 }, stats: { firstTokenMs: 1, totalMs: 1 } };
   }
 }
-
-test("fallback chain: the next provider answers when the first is down, slow or limited; never after text has started, never for a bad request", async () => {
-  for (const behaviour of ["dead", "slow", "limited"]) {
-    const a = new Scripted("a", behaviour);
-    const b = new Scripted("b", "ok");
-    const out = await collect(new FallbackProvider([{ provider: a }, { provider: b }]).stream(MSGS, OPTS));
-    assert.equal(out.text, "b", behaviour);
-    assert.deepEqual([a.calls, b.calls], [1, 1]);
-  }
-  const bad = new Scripted("a", "bad");
-  const next = new Scripted("b", "ok");
-  await assert.rejects(() => collect(new FallbackProvider([{ provider: bad }, { provider: next }]).stream(MSGS, OPTS)), (e) => e.code === "bad_request");
-  assert.equal(next.calls, 0, "the next provider would refuse it too");
-
-  const half = new Scripted("a", "halfway");
-  const after = new Scripted("b", "ok");
-  const chunks = [];
-  await assert.rejects(async () => { for await (const c of new FallbackProvider([{ provider: half }, { provider: after }]).stream(MSGS, OPTS)) chunks.push(c); }, (e) => e.code === "unavailable");
-  assert.deepEqual(chunks.map((c) => c.text), ["partial"]);
-  assert.equal(after.calls, 0, "no stitching two answers together");
-
-  await assert.rejects(() => collect(new FallbackProvider([{ provider: new Scripted("a", "dead") }, { provider: new Scripted("b", "slow") }]).stream(MSGS, OPTS)), (e) => e.code === "timeout", "the last failure is the one reported");
-  const done = new AbortController();
-  done.abort();
-  await assert.rejects(() => collect(new FallbackProvider([{ provider: new Scripted("a", "ok") }]).stream(MSGS, { ...OPTS, signal: done.signal })), (e) => e.code === "aborted");
-  assert.equal(new FallbackProvider([{ provider: new Scripted("a", "dead") }, { provider: new Scripted("b", "ok") }]).id, "a+b");
-  assert.equal((await new FallbackProvider([{ provider: new Scripted("a", "dead") }, { provider: new Scripted("b", "ok") }]).health()).ok, true);
-  assert.throws(() => new FallbackProvider([]));
-  // Narrower per-step timeouts only ever narrow.
-  const seen = [];
-  const spy = { id: "s", capabilities: async () => ({}), health: async () => ({ ok: true }), async *stream(_m, o) { seen.push([o.firstTokenTimeoutMs, o.totalTimeoutMs]); yield { type: "done", provider: "s", model: "m", usage: { promptTokens: 0, completionTokens: 0 }, stats: { firstTokenMs: 0, totalMs: 0 } }; } };
-  await collect(new FallbackProvider([{ provider: spy, firstTokenTimeoutMs: 500, totalTimeoutMs: 99_999 }]).stream(MSGS, OPTS));
-  assert.deepEqual(seen, [[500, 5000]]);
-});
 
 test("mock provider: a harmless scripted answer, steered by markers, and it records what it was sent", async () => {
   const mock = new MockProvider({ delayMs: 0 });

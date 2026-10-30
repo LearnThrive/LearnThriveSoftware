@@ -8,11 +8,10 @@ import { quiet, environment } from "./_routeHelpers.mjs";
 // run against the real servers separately.
 
 const { OllamaProvider } = loadTsFrom(import.meta.url, "../src/lib/assistant/ollama.ts");
-const { OllamaEmbeddingProvider, cosine, EMBEDDING_PREFIXES } = loadTsFrom(import.meta.url, "../src/lib/assistant/embeddings.ts");
-const { SystemOneClient, deterministicRoute, needsDecision } = loadTsFrom(import.meta.url, "../src/lib/assistant/decision.ts");
+const { cosine } = loadTsFrom(import.meta.url, "../src/lib/assistant/embeddings.ts");
+const { deterministicRoute } = loadTsFrom(import.meta.url, "../src/lib/assistant/decision.ts");
 const retrieval = loadTsFrom(import.meta.url, "../src/lib/assistant/retrieval.ts");
 const { TOOL_DEFINITIONS, runTool } = loadTsFrom(import.meta.url, "../src/lib/assistant/tools.ts");
-const warmup = loadTsFrom(import.meta.url, "../src/lib/assistant/warmup.ts");
 const cfg = loadTsFrom(import.meta.url, "../src/lib/assistant/config.ts");
 const svc = loadTsFrom(import.meta.url, "../src/lib/assistant/service.ts");
 const { MockProvider } = loadTsFrom(import.meta.url, "../src/lib/assistant/mock.ts");
@@ -128,105 +127,12 @@ test("ollama: a failed capability lookup is retried, not cached as a permanent n
   assert.equal(showCalls, 2);
 });
 
-test("warm-up: one in-flight load per endpoint/model/context, with exactly the turn's options, and residency is evidenced", async () => {
-  warmup.resetWarmUps();
-  const calls = [];
-  let resident = false;
-  const provider = {
-    id: "ollama",
-    async capabilities() {
-      return { vision: true, jsonMode: true, toolUse: true, maxContext: 4096 };
-    },
-    async health() {
-      return { ok: true, detail: "ok" };
-    },
-    async *stream() {},
-    async resident() {
-      return resident;
-    },
-    async warm(options) {
-      calls.push(options);
-      await new Promise((r) => setTimeout(r, 20));
-      resident = true;
-      return { ok: true, loadMs: 1234, detail: "ok" };
-    },
-  };
-  const profile = { provider, model: "m1", contextSize: 4096, keepAlive: "30m" };
-  const [a, b] = await Promise.all([warmup.warmOnce(profile), warmup.warmOnce(profile)]);
-  assert.deepEqual(a, { ok: true, loadMs: 1234, detail: "ok" });
-  assert.deepEqual(b, a);
-  assert.equal(calls.length, 1, "two turns, one load");
-  assert.deepEqual(calls[0], { model: "m1", contextSize: 4096, keepAlive: "30m", signal: calls[0].signal });
-  assert.equal(warmup.warmUpsInFlight(), 0, "a finished load is not held");
-  assert.equal(await warmup.modelReady(provider, "m1"), true);
-});
-
-test("embeddings: model prefixes, batching and a strict vector check; an over-long input is refused, never truncated", async () => {
-  const calls = [];
-  const provider = new OllamaEmbeddingProvider({
-    model: "embeddinggemma-2:270m-q8_0-text",
-    baseUrl: "http://127.0.0.1:11435",
-    keepAlive: "10m",
-    batch: 2,
-    maxChars: 20,
-    fetch: async (url, init) => {
-      const body = JSON.parse(init.body);
-      calls.push(body);
-      return Response.json({ embeddings: body.input.map(() => [1, 0, 0]) });
-    },
-  });
-  const vectors = await provider.embed(["one", "two", "three"], { kind: "document", title: "notes" });
-  assert.equal(vectors.length, 3);
-  assert.deepEqual(calls.map((c) => c.input.length), [2, 1], "batched");
-  assert.equal(calls[0].input[0], `${EMBEDDING_PREFIXES.document("notes")}one`);
-  assert.equal(calls[0].keep_alive, "10m");
-  assert.equal(calls[0].truncate, false);
-  assert.equal(provider.dimension, 3);
-  await provider.embed(["a"], { kind: "query" });
-  assert.equal(calls.at(-1).input[0], `${EMBEDDING_PREFIXES.query}a`);
-  await assert.rejects(() => provider.embed(["x".repeat(21)]), (e) => e.code === "too_long");
-
-  const bad = new OllamaEmbeddingProvider({ model: "m", baseUrl: "http://x", keepAlive: "1m", batch: 2, fetch: async () => Response.json({ embeddings: [[1, Number.NaN]] }) });
-  await assert.rejects(() => bad.embed(["a"]), (e) => e.code === "protocol", "a non-finite vector is a failure, never a zero vector");
-  assert.equal(cosine([1, 0], [1, 0]), 1);
-  assert.equal(cosine([1, 0], [0, 1]), 0);
-  assert.equal(cosine([1], [1, 0]), null);
-});
-
-test("decisions: a validated choice, a low-probability abstention, and no decision from a malformed distribution", async () => {
-  const config = { enabled: true, model: "laya", baseUrl: "http://127.0.0.1:11435", keepAlive: "10m", timeoutMs: 1000, minConfidence: 0.3, minMargin: 0.12 };
-  const make = (reply) =>
-    new SystemOneClient(config, async (url, init) => {
-      assert.equal(new URL(String(url)).pathname, "/v1/systemone");
-      const body = JSON.parse(init.body);
-      assert.equal(body.questions.intent.type, "choice");
-      assert.ok(body.state.length <= 1200);
-      return Response.json(reply);
-    });
-  const good = await make({ answers: { intent: { type: "choice", choice: "explain_question", probabilities: { general_chat: 0.1, explain_question: 0.8, search_material: 0.1 }, confidence: 0.8 } } }).route("Can you explain question 4b?");
-  assert.deepEqual(good, { intent: "explain_question", confidence: 0.8, source: "model" });
-  const weak = await make({ answers: { intent: { type: "choice", choice: "clarify", probabilities: { general_chat: 0.5, clarify: 0.5 }, confidence: 0.4 } } }).route("hm");
-  assert.equal(weak, null, "a tie has no margin: the caller routes deterministically");
-  const low = await make({ answers: { intent: { type: "choice", choice: "clarify", probabilities: { general_chat: 0.2, clarify: 0.25, search_material: 0.55 }, confidence: 0.55 } } }).route("hm");
-  assert.equal(low, null, "the chosen option is not the top one");
-  const bad = await make({ answers: { intent: { type: "choice", choice: "general_chat", probabilities: { general_chat: 0.2, clarify: 0.2 }, confidence: 0.9 } } }).route("hello there");
-  assert.equal(bad, null, "a distribution that does not sum to one is not a decision");
-  const unavailable = new SystemOneClient(config, async () => {
-    throw new Error("down");
-  });
-  assert.equal(await unavailable.route("hello there"), null);
-  const health = await unavailable.health();
-  assert.equal(health.ok, false);
-  assert.equal(health.detail, "unreachable");
-});
-
-test("routing: explicit metadata wins, obvious messages never wait for the model, ambiguity can be asked about", () => {
+test("routing: explicit metadata wins, and obvious messages are routed without any model", () => {
   assert.equal(deterministicRoute({ text: "hello", hasFreshFiles: true, hasHistory: false }).intent, "explain_question");
   assert.equal(deterministicRoute({ text: "", hasFreshFiles: true, hasHistory: false }).source, "explicit");
   assert.equal(deterministicRoute({ text: "solve the whole paper please", hasFreshFiles: false, hasHistory: true }).intent, "solve_paper");
   assert.equal(deterministicRoute({ text: "search my notes for fractions", hasFreshFiles: false, hasHistory: true }).intent, "search_material");
-  assert.equal(needsDecision("hi", false, true), false);
-  assert.equal(needsDecision("can you help me with this one", false, true), true);
+  assert.equal(deterministicRoute({ text: "tell me about the causes of the war", hasFreshFiles: false, hasHistory: true }), null, "an ordinary question has no special route and goes to the tutor");
 });
 
 test("retrieval: chunks follow question starts, labels are found exactly, and only the owner's vectors are compared", async () => {
@@ -302,24 +208,19 @@ test("queue: a waiter that exhausts its queue budget is told busy, and a stopped
   assert.equal(await second.run(async () => 2), 2);
 });
 
-test("config: staged budgets, image variants, deprecated picture aliases and bounded numbers", () => {
+test("config: Beam's defaults, one set of staged budgets, and bounded numbers", () => {
   const c = cfg.assistantConfig({});
-  assert.equal(c.model, "bonsai-2:9b");
-  assert.equal(c.contextSize, 8192);
+  assert.equal(c.model, "beam");
+  assert.equal(c.contextSize, 32768);
   assert.equal(c.maxOutputTokens, 4096);
   assert.equal(c.thinking, "auto");
-  assert.equal(c.stages.text.turnMs, 180000);
-  assert.equal(c.stages.image.turnMs, 240000);
-  assert.ok(c.stages.image.firstAnswerMs >= c.stages.text.firstAnswerMs);
-  assert.equal(c.retrieval.embedding.baseUrl, "http://127.0.0.1:11435");
-  assert.equal(c.decision.model, "laya:421m-typed-decisions-bf16");
-  const alias = cfg.assistantConfig({ ASSISTANT_PICTURE_FIRST_TOKEN_MS: "12000", ASSISTANT_PICTURE_TOTAL_MS: "34000" });
-  assert.equal(alias.stages.image.firstAnswerMs, 12000);
-  assert.equal(alias.stages.image.turnMs, 34000);
-  const bounded = cfg.assistantConfig({ ASSISTANT_CONCURRENCY: "99", ASSISTANT_IMAGES_PER_MESSAGE: "0", ASSISTANT_DECISION_MIN_CONFIDENCE: "3" });
-  assert.equal(bounded.concurrency, 1);
+  assert.equal(c.stages.turnMs, 360000);
+  assert.ok(c.stages.firstAnswerMs >= c.stages.firstActivityMs, "a reasoning model may take longer to a visible word than to its first sign of work");
+  assert.equal(cfg.assistantConfig({ ASSISTANT_STAGE_TURN_MS: "90000" }).stages.turnMs, 90000);
+  const bounded = cfg.assistantConfig({ ASSISTANT_CONCURRENCY: "99", ASSISTANT_IMAGES_PER_MESSAGE: "0", ASSISTANT_STAGE_IDLE_MS: "5" });
+  assert.equal(bounded.concurrency, cfg.ASSISTANT_DEFAULTS.concurrency);
   assert.equal(bounded.images.perMessage, 3);
-  assert.equal(bounded.decision.minConfidence, 0.3);
+  assert.equal(bounded.stages.idleMs, cfg.ASSISTANT_DEFAULTS.idleMs);
 });
 
 test("thinking policy: off for pictures and greetings, on for multi-step work, and an owner's level is honoured", () => {
@@ -369,7 +270,7 @@ class RoleProvider {
   }
 }
 
-test("service: prepares a cold model with an honest status, runs one tool round, and keeps the deadline absolute", async (t) => {
+test("service: runs one tool round, offers the tools a model supports, and keeps the deadline absolute", async (t) => {
   environment(t, {});
   quiet(t);
   const store = new InMemoryLibraryStore();
@@ -390,18 +291,18 @@ test("service: prepares a cold model with an honest status, runs one tool round,
   };
   const events = [];
   for await (const e of svc.sendMessage(deps, { owner: { clientId, studentId: null }, sessionId: null, text: "What is 2 + 2?" })) events.push(e);
-  assert.equal(events.find((e) => e.type === "status")?.state, "preparing");
+  assert.equal(events.some((e) => e.type === "status" && e.state === "preparing"), false, "there is no model to load: nothing is announced as preparing");
   assert.equal(events.at(-1).type, "done");
   assert.match(events.filter((e) => e.type === "delta").map((e) => e.text).join(""), /four/);
-  assert.equal(provider.warmCalls, 1);
+  assert.equal(provider.warmCalls, 0, "nothing is warmed: the model is hosted");
   assert.equal(provider.requests.length, 2, "the tool result goes back to the model once");
   const second = provider.requests[1].messages.at(-1);
   assert.equal(second.role, "tool");
   assert.equal(second.toolName, "check_calculation");
   assert.match(second.content, /^Yes: 2\+2 = 4\./);
   assert.ok(provider.requests[0].options.tools?.length, "tools are offered to a model that supports them");
-  assert.ok(provider.requests[0].options.totalTimeoutMs <= config.stages.text.turnMs, "the provider is given what is left of the absolute turn");
-  assert.equal(provider.requests[0].options.keepAlive, config.keepAlive);
+  assert.ok(provider.requests[0].options.totalTimeoutMs <= config.stages.turnMs, "the provider is given what is left of the absolute turn");
+  assert.equal(provider.requests[0].options.keepAlive, undefined, "keep-alive belongs to a local server");
   assert.equal(logs.filter(([o]) => o === "turn").length, 1);
   const stored = await store.chat.listMessages({ clientId, studentId: null }, events[0].sessionId);
   assert.equal(stored.at(-1).content, "Two plus two is four.");

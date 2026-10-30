@@ -111,45 +111,6 @@ test("the recall stage keeps only what the code can stand behind: a span that is
   assert.equal(entail.locateWords("Gerald is dismissed", "x Gerald   is  dismissed! y"), null);
 });
 
-test("the recall client reads one JSON answer, and every failure is an empty result", async () => {
-  const config = { enabled: true, model: "tutor", baseUrl: "http://127.0.0.1:11434", keepAlive: "10m", timeoutMs: 1_000, maxClaims: 4, passageChars: 2_000 };
-  const calls = [];
-  const ask = { claims: [{ id: "c1", subject: "Gerald", event: "prison", sentence: "Gerald is sent to prison." }], passages: [{ id: "p1", label: "the play", text: "Gerald is dismissed from the works after the strike." }] };
-  const ok = new entail.LocalClaimRecall(config, async (url, init) => {
-    calls.push(url);
-    const body = JSON.parse(init.body);
-    assert.equal(body.format, "json", "the runtime is asked to constrain the answer to JSON");
-    assert.equal(JSON.parse(body.messages[1].content).claims[0].id, "c1");
-    return {
-      ok: true,
-      status: 200,
-      json: async () => ({
-        message: {
-          content: JSON.stringify({
-            matches: [
-              { claim: "c1", relation: "supports", passage: "p1", span: "Gerald is dismissed from the works" },
-              { claim: "c1", relation: "perhaps", passage: "p1", span: "Gerald is dismissed from the works" },
-              { claim: "c2", relation: "supports", passage: "p1" },
-            ],
-          }),
-        },
-      }),
-    };
-  });
-  assert.deepEqual(await ok.findSupport(ask), [{ claim: "c1", relation: "supports", passage: "p1", span: "Gerald is dismissed from the works" }]);
-  assert.deepEqual(calls, ["http://127.0.0.1:11434/api/chat"]);
-  for (const broken of [
-    async () => ({ ok: true, status: 200, json: async () => ({ message: { content: "not json at all" } }) }),
-    async () => ({ ok: true, status: 200, json: async () => ({ error: "model not found" }) }),
-    async () => ({ ok: false, status: 500, json: async () => ({}) }),
-    async () => {
-      throw new Error("ECONNREFUSED");
-    },
-  ]) {
-    assert.deepEqual(await new entail.LocalClaimRecall(config, broken).findSupport(ask), []);
-  }
-});
-
 /* ------------------------------------------------------------------ the gate, both together */
 
 /** A prep with exactly the fields the gate reads, and a rewrite that keeps whatever the model wrote (like a repair that changes nothing). */

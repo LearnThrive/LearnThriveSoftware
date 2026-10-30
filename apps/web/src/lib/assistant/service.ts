@@ -1,14 +1,13 @@
 import type { ChatOwner, LibraryStore } from "@learnthrive/data/library";
 import type { LibraryStorage } from "@/lib/library/storage";
-import { stageBudgetsFor, type AssistantConfig, type StageBudgets } from "./config";
+import type { AssistantConfig, StageBudgets } from "./config";
 import { OutputGuard, accountReference, moderateInput, safeguardingExcerpt, type SafeguardingKind } from "./moderation";
 import { VOICE_PROMPT_ADDENDUM } from "./speech";
 import { BLOCKED_REPLIES, OUTPUT_BLOCKED_REPLY, SAFEGUARDING_REPLY, SYSTEM_PROMPT } from "./prompt";
 import { GenerationQueue, QueueAborted, QueueFull, QueueTimeout } from "./queue";
-import { ProviderError, isWarmable, type ChatProvider, type ProviderMessage, type ProviderToolCall, type StreamMetrics } from "./types";
+import { ProviderError, type ChatProvider, type ProviderMessage, type ProviderToolCall, type StreamMetrics } from "./types";
 import { defuse, describeDocument, preparePhoto, readPdfDocument } from "./documents";
-import { warmOnce } from "./warmup";
-import { deterministicRoute, needsDecision, type RouteDecision, type SystemOneClient } from "./decision";
+import { deterministicRoute, type RouteDecision } from "./decision";
 import { enqueueIndex, drainIndexQueue, describeHits, indexFile, searchUploads, type RetrievalDeps, type RetrievalHit } from "./retrieval";
 import { runTool, toolsFor } from "./tools";
 import { fallbackStudy, finishStudy, planStudy, prepareStudy, type StudyPrep } from "./study";
@@ -17,8 +16,11 @@ import { hasCitations, stripCitations } from "./research/citations";
 import { ActivityLog, drainActivity, serializeActivity, withActivity, type ActivityEvent, type ActivityOutcome } from "./activity";
 import type { ResearchService } from "./research/verify";
 import type { EmbeddingProvider } from "./embeddings";
-import { modelLabel } from "./models";
-import { defaultTarget, type GenerationTarget } from "./selection";
+import { defaultTarget, type GenerationTarget } from "./target";
+import { runInterface } from "./interface";
+import { modelText } from "@/lib/openui/format";
+import { interfacePrompt } from "@/lib/openui/library";
+import { planInterface } from "@/lib/openui/intent";
 
 /**
  * One question to LearnThrive AI, from the signed-in family's request to the stored answer (plan19 phase F, three-model brief).
@@ -36,10 +38,7 @@ import { defaultTarget, type GenerationTarget } from "./selection";
  * reported, but they do not stop the clock on the first visible word. Nothing the person typed, uploaded or was answered is ever
  * logged: `log` receives counters and reason codes only.
  */
-/**
- * `no_answer`: the model finished without anything to read (a reasoning model that spent its allowance thinking). The `model_*` codes are only
- * used for a turn whose model a developer chose, so the picker can say which model failed and how: an ordinary turn says `unavailable`.
- */
+/** `no_answer`: the model finished without anything to read (a reasoning model that spent its allowance thinking). */
 export type ChatErrorCode =
   | "empty"
   | "too_long"
@@ -52,11 +51,7 @@ export type ChatErrorCode =
   | "vision_unavailable"
   | "no_chat"
   | "aborted"
-  | "no_answer"
-  | "model_rate_limited"
-  | "model_unavailable"
-  | "model_budget"
-  | "uploads_not_sent";
+  | "no_answer";
 
 /** What the page may show while the server has evidence for it. Never a percentage. */
 export type ChatStatus = "preparing" | "reading" | "researching" | "verifying" | "thinking";
@@ -72,10 +67,14 @@ export type ChatEvent =
    * only after every check has finished: the complete approved text, its notes included, which the page shows in one go.
    */
   | { type: "delta"; text: string; whole?: true }
-  /** `model`: who answered, in words ("Step 5 Preview"), only for a turn whose model a developer chose. Taken from what the provider reported. */
-  | { type: "done"; messageId: string | null; provider: string | null; firstTokenMs: number | null; model?: string | null }
-  /** `model` and `detail` (a machine word such as `unauthorised` or `reasoning_exhausted`) only for a turn whose model a developer chose. */
-  | { type: "error"; code: ChatErrorCode; retryAfterSeconds?: number; model?: string | null; detail?: string };
+  /**
+   * An interactive answer (lib/openui, docs/OPENUI.md). `start`: a draft begins (the page clears any earlier one). `chunk`: more of the program, drawn as it
+   * arrives with every control off. `discard`: the draft did not pass its checks and must not be used. `final`: the checked interface in its stored form,
+   * which replaces the draft; this is what is kept and what a reopened chat shows. If no `final` arrives, the answer is plain text.
+   */
+  | { type: "ui"; phase: "start" | "discard" } | { type: "ui"; phase: "chunk"; text: string } | { type: "ui"; phase: "final"; content: string }
+  | { type: "done"; messageId: string | null; provider: string | null; firstTokenMs: number | null }
+  | { type: "error"; code: ChatErrorCode; retryAfterSeconds?: number };
 
 export interface SafeguardingFlag {
   reference: string;
@@ -92,8 +91,6 @@ export interface ChatServiceDeps {
   config: AssistantConfig;
   /** The embedding role. Absent: retrieval is off and nothing is indexed. */
   embeddings?: EmbeddingProvider | null;
-  /** The decision role. Absent: only explicit actions and file metadata route a turn. */
-  decision?: SystemOneClient | null;
   /** Tells the safeguarding lead. Best effort: a failure never changes what the person sees. */
   flag?: (flag: SafeguardingFlag) => Promise<void>;
   now?: () => Date;
@@ -101,12 +98,9 @@ export interface ChatServiceDeps {
   log?: (outcome: string, details?: Record<string, string | number>) => void;
   /** Whether the provider is a hosted one, which the token budget protects (a local model costs nothing per token). */
   hosted?: boolean;
-  /** Web research through SearXNG. Absent (tests): nothing is looked up and quotations are reported as unchecked. */
+  /** Web research (Ollama's web search and reader, SearXNG behind them). Absent (tests): nothing is looked up and quotations are reported as unchecked. */
   research?: ResearchService | null;
-  /**
-   * What generates this turn (selection.ts): the provider, the model it is asked for, and that model's limits. Absent: the configured provider
-   * with the configured limits. Only the generation differs between targets: the research, checks, history and safeguards are the same.
-   */
+  /** What generates this turn (target.ts): the provider, the model it is asked for, and that model's limits. Absent: the configured provider with the configured limits. */
   target?: GenerationTarget;
 }
 
@@ -124,14 +118,12 @@ export interface ChatInput {
   intent?: RouteDecision["intent"];
 }
 
+const INTERFACE_FALLBACK = "I could not build the interactive version, so here is the explanation in words.\n\n";
 const MINUTE_MS = 60_000;
 const DAY_MS = 86_400_000;
 export const USAGE_MINUTE = "assistant_message_minute";
 export const USAGE_DAY = "assistant_message_day";
 export const USAGE_TOKENS_DAY = "assistant_token_day";
-/** A developer's hosted-model use (the picker): completion tokens and requests per account per day, kept apart from the ordinary budget. */
-export const USAGE_HOSTED_TOKENS_DAY = "assistant_hosted_token_day";
-export const USAGE_HOSTED_REQUESTS_DAY = "assistant_hosted_request_day";
 
 const windowStart = (now: Date, size: number) => new Date(Math.floor(now.getTime() / size) * size);
 
@@ -172,8 +164,8 @@ interface TurnTimings {
 const remaining = (deadline: number) => Math.max(1, deadline - Date.now());
 
 /**
- * How hard a picked hosted model should reason for this turn: not at all for ordinary chat (the first word matters), lightly for a question
- * answered from sources, fully for a hard problem. The provider turns this into the model's own controls (models.ts).
+ * How hard a hosted reasoning model (Beam) should reason for this turn: not at all for ordinary chat (the first word matters), lightly for a question
+ * answered from sources, fully for a hard problem. The provider turns this into the endpoint's own control (providers.ts).
  */
 export function hostedEffort(mode: "fast" | "verified" | "advanced"): { reasoning: boolean; think: "off" | "low" | "medium" | "high" } {
   if (mode === "advanced") return { reasoning: true, think: "high" };
@@ -185,8 +177,6 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
   const { store, config } = deps;
   const target = deps.target ?? defaultTarget(config, deps.provider, deps.hosted === true);
   const provider = target.provider;
-  // Only a turn whose model a developer chose names the model, and the provider's own failure words, in what the page is told.
-  const picked = target.choice !== null;
   const now = (deps.now ?? (() => new Date()))();
   const log = deps.log ?? (() => {});
   const text = input.text.replace(/\r\n/g, "\n").trim();
@@ -261,24 +251,13 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
   let uploadedText = "";
   let attachable = fileIds.length ? await store.chat.getUnattachedFiles(input.owner, sessionId, fileIds) : [];
   const fresh = attachable.length > 0;
-  // The route refuses this before anything streams (handlers.ts); this is the second wall, before a byte of the file is read.
-  if (fresh && !target.uploads) {
-    log("uploads_not_sent");
-    return void (yield { type: "error", code: "uploads_not_sent", model: target.label });
-  }
-  let withheld = false;
   if (!fresh) {
     const earlier = (await store.chat.listFiles(input.owner, sessionId)).filter((f) => f.messageId !== null);
     const last = earlier.at(-1)?.messageId;
     attachable = last ? earlier.filter((f) => f.messageId === last) : [];
-    // A model that may not receive uploads (a picked hosted model, by default) is not shown an earlier one either, and is told so.
-    if (attachable.length && !target.uploads) {
-      attachable = [];
-      withheld = true;
-    }
   }
-  if (withheld) uploadedText += `\n\n<uploaded-file withheld="true">Files uploaded earlier in this chat are not shared with this model. If the question depends on them, say you cannot see them.</uploaded-file>`;
-  const vision = attachable.length > 0 ? (await provider.capabilities(target.visionModel ?? undefined)).vision : false;
+  // Beam reads text only: a text-based PDF is read as text, and a photo or a scanned page is reported as unsupported (below) rather than guessed at.
+  const vision = attachable.length > 0 ? (await provider.capabilities()).vision : false;
   const maxImages = vision ? config.images.perMessage : 0;
   const wantsPicture = /\b(photo|picture|image|diagram|drawing|look at|see (it|that|the)|show me|page\s*\d+)\b/i.test(text);
   // A fresh upload really is being decoded and read here, so saying so is evidence, not decoration. Once per turn.
@@ -358,17 +337,9 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
   // ---- routing and retrieval --------------------------------------------------------------------------------------
   // The explicit action and the file metadata win. Only an ambiguous text-only follow-up spends a decision call, and a helper
   // failure falls back to the deterministic route (a greeting is still answered).
-  const history = await store.chat.listMessages(input.owner, sessionId);
+  const history = (await store.chat.listMessages(input.owner, sessionId)).map((m) => (m.role === "assistant" ? { ...m, content: modelText(m.content) } : m));
   const hasHistory = history.length > 0;
-  let route = deterministicRoute({ text, hasFreshFiles: fresh, hasHistory, explicit: input.intent });
-  if (!route && config.decision.enabled && deps.decision && needsDecision(text, fresh, hasHistory)) {
-    try {
-      route = await deps.decision.route(`Student message: ${text.slice(0, 400)}${fresh ? ` (a new ${images.length ? "picture" : "file"} is attached)` : ""}`);
-    } catch {
-      route = null;
-    }
-    if (route) log("routed", { by: "model", intent: route.intent });
-  }
+  const route = deterministicRoute({ text, hasFreshFiles: fresh, hasHistory, explicit: input.intent });
   const intent = route?.intent ?? "general_chat";
 
   let retrieved: RetrievalHit[] = [];
@@ -422,36 +393,28 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
   }
   const messages: ProviderMessage[] = [{ role: "system", content: systemPrompt }, ...kept, { role: "user", content: userContent, ...(images.length ? { images } : {}) }];
 
+  // Whether this message asks for something better shown as an interface (lib/openui/intent.ts). Never for a spoken turn, and never when an explicit action
+  // (the Paper Tutor, "look this up") already decided what the turn is.
+  const plan = config.openui.enabled && !input.voice && !input.intent ? planInterface(text) : null;
+
   // Stored before the model runs, so a stopped or failed answer still leaves the question in the chat.
   const userMessage = await store.chat.appendMessage(input.owner, sessionId, "user", text || "(attached a file)", now);
   if (fresh) await store.chat.attachFiles(input.owner, sessionId, attachable.map((f) => f.id), userMessage.id);
 
-  if (target.quota) {
-    // A developer's picked hosted model: its own daily allowance, in tokens and in requests, checked before a request is made.
-    const [tokens, requests] = await Promise.all([store.chat.usageCount(input.owner.clientId, USAGE_HOSTED_TOKENS_DAY, day), store.chat.usageCount(input.owner.clientId, USAGE_HOSTED_REQUESTS_DAY, day)]);
-    if (tokens >= target.quota.tokens || requests >= target.quota.requests) {
-      log("budget", { hosted: 1 });
-      yield { type: "error", code: "model_budget", model: target.label };
-      return;
-    }
-  } else if (target.hosted && (await store.chat.usageCount(input.owner.clientId, USAGE_TOKENS_DAY, day)) >= config.dailyTokenBudget) {
+  if (target.hosted && (await store.chat.usageCount(input.owner.clientId, USAGE_TOKENS_DAY, day)) >= config.dailyTokenBudget) {
     log("budget");
     yield { type: "error", code: "budget" };
     return;
   }
 
   // Every request to the provider goes through here, so a tool round or a repair is counted and charged like the first request.
-  const tokensKey = target.quota ? USAGE_HOSTED_TOKENS_DAY : USAGE_TOKENS_DAY;
   const charge = async (completionTokens: number) => {
-    if (target.hosted && completionTokens > 0) await store.chat.incrementUsage(input.owner.clientId, tokensKey, day, completionTokens);
+    if (target.hosted && completionTokens > 0) await store.chat.incrementUsage(input.owner.clientId, USAGE_TOKENS_DAY, day, completionTokens);
   };
-  const generate = (prompt: readonly ProviderMessage[], options: Parameters<ChatProvider["stream"]>[1]) => {
-    if (target.quota) void store.chat.incrementUsage(input.owner.clientId, USAGE_HOSTED_REQUESTS_DAY, day, 1).catch(() => {});
-    return provider.stream(prompt, options);
-  };
+  const generate = (prompt: readonly ProviderMessage[], options: Parameters<ChatProvider["stream"]>[1]) => provider.stream(prompt, options);
 
   // ---- the turn ---------------------------------------------------------------------------------------------------
-  const stage: StageBudgets = { ...stageBudgetsFor(config, images.length > 0), ...target.stages };
+  const stage: StageBudgets = { ...config.stages, ...target.stages };
   const guard = new OutputGuard();
   let shown = "";
   const st: {
@@ -460,7 +423,6 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
     /** The provider and model that reported finishing ("nim:minimaxai/minimax-m3.1-flash"): what the answer is attributed to. */
     generatedBy: string | null;
     failure: ChatErrorCode | null;
-    failureDetail: string | undefined;
     retryAfterSeconds: number | undefined;
     cutOff: boolean;
     timings: TurnTimings;
@@ -470,7 +432,6 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
     providerId: null,
     generatedBy: null,
     failure: null,
-    failureDetail: undefined,
     retryAfterSeconds: undefined,
     timings: { queueMs: 0, prepareMs: 0, firstActivityMs: null, firstAnswerMs: null, totalMs: 0, rounds: 0, tools: 0, metrics: null },
   };
@@ -485,34 +446,72 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
   let withheldUnchecked = false;
 
   const stream = async function* (): AsyncGenerator<ChatEvent> {
-    // The target's own model names (a provider also refuses a name that is not its own, so a chain cannot pass one along).
-    const model = (images.length && target.visionModel ? target.visionModel : target.model) ?? undefined;
+    // The target's model name (a provider also refuses a name that is not its own).
+    const model = target.model ?? undefined;
     const caps = await provider.capabilities(model);
 
-    // Prepare the model only when the server says it is not resident, and say so only then (evidence, not a guess).
-    if (model && isWarmable(provider) && (await provider.resident(model)) !== true) {
-      yield { type: "status", state: "preparing" };
-      const prepared = await warmOnce({ provider, model, contextSize: config.contextSize, keepAlive: config.keepAlive }, { signal: turnSignal, budgetMs: stage.loadMs });
-      st.timings.prepareMs = Date.now() - enqueuedAt;
-      log("prepared", { ok: prepared.ok ? 1 : 0, loadMs: prepared.loadMs ?? -1, detail: prepared.detail });
-      if (!prepared.ok) {
-        st.failure = prepared.detail === "aborted" ? "aborted" : "unavailable";
-        return;
-      }
-    }
 
     const tools = caps.toolUse && config.maxToolRounds > 0 ? toolsFor(study?.session) : [];
-    // A picked hosted model reasons by the turn's mode (fast chat, a sourced answer, a hard problem) UNLESS the developer chose an effort for it
-    // in the picker, which is then what is asked for; the local tutor keeps its own policy.
+    // A hosted reasoning model reasons by the turn's mode (fast chat, a sourced answer, a hard problem); the mock keeps the configured policy.
     const mode = study?.mode ?? (thinkingFor("auto", text, images.length > 0).reasoning ? "advanced" : "fast");
-    const thinking: { reasoning: boolean; think?: boolean | string } = target.profile
-      ? target.effort === "auto"
-        ? hostedEffort(mode)
-        : { reasoning: target.effort !== "none", think: target.effort }
-      : thinkingFor(config.thinking, text, images.length > 0);
+    const thinking: { reasoning: boolean; think?: boolean | string } = target.hosted ? hostedEffort(mode) : thinkingFor(config.thinking, text, images.length > 0);
     let announcedThinking = false;
     const turnStartedAt = Date.now();
     const turnDeadline = turnStartedAt + stage.turnMs;
+    // An interactive answer is tried first when it was asked for. It is checked before the student can use it (interface.ts); if it cannot be made, the answer
+    // is given in words, and says so.
+    let uiNotice = "";
+    if (plan) {
+      const uiMessages: ProviderMessage[] = [
+        { role: "system", content: `${SYSTEM_PROMPT}\n\n${interfacePrompt()}` },
+        ...messages.slice(1, -1),
+        { role: "user", content: `${messages.at(-1)!.content}\n\n<interface-request>\n${plan.guidance}\n</interface-request>` },
+      ];
+      const ui = hostedEffort("verified");
+      const outcome = yield* runInterface({
+        messages: uiMessages,
+        generate,
+        charge,
+        activity,
+        research: study?.session ?? null,
+        extracts: study?.extracts ?? [],
+        maxRepairs: config.openui.maxRepairs,
+        signal: turnSignal,
+        options: () => ({
+          model,
+          maxTokens: Math.max(256, Math.min(target.maxOutputTokens + (target.hosted ? target.thinkingTokens : 0), target.contextSize - uiMessages.reduce((n, m) => n + approxTokens(m.content), 0) - 64)),
+          temperature: 0.3,
+          contextSize: target.contextSize,
+          signal: turnSignal,
+          firstTokenTimeoutMs: Math.min(stage.firstActivityMs, remaining(turnDeadline)),
+          firstAnswerTimeoutMs: Math.min(stage.firstAnswerMs, remaining(turnDeadline)),
+          idleTimeoutMs: stage.idleMs,
+          totalTimeoutMs: remaining(turnDeadline),
+          reasoning: target.hosted ? ui.reasoning : false,
+          ...(target.hosted ? { think: ui.think } : {}),
+        }),
+      });
+      log("interface", { ok: outcome.ok ? 1 : 0, kind: plan.kind, repairs: outcome.repairs, issues: outcome.ok ? outcome.firstDraft.length : outcome.issues.length, components: outcome.ok ? outcome.components : 0, quotes: outcome.ok ? outcome.quotes : 0 });
+      if (outcome.ok) {
+        // Delivered by the `ui` events; this is also what is stored. Nothing is held back for the text gate.
+        shown = outcome.content;
+        heldUndelivered = false;
+        st.timings.totalMs = Date.now() - turnStartedAt;
+        return;
+      }
+      if (turnSignal.aborted) {
+        st.failure = "aborted";
+        return;
+      }
+      uiNotice = INTERFACE_FALLBACK;
+      // Not held: the notice is the first words of the written answer. Held answers carry it at the front when they are released (below).
+      if (!gated) {
+        shown = uiNotice;
+        yield { type: "delta", text: uiNotice };
+      }
+    }
+    const noticeLength = gated ? 0 : uiNotice.length;
+
     // Writing the answer is a step like any other. A held answer is a DRAFT until the checks have passed, and the step says so.
     const writeStep = activity.start("write", gated ? "Drafting the answer" : "Writing the answer");
     let wroteText = false;
@@ -549,7 +548,6 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
         temperature: 0.4,
         contextSize: target.contextSize,
         signal: turnSignal,
-        keepAlive: config.keepAlive,
         firstTokenTimeoutMs: Math.min(stage.firstActivityMs, remaining(turnDeadline)),
         firstAnswerTimeoutMs: Math.min(stage.firstAnswerMs, remaining(turnDeadline)),
         idleTimeoutMs: stage.idleMs,
@@ -561,7 +559,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
         if (chunk.type === "activity") {
           if (st.timings.firstActivityMs === null) st.timings.firstActivityMs = Date.now() - turnStartedAt;
           // Activity is not the answer: report it once, do not touch the visible-answer clock.
-          if (chunk.kind === "thinking" && !announcedThinking && !shown && st.timings.firstAnswerMs === null) {
+          if (chunk.kind === "thinking" && !announcedThinking && shown.length <= noticeLength && st.timings.firstAnswerMs === null) {
             announcedThinking = true;
             yield { type: "status", state: "thinking" };
             // The provider reported hidden reasoning. Only the fact that the model is working it out is shown, never the reasoning itself.
@@ -601,7 +599,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
       }
 
       // A tool round only while nothing has been shown and the budget allows: a tool call after text would stitch two answers.
-      if (!calls.length || shown || rounds >= config.maxToolRounds) break;
+      if (!calls.length || shown.length > noticeLength || rounds >= config.maxToolRounds) break;
       rounds += 1;
       st.timings.rounds = rounds;
       const used = calls.slice(0, 2);
@@ -655,11 +653,10 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
               temperature: 0.2,
               contextSize: target.contextSize,
               signal: turnSignal,
-              keepAlive: config.keepAlive,
               firstTokenTimeoutMs: stage.firstActivityMs,
               firstAnswerTimeoutMs: stage.firstAnswerMs,
               idleTimeoutMs: stage.idleMs,
-              totalTimeoutMs: Math.min(stage.turnMs, target.profile ? 240_000 : 120_000),
+              totalTimeoutMs: Math.min(stage.turnMs, target.hosted ? 240_000 : 120_000),
               reasoning: false,
               think: false,
             })) {
@@ -680,7 +677,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
         };
         let reviewed: Awaited<ReturnType<typeof reviewAnswer>> | null = null;
         try {
-          reviewed = yield* withActivity(activity, () => reviewAnswer(study!, shown, { rewrite, maxRepairs: 2, deadlineMs: target.profile ? 240_000 : 90_000, activity }));
+          reviewed = yield* withActivity(activity, () => reviewAnswer(study!, shown, { rewrite, maxRepairs: 2, deadlineMs: target.hosted ? 240_000 : 90_000, activity }));
         } catch {
           reviewed = null;
           // The checks that were under way did not finish.
@@ -721,6 +718,8 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
         if (!gated) yield { type: "delta", text: extra };
       }
     }
+    // A held answer that follows a failed interface says so at its front.
+    if (gated && uiNotice && shown.trim() && !shown.startsWith(uiNotice)) shown = uiNotice + shown;
     // The held answer, released: once, whole, after every check. Not if the student pressed Stop while it was being checked.
     if (gated && heldUndelivered && !guard.stoppedFor) {
       if (turnSignal.aborted) {
@@ -785,22 +784,11 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
     }
     if (crashed instanceof QueueAborted) st.failure = "aborted";
     else if (crashed instanceof ProviderError) {
-      // The real failure, said plainly: never replaced by an answer from another model. A picked model's failure names the model and the cause.
-      st.failure =
-        crashed.code === "timeout"
-          ? "timeout"
-          : crashed.code === "aborted"
-            ? "aborted"
-            : crashed.code === "empty"
-              ? "no_answer"
-              : picked && crashed.code === "rate_limited"
-                ? "model_rate_limited"
-                : picked
-                  ? "model_unavailable"
-                  : "unavailable";
-      st.failureDetail = picked ? (crashed.detail ?? crashed.code) : undefined;
+      // The real failure, said plainly: never replaced by an answer from another model.
+      st.failure = crashed.code === "timeout" ? "timeout" : crashed.code === "aborted" ? "aborted" : crashed.code === "empty" ? "no_answer" : "unavailable";
       st.retryAfterSeconds = crashed.retryAfterMs ? Math.max(1, Math.ceil(crashed.retryAfterMs / 1000)) : undefined;
-      log("provider_error", { code: crashed.code, picked: picked ? 1 : 0 });
+      // A machine word (`unauthorised`, `rate_limited`, `reasoning_exhausted`): never a message body or a key. It is what makes a failed turn diagnosable.
+      log("provider_error", { code: crashed.code, detail: crashed.detail ?? crashed.code });
     } else if (crashed) {
       unexpected = crashed;
       closing = [];
@@ -841,10 +829,8 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
       blockedNote = `${shown ? "\n\n" : ""}${OUTPUT_BLOCKED_REPLY}`;
       shown += blockedNote;
     }
-    // Who wrote it: what the provider reported when it finished. A picked hosted model is one provider (never a chain), so a reply it stopped
-    // part-way through is still truthfully its own; anything else without a report is left unattributed rather than guessed.
-    const generatedBy = picked ? (st.generatedBy ?? (target.profile ? `nim:${target.profile.model}` : null)) : null;
-    const answeredBy = picked ? (modelLabel(generatedBy) ?? null) : null;
+    // Who wrote it: what the provider reported when it finished ("ollama_cloud:beam"); without a report it is left unattributed rather than guessed.
+    const generatedBy = st.generatedBy;
     let messageId: string | null = null;
     const record = serializeActivity(activity.steps, outcome);
     if (shown.trim()) messageId = (await store.chat.appendMessage(input.owner, sessionId, "assistant", shown, deps.now ? deps.now() : new Date(), { ...(generatedBy ? { generatedBy } : {}), ...(record ? { activity: record } : {}) })).id;
@@ -856,10 +842,9 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
       out.push({
         type: "error",
         code: st.failure,
-        ...(st.retryAfterSeconds && (st.failure === "model_rate_limited" || st.failure === "unavailable") ? { retryAfterSeconds: st.retryAfterSeconds } : {}),
-        ...(picked ? { model: answeredBy ?? target.label, ...(st.failureDetail ? { detail: st.failureDetail } : {}) } : {}),
+        ...(st.retryAfterSeconds && st.failure === "unavailable" ? { retryAfterSeconds: st.retryAfterSeconds } : {}),
       });
-    } else out.push({ type: "done", messageId, provider: st.providerId, firstTokenMs: st.firstTokenMs, ...(picked ? { model: answeredBy } : {}) });
+    } else out.push({ type: "done", messageId, provider: st.providerId, firstTokenMs: st.firstTokenMs });
     closing = out;
     return out;
   };
