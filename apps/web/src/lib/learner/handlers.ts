@@ -302,7 +302,7 @@ export async function handleAcceptInvitation(request: Request, deps: LearnerDeps
     return refuse(410, result.reason, REFUSED_INVITATION);
   }
   logOutcome("learner-accept", "ok");
-  return jsonResponse(200, { success: true, next: safeNextPath("/library/study-buddy", "/account") }, NO_STORE);
+  return jsonResponse(200, { success: true, next: safeNextPath("/library/ai", "/account") }, NO_STORE);
 }
 
 /** POST /api/learner/view { studentId }: a guardian opens the supervised view of one of their learners. */
@@ -317,7 +317,7 @@ export async function handleStartView(request: Request, deps: LearnerDeps): Prom
   if (!started) return refuse(404, "not_found", "That learner is not set up for the supervised view.");
   deps.jar.set(SUPERVISED_COOKIE, token, { httpOnly: true, sameSite: "lax", secure: (deps.env ?? process.env).NODE_ENV === "production", path: "/" });
   logOutcome("learner-view", "started");
-  return jsonResponse(200, { success: true, next: "/library/study-buddy" }, NO_STORE);
+  return jsonResponse(200, { success: true, next: "/library/ai" }, NO_STORE);
 }
 
 /**

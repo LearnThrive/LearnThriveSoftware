@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
  * what is not there. The page itself holds no chat: the client fetches it from the routes, which check everything again.
  */
 export default async function StudyBuddyPage() {
-  const { rt, account } = await requireAccountPage("/library/study-buddy");
+  const { rt, account } = await requireAccountPage("/library/ai");
   if (assistantClosed(process.env, true)) {
     const { notFound } = await import("next/navigation");
     notFound();

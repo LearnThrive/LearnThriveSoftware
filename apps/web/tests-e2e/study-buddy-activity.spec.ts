@@ -24,7 +24,7 @@ async function enrolled(page: Page) {
 }
 
 async function open(page: Page) {
-  await page.goto('/library/study-buddy');
+  await page.goto('/library/ai');
   await expect(page.getByRole('heading', { level: 1, name: 'LearnThrive AI' })).toBeVisible();
   await hydrated(page);
 }

@@ -109,7 +109,7 @@ The tuition dashboard and the Library, LearnThrive AI and account pages now shar
   there is no Account link. Hiding a link is never the control: every page and API checks again.
 - **Secondary slot.** A page renders into the sidebar with `<SidebarSection>` (`components/shell/SidebarSlot.tsx`). LearnThrive AI's conversation history lives
   there. One slot element is moved between the desktop sidebar and the open drawer, so a page's state (an open search box) survives either.
-- **Focused areas.** `/library/study-buddy` takes the whole content column (`app-content--flush`) and owns its height under the top bar (and the
+- **Focused areas.** `/library/ai` takes the whole content column (`app-content--flush`) and owns its height under the top bar (and the
   supervised banner), so the box stays above a phone's keyboard and the page has one scroll.
 - **Focus and keyboard.** The drawer returns focus to its button on Escape, the close button and the scrim; the skip link is first; covered by
   `one-sign-in.spec.ts` ("one shell, by keyboard alone").

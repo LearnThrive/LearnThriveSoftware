@@ -20,7 +20,7 @@ async function enrolled(page: Page) {
 }
 
 async function open(page: Page) {
-  await page.goto('/library/study-buddy');
+  await page.goto('/library/ai');
   await expect(page.getByRole('heading', { level: 1, name: 'LearnThrive AI' })).toBeVisible();
   await hydrated(page);
 }
@@ -35,7 +35,7 @@ test('closed to an account without Library access, in the page and in the API', 
   const email = address();
   await signUp(page, email);
   await confirm(page, email);
-  await page.goto('/library/study-buddy');
+  await page.goto('/library/ai');
   await expect(page.getByText('included for enrolled students and Library subscribers')).toBeVisible();
   await expect(page.getByLabel('Your message')).toHaveCount(0);
   const response = await page.request.post('/api/assistant/chat', { data: { text: 'hi', adultAck: true } });
@@ -45,7 +45,7 @@ test('closed to an account without Library access, in the page and in the API', 
 });
 
 test('signed out, the page sends a visitor to sign in and the API says 401', async ({ page, request }) => {
-  await page.goto('/library/study-buddy');
+  await page.goto('/library/ai');
   await expect(page).toHaveURL(/\/login\?next=%2Flibrary%2Fstudy-buddy$/);
   expect((await request.post('/api/assistant/chat', { data: { text: 'hi' } })).status()).toBe(401);
 });

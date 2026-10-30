@@ -44,6 +44,12 @@ const nextConfig: NextConfig = {
         destination: "/about",
         permanent: true,
       },
+      // LearnThrive AI used to live at /library/study-buddy; keep old links and bookmarks working.
+      {
+        source: "/library/study-buddy",
+        destination: "/library/ai",
+        permanent: true,
+      },
       // One canonical host: the bare domain goes to www (siteConfig.url), path and query kept.
       {
         source: "/:path*",

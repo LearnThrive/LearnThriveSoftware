@@ -10,7 +10,7 @@ Sign in at `/login`. It is the one sign-in for everybody (`docs/AUTHENTICATION.m
 | Tutor | Tahasin Hasan | `tutor@learnthrive.dev` | `dev-tutor-pass` | none | `/dashboard`; no LearnThrive AI or Library |
 | Client | Abdurrahman Mustafa | `client@learnthrive.dev` | `dev-client-pass` | **enrolled** | `/dashboard`; LearnThrive AI and the Library in the menu. Parent/guardian role |
 | Student | Brian James Khalawon | `student@learnthrive.dev` | `dev-student-pass` | **enrolled** | `/dashboard`; LearnThrive AI and the Library in the menu |
-| Library member | Library Member | `member@learnthrive.dev` | `dev-member-pass` | **subscription**, not enrolled | `/library/study-buddy`; the dashboard is closed to them |
+| Library member | Library Member | `member@learnthrive.dev` | `dev-member-pass` | **subscription**, not enrolled | `/library/ai`; the dashboard is closed to them |
 | Visitor | New Visitor | `visitor@learnthrive.dev` | `dev-visitor-pass` | none | `/account`; LearnThrive AI says what it is included with |
 | (disabled) | Disabled Test Account | `disabled@learnthrive.dev` | `dev-disabled-pass` | none | Deliberately disabled — exists to exercise the "this account has been disabled" sign-in state without any extra setup. |
 

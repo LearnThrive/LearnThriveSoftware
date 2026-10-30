@@ -26,7 +26,7 @@ const ROLE_LABELS: Record<AuthenticatedUser["role"], string> = {
 };
 
 /** Pages that are one focused working area (the conversation) and want the whole content column, not a padded, width-limited one. */
-const FLUSH_PREFIXES = ["/library/study-buddy"];
+const FLUSH_PREFIXES = ["/library/ai"];
 
 /**
  * The one authenticated shell (docs/IDENTITY.md, section "One shell"): sidebar, topbar, account menu, mobile drawer, and a secondary slot

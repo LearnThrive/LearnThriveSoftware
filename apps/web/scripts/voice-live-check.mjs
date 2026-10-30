@@ -37,7 +37,7 @@ const page = await context.newPage();
 await page.goto(`${base}/api/dev/library-seed?action=tester`);
 const login = await page.request.post(`${base}/api/account/login`, { data: { email: "tester@example.com", password: "study-buddy-test-2026" } });
 if (!login.ok()) throw new Error(`sign-in failed (${login.status()})`);
-await page.goto(`${base}/library/study-buddy`);
+await page.goto(`${base}/library/ai`);
 await page.getByRole("button", { name: "Talk instead of typing" }).waitFor({ timeout: 30_000 });
 await page.getByRole("checkbox", { name: /18 or over/ }).check();
 

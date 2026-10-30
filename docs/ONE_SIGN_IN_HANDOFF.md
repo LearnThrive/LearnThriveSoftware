@@ -27,7 +27,7 @@ rule, `platformAccess(role, facts)` in `packages/data/src/library/access.ts`:
 | --- | --- | --- | --- | --- | --- |
 | Admin, tutor | `staff` | yes | by role (admin) / grant | same | `/dashboard` |
 | Enrolled family (parent, student) | `enrolled` | yes | yes | yes | `/dashboard` |
-| Library subscriber (or admin grant), not enrolled | `library` | **no** | yes | yes | `/library/study-buddy` (or `/library` if LearnThrive AI is closed) |
+| Library subscriber (or admin grant), not enrolled | `library` | **no** | yes | yes | `/library/ai` (or `/library` if LearnThrive AI is closed) |
 | Signed in, entitled to nothing | `none` | no | free samples | no | `/account` |
 
 `destinationFor(access, requested, options)` keeps the page the person asked for (`?next=`) only if their access includes it,
@@ -140,13 +140,13 @@ Sign in at `/login` with these (they only exist on a local dev server; the list 
 | `tutor@learnthrive.dev` | `dev-tutor-pass` | `/dashboard` | no LearnThrive AI / Library |
 | `client@learnthrive.dev` | `dev-client-pass` | `/dashboard` | "Learning" menu; LearnThrive AI page shows a "Dashboard" link back |
 | `student@learnthrive.dev` | `dev-student-pass` | `/dashboard` | same as client |
-| `member@learnthrive.dev` | `dev-member-pass` | `/library/study-buddy` | **no** dashboard; typing `/dashboard` in the bar returns them to LearnThrive AI |
+| `member@learnthrive.dev` | `dev-member-pass` | `/library/ai` | **no** dashboard; typing `/dashboard` in the bar returns them to LearnThrive AI |
 | `visitor@learnthrive.dev` | `dev-visitor-pass` | `/account` | LearnThrive AI says what it is included with |
 | `disabled@learnthrive.dev` | `dev-disabled-pass` | stays on `/login` | "This account has been disabled…" |
 
 Also check: a wrong password gives the generic "Email or password is not right."; `/dashboard` while signed out redirects to
 `/login?next=%2Fdashboard` and signing in returns there; `/account/sign-in` redirects to `/login`; the sign-out button in the
-dashboard and in the Library both end the session everywhere (then `/dashboard` and `/library/study-buddy` both ask to sign in).
+dashboard and in the Library both end the session everywhere (then `/dashboard` and `/library/ai` both ask to sign in).
 Restarting the dev server wipes all dev sessions and data by design.
 
 ### B6. End-to-end tests locally
@@ -195,7 +195,7 @@ Tick each only with evidence (a passing test name, a command output, or a screen
 2. **The LearnThrive AI login page is the platform's login page.** `/login` renders `AccountShell` + `AccountAuthPanel`; `LoginForm.tsx` is
    gone; `/account/sign-in` redirects. Evidence: `auth.spec.ts`, `account.spec.ts`, B5.
 3. **A Library subscriber who is not enrolled gets LearnThrive AI and the Library, and nothing else.** `member` lands on
-   `/library/study-buddy`; `/dashboard` and every `/dashboard/*` send them home; no Dashboard link in their menu. Evidence:
+   `/library/ai`; `/dashboard` and every `/dashboard/*` send them home; no Dashboard link in their menu. Evidence:
    `one-sign-in.spec.ts` (subscriber tests), `devAccounts.test.mjs`, `portal.test.mjs`.
 4. **Enrolled students get everything.** Evidence: B5 rows 3–4, `libraryAccess.test.ts` (`enrolled` tier), nav test in
    `library-open.spec.ts:146` (menu has LearnThrive AI and Dashboard).

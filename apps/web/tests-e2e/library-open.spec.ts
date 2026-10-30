@@ -169,7 +169,7 @@ test('the name on the account page is the name on the download, and the account 
   const menu = page.getByRole('navigation', { name: 'Main navigation' });
   await expect(menu.getByRole('link', { name: 'Library', exact: true })).toBeVisible();
   await expect(menu.getByRole('link', { name: 'Account' })).toHaveAttribute('href', '/account');
-  await expect(menu.getByRole('link', { name: 'LearnThrive AI' })).toHaveAttribute('href', '/library/study-buddy');
+  await expect(menu.getByRole('link', { name: 'LearnThrive AI' })).toHaveAttribute('href', '/library/ai');
   await expect(menu.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/dashboard');
 });
 

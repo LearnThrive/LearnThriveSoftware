@@ -85,7 +85,7 @@ test('a Library subscriber lands on LearnThrive AI, has no dashboard link, and t
 
 test('someone signed in with nothing yet lands on their account page, and LearnThrive AI tells them what it is included with', async ({ page }) => {
   await signIn(page, WHO.visitor, /\/account$/);
-  await page.goto('/library/study-buddy');
+  await page.goto('/library/ai');
   await expect(page.getByText('LearnThrive AI is included for enrolled students and Library subscribers.')).toBeVisible();
   await page.goto('/dashboard');
   await expect(page).toHaveURL(/\/account$/);
@@ -137,7 +137,7 @@ test('signing out of the dashboard ends the Library session too, and signing out
   await page.getByRole('button', { name: 'Account menu' }).click();
   await page.getByRole('menuitem', { name: 'Log out' }).click();
   await expect(page).toHaveURL(/\/$/);
-  await page.goto('/library/study-buddy');
+  await page.goto('/library/ai');
   await expect(page).toHaveURL(/\/login\?next=%2Flibrary%2Fstudy-buddy$/);
   await page.goto('/dashboard');
   await expect(page).toHaveURL(/\/login\?next=%2Fdashboard$/);

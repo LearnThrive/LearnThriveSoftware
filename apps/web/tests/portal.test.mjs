@@ -189,7 +189,7 @@ test("proxy: every request it lets through is stamped with the path and query as
     }
   };
   assert.equal(stamp("/dashboard/lessons?week=3", { NODE_ENV: "development" }), "/dashboard/lessons?week=3");
-  assert.equal(stamp("/library/study-buddy", { ...production, LIBRARY_ENABLED: "true" }), "/library/study-buddy");
+  assert.equal(stamp("/library/ai", { ...production, LIBRARY_ENABLED: "true" }), "/library/ai");
   assert.equal(stamp("/dashboard", { NODE_ENV: "development" }, { "x-learnthrive-path": "//evil.example/x" }), "/dashboard", "a client-supplied copy never survives");
   assert.equal(stamp("/dashboard", production), null, "a gated path that redirects carries nothing");
 });

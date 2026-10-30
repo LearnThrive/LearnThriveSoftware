@@ -48,7 +48,7 @@ export async function PlatformShell({ children, requireDashboard = false }: { ch
   const unreadCount = tuition ? await getDataProvider().notifications.unreadCountForUser(user.id) : 0;
   const learnerRole = Boolean(who?.account.learner) || Boolean(viewing);
   const roleLabel = viewing ? `Viewing as ${viewing.displayName}` : tuition ? undefined : learnerRole ? "Learner" : "Member";
-  const home = tuition ? "/dashboard" : studyBuddy ? "/library/study-buddy" : library ? "/library" : "/account";
+  const home = tuition ? "/dashboard" : studyBuddy ? "/library/ai" : library ? "/library" : "/account";
 
   return (
     <AppShellClient

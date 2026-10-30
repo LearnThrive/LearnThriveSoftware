@@ -66,7 +66,7 @@ Three helpers in `apps/web/src/lib/auth/guard.ts`, used from Server Components a
 | --- | --- | --- |
 | `ADMIN`, `TUTOR` | the dashboard, lessons, classroom. An administrator also holds the whole Library and LearnThrive AI by role; a tutor only what their own standing gives | `/dashboard` |
 | Enrolled family (an active tuition assignment) | **everything**: the dashboard, lessons, classroom, the Library, LearnThrive AI | `/dashboard` |
-| Library subscriber, or a granted account, not enrolled | the Library and LearnThrive AI **only**, never the dashboard | `/library/study-buddy` (`/library` where LearnThrive AI is closed) |
+| Library subscriber, or a granted account, not enrolled | the Library and LearnThrive AI **only**, never the dashboard | `/library/ai` (`/library` where LearnThrive AI is closed) |
 | Signed in with nothing yet | their account page; LearnThrive AI says what it is included with | `/account` |
 
 **One rule decides it:** `platformAccess(role, facts)` in `packages/data/src/library/access.ts`, over the same facts `canAccess` reads (enrolled, subscription, admin grant). It is pure and has a table test, including a test that it agrees with `canAccess` for every role and combination of facts. The sign-in routes (`destinationFor`/`homePath`), the dashboard and member navigation, the LearnThrive AI page and the assistant's routes all call it, so what a menu offers and what a route allows cannot drift. Enrolment beats a subscription: an enrolled family that also subscribes simply has everything.

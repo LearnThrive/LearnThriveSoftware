@@ -23,7 +23,7 @@ const BILLING_MESSAGES: Record<string, string> = {
 export default async function AccountPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { rt, user, account } = await requireAccountPage("/account");
   // Inside a supervised view the account (and the money) is closed: the guardian leaves the view with their password first.
-  if (await inSupervisedView(rt, await nextJar(), account.profileId)) redirect("/library/study-buddy");
+  if (await inSupervisedView(rt, await nextJar(), account.profileId)) redirect("/library/ai");
   const learner = account.learner;
   const raw = (await searchParams).billing;
   const message = typeof raw === "string" && Object.hasOwn(BILLING_MESSAGES, raw) ? BILLING_MESSAGES[raw] : null;
