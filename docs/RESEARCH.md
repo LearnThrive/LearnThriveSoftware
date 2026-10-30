@@ -62,6 +62,19 @@ Spoken (voice) turns skip both to stay quick.
 | Query privacy | `research/privacy.ts` |
 | The research tools the model may call | `research/tools.ts`, `tools.ts` |
 
+## Ollama web search and page reader (the first choice when a key is set)
+
+With `OLLAMA_API_KEY` set, search and page reading go through Ollama's own hosted API first (`POST https://ollama.com/api/web_search` with `{ query, max_results }`, `POST https://ollama.com/api/web_fetch` with `{ url }`, the key in an `Authorization: Bearer` header on the server only: [docs.ollama.com/capabilities/web-search](https://docs.ollama.com/capabilities/web-search)). SearXNG and Crawl4AI stay, and back them up: `RESEARCH_PROVIDER=auto` (the default) tries Ollama, then SearXNG, for a search, and Ollama, then Crawl4AI, then a plain fetch, for a page; `ollama` or `searxng` uses only that one. `research/ollamaWeb.ts` holds the client, the composite search and the composite reader.
+
+The rules did not change, they apply to this source too:
+
+- A result is a **lead**, never proof. A snippet never verifies a quotation; the page is read, then the words are matched (`verify.ts`).
+- **Source URLs are validated**: only `http(s)` results are kept, duplicates (a trailing slash, a fragment) are dropped, and the address handed to `web_fetch` has already passed the private-network, credential, port and redirect checks in `fetchSource.ts`. `web_fetch` is an extraction backend like Crawl4AI: it reports the page's text and no redirect, and the same text cleaning, injection scan and marker defusing apply.
+- **Caching, limits and failure**: identical searches are cached (`SEARXNG_CACHE_TTL_SECONDS`), every outcome is a status and never a throw (a refused key, a rate limit, a timeout and a bad answer are each named, and an oversized answer is ignored), and the per-answer limits (`RESEARCH_MAX_SEARCHES`, `_MAX_FETCHES`, `_PER_MINUTE`) and the tool-round limit still bound every turn.
+- **Privacy**: the query is made privacy-safe before any search sees it (`privacy.ts`: no names, emails or phone numbers). If the sources cannot be read the answer says it could not check.
+
+**Verified against live data, 30 October 2026.** The first browser run with a real key found that a correct quotation was reported as spoken by the wrong person: the loose plain-text speaker reading had split a page wrongly. A speaker is now only allowed to contradict a student when it was read from an unambiguous layout (`Speech.structured`); otherwise the words are still verified and the speaker is "not checked" (`tests/researchAttribution.test.mjs`). Quotation results are also reported to the page in five states (`VERIFIED_EXACT`, `VERIFIED_VARIANT`, `UNVERIFIED`, `INCORRECT_ATTRIBUTION`, `PARAPHRASE`) for interactive answers: [OPENUI.md](OPENUI.md).
+
 ## Architecture: SearXNG finds, Crawl4AI reads, the verifier decides
 
 ```
@@ -204,10 +217,7 @@ Only `supports` promotes a claim here. A claim the sources contradict is already
 because a model read the pages differently: **the stage can only add evidence it can point at.** It cannot make a claim verified — that needs the words
 of a text — and it cannot suppress a problem.
 
-It is off by default, development only (`ASSISTANT_CLAIM_RECALL=on`, with `ASSISTANT_RECALL_MODEL`, `_BASE_URL`, `_KEEP_ALIVE`, `_TIMEOUT_MS`,
-`_MAX_CLAIMS`, `_PASSAGE_CHARS`; the tutor's own model and endpoint by default, since it is the resident model that can read a sentence against a
-passage). Four claims and three pages per call, with its own deadline, and every failure is an empty result. With it off, the exact checks run exactly as
-they did before.
+The model call that proposes these spans was a local helper model and has been removed with the other local models; the checking code (`acceptSupports`, which accepts only spans found word for word in a page that was read) is kept, and with no proposer the exact checks run exactly as they did before. A hosted proposer can be plugged in through `ResearchDeps.recall` without changing it.
 
 ## The gate: nothing unchecked is shown first
 

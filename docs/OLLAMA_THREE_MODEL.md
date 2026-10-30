@@ -1,5 +1,7 @@
 # LearnThrive AI's three local Ollama roles
 
+> **Historical (30 October 2026).** LearnThrive AI no longer uses local models, NVIDIA's hosted catalogue or a model picker: its only reasoning model is Reflection's Beam on Ollama Cloud (see [ASSISTANT.md](ASSISTANT.md) and [OPENUI.md](OPENUI.md)). This page records the earlier evaluation and is kept for that reason; the scripts it names (`scripts/ollama-local.mjs`, `npm run ollama:*`) have been removed.
+
 The owner's brief (23 October 2026) asked for three local model roles, a fix for the picture-question timeout that was not
 "raise every timeout", and measurements on the actual laptop. This is the runbook for what was built, what was measured, and how to
 put the previous arrangement back.

@@ -1,5 +1,7 @@
 # LearnThrive AI's local models: measured, and the selection
 
+> **Historical (30 October 2026).** LearnThrive AI no longer uses local models, NVIDIA's hosted catalogue or a model picker: its only reasoning model is Reflection's Beam on Ollama Cloud (see [ASSISTANT.md](ASSISTANT.md) and [OPENUI.md](OPENUI.md)). This page records the earlier evaluation and is kept for that reason; the benchmark scripts it names have been removed.
+
 This is the readable result of the three-model brief's benchmark (section 13). The numbers themselves are **generated**, never
 hand-written: [`docs/benchmarks/ollama-summary.md`](benchmarks/ollama-summary.md) and
 [`docs/benchmarks/ollama-results.json`](benchmarks/ollama-results.json) come from `npm run ollama:bench`, and

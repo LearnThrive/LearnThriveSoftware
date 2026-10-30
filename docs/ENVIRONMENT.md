@@ -40,8 +40,8 @@ Set these in Render's environment, as secrets where the table says so, and nowhe
 
 - **Required to run:** `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `ENQUIRY_EMAIL`, `CAPTCHA_SECRET`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`.
 - **Stay unset until the owner flips them** (each opens something that is closed by default): `LIBRARY_ENABLED`, `LIBRARY_TERMS_APPROVED`, `ASSISTANT_ENABLED`, `ASSISTANT_PRODUCTION_APPROVED`, `ASSISTANT_MINORS_APPROVED`, `PAPER_TUTOR_ENABLED`, `PAPER_MARKER_ENABLED`, `PAPER_MARKS_RELEASED`, `NEXT_PUBLIC_APP_PORTAL_ENABLED`. In particular `LIBRARY_ENABLED` and `NEXT_PUBLIC_APP_PORTAL_ENABLED` are not set as part of the Supabase work.
-- **Never set in production** (development, tests or an operator's own shell): `NEXT_PUBLIC_MOTION_DEBUG`, `CAREERS_OPEN_FOR_TESTING`, `DATABASE_ADMIN_URL`, `LEARNTHRIVE_SERVER_PASSWORD`, `SUPABASE_DB_PASSWORD`, `SUPABASE_LOCAL`, `SUPABASE_LOCAL_SERIAL`, `SMOKE_EMAIL`, `CHECK_ENV_ALLOW_HOSTED`, `LIBRARY_DEV_STORAGE_DIR`, `STRIPE_FAKE`, `SEARXNG_SECRET`, `SEARXNG_IMAGE`, `CRAWL4AI_IMAGE`, `ASSISTANT_NIM_MODEL`, `ASSISTANT_NIM_VISION_MODEL`, `NVIDIA_API_KEY`, `ASSISTANT_NIM_MODELS`, `ASSISTANT_MODEL_PICKER`, `ASSISTANT_NIM_DAILY_TOKENS`, `ASSISTANT_NIM_DAILY_REQUESTS`, `ASSISTANT_NIM_UPLOADS`, `ASSISTANT_NIM_REASONING_TOKENS`, `VOICE_ENABLED`, `VOICE_PROVIDER`, `VOICE_URL`, `VOICE_TOKEN`, `VOICE_HOST`, `VOICE_PORT`, `VOICE_STT_ENGINE`, `VOICE_STT_DEVICE`, `VOICE_STT_MODEL`, `VOICE_STT_COMPUTE`, `VOICE_PARAKEET_URL`, `VOICE_PARAKEET_HOME`, `VOICE_PARAKEET_PORT`, `VOICE_TTS_ENGINE`, `VOICE_TTS_VOICE`, `VOICE_TTS_DEVICE`, `VOICE_FALLBACK_ENABLED`, `LEARNTHRIVE_SUPABASE`, `LEARNTHRIVE_SUPABASE_USE`, `LEARNTHRIVE_DOCKER`, `OLLAMA_MODELS`, `OLLAMA_MODELS_DIR`, `VITE_TURN_URL`, `VITE_TURN_USERNAME`, `VITE_TURN_CREDENTIAL`, `CLOUDFLARE_TURN_KEY_ID`, `CLOUDFLARE_TURN_API_TOKEN`, `TUNNEL_HOST`, `NEXT_DIST_DIR`, `CHROME_PATH`.
-- **Secret:** `RESEND_API_KEY`, `CAPTCHA_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `DATABASE_ADMIN_URL`, `LEARNTHRIVE_SERVER_PASSWORD`, `SUPABASE_DB_PASSWORD`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SEARXNG_SECRET`, `CRAWL4AI_API_TOKEN`, `ASSISTANT_API_KEY`, `NVIDIA_API_KEY`, `VOICE_TOKEN`, `CLOUDFLARE_TURN_KEY_ID`, `CLOUDFLARE_TURN_API_TOKEN`.
+- **Never set in production** (development, tests or an operator's own shell): `NEXT_PUBLIC_MOTION_DEBUG`, `CAREERS_OPEN_FOR_TESTING`, `DATABASE_ADMIN_URL`, `LEARNTHRIVE_SERVER_PASSWORD`, `SUPABASE_DB_PASSWORD`, `SUPABASE_LOCAL`, `SUPABASE_LOCAL_SERIAL`, `SMOKE_EMAIL`, `CHECK_ENV_ALLOW_HOSTED`, `LIBRARY_DEV_STORAGE_DIR`, `STRIPE_FAKE`, `OLLAMA_API_KEY`, `OLLAMA_CLOUD_BASE_URL`, `OLLAMA_WEB_BASE_URL`, `SEARXNG_SECRET`, `SEARXNG_IMAGE`, `CRAWL4AI_IMAGE`, `VOICE_ENABLED`, `VOICE_PROVIDER`, `VOICE_URL`, `VOICE_TOKEN`, `VOICE_HOST`, `VOICE_PORT`, `VOICE_STT_ENGINE`, `VOICE_STT_DEVICE`, `VOICE_STT_MODEL`, `VOICE_STT_COMPUTE`, `VOICE_PARAKEET_URL`, `VOICE_PARAKEET_HOME`, `VOICE_PARAKEET_PORT`, `VOICE_TTS_ENGINE`, `VOICE_TTS_VOICE`, `VOICE_TTS_DEVICE`, `VOICE_FALLBACK_ENABLED`, `LEARNTHRIVE_SUPABASE`, `LEARNTHRIVE_SUPABASE_USE`, `LEARNTHRIVE_DOCKER`, `VITE_TURN_URL`, `VITE_TURN_USERNAME`, `VITE_TURN_CREDENTIAL`, `CLOUDFLARE_TURN_KEY_ID`, `CLOUDFLARE_TURN_API_TOKEN`, `TUNNEL_HOST`, `NEXT_DIST_DIR`, `CHROME_PATH`.
+- **Secret:** `RESEND_API_KEY`, `CAPTCHA_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `DATABASE_ADMIN_URL`, `LEARNTHRIVE_SERVER_PASSWORD`, `SUPABASE_DB_PASSWORD`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `OLLAMA_API_KEY`, `SEARXNG_SECRET`, `CRAWL4AI_API_TOKEN`, `ASSISTANT_API_KEY`, `VOICE_TOKEN`, `CLOUDFLARE_TURN_KEY_ID`, `CLOUDFLARE_TURN_API_TOKEN`.
 
 ## Site and mail
 
@@ -118,24 +118,23 @@ Set these in Render's environment, as secrets where the table says so, and nowhe
 | `ASSISTANT_ENABLED` | The LearnThrive AI kill switch. In production it is on only if exactly true. | optional | unset until the owner flips it | no | n/a | on in development, off in production |
 | `ASSISTANT_PRODUCTION_APPROVED` | true only after plan19 section 6 (provider contract, safeguarding, privacy, terms) is complete and recorded. | optional | unset until approved | no | n/a | unset |
 | `ASSISTANT_MINORS_APPROVED` | true only after the safeguarding lead approves in writing. Until then LearnThrive AI is for adult account holders. | optional | unset until approved | no | n/a | unset |
-| `ASSISTANT_PROVIDER` | ollama (development), nim (evaluation only), custom (the production slot), mock (tests), or a comma list in development. | optional | custom, only when approved | no | n/a | ollama |
-| `ASSISTANT_MODEL` | The tutor model: vision, tools and thinking. The measured profile is in docs/OLLAMA_THREE_MODEL.md; rollback is qwen3.5:9b. | optional | optional | no | n/a | bonsai-2:9b |
-| `ASSISTANT_VISION_MODEL` | The model used when a message has images (may be the tutor). | optional | optional | no | n/a | the text model if it can see |
-| `ASSISTANT_BASE_URL` | The provider's address. Production: the chosen OpenAI-compatible endpoint. Development: the GPU Ollama server. | optional | optional | no | n/a | http://127.0.0.1:11434 (Ollama) |
-| `ASSISTANT_KEEP_ALIVE` | How long Ollama keeps the tutor resident after a turn. Server-side OLLAMA_KEEP_ALIVE is separate (scripts/ollama-local.mjs). | optional | optional | no | n/a | 30m |
+| `ASSISTANT_PROVIDER` | ollama_cloud (development: Reflection's Beam on Ollama Cloud), custom (the production slot) or mock (tests). Exactly one: there is no chain and no fallback to another model. | optional | custom, only when approved | no | n/a | ollama_cloud |
+| `ASSISTANT_MODEL` | The model name sent to the provider. Beam is listed by Ollama Cloud as beam (text in, text out; completion, thinking and tools). | optional | optional | no | n/a | beam |
+| `OLLAMA_API_KEY` | The Ollama Cloud key (ollama.com/settings/keys): Beam's inference and Ollama's web search and page reader. Server only: never sent to the browser or logged. Development only; production uses the approved custom provider. | optional | unset | **yes** | ollama.com > Settings > Keys | unset |
+| `OLLAMA_CLOUD_BASE_URL` | Ollama Cloud's OpenAI-compatible address. | optional | unset | no | n/a | https://ollama.com/v1 |
+| `OLLAMA_WEB_BASE_URL` | Where Ollama's web_search and web_fetch live (/api/web_search, /api/web_fetch). | optional | unset | no | n/a | https://ollama.com |
+| `RESEARCH_PROVIDER` | auto (default: Ollama's web search and page reader when OLLAMA_API_KEY is set, SearXNG and Crawl4AI otherwise, each backing up the other), ollama or searxng. | optional | optional | no | n/a | auto |
+| `OPENUI_ENABLED` | on (default) or off: let an answer be an interactive interface when the student asks for one (a graph to explore, a quiz, flashcards, a diagram). Off, every answer is text. | optional | optional | no | n/a | on |
+| `OPENUI_MAX_REPAIRS` | How many times an interface that did not pass its checks is sent back to the model with what was wrong (0 to 2). After the last, it is dropped and the answer is given in words. | optional | optional | no | n/a | 1 |
+| `ASSISTANT_BASE_URL` | The production provider's address (the chosen OpenAI-compatible endpoint, provider custom). Unused by ollama_cloud, which has OLLAMA_CLOUD_BASE_URL. | optional | only when approved | no | n/a | unset |
 | `ASSISTANT_THINKING` | Thinking policy: off, auto (only genuinely multi-step work), on, or a level the model reports (low/medium/high). | optional | optional | no | n/a | auto |
 | `ASSISTANT_THINKING_TOKENS` | Extra output tokens allowed for thinking, on top of the answer's own budget (thinking and the answer share one token count, so a hard question that thinks at length would otherwise leave the answer a few hundred words). | optional | optional | no | n/a | 1500 |
-| `ASSISTANT_HELPER_BASE_URL` | The CPU-only Ollama server for the embedding and decision roles (a second loopback process; docs/OLLAMA_THREE_MODEL.md). | optional | optional | no | n/a | http://127.0.0.1:11435 |
 | `ASSISTANT_STAGE_QUEUE_MS` | How long a turn may wait for a generation slot. | optional | optional | no | n/a | 20000 |
-| `ASSISTANT_STAGE_LOAD_MS` | How long a model may take to become resident before the turn starts (a visible preparing state, not a silent wait). | optional | optional | no | n/a | 180000 |
-| `ASSISTANT_STAGE_FIRST_ACTIVITY_MS` | From sending the request to the first activity of any kind: thinking, a tool call or text. | optional | optional | no | n/a | 60000 |
-| `ASSISTANT_STAGE_FIRST_ANSWER_MS` | From sending the request to the first visible word of the answer. | optional | optional | no | n/a | 45000 |
-| `ASSISTANT_STAGE_FIRST_ANSWER_IMAGE_MS` | The same, for a turn with a photo or a pictured page. | optional | optional | no | n/a | 90000 |
-| `ASSISTANT_STAGE_IDLE_MS` | The longest silence allowed between two events once activity has started. | optional | optional | no | n/a | 30000 |
-| `ASSISTANT_STAGE_IDLE_IMAGE_MS` | The same, for a turn with a picture. | optional | optional | no | n/a | 45000 |
+| `ASSISTANT_STAGE_FIRST_ACTIVITY_MS` | From sending the request to the first activity of any kind: thinking, a tool call or text. | optional | optional | no | n/a | 90000 |
+| `ASSISTANT_STAGE_FIRST_ANSWER_MS` | From sending the request to the first visible word of the answer. A reasoning model writes nothing until it has thought, so this is generous. | optional | optional | no | n/a | 240000 |
+| `ASSISTANT_STAGE_IDLE_MS` | The longest silence allowed between two events once activity has started. | optional | optional | no | n/a | 90000 |
 | `ASSISTANT_STAGE_TOOL_MS` | One tool execution, including result validation. | optional | optional | no | n/a | 60000 |
-| `ASSISTANT_STAGE_TURN_MS` | The whole turn, absolute: tool rounds and retries never reset it. | optional | optional | no | n/a | 180000 |
-| `ASSISTANT_STAGE_TURN_IMAGE_MS` | The whole turn for a message with a picture. | optional | optional | no | n/a | 240000 |
+| `ASSISTANT_STAGE_TURN_MS` | The whole turn, absolute: tool rounds, repairs and retries never reset it. | optional | optional | no | n/a | 360000 |
 | `ASSISTANT_MAX_TOOL_ROUNDS` | Tool round trips allowed in one turn (0 turns tool calling off). | optional | optional | no | n/a | 2 |
 | `SEARXNG_BASE_URL` | Where SearXNG runs. Web research is always on; npm start runs the container from config/compose.yaml on this address. It must have the json format enabled in its settings.yml. Never exposed to the browser. | optional | optional | no | n/a | http://127.0.0.1:8888 |
 | `SEARXNG_SECRET` | The secret key for the SearXNG container (config/compose.yaml). Compose reads it; the website never does. The default is a development value that is safe only because the container listens on 127.0.0.1. | optional | unset | **yes** | generate a long random value yourself if the container is ever reachable from elsewhere | a fixed development value |
@@ -153,33 +152,14 @@ Set these in Render's environment, as secrets where the table says so, and nowhe
 | `RESEARCH_MAX_FETCHES` | Web pages one answer may read. | optional | optional | no | n/a | 5 |
 | `RESEARCH_FETCH_MAX_BYTES` | Most bytes read from one web page or PDF. | optional | optional | no | n/a | 1500000 |
 | `RESEARCH_PER_MINUTE` | Searches one account may start per minute, across answers. | optional | optional | no | n/a | 10 |
-| `ASSISTANT_RETRIEVAL` | on (default) or off: search the family's OWN uploads for relevant chunks. Off also stops indexing. | optional | optional | no | n/a | on |
+| `ASSISTANT_RETRIEVAL` | on or off (default off): search the family's OWN uploads for relevant chunks. It needs an embedding provider, and none is configured now that the local helper models are gone, so it stays off until a hosted one is chosen. | optional | optional | no | n/a | off |
 | `ASSISTANT_RETRIEVAL_TOP_K` | Chunks of the student's material given to the tutor. | optional | optional | no | n/a | 4 |
 | `ASSISTANT_RETRIEVAL_MIN_SCORE` | The lowest cosine similarity that counts as a retrieval hit (0 to 1). | optional | optional | no | n/a | 0.35 |
-| `ASSISTANT_EMBED_MODEL` | The embedding model (text-only Q8 tag; it never reads a photo). | optional | optional | no | n/a | embeddinggemma-2:270m-q8_0-text |
-| `ASSISTANT_EMBED_BASE_URL` | Where the embedding role runs. Default: the CPU helper. | optional | optional | no | n/a | ASSISTANT_HELPER_BASE_URL |
-| `ASSISTANT_EMBED_KEEP_ALIVE` | How long the embedding model stays resident between turns. | optional | optional | no | n/a | 10m |
-| `ASSISTANT_EMBED_BATCH` | Chunks embedded per request while indexing. | optional | optional | no | n/a | 8 |
-| `ASSISTANT_DECISION` | on (development default) or off: let the typed-decision model route an ambiguous message. Never decides rights, ownership or correctness. | optional | optional | no | n/a | on in development, off in production |
-| `ASSISTANT_DECISION_MODEL` | The typed-decision model (POST /v1/systemone). | optional | optional | no | n/a | laya:421m-typed-decisions-bf16 |
-| `ASSISTANT_DECISION_BASE_URL` | Where the decision role runs. Default: the CPU helper. | optional | optional | no | n/a | ASSISTANT_HELPER_BASE_URL |
-| `ASSISTANT_DECISION_KEEP_ALIVE` | How long the decision model stays resident. | optional | optional | no | n/a | 10m |
-| `ASSISTANT_DECISION_TIMEOUT_MS` | A routing call's own deadline; on timeout routing is deterministic. | optional | optional | no | n/a | 4000 |
-| `ASSISTANT_DECISION_MIN_CONFIDENCE` | The chosen option's own probability below which the model's route is ignored (0 to 1). | optional | optional | no | n/a | 0.3 |
-| `ASSISTANT_DECISION_MIN_MARGIN` | How far ahead of the runner-up the chosen option must be (a five-way tie is not a route). | optional | optional | no | n/a | 0.12 |
-| `ASSISTANT_CLAIM_RECALL` | on or off (default off): let a model say WHERE in the pages that were read a statement is settled, so a claim is judged by meaning and not only by shared words. Every span it proposes is checked against the page in code first (research/entail.ts). Development only. | optional | optional | no | n/a | off |
-| `ASSISTANT_RECALL_MODEL` | The model that stage uses. Default: the tutor's own model. | optional | optional | no | n/a | ASSISTANT_MODEL |
-| `ASSISTANT_RECALL_BASE_URL` | Where the recall stage runs. Default: the tutor's endpoint (it is a prose model, so not the CPU helper). | optional | optional | no | n/a | ASSISTANT_BASE_URL |
-| `ASSISTANT_RECALL_KEEP_ALIVE` | How long the recall model stays resident. | optional | optional | no | n/a | 10m |
-| `ASSISTANT_RECALL_TIMEOUT_MS` | A recall call's own deadline. On timeout the exact checks' result stands. | optional | optional | no | n/a | 8000 |
-| `ASSISTANT_RECALL_MAX_CLAIMS` | How many claims one recall call may carry. | optional | optional | no | n/a | 4 |
-| `ASSISTANT_RECALL_PASSAGE_CHARS` | The most characters of one page handed to the recall stage. | optional | optional | no | n/a | 3000 |
 | `ASSISTANT_PHOTO_LONG_SIDE` | Long side of a photo sent to the tutor, in pixels (the stored original is untouched). | optional | optional | no | n/a | 1400 |
 | `ASSISTANT_PAGE_LONG_SIDE` | Long side of a rendered PDF page, in pixels. | optional | optional | no | n/a | 1200 |
 | `ASSISTANT_IMAGES_PER_MESSAGE` | The most pictures sent with one message. | optional | optional | no | n/a | 3 |
-| `ASSISTANT_VRAM_HEADROOM_MIB` | The GPU headroom the benchmark checks under peak image requests (an engineering target, not a runtime limit). | optional | optional | no | n/a | 1536 |
 | `ASSISTANT_API_KEY` | The production provider's key (custom). Never logged. | optional | only when approved | **yes** | the chosen provider | unset |
-| `ASSISTANT_CONTEXT` | Context window to ask for, in tokens. The warm-up sends the same value: a change reloads the model. It has to hold the instructions, the history, a picture and the longest answer. | optional | optional | no | n/a | 8192 |
+| `ASSISTANT_CONTEXT` | The context window the history is planned against, in tokens. It has to hold the instructions (an interactive answer's component library is a few thousand tokens), the history and the longest answer. | optional | optional | no | n/a | 32768 |
 | `ASSISTANT_MAX_OUTPUT_TOKENS` | The most tokens in one answer. 4096 is about 3000 words of plain English and still over 2000 for maths written in LaTeX. An answer that reaches it stops with a visible note, so it must fit inside ASSISTANT_CONTEXT with the instructions and history. | optional | optional | no | n/a | 4096 |
 | `ASSISTANT_DAILY_MESSAGES` | Messages one account may send a day. | optional | optional | no | n/a | 40 |
 | `LEARNER_INVITE_HOURS` | How long a guardian's learner invitation link works, in hours. | optional | optional | no | n/a | 72 |
@@ -195,19 +175,8 @@ Set these in Render's environment, as secrets where the table says so, and nowhe
 | `PAPER_SCAN_LAYOUT` | Whether the vision model is asked where a scanned page's answer spaces are (each is checked against the drawing of the page before use). false: answers go on the worked pages. | optional | optional | no | n/a | on |
 | `ASSISTANT_PER_MINUTE` | Messages one account may send a minute. | optional | optional | no | n/a | 6 |
 | `ASSISTANT_DAILY_TOKEN_BUDGET` | Hosted providers: completion tokens per account per day (the cost cap). | optional | optional | no | n/a | 40000 |
-| `ASSISTANT_CONCURRENCY` | Answers generated at once on this server. | optional | optional | no | n/a | 1 |
-| `ASSISTANT_PICTURE_FIRST_TOKEN_MS` | Deprecated alias for ASSISTANT_STAGE_FIRST_ANSWER_IMAGE_MS (kept so an existing .env.local keeps working). | optional | optional | no | n/a | ASSISTANT_STAGE_FIRST_ANSWER_IMAGE_MS |
-| `ASSISTANT_PICTURE_TOTAL_MS` | Deprecated alias for ASSISTANT_STAGE_TURN_IMAGE_MS. | optional | optional | no | n/a | ASSISTANT_STAGE_TURN_IMAGE_MS |
+| `ASSISTANT_CONCURRENCY` | Answers generated at once on this server. | optional | optional | no | n/a | 2 |
 | `ASSISTANT_SAFEGUARDING_EMAIL` | The safeguarding lead's mailbox for flags (an opaque reference and a category, never the pupil's name). Needed before LearnThrive AI opens. | optional | optional | no | the safeguarding lead | unset |
-| `ASSISTANT_NIM_MODEL` | Evaluation only: the model when the provider is nim. | optional | unset | no | n/a | meta/llama-3.2-11b-vision-instruct |
-| `ASSISTANT_NIM_VISION_MODEL` | Evaluation only: the vision model when the provider is nim. | optional | unset | no | n/a | unset |
-| `NVIDIA_API_KEY` | Evaluation only (nim, synthetic prompts only): NVIDIA's hosted catalogue key. Never used in production. | optional | unset | **yes** | NVIDIA build catalogue | unset |
-| `ASSISTANT_NIM_MODELS` | Evaluation only: the hosted NVIDIA models the developer model picker offers to administrators on a development server, comma separated (minimaxai/minimax-m3.1-flash, stepfun-ai/step-5-preview). An id not in the built-in table is ignored. Unset: both models are offered whenever NVIDIA_API_KEY is set. Set but empty: no picker. | optional | unset | no | n/a | unset |
-| `ASSISTANT_MODEL_PICKER` | off hides the developer model picker even when ASSISTANT_NIM_MODELS is set. Production never shows it. | optional | unset | no | n/a | on where allowed |
-| `ASSISTANT_NIM_DAILY_TOKENS` | Evaluation only: completion tokens (answer plus reasoning) per account per day across the picker's hosted models. Kept apart from ASSISTANT_DAILY_TOKEN_BUDGET. | optional | unset | no | n/a | 600000 |
-| `ASSISTANT_NIM_DAILY_REQUESTS` | Evaluation only: requests per account per day to the picker's hosted models (a tool round or a repair is a request). | optional | unset | no | n/a | 300 |
-| `ASSISTANT_NIM_UPLOADS` | Evaluation only: on lets uploaded files be sent to the picker's hosted trial models. Synthetic test files only: NVIDIA's trial is not cleared for real student material. | optional | unset | no | n/a | off |
-| `ASSISTANT_NIM_REASONING_TOKENS` | Evaluation only: the hidden-reasoning allowance (tokens, on top of the answer) for every picker model. Unset: each model's own (12000 MiniMax, 16000 Step). | optional | unset | no | n/a | unset |
 | `PAPER_TUTOR_ENABLED` | The Paper Tutor switch inside LearnThrive AI's own. Development: on unless false. Production: on only if exactly true. | optional | unset until the owner flips it | no | n/a | on in development, off in production |
 | `PAPER_MARKER_ENABLED` | Checking a student's own completed paper (the Paper Tutor's marking). Not yet measured on real handwriting or marked scripts, so it is opt-in everywhere: on only if exactly true, and only where the Paper Tutor is on. | optional | unset until the owner flips it | no | n/a | off |
 | `PAPER_MARKS_RELEASED` | Whether marking shows numeric marks (awards, estimates, totals). Automatic marking is not validated against work marked by a qualified person, so this is its own flag: development on unless false, production only if exactly true. Off, the work still gets feedback and no mark is shown. | optional | unset until the owner flips it | no | n/a | on in development, off in production |
@@ -229,8 +198,6 @@ Set these in Render's environment, as secrets where the table says so, and nowhe
 | `VOICE_TTS_DEVICE` | The sidecar's own setting: where Kokoro synthesises - cpu (the measured default) or cuda (needs an accelerated onnxruntime, and /health says when it is not there). | optional | unset | no | n/a | cpu |
 | `VOICE_FALLBACK_ENABLED` | The sidecar's own setting: when the preferred speech engine cannot start, use the old one AND say so in /health. false makes it a hard failure instead. | optional | unset | no | n/a | true |
 | `LEARNTHRIVE_DOCKER` | 0 stops npm run dev from starting the model and voice in Docker (the Playwright servers set it). | optional | unset | no | n/a | unset |
-| `OLLAMA_MODELS` | Where this machine's Ollama keeps its models; the Docker Ollama mounts the same folder. | optional | unset | no | n/a | unset |
-| `OLLAMA_MODELS_DIR` | The same folder, as the compose file names it (defaults to OLLAMA_MODELS). | optional | unset | no | n/a | unset |
 
 ## Portal and classroom
 
