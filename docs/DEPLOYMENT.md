@@ -8,22 +8,24 @@ How the **public LearnThrive site** (the marketing pages and the enquiry form) g
 | --- | --- | --- |
 | `apps/web` — the public site, `/api/enquiry`, `/api/health`, `/og/*` | **Yes**, as one Next.js 16 app | The only thing in this deployment. |
 | The signed-in app (`/login`, `/dashboard/**`, the classroom page) | **No — closed in production** | Built into the same bundle but unreachable: see "The portal" below. It opens when real authentication exists (the Supabase work), not before. |
-| `apps/realtime` (the Socket.IO classroom server) | **No** | It holds long-lived WebSocket connections and in-memory room state, so it cannot run as serverless functions. It needs a long-running Node host of its own, and is a separate decision made when the portal opens. |
+| The classroom's Socket.IO signalling and TURN-credential endpoint (`apps/realtime`'s code) | **Yes, inside the unified server** (decided 2 Nov 2026) | It holds long-lived WebSocket connections and in-memory room state, so it needs a long-running Node process and **exactly one instance**. `apps/web/server.ts` runs it in the same process as the site, on the same origin, which is what the classroom's browser code expects. `apps/realtime` as a separate service is not used. |
 | `apps/classroom` (the standalone Vite classroom prototype) | **No** | Prototype; not part of the site. |
 | Storybook | **Never** | A development tool. |
-| `apps/web/server.ts` | **No** | Development only: it wraps `next dev` (`npm run dev` runs it with `tsx`). Production does not need it. |
+| `apps/web/server.ts` | **Yes, when the classroom is used** | `npm run dev` runs it in development; `npm run serve` runs it in production (see below). A deployment that only serves the public pages can still use `next start`, but then the classroom has no signalling and no TURN endpoint. |
 
-Without the realtime server the deployed site behaves exactly as intended: every public page works, the enquiry form sends mail, and anything classroom-related is unreachable because the portal is closed.
+Started with `next start` (no classroom server) the deployed site still behaves as intended while the portal is closed: every public page works, the enquiry form sends mail, and anything classroom-related is unreachable. Once the portal opens, the classroom needs the unified server below.
 
 ## Production start path
 
 ```bash
-npm ci
+npm ci --include=dev                        # the build needs the dev tools, such as TypeScript
 npm run build --workspace=apps/web          # next build
-NODE_ENV=production npm run start --workspace=apps/web -- -p 3000     # next start
+PORT=3000 npm run serve --workspace=apps/web    # the unified server, in production mode
 ```
 
-`next start` is the whole production runtime; `tsx server.ts` is not involved. A host that builds for you (Vercel and similar) runs the same two Next commands. The build needs outbound network access once (for the Google-hosted fonts, which `next/font` downloads at build time and then serves from the site itself; nothing is requested from Google at runtime).
+`npm run serve` runs `apps/web/serve.mjs`, which sets `NODE_ENV=production` before anything loads, registers `tsx` (a production dependency of `apps/web`) and starts `server.ts`: the Next.js site, the classroom's Socket.IO signalling and `GET /api/turn-credentials` on **one port and one origin**. `PORT` is read from the environment (Render sets it). It follows Next's own custom-server guide (`node_modules/next/dist/docs/01-app/02-guides/custom-server.md`). `next start` still works for a site with no classroom, and is what the CI smoke suite uses; `tests-prod/unified-server.spec.ts` covers the unified server (`PROD_SERVER=unified`).
+
+**Run exactly one instance.** Rooms and chat are in memory, so a second instance would split a lesson between two servers, and a restart or deploy ends any lesson in progress: deploy outside lesson hours. Host a paid instance, never a free one that sleeps. The build needs outbound network access once (for the Google-hosted fonts, which `next/font` downloads at build time and then serves from the site itself; nothing is requested from Google at runtime).
 
 Use Node `^20.19`, `^22.13` or `>=24` (the `engines` field; CI pins 22.12.0).
 
