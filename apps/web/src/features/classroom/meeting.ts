@@ -1,6 +1,6 @@
 import { io, type Socket } from 'socket.io-client';
 import {
-  MAX_CHAT_LENGTH, MAX_NAME_LENGTH, ROOM_PATTERN,
+  MAX_CHAT_LENGTH, MAX_NAME_LENGTH, MAX_PARTICIPANTS, ROOM_PATTERN,
   type Announcement, type BoardBackground, type BoardElement, type BoardState, type ChatMessage,
   type ClientToServerEvents, type Participant, type ParticipantRole, type PollState, type PollVisibility,
   type ReactionEmoji, type RoomSettings, type RoomTimerState, type ServerToClientEvents, type TimerMode,
@@ -8,10 +8,11 @@ import {
 } from '@learnthrive/shared/protocol';
 import { aggregateConnectionStatus } from './callStatus';
 import { reconcileBoardElements } from './board';
-import { ensureFreshTurnCredentials } from './ice';
+import { ensureFreshTurnCredentials, getIceConfiguration } from './ice';
 import { createLogger } from './log';
 import { browserSupportError, listDevices, LocalMedia, mediaErrorMessage, type DeviceOption } from './media';
 import { PeerSession, type DirectionDiagnostics } from './peer';
+import { SfuMedia, type SfuConnection, type SfuTransport } from './sfu';
 import { canShareScreen, screenShareErrorMessage, ScreenShare } from './screenShare';
 import { classifyQuality, type CallStats, type ConnectionQuality } from './stats';
 
@@ -24,6 +25,10 @@ const NOTICE_DURATION_MS = 3500;
 const COPY_CONFIRMATION_MS = 2500;
 const MAX_CHAT_HISTORY = 200;
 const REACTION_DURATION_MS = 2200;
+// With the SFU each person sends ONE copy of their camera, so the cap is not about how many others there are. 700 kbps keeps a face clear
+// and a class of eleven affordable (every student pulls the others' video, and Cloudflare bills what it sends).
+const SFU_CAMERA_KBPS = 700;
+const SFU_REQUEST_TIMEOUT_MS = 15_000;
 
 export interface DisplayReaction { id: number; emoji: string; mine: boolean }
 
@@ -40,8 +45,8 @@ const DEFAULT_BOARD_STATE: BoardState = { pages: [], activePageId: '', elementsB
  * remote participant stops moving, same as any other live-cursor UI. */
 export interface BoardPointer { id: string; name: string; x: number; y: number; tool: 'pointer' | 'laser'; updatedAt: number }
 
-/** Display + connection state for one other admitted participant. A room holds up to 3 of these
- * (1 tutor + 3 students, minus yourself), each backed by its own independent PeerSession. */
+/** Display + connection state for one other admitted participant. In a mesh room each is backed by its own PeerSession (up to 3);
+ * in an SFU room (up to 10 students) they all share the one SfuMedia connection and `connection` reports that. */
 export interface RemotePeer {
   participant: Participant;
   stream: MediaStream | null;
@@ -68,6 +73,9 @@ export interface MeetingSnapshot {
   screenSharePending: boolean;
   preparing: boolean;
   peers: RemotePeer[];
+  // How many people the room holds (tutor included) and how its media travels, both told to us by the server on joining.
+  maxParticipants: number;
+  mediaMode: 'mesh' | 'sfu';
   role: ParticipantRole | null;
   waiting: WaitingParticipant[];
   roomId: string;
@@ -116,11 +124,21 @@ function defaultRemotePeer(participant: Participant): RemotePeer {
   };
 }
 
+/** What a shared SFU connection's state means for each person's tile (the tile and the headline status read connection/ice). */
+function sfuPeerState(state: SfuConnection): Pick<RemotePeer, 'connection' | 'ice'> {
+  switch (state) {
+    case 'connected': return { connection: 'connected', ice: 'connected' };
+    case 'reconnecting': return { connection: 'disconnected', ice: 'disconnected' };
+    case 'failed': return { connection: 'failed', ice: 'failed' };
+    default: return { connection: 'connecting', ice: 'checking' };
+  }
+}
+
 export class MeetingController {
   private snapshot: MeetingSnapshot = {
     phase: 'prejoin', status: 'Ready to join', error: null, mediaError: null,
     localStream: null, audio: false, video: false, screenSharing: false, screenShareAudio: false, screenSharePending: false, preparing: false,
-    peers: [], role: null, waiting: [], roomId: '', name: '', signalling: 'disconnected', copied: false,
+    peers: [], maxParticipants: MAX_PARTICIPANTS, mediaMode: 'mesh', role: null, waiting: [], roomId: '', name: '', signalling: 'disconnected', copied: false,
     reconnectFailed: false,
     cameras: [], microphones: [], selectedCamera: undefined, selectedMicrophone: undefined, notice: null,
     chatOpen: false, messages: [], unreadCount: 0, handRaised: false, reactions: [],
@@ -135,6 +153,9 @@ export class MeetingController {
   private readonly screenShare = new ScreenShare(() => this.endScreenShare());
   private socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
   private peers = new Map<string, PeerSession>();
+  private sfu: SfuMedia | null = null;
+  private sfuSocketId: string | undefined;
+  private sfuConnection: SfuConnection = 'connecting';
   private active = false;
   private actionVersion = 0;
   private copyTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -197,6 +218,10 @@ export class MeetingController {
         : peerCount >= 3 ? 500
           : peerCount === 2 ? 700
             : null;
+    if (this.sfu) {
+      void this.sfu.setVideoSendBitrate(this.snapshot.screenSharing ? null : this.snapshot.dataSaver ? 250 : SFU_CAMERA_KBPS);
+      return;
+    }
     for (const session of this.peers.values()) void session.setVideoSendBitrate(kbps);
   }
 
@@ -227,6 +252,7 @@ export class MeetingController {
       selectedCamera: this.media.selectedDevice.video, selectedMicrophone: this.media.selectedDevice.audio,
     });
     for (const session of this.peers.values()) session.syncTracks();
+    this.sfu?.syncTracks();
     if (this.active && this.socket?.connected) this.socket.emit('participant:media', state);
   }
 
@@ -329,6 +355,7 @@ export class MeetingController {
         return;
       }
       for (const session of this.peers.values()) { session.setVideoOverride(video); session.setAudioOverride(audio); }
+      this.sfu?.syncTracks({ video, audio });
       this.update({ screenSharing: true, screenShareAudio: this.screenShare.hasAudio, error: null });
       this.applyVideoBandwidthPolicy();
       this.emitScreenShare(true);
@@ -343,6 +370,7 @@ export class MeetingController {
   private endScreenShare() {
     this.screenShare.stop();
     for (const session of this.peers.values()) { session.setVideoOverride(null); session.setAudioOverride(null); }
+    this.sfu?.syncTracks({ video: null, audio: null });
     this.update({ screenSharing: false, screenShareAudio: false });
     this.applyVideoBandwidthPolicy();
     this.emitScreenShare(false);
@@ -559,6 +587,7 @@ export class MeetingController {
     socket.on('room:joined', (payload) => {
       this.update({
         phase: 'meeting', roomId: payload.roomId, name: payload.self.name, role: payload.self.role, waiting: payload.waiting, error: null,
+        maxParticipants: payload.media ? payload.media.maxStudents + 1 : MAX_PARTICIPANTS, mediaMode: payload.media?.mode ?? 'mesh',
         forceMuted: payload.self.forceMuted, roomSettings: payload.settings,
         poll: payload.poll, understandingCheck: payload.understandingCheck, timer: payload.timer,
         board: payload.board, announcement: payload.announcement,
@@ -571,12 +600,14 @@ export class MeetingController {
       // same event) and the mic is still enabled from before the disconnect.
       if (payload.self.forceMuted && this.media.track('audio')?.enabled) this.media.disable('audio');
       const known = new Set(this.snapshot.peers.map((peer) => peer.participant.id));
-      const additions = payload.peers.filter((edge) => !known.has(edge.peer.id)).map((edge) => defaultRemotePeer(edge.peer));
+      const additions = payload.peers.filter((edge) => !known.has(edge.peer.id)).map((edge) => this.freshPeer(edge.peer));
       // Always recomputes status (via setPeers), not just when there happen to be new peers —
       // otherwise a lone tutor with zero peers never gets a real status at all, just whatever
       // 'Connecting…'/'Ready to join' was left over from the pre-join screen.
       this.setPeers(additions.length ? [...this.snapshot.peers, ...additions] : this.snapshot.peers);
-      for (const edge of payload.peers) this.startPeer(edge.peer.id, edge.sessionId, edge.initiator);
+      // An SFU room has no per-person connection: one SfuMedia carries everyone (see sfu.ts), told what to pull by sfu:publications.
+      if (payload.media?.mode === 'sfu') this.startSfu(socket);
+      else for (const edge of payload.peers) this.startPeer(edge.peer.id, edge.sessionId, edge.initiator);
     });
     socket.on('room:denied', () => this.rejectJoin('The tutor declined to admit you to this class.'));
     socket.on('room:settings-update', (settings) => this.update({ roomSettings: settings }));
@@ -592,9 +623,9 @@ export class MeetingController {
     socket.on('room:participant-joined', ({ peer, sessionId, initiator }) => {
       this.announce(`${peer.name} joined`);
       const known = this.snapshot.peers.some((entry) => entry.participant.id === peer.id);
-      if (!known) this.setPeers([...this.snapshot.peers, defaultRemotePeer(peer)]);
+      if (!known) this.setPeers([...this.snapshot.peers, this.freshPeer(peer)]);
       else this.updatePeer(peer.id, { participant: peer });
-      this.startPeer(peer.id, sessionId, initiator);
+      if (this.snapshot.mediaMode === 'mesh') this.startPeer(peer.id, sessionId, initiator);
     });
     socket.on('room:participant-reconnecting', ({ id }) => this.updatePeer(id, { reconnecting: true }));
     socket.on('room:participant-reconnected', (participant) => {
@@ -603,6 +634,7 @@ export class MeetingController {
     });
     socket.on('room:participant-left', ({ id, name: departedName }) => {
       this.closePeer(id);
+      this.sfu?.unsubscribe(id);
       this.announce(departedName ? `${departedName} left the meeting` : 'A participant left the meeting');
     });
     socket.on('participant:media', ({ id, media }) => {
@@ -693,11 +725,72 @@ export class MeetingController {
       if (this.snapshot.phase === 'joining') this.rejectJoin(message);
       else this.update({ error: message });
     });
+    socket.on('sfu:publications', ({ publications }) => {
+      for (const publication of publications) if (publication.participantId !== socket.id) this.sfu?.subscribe(publication);
+    });
+    socket.on('sfu:published', (publication) => { if (publication.participantId !== socket.id) this.sfu?.subscribe(publication); });
+    socket.on('sfu:unpublished', ({ participantId }) => this.sfu?.unsubscribe(participantId));
     socket.on('webrtc:offer', (payload) => { for (const session of this.peers.values()) session.description(payload); });
     socket.on('webrtc:answer', (payload) => { for (const session of this.peers.values()) session.description(payload); });
     socket.on('webrtc:ice-candidate', (payload) => { for (const session of this.peers.values()) session.candidate(payload); });
     socket.connect();
   };
+
+  // A new display entry for another participant: in an SFU room it starts with the shared connection's state rather than 'new'.
+  private freshPeer(participant: Participant): RemotePeer {
+    const peer = defaultRemotePeer(participant);
+    return this.sfu ? { ...peer, ...sfuPeerState(this.sfuConnection) } : peer;
+  }
+
+  private startSfu(socket: Socket<ServerToClientEvents, ClientToServerEvents>) {
+    // A new socket id (the server restarted, or the transport was not recovered) is a new participant to the server: our old sessions
+    // belong to the old id, so publish afresh.
+    if (this.sfu && this.sfuSocketId !== socket.id) this.closeSfu();
+    if (this.sfu) return;
+    const ask = <T,>(event: 'sfu:request' | 'sfu:publish', payload: unknown): Promise<T> => new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('The media service did not answer in time.')), SFU_REQUEST_TIMEOUT_MS);
+      (socket.emit as (event: string, payload: unknown, ack: (reply: { ok: boolean; data?: unknown; error?: string }) => void) => void)(event, payload, (reply) => {
+        clearTimeout(timer);
+        if (reply.ok) resolve(reply.data as T);
+        else reject(new Error(reply.error ?? 'The media service refused the request.'));
+      });
+    });
+    const transport: SfuTransport = {
+      request: (request) => ask<Record<string, unknown>>('sfu:request', request),
+      publish: async (sessionId, tracks) => { await ask('sfu:publish', { sessionId, tracks }); },
+    };
+    this.sfuSocketId = socket.id;
+    this.sfuConnection = 'connecting';
+    // Created now, not after the credentials arrive: the server lists who is already publishing (sfu:publications) right behind
+    // room:joined. SfuMedia holds all its work until the TURN credentials have been fetched (deps.ready), so nothing is lost.
+    const sfu = new SfuMedia(transport, this.media, {
+      stream: (participantId, stream) => this.updatePeer(participantId, { stream }),
+      connection: (state) => this.onSfuConnection(state),
+      error: (error) => {
+        peerLog.warn('SFU media failed', error);
+        this.announce('We could not set up your media connection. Check your network, then leave and rejoin.');
+      },
+    }, { iceConfiguration: getIceConfiguration, ready: ensureFreshTurnCredentials().catch(() => undefined) });
+    this.sfu = sfu;
+    // Carry an active screen share (and any shared audio) across a re-join.
+    if (this.snapshot.screenSharing) sfu.syncTracks({ video: this.screenShare.stream?.getVideoTracks()[0] ?? null, audio: this.screenShare.outgoingAudioTrack });
+    this.applyVideoBandwidthPolicy();
+    void sfu.start().catch(() => undefined); // failures are reported through the error callback above
+  }
+
+  private closeSfu() {
+    this.sfu?.close();
+    this.sfu = null;
+    this.sfuSocketId = undefined;
+  }
+
+  private onSfuConnection(state: SfuConnection) {
+    this.sfuConnection = state;
+    const patch = sfuPeerState(state);
+    this.setPeers(this.snapshot.peers.map((peer) => ({
+      ...peer, ...patch, connectedAt: state === 'connected' ? (peer.connectedAt ?? Date.now()) : peer.connectedAt,
+    })));
+  }
 
   private startPeer(peerId: string, sessionId: string, initiator: boolean) {
     const existing = this.peers.get(peerId);
@@ -750,6 +843,7 @@ export class MeetingController {
   }
 
   private closeAllPeers() {
+    this.closeSfu();
     for (const session of this.peers.values()) session.close();
     this.peers.clear();
     this.setPeers([]);

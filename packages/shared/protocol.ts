@@ -74,8 +74,26 @@ export interface BoardState { pages: BoardPage[]; activePageId: string; elements
 // locally. Deliberately separate from chat, which it must never pollute (see plan section 33).
 export interface Announcement { id: string; text: string; sentAt: number }
 
+// How this room carries audio and video. 'mesh' is the original peer-to-peer design (every participant connects to every other, so
+// a room is limited to MAX_STUDENTS students); 'sfu' sends one copy of each participant's media to Cloudflare's SFU, which forwards it
+// (so a room can hold SFU_MAX_STUDENTS students). The server decides, from whether the Cloudflare SFU is configured, and tells each
+// client in room:joined; a client that does not see this field (an older build) uses mesh.
+export type MediaMode = 'mesh' | 'sfu';
+export interface RoomMedia { mode: MediaMode; maxStudents: number }
+export type SfuTrackKind = 'audio' | 'video';
+export interface SfuTrackInfo { trackName: string; kind: SfuTrackKind }
+// One participant's published tracks: the Cloudflare session they were published into and each track's name. Anyone else in the room
+// pulls them by (sessionId, trackName). The server only ever lists tracks it has verified were published by that participant.
+export interface SfuPublication { participantId: string; sessionId: string; tracks: SfuTrackInfo[] }
+// The four Cloudflare SFU calls a client may ask the server to make for it. The server holds the app secret, checks the caller owns the
+// session (or, for a pull, that the track really was published in the same room) and forwards only the fields it understands.
+export type SfuOperation = 'session.new' | 'tracks.new' | 'renegotiate' | 'tracks.close';
+export interface SfuRequest { op: SfuOperation; sessionId?: string; body?: unknown }
+export type SfuReply = { ok: true; data: Record<string, unknown> } | { ok: false; error: string };
+
 export interface JoinedRoom {
   roomId: string; self: Participant; peers: PeerEdge[]; waiting: WaitingParticipant[];
+  media?: RoomMedia;
   settings: RoomSettings; poll: PollState | null; understandingCheck: UnderstandingCheckState | null; timer: RoomTimerState | null;
   board: BoardState; announcement: Announcement | null;
 }
@@ -138,6 +156,9 @@ export interface ClientToServerEvents {
   'webrtc:offer': (payload: SignalDescription) => void;
   'webrtc:answer': (payload: SignalDescription) => void;
   'webrtc:ice-candidate': (payload: SignalCandidate) => void;
+  // SFU rooms only (RoomMedia.mode === 'sfu'); refused in a mesh room.
+  'sfu:request': (payload: SfuRequest, ack: (reply: SfuReply) => void) => void;
+  'sfu:publish': (payload: { sessionId: string; tracks: SfuTrackInfo[] }, ack: (reply: SfuReply) => void) => void;
 }
 export interface ServerToClientEvents {
   'room:joined': (payload: JoinedRoom) => void;
@@ -200,12 +221,20 @@ export interface ServerToClientEvents {
   'webrtc:offer': (payload: SignalDescription) => void;
   'webrtc:answer': (payload: SignalDescription) => void;
   'webrtc:ice-candidate': (payload: SignalCandidate) => void;
+  // SFU rooms: everything already published when you were admitted (sent right after room:joined), then each later publication, and
+  // the departure of a publisher (its tracks are gone; stop pulling them).
+  'sfu:publications': (payload: { publications: SfuPublication[] }) => void;
+  'sfu:published': (payload: SfuPublication) => void;
+  'sfu:unpublished': (payload: { participantId: string }) => void;
 }
 export const ROOM_PATTERN = /^[a-z0-9][a-z0-9-]{7,47}$/;
 export const MAX_NAME_LENGTH = 40;
 export const MAX_CHAT_LENGTH = 500;
 export const MAX_STUDENTS = 3;
 export const MAX_PARTICIPANTS = MAX_STUDENTS + 1;
+// With the Cloudflare SFU (RoomMedia.mode === 'sfu') a room holds one tutor and up to ten students.
+export const SFU_MAX_STUDENTS = 10;
+export const SFU_MAX_PARTICIPANTS = SFU_MAX_STUDENTS + 1;
 // Abuse-prevention only — the admitted-participant cap is enforced independently and is what
 // actually matters; this just stops an unbounded number of sockets piling up unadmitted.
 export const WAITING_ROOM_CAP = 10;

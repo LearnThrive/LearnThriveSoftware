@@ -2,8 +2,8 @@
 
 import './styles.css';
 import { BrandMark } from "@/components/brand/BrandMark";
-import { lazy, Suspense, useEffect, useRef, useState, type FormEvent, type ReactElement } from 'react';
-import { MAX_NAME_LENGTH, MAX_PARTICIPANTS, ROOM_PATTERN, type ReactionEmoji } from '@learnthrive/shared/protocol';
+import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactElement } from 'react';
+import { MAX_NAME_LENGTH, ROOM_PATTERN, type ReactionEmoji } from '@learnthrive/shared/protocol';
 import { useMeeting } from './useMeeting';
 import type { RemotePeer } from './meeting';
 import { canShareScreen } from './screenShare';
@@ -35,6 +35,11 @@ import { HelpQueuePanel } from './components/HelpQueuePanel';
 type FocusTarget = 'local' | string; // string = a peer's participant id
 type LayoutMode = 'focus' | 'sideBySide' | 'gallery';
 type WorkspaceMode = 'call' | 'board' | 'present';
+
+/** Columns for the gallery: two for a small call, then more as the room fills (up to eleven people with the SFU). */
+function galleryColumns(tiles: number): number {
+  return tiles <= 4 ? 2 : tiles <= 9 ? 3 : 4;
+}
 
 function Brand() {
   // Sized here at the largest the stylesheet ever renders it (47×42); the media queries scale it
@@ -302,7 +307,7 @@ export function App({ lessonId, initialToken, isDevRoute }: ClassroomAppProps = 
           <div>
             <div className="meeting-title-line">
               <h1>Your meeting</h1>
-              <span className="participant-count"><Icon name="people" size={15} />{1 + snapshot.peers.length} / {MAX_PARTICIPANTS}</span>
+              <span className="participant-count"><Icon name="people" size={15} />{1 + snapshot.peers.length} / {snapshot.maxParticipants}</span>
               <MeetingTimer connectedAt={snapshot.peers.find((peer) => peer.connectedAt != null)?.connectedAt ?? null} />
               {snapshot.timer && <ClassTimer timer={snapshot.timer} isTutor={snapshot.role === 'tutor'} onPause={pauseTimer} onResume={resumeTimer} onStop={stopTimer} />}
             </div>
@@ -341,7 +346,7 @@ export function App({ lessonId, initialToken, isDevRoute }: ClassroomAppProps = 
           ) : (
             <div className="meeting-stage" ref={stageRef}>
               {layoutMode === 'gallery' && snapshot.peers.length > 0 ? (
-                <div className={`stage-gallery ${snapshot.peers.length === 2 ? 'gallery-three' : ''}`}>{selfTile(false)}{snapshot.peers.map((peer) => peerTile(peer, false))}</div>
+                <div className={`stage-gallery ${snapshot.peers.length === 2 ? 'gallery-three' : ''}`} style={{ '--gallery-columns': galleryColumns(1 + snapshot.peers.length) } as CSSProperties}>{selfTile(false)}{snapshot.peers.map((peer) => peerTile(peer, false))}</div>
               ) : layoutMode === 'sideBySide' && snapshot.peers.length === 1 ? (
                 <div className="stage-side-by-side">{peerTile(snapshot.peers[0], false)}{selfTile(false)}</div>
               ) : snapshot.peers.length === 0 ? (
@@ -487,7 +492,7 @@ export function App({ lessonId, initialToken, isDevRoute }: ClassroomAppProps = 
       {debug && <details className="diagnostics"><summary>Development diagnostics</summary><dl>
         <dt>Room</dt><dd>{snapshot.roomId || room || 'Not joined'}</dd>
         <dt>Role</dt><dd>{snapshot.role ?? 'n/a'}</dd>
-        <dt>Participants</dt><dd>{1 + snapshot.peers.length} / {MAX_PARTICIPANTS}</dd>
+        <dt>Participants</dt><dd>{1 + snapshot.peers.length} / {snapshot.maxParticipants}</dd>
         <dt>Waiting</dt><dd>{snapshot.waiting.length}</dd>
         <dt>Signalling server</dt><dd>{snapshot.signalling}</dd>
         <dt>Headline status</dt><dd>{snapshot.status}</dd>
