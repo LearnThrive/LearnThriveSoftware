@@ -15,7 +15,7 @@ type Env = Record<string, string | undefined>;
  *   ASSISTANT_API_KEY               the production provider's key (`custom`). Never logged
  *   ASSISTANT_CONTEXT               context window the history is planned against, tokens (default 32768; Beam itself accepts far more)
  *   ASSISTANT_MAX_OUTPUT_TOKENS     most tokens in one answer (default 4096; the model's hidden thinking has its own extra allowance, ASSISTANT_THINKING_TOKENS)
- *   ASSISTANT_THINKING              off | auto | on | low | medium | high (default auto: only a genuinely hard question may think)
+ *   ASSISTANT_THINKING              off | auto | on | low | medium | high (default auto = high for Beam on every turn; off sends no reasoning)
  *   ASSISTANT_DAILY_MESSAGES        messages per account per day (default 40)     ASSISTANT_PER_MINUTE   per minute (default 6)
  *   ASSISTANT_DAILY_TOKEN_BUDGET    completion tokens per account per day (default 40000): the cost cap on a hosted provider
  *   ASSISTANT_CONCURRENCY           answers generated at once on this server (default 2)

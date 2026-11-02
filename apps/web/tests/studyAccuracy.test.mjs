@@ -397,11 +397,13 @@ test("the turn's instructions follow the student's choice in every subject, and 
   assert.match(g, /one step at a time/);
   assert.match(g, /Do not give the final answer unless they ask/);
   assert.doesNotMatch(g, /straight away/);
-  // Coursework is still not written for them.
-  assert.match(block("Give me a model answer for my english essay"), /Coursework or other assessed work/);
+  // A model essay is written in full; only their own hand-in coursework is not written for them.
+  assert.match(block("Give me a model answer for my english essay"), /includes a full model essay: write it out in full, never only a plan/);
+  assert.match(block("Give me a model answer for my english essay"), /own coursework or other assessed work that they will hand in as theirs/);
   // Nothing said: no mode instruction at all (the base prompt says to answer directly and offer to work through it).
   assert.doesNotMatch(block("Solve 2x + 7 = 19"), /How they want to be helped/);
   const promptLib = loadTsFrom(import.meta.url, "../src/lib/assistant/prompt.ts");
+  assert.match(promptLib.SYSTEM_PROMPT, /write it in full[^.]*do not refuse it or hand back only a plan/);
   assert.doesNotMatch(promptLib.SYSTEM_PROMPT, /Teach, do not just tell/);
   assert.match(promptLib.SYSTEM_PROMPT, /Never make a student work through something they only asked you to answer/);
 });

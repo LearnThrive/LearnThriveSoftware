@@ -281,6 +281,19 @@ test("a turn: Beam answers, the answer is stored with the model that reported it
   assert.equal(await w.store.chat.usageCount(own(w.clientId).clientId, svc.USAGE_TOKENS_DAY, day), 12);
 });
 
+test("thinking is high for every turn by default, however plain the question; ASSISTANT_THINKING can name another level or switch it off", () => {
+  for (const policy of ["auto", "on", "high"]) assert.deepEqual(svc.hostedEffort(policy), { reasoning: true, think: "high" }, policy);
+  assert.deepEqual(svc.hostedEffort("low"), { reasoning: true, think: "low" });
+  assert.deepEqual(svc.hostedEffort("medium"), { reasoning: true, think: "medium" });
+  assert.deepEqual(svc.hostedEffort("off"), { reasoning: false, think: "off" });
+});
+
+test("a plain chat turn asks Beam to reason at high effort", async (t) => {
+  const w = await turnWorld(t, () => sse([content("Hi."), usage(4)]));
+  await w.send("hello there");
+  assert.equal(w.fake.requests[0].body.reasoning_effort, "high");
+});
+
 test("a turn: when Beam fails, the student is told it failed; nothing else answers in its place and nothing is invented", async (t) => {
   const w = await turnWorld(t, () => new Response("{}", { status: 500 }));
   const events = await w.send("hello there");
