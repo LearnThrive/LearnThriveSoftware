@@ -52,7 +52,9 @@ async function startServer() {
   });
 
   server.listen(port, () => {
-    console.log(`> LearnThrive unified server ready on http://${hostname}:${port}`);
+    console.log(`> LearnThrive unified server ready on port ${port} (${dev ? 'development' : 'production'}: site, classroom signalling and TURN credentials on one origin)`);
+    if (realtime.media.mode === 'sfu') console.log(`> Classroom media: Cloudflare SFU, up to ${realtime.media.maxStudents} students per lesson`);
+    else console.warn(`> Classroom media: peer-to-peer mesh, at most ${realtime.media.maxStudents} students per lesson. Set CLOUDFLARE_SFU_APP_ID and CLOUDFLARE_SFU_APP_SECRET for the Cloudflare SFU (up to 10 students).`);
   });
 
   server.on('error', (err) => {

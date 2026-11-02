@@ -10,6 +10,7 @@
     "dev": "tsx server.ts",
     "dev:next": "next dev",
     "build": "next build",
+    "serve": "node serve.mjs",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -74,7 +75,8 @@
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "resend": "6.28.0",
-    "socket.io-client": "^4.8.3"
+    "socket.io-client": "^4.8.3",
+    "tsx": "^4.23.13"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

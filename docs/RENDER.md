@@ -8,8 +8,8 @@ How to put `apps/web` (the public site, including the careers section, the safeg
 | --- | --- |
 | Type | Web Service (Node) |
 | Root directory | the repository root (it is an npm workspace) |
-| Build command | `npm ci && npm run build --workspace=apps/web` |
-| Start command | `NODE_ENV=production npm run start --workspace=apps/web` (Render sets `PORT`; `next start` reads it) |
+| Build command | `npm ci --include=dev && npm run build --workspace=apps/web` (Render sets `NODE_ENV=production`, which would otherwise skip the build tools) |
+| Start command | `npm run serve --workspace=apps/web` (the unified server: site, classroom signalling and TURN credentials on one origin; it sets `NODE_ENV=production` itself and reads Render's `PORT`). Use `npm run start --workspace=apps/web` only for a site with no classroom. **Run one instance** |
 | Health check path | `/api/health` |
 | Node | 22 (`^22.13`), or any version in the `engines` field |
 | Instance | **A paid instance.** Free instances spin down after about fifteen minutes without traffic and answer the next request slowly. A visitor who has spent ten minutes on the application form must not meet a cold start when they press send. |
