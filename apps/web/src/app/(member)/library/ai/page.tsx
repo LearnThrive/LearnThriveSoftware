@@ -23,7 +23,7 @@ export default async function StudyBuddyPage() {
   const facts = await accessFactsFor(rt.store, account);
   if (!platformAccess(account.role, facts).studyBuddy) {
     return (
-      <main id="main-content" className={styles.center}>
+      <div className={styles.center}>
         <div>
           <h1>LearnThrive AI</h1>
           <p>LearnThrive AI is included for enrolled students and Library subscribers.</p>
@@ -33,19 +33,19 @@ export default async function StudyBuddyPage() {
             </Link>
           </p>
         </div>
-      </main>
+      </div>
     );
   }
   if (!account.adultConfirmed && !account.learner) {
     return (
-      <main id="main-content" className={styles.center}>
+      <div className={styles.center}>
         <p>LearnThrive AI is for adult account holders.</p>
-      </main>
+      </div>
     );
   }
   return (
-    <main id="main-content">
+    <div>
       <StudyBuddyLoader />
-    </main>
+    </div>
   );
 }

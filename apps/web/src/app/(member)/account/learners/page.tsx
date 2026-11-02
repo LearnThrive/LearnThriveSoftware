@@ -16,7 +16,7 @@ export default async function LearnersPage() {
   if (account.role === "STUDENT" || account.learner || !account.adultConfirmed) notFound();
   if (await inSupervisedView(rt, await nextJar(), account.profileId)) redirect("/library/ai");
   return (
-    <main id="main-content" className={styles.page} style={{ maxWidth: "52rem" }}>
+    <div className={styles.page} style={{ maxWidth: "52rem" }}>
       <h1>Your learners</h1>
       <LearnersPanel />
       <p>
@@ -24,6 +24,6 @@ export default async function LearnersPage() {
           Back to your account
         </Link>
       </p>
-    </main>
+    </div>
   );
 }

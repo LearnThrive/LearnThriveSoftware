@@ -16,7 +16,7 @@ export default async function BillingSuccessPage() {
   const facts = account.clientId ? await rt.store.access.facts(account.clientId) : null;
   const active = Boolean(facts?.subscription);
   return (
-    <main id="main-content" className={styles.page}>
+    <div className={styles.page}>
       <h1>Thank you</h1>
       {active ? (
         <p role="status">Your subscription is active. You can browse and download from the Library now.</p>
@@ -38,6 +38,6 @@ export default async function BillingSuccessPage() {
         </Link>
       </p>
       <p className={styles.small}>A receipt will arrive by email. You can cancel any time from your account (Manage billing).</p>
-    </main>
+    </div>
   );
 }

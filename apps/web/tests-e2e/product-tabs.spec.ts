@@ -83,7 +83,7 @@ test.describe('ProductTabs (task 1)', () => {
     await page.keyboard.press('ArrowRight');
     await expect(studentsTab).toBeFocused();
     await expect(studentsTab).toHaveAttribute('aria-selected', 'true');
-    await expect(section.getByText('Live lesson')).toBeVisible();
+    await expect(section.getByText('Live lesson', { exact: true })).toBeVisible();
 
     await page.keyboard.press('End');
     await expect(tutorsTab).toBeFocused();
@@ -110,7 +110,7 @@ test.describe('ProductTabs (task 1)', () => {
     await section.scrollIntoViewIfNeeded();
 
     await section.getByRole('tab', { name: 'Students' }).click();
-    await expect(section.getByText('Live lesson')).toBeVisible();
+    await expect(section.getByText('Live lesson', { exact: true })).toBeVisible();
     await expect(section.getByRole('tabpanel')).toHaveCSS('opacity', '1');
 
     await section.getByRole('tab', { name: 'Tutors' }).click();

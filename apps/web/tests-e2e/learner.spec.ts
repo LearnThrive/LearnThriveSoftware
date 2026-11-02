@@ -42,16 +42,16 @@ test('a guardian adds a young learner, agrees to LearnThrive AI, views as them, 
   await card.getByRole('checkbox', { name: /Allow the supervised view/ }).click();
   await expect(card).toContainText('Supervised view on');
   await card.getByRole('button', { name: 'View as Kit' }).click();
-  await expect(page).toHaveURL(/\/library\/study-buddy$/);
+  await expect(page).toHaveURL(/\/library\/ai$/);
 
   const banner = page.getByRole('region', { name: 'Supervised view' });
   await expect(banner).toContainText('Viewing as Kit');
   // The account and the guardian controls are shut inside the view, by the server as well as the menu.
   await expect(page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Account' })).toHaveCount(0);
   await page.goto('/account');
-  await expect(page).toHaveURL(/\/library\/study-buddy$/);
+  await expect(page).toHaveURL(/\/library\/ai$/);
   await page.goto('/account/learners');
-  await expect(page).toHaveURL(/\/library\/study-buddy$/);
+  await expect(page).toHaveURL(/\/library\/ai$/);
   const closed = await page.request.get('/api/learners');
   expect(closed.status()).toBe(403);
   expect((await closed.json()).code).toBe('leave_learner_view');
@@ -120,7 +120,7 @@ test('an older learner is invited, makes their account, accepts, and has LearnTh
   await learner.goto(inviteLink.replace(/^https?:\/\/[^/]+/, ''));
   await hydrated(learner);
   await learner.getByRole('button', { name: 'Accept the invitation' }).click();
-  await expect(learner).toHaveURL(/\/library\/study-buddy$/);
+  await expect(learner).toHaveURL(/\/library\/ai$/);
   await expect(learner.getByRole('heading', { level: 1, name: 'LearnThrive AI' })).toBeVisible();
   await learner.getByRole('textbox').first().fill('What is 6 x 7?');
   await learner.getByRole('button', { name: /send/i }).click();

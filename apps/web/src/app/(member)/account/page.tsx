@@ -45,7 +45,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
         : "Free samples only. The Library is included for enrolled students.";
 
   return (
-    <main id="main-content" className={styles.page}>
+    <div className={styles.page}>
       <h1>Your account</h1>
       <dl className={styles.details}>
         <dt>Email</dt>
@@ -70,6 +70,6 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
         </p>
       ) : null}
       <SignOutButton />
-    </main>
+    </div>
   );
 }
