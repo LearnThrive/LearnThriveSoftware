@@ -21,6 +21,8 @@ const nextConfig: NextConfig = {
           production: process.env.NODE_ENV === "production",
           classroomUrl: process.env.NEXT_PUBLIC_CLASSROOM_URL,
           cspReportOnly: process.env.CSP_REPORT_ONLY === "1",
+          // CI's smoke suite only (see securityHeaders.ts): a deployed build never sets this.
+          upgradeInsecure: process.env.CSP_UPGRADE_INSECURE !== "0",
           // Read when the server starts: hosted Stripe pages are form targets only while subscriptions are on.
           billing: process.env.LIBRARY_PHASE?.trim().toLowerCase() === "live",
         }),

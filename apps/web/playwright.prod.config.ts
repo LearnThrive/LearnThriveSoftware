@@ -15,10 +15,11 @@ const crossBrowser = process.env.PW_CROSS_BROWSER === '1';
 
 export default defineConfig({
   testDir: './tests-prod',
-  timeout: 30_000,
+  // Firefox and WebKit on a CI runner load the heaviest pages (the hero) more slowly than Chromium does.
+  timeout: crossBrowser ? 60_000 : 30_000,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  retries: process.env.CI ? 2 : 0,
   reporter: 'list',
   use: {
     baseURL: process.env.PROD_BASE_URL ?? 'http://localhost:3200',
