@@ -51,6 +51,9 @@ function londonDateTimeFieldsIn(minutesFromNow: number): { date: string; time: s
   return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}` };
 }
 
+// Saving a lesson compiles its route on first use; on a two-vCPU CI runner that can take longer than a laptop's 10 seconds.
+const SLOW = process.env.CI ? 45_000 : 10_000;
+
 test('the one-dev-server regression test: Home, Login, Admin dashboard, a Lesson, and the Classroom UI are all reachable at one origin, Socket.IO connects, TURN is reachable, and classroom exit returns to the platform', async ({ page }) => {
   // 1 & 2: public Home and Login reachable at the canonical single origin.
   await page.goto('/');
@@ -85,11 +88,11 @@ test('the one-dev-server regression test: Home, Login, Admin dashboard, a Lesson
   // fix) rather than chasing an offset guaranteed never to collide.
   const scheduleAnyway = page.getByRole('button', { name: 'Schedule anyway' });
   await Promise.race([
-    page.waitForURL(/\/dashboard\/calendar$/, { timeout: 10_000 }),
-    scheduleAnyway.waitFor({ state: 'visible', timeout: 10_000 }),
+    page.waitForURL(/\/dashboard\/calendar$/, { timeout: SLOW }),
+    scheduleAnyway.waitFor({ state: 'visible', timeout: SLOW }),
   ]).catch(() => {});
   if (await scheduleAnyway.isVisible()) await scheduleAnyway.click();
-  await expect(page).toHaveURL(/\/dashboard\/calendar$/, { timeout: 10_000 });
+  await expect(page).toHaveURL(/\/dashboard\/calendar$/, { timeout: SLOW });
 
   await page.goto('/dashboard/calendar');
   await openLessonFromCalendar(page, lessonTitle);

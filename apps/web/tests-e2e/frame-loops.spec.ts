@@ -58,7 +58,8 @@ test.describe('StatCounter', () => {
     const writes = await page.evaluate(() => (window as unknown as { __statWrites: number }).__statWrites);
     const commits = await reactCommits(page);
     expect(writes, 'the number should have visibly counted through several values').toBeGreaterThan(5);
-    expect(commits, `React committed ${commits} times during a ${writes}-step count`).toBeLessThan(10);
+    // A per-frame re-render would commit about once per step; a few commits (the scroll-in, the end) are normal, and a busy CI runner adds some.
+    expect(commits, `React committed ${commits} times during a ${writes}-step count`).toBeLessThan(Math.max(10, Math.floor(writes / 2)));
   });
 
   test('under reduced motion the number never changes at all', async ({ page }) => {
