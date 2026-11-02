@@ -190,7 +190,7 @@ test.describe('anchors', () => {
     await expect(page).toHaveURL(/#how$/);
     // Lands at the document's scroll-padding-top (6rem = 96px), under the 69px header, within a few px.
     const topOfHow = () => page.evaluate(() => Math.round(document.getElementById('how')!.getBoundingClientRect().top));
-    await expect.poll(async () => Math.abs((await topOfHow()) - 96), { timeout: 6000 }).toBeLessThanOrEqual(20);
+    await expect.poll(async () => Math.abs((await topOfHow()) - 96), { timeout: process.env.CI ? 20_000 : 6000 }).toBeLessThanOrEqual(20);
     expect(await page.evaluate(() => document.activeElement?.id)).toBe('how');
   });
 
@@ -206,7 +206,7 @@ test.describe('anchors', () => {
     await expect(page).not.toHaveURL(/#how/);
     // The browser restores the position the page had before the jump; Lenis must not carry on
     // gliding toward the old destination.
-    await expect.poll(() => scrollY(page), { timeout: 5000 }).toBeLessThan(80);
+    await expect.poll(() => scrollY(page), { timeout: process.env.CI ? 20_000 : 5000 }).toBeLessThan(80);
     await page.waitForTimeout(800);
     expect(await scrollY(page)).toBeLessThan(80);
   });

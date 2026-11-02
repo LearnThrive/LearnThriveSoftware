@@ -19,8 +19,12 @@ const options = (page: Page) => palette(page).getByRole('option');
 const field = (page: Page) => page.getByRole('combobox', { name: 'Search LearnThrive' });
 
 async function openWithShortcut(page: Page) {
-  await page.keyboard.press('Control+K');
-  await expect(palette(page)).toBeVisible();
+  // The shortcut does nothing until the page has hydrated, which on a slow dev server can take a few seconds: press again only while it is
+  // still closed, so a late first press cannot be toggled shut by a second.
+  await expect(async () => {
+    if (!(await palette(page).isVisible())) await page.keyboard.press('Control+K');
+    await expect(palette(page)).toBeVisible({ timeout: 2000 });
+  }).toPass({ timeout: 30_000 });
   await expect(field(page)).toBeFocused();
 }
 
