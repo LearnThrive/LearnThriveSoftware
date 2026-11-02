@@ -30,7 +30,7 @@ test('sign up, confirm by email, sign out, sign in again', async ({ page }) => {
   await page.getByRole('button', { name: 'Confirm my email' }).click();
   await expect(page).toHaveURL(/\/account$/);
   await expect(page.getByRole('heading', { name: 'Your account' })).toBeVisible();
-  await expect(page.getByText(email)).toBeVisible();
+  await expect(page.getByRole('main').getByText(email)).toBeVisible();
   await expectAxeClean(page, 'account');
 
   const cookies = await page.context().cookies();

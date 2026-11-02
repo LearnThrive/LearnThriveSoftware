@@ -46,7 +46,7 @@ test('closed to an account without Library access, in the page and in the API', 
 
 test('signed out, the page sends a visitor to sign in and the API says 401', async ({ page, request }) => {
   await page.goto('/library/ai');
-  await expect(page).toHaveURL(/\/login\?next=%2Flibrary%2Fstudy-buddy$/);
+  await expect(page).toHaveURL(/\/login\?next=%2Flibrary%2Fai$/);
   expect((await request.post('/api/assistant/chat', { data: { text: 'hi' } })).status()).toBe(401);
 });
 

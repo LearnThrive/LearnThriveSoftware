@@ -571,7 +571,9 @@ ol {
   min-height: 5rem;
   align-items: center;
   justify-content: space-between;
-  gap: 1.5rem;
+  /* Narrows a little as the window does, so the one-line desktop header still fits at its smallest width (1121px) with fonts
+     that run a few pixels wider than Windows' (Linux CI measured an 11px overflow with a fixed 1.5rem). */
+  gap: clamp(0.75rem, 1.5vw, 1.5rem);
   transition: min-height 0.25s ease;
 }
 

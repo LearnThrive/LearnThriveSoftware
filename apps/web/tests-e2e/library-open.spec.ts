@@ -168,9 +168,11 @@ test('the name on the account page is the name on the download, and the account 
   // sees that link: one-sign-in.spec.ts).
   const menu = page.getByRole('navigation', { name: 'Main navigation' });
   await expect(menu.getByRole('link', { name: 'Library', exact: true })).toBeVisible();
-  await expect(menu.getByRole('link', { name: 'Account' })).toHaveAttribute('href', '/account');
+  // An enrolled family keeps the account in the account menu, not in this navigation (docs/IDENTITY.md, "One shell").
+  await expect(menu.getByRole('link', { name: 'Account' })).toHaveCount(0);
   await expect(menu.getByRole('link', { name: 'LearnThrive AI' })).toHaveAttribute('href', '/library/ai');
-  await expect(menu.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/dashboard');
+  // A family's dashboard entry is called Home (appNavigation.ts, the client menu).
+  await expect(menu.getByRole('link', { name: 'Home', exact: true })).toHaveAttribute('href', '/dashboard');
 });
 
 test('members content: refused for a plain account, open to an enrolled family, and the page says why', async ({ page }) => {

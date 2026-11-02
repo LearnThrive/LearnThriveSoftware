@@ -55,7 +55,7 @@ test('an enrolled family signs in to the dashboard and finds LearnThrive AI and 
   await expectAxeClean(page, 'the enrolled family\'s dashboard with the Learning menu');
 
   await menu.getByRole('link', { name: 'LearnThrive AI' }).click();
-  await expect(page).toHaveURL(/\/library\/study-buddy$/);
+  await expect(page).toHaveURL(/\/library\/ai$/);
   // And the way back is in the member menu.
   await memberMenu(page).getByRole('link', { name: 'Home' }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
@@ -68,7 +68,7 @@ test('an enrolled student is the same: the dashboard first, everything one click
 });
 
 test('a Library subscriber lands on LearnThrive AI, has no dashboard link, and the dashboard is closed to them', async ({ page }) => {
-  await signIn(page, WHO.member, /\/library\/study-buddy$/);
+  await signIn(page, WHO.member, /\/library\/ai$/);
   await expect(memberMenu(page).getByRole('link', { name: 'LearnThrive AI' })).toBeVisible();
   await expect(memberMenu(page).getByRole('link', { name: 'Library' })).toBeVisible();
   await expect(memberMenu(page).getByRole('link', { name: 'Dashboard' })).toHaveCount(0);
@@ -77,7 +77,7 @@ test('a Library subscriber lands on LearnThrive AI, has no dashboard link, and t
   // Asking for the dashboard (or a page in it) leads back to what they have, never to the dashboard.
   for (const path of ['/dashboard', '/dashboard/lessons', '/dashboard/calendar']) {
     await page.goto(path);
-    await expect(page, path).toHaveURL(/\/library\/study-buddy$/);
+    await expect(page, path).toHaveURL(/\/library\/ai$/);
   }
   // Nor can they reach the signed-in app's API: no session of that kind exists for them.
   expect((await page.request.get('/api/lessons/anything/ics')).status()).toBe(401);
@@ -109,7 +109,7 @@ test('a page asked for before signing in is kept for someone who may open it, an
   await signIn(page, WHO.client, /\/dashboard\/calendar$/, '/dashboard/calendar');
   await context.clearCookies();
 
-  await signIn(page, WHO.member, /\/library\/study-buddy$/, '/dashboard/calendar');
+  await signIn(page, WHO.member, /\/library\/ai$/, '/dashboard/calendar');
   await context.clearCookies();
 
   // A page that is not a path on this site is never followed.
@@ -117,11 +117,11 @@ test('a page asked for before signing in is kept for someone who may open it, an
 });
 
 test('a person who is already signed in is sent straight on from /login', async ({ page }) => {
-  await signIn(page, WHO.member, /\/library\/study-buddy$/);
+  await signIn(page, WHO.member, /\/library\/ai$/);
   await page.goto('/login');
-  await expect(page).toHaveURL(/\/library\/study-buddy$/);
+  await expect(page).toHaveURL(/\/library\/ai$/);
   await page.goto('/login?next=/dashboard');
-  await expect(page).toHaveURL(/\/library\/study-buddy$/);
+  await expect(page).toHaveURL(/\/library\/ai$/);
 });
 
 test('a lapsed access token is renewed in passing: the page asked for opens, no sign-in form in between', async ({ page, context }) => {
@@ -138,7 +138,7 @@ test('signing out of the dashboard ends the Library session too, and signing out
   await page.getByRole('menuitem', { name: 'Log out' }).click();
   await expect(page).toHaveURL(/\/$/);
   await page.goto('/library/ai');
-  await expect(page).toHaveURL(/\/login\?next=%2Flibrary%2Fstudy-buddy$/);
+  await expect(page).toHaveURL(/\/login\?next=%2Flibrary%2Fai$/);
   await page.goto('/dashboard');
   await expect(page).toHaveURL(/\/login\?next=%2Fdashboard$/);
 
@@ -151,7 +151,7 @@ test('signing out of the dashboard ends the Library session too, and signing out
 });
 
 test('the public header offers a signed-in person their own place instead of "Login"', async ({ page }) => {
-  await signIn(page, WHO.member, /\/library\/study-buddy$/);
+  await signIn(page, WHO.member, /\/library\/ai$/);
   await page.goto('/');
   const header = page.getByRole('banner');
   await expect(header.getByRole('link', { name: /^LearnThrive AI/ })).toBeVisible();
@@ -175,7 +175,7 @@ test('a disabled account is told so, with no session, and a wrong password gets 
 });
 
 test('one shell, by keyboard alone: the skip link first, the menu in reading order, Enter follows a link, and the account menu opens and closes', async ({ page }) => {
-  await signIn(page, WHO.member, /\/library\/study-buddy$/);
+  await signIn(page, WHO.member, /\/library\/ai$/);
   await page.goto('/account');
   await hydrated(page);
   await page.keyboard.press('Tab');
@@ -191,7 +191,7 @@ test('one shell, by keyboard alone: the skip link first, the menu in reading ord
   for (let i = 0; i < 3; i += 1) await page.keyboard.press('Shift+Tab');
   await expect(dashboardMenu(page).getByRole('link', { name: 'LearnThrive AI' })).toBeFocused();
   await page.keyboard.press('Enter');
-  await expect(page).toHaveURL(/\/library\/study-buddy$/);
+  await expect(page).toHaveURL(/\/library\/ai$/);
   // The account menu: opens from its button, Escape closes it and returns focus to the button.
   const trigger = page.getByRole('button', { name: 'Account menu' });
   await trigger.focus();

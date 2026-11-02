@@ -5,7 +5,9 @@ import { defineConfig, devices } from '@playwright/test';
 // Next.js server and real cookies, not just unit-testable pure functions).
 export default defineConfig({
   testDir: './tests-e2e',
-  timeout: 30_000,
+  // A CI runner has two vCPUs and compiles each dev route on first use, so a test there needs more time (and fewer neighbours) than on a laptop.
+  timeout: process.env.CI ? 90_000 : 30_000,
+  expect: { timeout: process.env.CI ? 10_000 : 5_000 },
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   // One shared dev-mode Next.js server (single Node process, on-demand route compilation) backs
@@ -15,8 +17,8 @@ export default defineConfig({
   // conflict-detection path instead of a clean redirect) rather than real bugs — reproducibly
   // gone when the same file runs alone. Capping workers, and retrying locally too (not just in
   // CI), trades a little wall-clock time for a suite that means what it reports either way.
-  workers: 4,
-  retries: 1,
+  workers: process.env.CI ? 2 : 4,
+  retries: process.env.CI ? 2 : 1,
   reporter: 'list',
   use: {
     // Must be "localhost", not "127.0.0.1" — Next.js 16 dev's origin protection treats them as
