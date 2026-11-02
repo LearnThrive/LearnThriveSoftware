@@ -37,6 +37,9 @@ test("the policy allows nothing from another origin, no eval, no plugins, no bas
 });
 
 test("form-action allows Stripe's two hosted pages only while subscriptions are on, and nothing else changes", () => {
+  assert.match(buildContentSecurityPolicy({}), /upgrade-insecure-requests/, "on by default");
+  assert.doesNotMatch(buildContentSecurityPolicy({ upgradeInsecure: false }), /upgrade-insecure-requests/, "CSP_UPGRADE_INSECURE=0 drops only that directive");
+  assert.match(buildContentSecurityPolicy({ upgradeInsecure: false }), /default-src 'self'/);
   const off = buildContentSecurityPolicy({});
   const on = buildContentSecurityPolicy({ billing: true });
   assert.match(on, /form-action 'self' https:\/\/checkout\.stripe\.com https:\/\/billing\.stripe\.com;/);

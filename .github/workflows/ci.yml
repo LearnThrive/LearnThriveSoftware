@@ -44,15 +44,22 @@ jobs:
 
       # Production build of the public site, with ONLY production-style settings: no email credentials,
       # the portal closed (the default), no development provider. This is what is deployed.
+      # The one difference: CSP_UPGRADE_INSECURE=0 drops `upgrade-insecure-requests`, because this job serves the
+      # build over plain http://localhost and WebKit would otherwise upgrade those requests to https and fail. A
+      # deployed build never sets it (securityHeaders.ts, tests/securityHeaders.test.mjs).
       - run: npm run build --workspace=apps/web
+        env:
+          CSP_UPGRADE_INSECURE: "0"
 
       - name: Install browsers for the smoke suite
         run: npx playwright install --with-deps chromium firefox webkit
 
+      # The unified server (site + classroom signalling + TURN endpoint on one origin): what Render runs
+      # (docs/DEPLOYMENT.md). It sets NODE_ENV=production itself.
       - name: Start the production server
         working-directory: apps/web
         run: |
-          NODE_ENV=production npx next start -p 3200 > "$RUNNER_TEMP/next-start.log" 2>&1 &
+          PORT=3200 npm run serve > "$RUNNER_TEMP/next-start.log" 2>&1 &
           for i in $(seq 1 60); do
             curl -fs http://localhost:3200/api/health > /dev/null && exit 0
             sleep 1
@@ -64,6 +71,7 @@ jobs:
         working-directory: apps/web
         env:
           PW_CROSS_BROWSER: "1"
+          PROD_SERVER: unified
         run: npm run test:prod-smoke
 
       - name: Keep the Playwright traces of a failure

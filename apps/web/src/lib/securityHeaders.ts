@@ -29,6 +29,13 @@ export type SecurityHeaderOptions = {
   cspReportOnly?: boolean;
   /** LIBRARY_PHASE === "live": subscriptions are on, so forms may target Stripe's hosted pages (STRIPE_FORM_TARGETS). */
   billing?: boolean;
+  /**
+   * Whether the policy tells the browser to load every subresource over https (`upgrade-insecure-requests`). Always on in a real
+   * deployment (the site is https only). CSP_UPGRADE_INSECURE=0 at build time turns it off for ONE purpose: the production smoke
+   * suite serves the build over plain http://localhost, and WebKit (unlike Chromium and Firefox) upgrades localhost requests too and
+   * then fails the TLS handshake. Never set it for a build that is deployed.
+   */
+  upgradeInsecure?: boolean;
 };
 
 export type HeaderEntry = { key: string; value: string };
@@ -52,7 +59,7 @@ function originOf(url: string | undefined): string | undefined {
  */
 export const STRIPE_FORM_TARGETS = ["https://checkout.stripe.com", "https://billing.stripe.com"] as const;
 
-export function buildContentSecurityPolicy({ classroomUrl, billing }: Pick<SecurityHeaderOptions, "classroomUrl" | "billing">): string {
+export function buildContentSecurityPolicy({ classroomUrl, billing, upgradeInsecure = true }: Pick<SecurityHeaderOptions, "classroomUrl" | "billing" | "upgradeInsecure">): string {
   const classroom = originOf(classroomUrl);
   const classroomSockets = classroom ? [classroom, classroom.replace(/^http/, "ws")] : [];
   const directives: Record<string, string[]> = {
@@ -71,10 +78,10 @@ export function buildContentSecurityPolicy({ classroomUrl, billing }: Pick<Secur
     "form-action": ["'self'", ...(billing ? STRIPE_FORM_TARGETS : [])],
     "frame-ancestors": ["'self'"],
   };
-  return [...Object.entries(directives).map(([name, values]) => `${name} ${values.join(" ")}`), "upgrade-insecure-requests"].join("; ");
+  return [...Object.entries(directives).map(([name, values]) => `${name} ${values.join(" ")}`), ...(upgradeInsecure ? ["upgrade-insecure-requests"] : [])].join("; ");
 }
 
-export function buildSecurityHeaders({ production, classroomUrl, cspReportOnly, billing }: SecurityHeaderOptions): HeaderEntry[] {
+export function buildSecurityHeaders({ production, classroomUrl, cspReportOnly, billing, upgradeInsecure }: SecurityHeaderOptions): HeaderEntry[] {
   const headers: HeaderEntry[] = [
     { key: "X-Content-Type-Options", value: "nosniff" },
     { key: "X-Frame-Options", value: "SAMEORIGIN" },
@@ -99,7 +106,7 @@ export function buildSecurityHeaders({ production, classroomUrl, cspReportOnly, 
   if (production) {
     headers.push({
       key: cspReportOnly ? "Content-Security-Policy-Report-Only" : "Content-Security-Policy",
-      value: buildContentSecurityPolicy({ classroomUrl, billing }),
+      value: buildContentSecurityPolicy({ classroomUrl, billing, upgradeInsecure }),
     });
     // One year, subdomains included. NOT `preload`: that is a one-way door (the domain is baked into
     // browsers' lists) and waits for the owner's confirmation that it is permanently HTTPS.
