@@ -4,10 +4,15 @@ import { createRequire } from "node:module";
 import test from "node:test";
 import { compileFunction } from "node:vm";
 import ts from "typescript";
+import { loadTsFrom } from "./_tsLoader.mjs";
+import { humanCheck } from "./_routeHelpers.mjs";
 
 // Run the real TypeScript route using the existing compiler dependency. This also
 // works on the supported Node 20 releases, which cannot import TypeScript directly.
 const require = createRequire(import.meta.url);
+const humanCheckLib = loadTsFrom(import.meta.url, "../src/lib/human-check.ts");
+// The route needs only "resend" and the human check; anything else is a mistake worth failing on.
+const routeRequire = (specifier) => (specifier === "@/lib/human-check" ? humanCheckLib : require(specifier));
 const routeSource = readFileSync(
   new URL("../src/app/api/enquiry/route.ts", import.meta.url),
   "utf8",
@@ -19,7 +24,7 @@ const compiledRoute = ts.transpileModule(routeSource, {
 function loadRoute() {
   const fakeModule = { exports: {} };
   compileFunction(compiledRoute, ["require", "module", "exports"])(
-    require, fakeModule, fakeModule.exports,
+    routeRequire, fakeModule, fakeModule.exports,
   );
   return fakeModule.exports;
 }
@@ -48,7 +53,8 @@ function request(body = validEnquiry) {
   return new Request("http://localhost/api/enquiry", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    // A challenge works once, so every request carries a fresh one (unless the test names its own).
+    body: JSON.stringify({ humanCheck: humanCheck(), ...body }),
   });
 }
 
@@ -144,6 +150,7 @@ function productionEnv(t) {
   setEnv(t, "RESEND_API_KEY", "re_test_not_a_real_key");
   setEnv(t, "RESEND_FROM_EMAIL", "enquiries@example.test");
   setEnv(t, "ENQUIRY_EMAIL", "owner@example.test");
+  setEnv(t, "CAPTCHA_SECRET", "a-test-secret-that-is-at-least-thirty-two-characters-long");
 }
 
 test("a filled honeypot gets the normal success answer and sends nothing", async (t) => {
@@ -177,6 +184,37 @@ test("in production a human-paced submission is sent", async (t) => {
   assert.equal(sent.length, 2);
   assert.deepEqual(sent[0].to, ["owner@example.test"]);
   assert.match(sent[0].from, /enquiries@example\.test/);
+});
+
+test("the human check: an enquiry without one, or with a spent one, is refused and sends nothing", async (t) => {
+  productionEnv(t);
+  const sent = mockResend(t);
+  const { POST } = loadRoute();
+  const none = new Request("http://localhost/api/enquiry", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...validEnquiry, website: "", elapsedMs: 41000 }),
+  });
+  const refused = await POST(none);
+  assert.equal(refused.status, 400);
+  assert.equal((await refused.json()).code, "human-check");
+
+  const once = humanCheck();
+  assert.equal((await POST(request({ ...validEnquiry, elapsedMs: 41000, humanCheck: once }))).status, 200);
+  const again = await POST(request({ ...validEnquiry, support: "A different message, long enough to pass.", elapsedMs: 41000, humanCheck: once }));
+  assert.equal(again.status, 400, "a challenge works once");
+  assert.equal(sent.length, 2, "only the one real enquiry was emailed");
+});
+
+test("production without CAPTCHA_SECRET fails closed to 'email us' rather than accept unchecked enquiries", async (t) => {
+  productionEnv(t);
+  setEnv(t, "CAPTCHA_SECRET", undefined);
+  const sent = mockResend(t);
+  const { POST } = loadRoute();
+  const response = await POST(request({ ...validEnquiry, elapsedMs: 41000 }));
+  assert.equal(response.status, 503);
+  assert.match((await response.json()).error, /email/i);
+  assert.equal(sent.length, 0);
 });
 
 test("outside production a fast submission is allowed (developers and un-mocked e2e runs)", async (t) => {

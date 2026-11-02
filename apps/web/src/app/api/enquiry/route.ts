@@ -1,10 +1,10 @@
 import { Resend } from "resend";
+import { humanCheckAvailable, verifyHumanCheck } from "@/lib/human-check";
 
 // No import from "@/lib/site" here (deliberately, not an oversight): tests/enquiry.test.mjs loads
-// this one file directly with a plain CommonJS require() via ts.transpileModule, which has no
-// tsconfig path-alias resolution and can't load a second .ts file either. The constants below
-// duplicate site.ts's values for that reason — the same reason the pre-existing RECIPIENT default
-// was already a literal rather than an import.
+// this one file with ts.transpileModule and a hand-made require(), which resolves only "resend" and
+// "@/lib/human-check". The constants below duplicate site.ts's values for that reason — the same
+// reason the pre-existing RECIPIENT default was already a literal rather than an import.
 const SITE_URL = "https://www.learnthrivetuition.co.uk";
 const RECIPIENT = process.env.ENQUIRY_EMAIL ?? "info@learnthrivetuition.co.uk";
 
@@ -19,12 +19,15 @@ const ALLOWED_ORIGINS = new Set(
 );
 
 // ── Abuse protection (plan15 Wave 12 section 16.3) ───────────────────────────────────────────────
-// Three cheap layers in front of the email send, none of them visible to a person and none of them a
-// third-party CAPTCHA (that is an owner decision: privacy and cookie implications):
+// Layers in front of the email send. None is a third-party CAPTCHA (privacy and cookie implications):
 //   1. a honeypot field that a human never sees or fills (`website`),
 //   2. a minimum time-to-submit measured by the form itself (`elapsedMs`): a person cannot read, fill
 //      and send seven fields in under MIN_FILL_MS, a script can,
-//   3. the per-IP limiter below, plus whatever the host's own firewall adds (docs/DEPLOYMENT.md).
+//   3. the per-IP limiter below, plus whatever the host's own firewall adds (docs/DEPLOYMENT.md),
+//   4. the site's own human check (lib/human-check.ts, the same one the careers, subject-request and
+//      Library waitlist forms use): a signed proof-of-work the browser solves in a Worker, with no
+//      third-party script, cookie or storage. In production it fails closed: without CAPTCHA_SECRET
+//      the route answers 503 "email us" rather than accept unchecked enquiries.
 // A request that trips 1 or 2 gets the SAME success response a real one does, so a bot learns nothing
 // from probing, and nothing is sent. Outside production the elapsed time may be absent (server-to-
 // server callers and this route's own tests never send it); in production its absence is a bot.
@@ -312,12 +315,21 @@ export async function POST(request: Request) {
     const apiKey = process.env.RESEND_API_KEY?.trim();
     const productionMisconfigured =
       process.env.NODE_ENV === "production" &&
-      (!process.env.ENQUIRY_EMAIL?.trim() || !process.env.RESEND_FROM_EMAIL?.trim());
+      (!process.env.ENQUIRY_EMAIL?.trim() || !process.env.RESEND_FROM_EMAIL?.trim() || !humanCheckAvailable());
     if (!apiKey || productionMisconfigured) {
       logOutcome("unavailable", !apiKey ? "no-api-key" : "incomplete-production-config");
       return Response.json(
         { error: `Enquiries are not accepting submissions right now. Please email ${RECIPIENT} directly.` },
         { status: 503 },
+      );
+    }
+
+    const human = verifyHumanCheck((body as unknown as Record<string, unknown>).humanCheck);
+    if (!human.ok) {
+      logOutcome("rejected", `human-${human.reason}`);
+      return Response.json(
+        { code: "human-check", error: "We could not confirm that you are a person. Please wait a moment for the check to finish, then send again." },
+        { status: 400 },
       );
     }
 
