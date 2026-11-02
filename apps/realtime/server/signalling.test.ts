@@ -93,6 +93,7 @@ describe('signalling through real Socket.IO clients', () => {
     expect(tutorEvents[0]).toEqual({
       roomId: 'room-one', self: { id: tutor.id, name: 'Alice', media, screenSharing: false, handRaised: false, handRaisedAt: null, role: 'tutor', forceMuted: false },
       peers: [], waiting: [], settings: DEFAULT_SETTINGS, poll: null, understandingCheck: null, timer: null,
+      media: { mode: 'mesh', maxStudents: 3 },
       board: {
         pages: [{ id: firstPageId, name: 'Board 1', background: 'blank' }],
         activePageId: firstPageId, elementsByPage: { [firstPageId]: [] }, studentsCanDraw: true,

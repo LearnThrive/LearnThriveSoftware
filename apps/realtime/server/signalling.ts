@@ -8,13 +8,14 @@ import {
   ANNOUNCEMENT_TTL_MS, MAX_ANNOUNCEMENT_LENGTH, MAX_BOARD_ELEMENT_BYTES, MAX_BOARD_ELEMENTS_PER_PAGE,
   MAX_BOARD_IMPORT_BYTES, MAX_BOARD_PAGE_NAME_LENGTH, MAX_BOARD_PAGES, MAX_BOARD_UPDATE_BATCH, MAX_CHAT_LENGTH,
   MAX_NAME_LENGTH, MAX_POLL_OPTION_LENGTH, MAX_POLL_OPTIONS, MAX_POLL_QUESTION_LENGTH, MAX_STUDENTS,
-  MIN_POLL_OPTIONS, REACTION_EMOJIS, ROOM_PATTERN, WAITING_ROOM_CAP,
+  MIN_POLL_OPTIONS, REACTION_EMOJIS, ROOM_PATTERN, SFU_MAX_STUDENTS, WAITING_ROOM_CAP,
 } from '@learnthrive/shared/protocol';
 import type {
   Announcement, BoardBackground, BoardElement, BoardPage, BoardState, ChatMessage, ClientToServerEvents,
   JoinedRoom, MediaState, Participant, ParticipantRole, PollState, PollVisibility, RoomSettings, RoomTimerState,
-  ServerToClientEvents, SignalCandidate, SignalDescription, TimerMode, UnderstandingCheckState, UnderstandingStatus,
+  ServerToClientEvents, SfuPublication, SfuTrackInfo, SignalCandidate, SignalDescription, TimerMode, UnderstandingCheckState, UnderstandingStatus,
 } from '@learnthrive/shared/protocol';
+import { createSfuService, sfuFromEnv, type SfuApi } from './sfu';
 
 const CHAT_RATE_WINDOW_MS = 4000;
 const CHAT_RATE_MAX_MESSAGES = 6;
@@ -72,6 +73,8 @@ interface Room {
   participants: Map<string, Participant>;
   waiting: Map<string, WaitingEntry>;
   edges: Map<string, Edge>;
+  // SFU rooms only: what each participant has published to Cloudflare (verified by sfu:publish), keyed by participant id.
+  publications: Map<string, SfuPublication>;
   settings: RoomSettings;
   activeScreenShareId: string | null;
   poll: RoomPoll | null;
@@ -95,7 +98,7 @@ type MeetingSocket = Socket<ClientToServerEvents, ServerToClientEvents, Record<s
 function createRoom(): Room {
   const firstPageId = randomUUID();
   return {
-    participants: new Map(), waiting: new Map(), edges: new Map(),
+    participants: new Map(), waiting: new Map(), edges: new Map(), publications: new Map(),
     settings: { locked: false, studentsCanShareScreen: true, studentsCanChat: true },
     activeScreenShareId: null, poll: null, understandingCheck: null, timer: null,
     board: {
@@ -113,6 +116,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function parseMedia(value: unknown): MediaState | null {
   if (!isRecord(value) || typeof value.audio !== 'boolean' || typeof value.video !== 'boolean') return null;
   return { audio: value.audio, video: value.video };
+}
+
+function parseSfuTracks(value: unknown): SfuTrackInfo[] | null {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 4) return null;
+  const tracks: SfuTrackInfo[] = [];
+  for (const entry of value) {
+    if (!isRecord(entry) || typeof entry.trackName !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(entry.trackName)) return null;
+    if (entry.kind !== 'audio' && entry.kind !== 'video') return null;
+    tracks.push({ trackName: entry.trackName, kind: entry.kind });
+  }
+  return new Set(tracks.map((track) => track.trackName)).size === tracks.length ? tracks : null;
 }
 
 function parseRole(value: unknown): ParticipantRole | null {
@@ -229,8 +243,20 @@ async function fetchCloudflareTurnCredentials(keyId: string, apiToken: string): 
   return response.json();
 }
 
-export function createSignallingServer(options?: { disconnectGraceMs?: number; httpServer?: import('node:http').Server }) {
+export function createSignallingServer(options?: {
+  disconnectGraceMs?: number;
+  httpServer?: import('node:http').Server;
+  // The Cloudflare SFU that carries this server's rooms' media. Left out, it is read from CLOUDFLARE_SFU_APP_ID and
+  // CLOUDFLARE_SFU_APP_SECRET; null forces the peer-to-peer mesh. With an SFU a room holds SFU_MAX_STUDENTS students; without one,
+  // MAX_STUDENTS (a mesh cannot carry more). `maxStudents` overrides either.
+  sfu?: SfuApi | null;
+  maxStudents?: number;
+}) {
   const disconnectGraceMs = options?.disconnectGraceMs ?? 10_000;
+  const sfuApi = options?.sfu === undefined ? sfuFromEnv() : options.sfu;
+  const sfuService = sfuApi ? createSfuService(sfuApi) : null;
+  const maxStudents = options?.maxStudents ?? (sfuApi ? SFU_MAX_STUDENTS : MAX_STUDENTS);
+  const roomMedia = { mode: sfuApi ? 'sfu' : 'mesh', maxStudents } as const;
   const app = express();
   app.disable('x-powered-by');
   app.get('/health', (_request, response) => response.json({ status: 'ok' }));
@@ -318,6 +344,15 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number; h
     let count = 0;
     for (const participant of room.participants.values()) if (participant.role === 'student') count += 1;
     return count;
+  }
+
+  // Who must hear about this participant (leaving, reconnecting): in a mesh the people they have a connection to, in an SFU room
+  // everyone else admitted (there are no edges: the media goes through Cloudflare).
+  function peerIdsOf(room: Room, socketId: string): string[] {
+    if (sfuService) return [...room.participants.keys()].filter((id) => id !== socketId);
+    const ids: string[] = [];
+    for (const edge of room.edges.values()) if (edge.participantIds.includes(socketId)) ids.push(otherIdOnEdge(edge, socketId));
+    return ids;
   }
 
   function otherIdOnEdge(edge: Edge, socketId: string): string {
@@ -443,8 +478,10 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number; h
   function admitParticipant(socket: MeetingSocket, roomId: string, room: Room, self: Participant) {
     const peers: JoinedRoom['peers'] = [];
     for (const [otherId, other] of room.participants) {
-      const sessionId = randomUUID();
-      room.edges.set(sessionId, { sessionId, participantIds: [otherId, self.id], initiatorId: otherId });
+      // In an SFU room there is no connection between two participants, so no edge: the id below only names the pair for the client's
+      // bookkeeping and no webrtc: message ever carries it.
+      const sessionId = sfuService ? `sfu:${otherId}:${self.id}` : randomUUID();
+      if (!sfuService) room.edges.set(sessionId, { sessionId, participantIds: [otherId, self.id], initiatorId: otherId });
       io.to(otherId).emit('room:participant-joined', { peer: self, sessionId, initiator: true });
       peers.push({ peer: other, sessionId, initiator: false });
     }
@@ -452,7 +489,8 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number; h
     socket.data.roomId = roomId;
     void socket.join(`meeting:${roomId}`);
     const waiting = self.role === 'tutor' ? [...room.waiting.entries()].map(([id, entry]) => ({ id, name: entry.name })) : [];
-    socket.emit('room:joined', { roomId, self, peers, waiting, ...personalizedExtras(room, self.id, self.role), board: buildBoardState(room), announcement: room.announcement });
+    socket.emit('room:joined', { roomId, self, peers, waiting, media: roomMedia, ...personalizedExtras(room, self.id, self.role), board: buildBoardState(room), announcement: room.announcement });
+    if (sfuService) socket.emit('sfu:publications', { publications: [...room.publications.values()] });
     if (self.role === 'tutor') socket.emit('room:removed-list-update', { names: [...room.removedNames.values()] });
   }
 
@@ -465,13 +503,18 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number; h
   function resendJoinedState(socket: MeetingSocket, roomId: string, room: Room) {
     const self = room.participants.get(socket.id)!;
     const peers: JoinedRoom['peers'] = [];
-    for (const edge of room.edges.values()) {
-      if (!edge.participantIds.includes(socket.id)) continue;
-      const other = room.participants.get(otherIdOnEdge(edge, socket.id));
-      if (other) peers.push({ peer: other, sessionId: edge.sessionId, initiator: edge.initiatorId === socket.id });
+    if (sfuService) {
+      for (const other of room.participants.values()) if (other.id !== socket.id) peers.push({ peer: other, sessionId: `sfu:${other.id}:${socket.id}`, initiator: false });
+    } else {
+      for (const edge of room.edges.values()) {
+        if (!edge.participantIds.includes(socket.id)) continue;
+        const other = room.participants.get(otherIdOnEdge(edge, socket.id));
+        if (other) peers.push({ peer: other, sessionId: edge.sessionId, initiator: edge.initiatorId === socket.id });
+      }
     }
     const waiting = self.role === 'tutor' ? [...room.waiting.entries()].map(([id, entry]) => ({ id, name: entry.name })) : [];
-    socket.emit('room:joined', { roomId, self, peers, waiting, ...personalizedExtras(room, self.id, self.role), board: buildBoardState(room), announcement: room.announcement });
+    socket.emit('room:joined', { roomId, self, peers, waiting, media: roomMedia, ...personalizedExtras(room, self.id, self.role), board: buildBoardState(room), announcement: room.announcement });
+    if (sfuService) socket.emit('sfu:publications', { publications: [...room.publications.values()] });
     if (self.role === 'tutor') socket.emit('room:removed-list-update', { names: [...room.removedNames.values()] });
   }
 
@@ -545,11 +588,13 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number; h
     for (const [sessionId, edge] of room.edges) {
       if (edge.participantIds.includes(staleId)) room.edges.delete(sessionId);
     }
+    if (room.publications.delete(staleId)) for (const id of room.participants.keys()) io.to(id).emit('sfu:unpublished', { participantId: staleId });
+    sfuService?.release(staleId);
   }
 
   function admitWaitingId(roomId: string, room: Room, waitingId: string): boolean {
     const entry = room.waiting.get(waitingId);
-    if (!entry || studentCount(room) >= MAX_STUDENTS) return false;
+    if (!entry || studentCount(room) >= maxStudents) return false;
     const waitingSocket = io.sockets.sockets.get(waitingId);
     if (!waitingSocket) { room.waiting.delete(waitingId); return false; } // gone for good; clean up, don't count as admitted
     room.waiting.delete(waitingId);
@@ -584,12 +629,13 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number; h
     if (room.activeScreenShareId === socket.id) room.activeScreenShareId = null;
     const departing = room.participants.get(socket.id) ?? null;
     if (!room.participants.delete(socket.id)) return;
-    const remainingIds = new Set<string>();
+    const remainingIds = new Set<string>(peerIdsOf(room, socket.id));
     for (const [sessionId, edge] of room.edges) {
-      if (!edge.participantIds.includes(socket.id)) continue;
-      room.edges.delete(sessionId);
-      remainingIds.add(otherIdOnEdge(edge, socket.id));
+      if (edge.participantIds.includes(socket.id)) room.edges.delete(sessionId);
     }
+    // The leaver's published tracks are gone: tell everyone to stop pulling them. (Cloudflare collects the idle session itself.)
+    if (room.publications.delete(socket.id)) for (const id of room.participants.keys()) io.to(id).emit('sfu:unpublished', { participantId: socket.id });
+    sfuService?.release(socket.id);
 
     // The tutor departing ends the class for everyone still in it — every remaining admitted
     // participant AND every still-waiting student (who today would otherwise get no signal at
@@ -640,9 +686,7 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number; h
         clearPending(socket.id);
       } else if (room?.participants.has(socket.id) && clearPending(socket.id)) {
         const self = room.participants.get(socket.id)!;
-        for (const edge of room.edges.values()) {
-          if (edge.participantIds.includes(socket.id)) io.to(otherIdOnEdge(edge, socket.id)).emit('room:participant-reconnected', self);
-        }
+        for (const id of peerIdsOf(room, socket.id)) io.to(id).emit('room:participant-reconnected', self);
         // Refresh the recovering client's own view of anything that may have changed while it
         // was offline (a force-mute directive, a settings/poll/understanding-check/timer update,
         // a screen-share stop directive) — resendJoinedState is safe to call on an
@@ -706,7 +750,7 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number; h
       const waitingIds = [...ctx.room.waiting.keys()]; // snapshot before the loop mutates room.waiting
       let admitted = 0;
       for (const id of waitingIds) {
-        if (studentCount(ctx.room) >= MAX_STUDENTS) break;
+        if (studentCount(ctx.room) >= maxStudents) break;
         if (admitWaitingId(ctx.roomId, ctx.room, id)) admitted += 1;
       }
       socket.emit('room:admit-result', { admitted, remaining: ctx.room.waiting.size });
@@ -1177,6 +1221,36 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number; h
       const message: SignalCandidate = { sessionId: ctx.edge.sessionId, candidate };
       io.to(ctx.otherId).emit('webrtc:ice-candidate', message);
     });
+    // SFU rooms: the browser asks this server to make each Cloudflare SFU call (the app secret never leaves the server), then announces
+    // what it published. Both are refused outside an SFU room and for anyone not admitted to the room.
+    socket.on('sfu:request', (payload: unknown, ack?: unknown) => {
+      if (typeof ack !== 'function') return;
+      const reply = ack as (reply: import('@learnthrive/shared/protocol').SfuReply) => void;
+      const roomId = socket.data.roomId;
+      const room = roomId ? rooms.get(roomId) : undefined;
+      if (!sfuService || !room || !room.participants.has(socket.id)) { reply({ ok: false, error: 'Media is not available in this class.' }); return; }
+      const pullable = (sessionId: string, trackName: string) => {
+        for (const publication of room.publications.values()) {
+          if (publication.participantId !== socket.id && publication.sessionId === sessionId && publication.tracks.some((track) => track.trackName === trackName)) return true;
+        }
+        return false;
+      };
+      void sfuService.handle(socket.id, payload, pullable).then(reply);
+    });
+    socket.on('sfu:publish', (payload: unknown, ack?: unknown) => {
+      if (typeof ack !== 'function') return;
+      const reply = ack as (reply: import('@learnthrive/shared/protocol').SfuReply) => void;
+      const roomId = socket.data.roomId;
+      const room = roomId ? rooms.get(roomId) : undefined;
+      const self = room?.participants.get(socket.id);
+      if (!sfuService || !room || !self) { reply({ ok: false, error: 'Media is not available in this class.' }); return; }
+      const tracks = isRecord(payload) ? parseSfuTracks(payload.tracks) : null;
+      if (!isRecord(payload) || !sfuService.owns(socket.id, payload.sessionId) || !tracks) { reply({ ok: false, error: 'Invalid publication.' }); return; }
+      const publication: SfuPublication = { participantId: socket.id, sessionId: payload.sessionId as string, tracks };
+      room.publications.set(socket.id, publication);
+      for (const id of room.participants.keys()) if (id !== socket.id) io.to(id).emit('sfu:published', publication);
+      reply({ ok: true, data: {} });
+    });
     socket.on('room:leave', (ack?: unknown) => {
       leaveNow(socket);
       if (typeof ack === 'function') ack();
@@ -1191,13 +1265,11 @@ export function createSignallingServer(options?: { disconnectGraceMs?: number; h
         return;
       }
       if (!room.participants.has(socket.id)) return;
-      for (const edge of room.edges.values()) {
-        if (edge.participantIds.includes(socket.id)) io.to(otherIdOnEdge(edge, socket.id)).emit('room:participant-reconnecting', { id: socket.id });
-      }
+      for (const id of peerIdsOf(room, socket.id)) io.to(id).emit('room:participant-reconnecting', { id: socket.id });
       const timer = setTimeout(() => { pendingDisconnects.delete(socket.id); leaveNow(socket); }, disconnectGraceMs);
       pendingDisconnects.set(socket.id, { roomId: roomId!, timer });
     });
   });
 
-  return { httpServer, io, rooms, app };
+  return { httpServer, io, rooms, app, media: roomMedia };
 }

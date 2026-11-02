@@ -37,6 +37,7 @@ function variablesRead() {
     join(REPO, "scripts", "dev-services.mjs"),
     ...walk(join(REPO, "packages"), (f) => /\.(ts|mjs)$/.test(f) && f.includes(`${sep}src${sep}`) && !isTest(f)),
     ...walk(join(REPO, "apps", "realtime", "server"), (f) => f.endsWith(".ts") && !isTest(f)),
+    ...walk(join(REPO, "packages", "shared"), (f) => f.endsWith(".ts") && !isTest(f)),
   ];
   for (const file of code) {
     const text = read(file);
@@ -131,7 +132,7 @@ test("local: anything that points at the hosted project fails, in every kind of 
 });
 
 test("production: required variables, forbidden ones, held switches, the pooler and the narrow role", () => {
-  const good = { NODE_ENV: "production", SUPABASE_URL: "https://abcdefghijklmnopqrst.supabase.co", SUPABASE_ANON_KEY: PUB, SUPABASE_SERVICE_ROLE_KEY: SECRET, DATABASE_URL: "postgresql://learnthrive_server.abcdefghijklmnopqrst:pw-pw-pw-pw-pw@aws-0-eu-west-2.pooler.supabase.com:6543/postgres", RESEND_API_KEY: `re_${"x".repeat(30)}`, RESEND_FROM_EMAIL: "hello@example.com", ENQUIRY_EMAIL: "info@example.com", CAPTCHA_SECRET: "c".repeat(40) };
+  const good = { NODE_ENV: "production", SUPABASE_URL: "https://abcdefghijklmnopqrst.supabase.co", SUPABASE_ANON_KEY: PUB, SUPABASE_SERVICE_ROLE_KEY: SECRET, DATABASE_URL: "postgresql://learnthrive_server.abcdefghijklmnopqrst:pw-pw-pw-pw-pw@aws-0-eu-west-2.pooler.supabase.com:6543/postgres", RESEND_API_KEY: `re_${"x".repeat(30)}`, RESEND_FROM_EMAIL: "hello@example.com", ENQUIRY_EMAIL: "info@example.com", CAPTCHA_SECRET: "c".repeat(40), CLOUDFLARE_TURN_KEY_ID: "k".repeat(16), CLOUDFLARE_TURN_API_TOKEN: "t".repeat(32), CLOUDFLARE_SFU_APP_ID: "a".repeat(32), CLOUDFLARE_SFU_APP_SECRET: "s".repeat(40), CLASSROOM_JOIN_SECRET: "j".repeat(64) };
   const base = checkEnvironment(good, { mode: "production" });
   assert.equal(base.failures, 0, JSON.stringify(base.rows.filter((r) => ["MISSING", "MALFORMED", "FORBIDDEN"].includes(r.status))));
   assert.equal(base.warnings, 0);
