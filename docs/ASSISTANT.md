@@ -81,7 +81,7 @@ The full list, with checks, is generated into [ENVIRONMENT.md](ENVIRONMENT.md) f
 | `ASSISTANT_BASE_URL` / `ASSISTANT_API_KEY` | The production provider's address and key (`custom`). Never logged | none |
 | `ASSISTANT_CONTEXT` | Context window the history is planned against, tokens. It must hold the instructions (an interactive answer's component library is a few thousand tokens), the history and the longest answer | 32768 |
 | `ASSISTANT_MAX_OUTPUT_TOKENS` | Most tokens in one answer: about 3000 words of plain English at the default, still over 2000 for LaTeX maths. An answer that reaches the limit stops with a visible note, and "continue" carries on | 4096 |
-| `ASSISTANT_THINKING` / `ASSISTANT_THINKING_TOKENS` | `off`, `auto`, `on` or a level; extra tokens thinking may use (thinking and the answer share one count) so the answer still fits | `auto` / 1500 |
+| `ASSISTANT_THINKING` / `ASSISTANT_THINKING_TOKENS` | Beam thinks at `high` on every turn by default (`auto` and `on` both mean high; also interfaces and repairs); `off` sends none, `low`/`medium`/`high` name a level; extra tokens thinking may use (thinking and the answer share one count) so the answer still fits | `auto` / 1500 |
 | `ASSISTANT_STAGE_*` | Staged budgets: queue, first activity, first answer, idle, tool round, whole turn | 20 s / 90 s / 240 s / 90 s / 60 s / 360 s |
 | `ASSISTANT_MAX_TOOL_ROUNDS` | Read-only tool round trips in one turn (0 disables tools) | 2 |
 | `ASSISTANT_RETRIEVAL`, `_TOP_K`, `_MIN_SCORE` | Search the family's own uploads (needs an embedding provider: off) | off / 4 / 0.35 |

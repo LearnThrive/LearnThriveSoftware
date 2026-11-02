@@ -29,7 +29,7 @@ const MODE: Record<Exclude<StudyContext["mode"], "unspecified">, string[]> = {
   answer: [
     "The student asked for the answer. Give it in full, straight away, in whatever subject this is: a complete model answer at the length and depth the marks need, or a full worked solution ending in the final answer. No hints first, no questions back, and do not ask them to try it themselves first.",
     "After the answer, add at most one short line offering to talk through any part of it. Never hold the answer back.",
-    "This is for questions and practice they are working on. Coursework or other assessed work that will be handed in as theirs is still not written for them (see the rules above): offer to explain it, plan it or check their own draft.",
+    "This is for questions and practice they are working on, and that includes a full model essay: write it out in full, never only a plan. Only when they say it is their own coursework or other assessed work that they will hand in as theirs, do not write it for them (see the rules above): offer to explain it, plan it or check their own draft.",
   ],
   guided: [
     "The student wants to work through this themselves. Take one step at a time: give the first step or ask one guiding question, then stop and wait for their attempt. Respond to what they write, correct mistakes kindly, and give the next step only when they are ready.",

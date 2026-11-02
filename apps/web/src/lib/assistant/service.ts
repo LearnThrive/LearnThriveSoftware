@@ -164,13 +164,14 @@ interface TurnTimings {
 const remaining = (deadline: number) => Math.max(1, deadline - Date.now());
 
 /**
- * How hard a hosted reasoning model (Beam) should reason for this turn: not at all for ordinary chat (the first word matters), lightly for a question
- * answered from sources, fully for a hard problem. The provider turns this into the endpoint's own control (providers.ts).
+ * How hard a hosted reasoning model (Beam) reasons: by the owner's ASSISTANT_THINKING, and HIGH by default (`auto`), for every kind of turn: plain chat, a
+ * sourced answer, a hard problem, an interactive interface, and the repair of a held draft. `off` asks for none, `low`, `medium` and `high` name a level,
+ * `on` is high. The provider turns this into the endpoint's own control (providers.ts); an endpoint that refuses the field is asked again without it.
  */
-export function hostedEffort(mode: "fast" | "verified" | "advanced"): { reasoning: boolean; think: "off" | "low" | "medium" | "high" } {
-  if (mode === "advanced") return { reasoning: true, think: "high" };
-  if (mode === "verified") return { reasoning: true, think: "low" };
-  return { reasoning: false, think: "off" };
+export function hostedEffort(policy: AssistantConfig["thinking"]): { reasoning: boolean; think: "off" | "low" | "medium" | "high" } {
+  if (policy === "off") return { reasoning: false, think: "off" };
+  if (policy === "low" || policy === "medium") return { reasoning: true, think: policy };
+  return { reasoning: true, think: "high" };
 }
 
 export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): AsyncGenerator<ChatEvent> {
@@ -452,9 +453,8 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
 
 
     const tools = caps.toolUse && config.maxToolRounds > 0 ? toolsFor(study?.session) : [];
-    // A hosted reasoning model reasons by the turn's mode (fast chat, a sourced answer, a hard problem); the mock keeps the configured policy.
-    const mode = study?.mode ?? (thinkingFor("auto", text, images.length > 0).reasoning ? "advanced" : "fast");
-    const thinking: { reasoning: boolean; think?: boolean | string } = target.hosted ? hostedEffort(mode) : thinkingFor(config.thinking, text, images.length > 0);
+    // A hosted reasoning model reasons at the configured level on every turn (high by default); the mock keeps its own per-question policy.
+    const thinking: { reasoning: boolean; think?: boolean | string } = target.hosted ? hostedEffort(config.thinking) : thinkingFor(config.thinking, text, images.length > 0);
     let announcedThinking = false;
     const turnStartedAt = Date.now();
     const turnDeadline = turnStartedAt + stage.turnMs;
@@ -467,7 +467,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
         ...messages.slice(1, -1),
         { role: "user", content: `${messages.at(-1)!.content}\n\n<interface-request>\n${plan.guidance}\n</interface-request>` },
       ];
-      const ui = hostedEffort("verified");
+      const ui = hostedEffort(config.thinking);
       const outcome = yield* runInterface({
         messages: uiMessages,
         generate,
@@ -638,6 +638,7 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
       if (shown.trim() && study.review) {
         yield { type: "status", state: "verifying" };
         // A corrected rewrite from the model. Not allowed to think, never allowed to overrun the window: if it cannot fit, the draft is cut instead.
+        const repairEffort: { reasoning: boolean; think: boolean | string } = target.hosted ? hostedEffort(config.thinking) : { reasoning: false, think: false };
         const rewrite = async (instruction: string, draft: string): Promise<string> => {
           const prompt: ProviderMessage[] = [...messages, { role: "assistant", content: draft }, { role: "user", content: instruction }];
           const room = target.contextSize - prompt.reduce((n, m) => n + approxTokens(m.content), 0) - 64;
@@ -649,7 +650,8 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
             // The same target as the draft: a repair is never written by a different model.
             for await (const c of generate(prompt, {
               model,
-              maxTokens: Math.min(target.maxOutputTokens, room),
+              // A repair thinks as hard as the draft did, and gets the thinking allowance on top of the answer's, inside the room the window leaves.
+              maxTokens: Math.min(target.maxOutputTokens + (target.hosted && repairEffort.reasoning ? target.thinkingTokens : 0), room),
               temperature: 0.2,
               contextSize: target.contextSize,
               signal: turnSignal,
@@ -657,8 +659,8 @@ export async function* sendMessage(deps: ChatServiceDeps, input: ChatInput): Asy
               firstAnswerTimeoutMs: stage.firstAnswerMs,
               idleTimeoutMs: stage.idleMs,
               totalTimeoutMs: Math.min(stage.turnMs, target.hosted ? 240_000 : 120_000),
-              reasoning: false,
-              think: false,
+              reasoning: repairEffort.reasoning,
+              think: repairEffort.think,
             })) {
               if (c.type === "text") {
                 const s = again.push(c.text);
