@@ -9,7 +9,7 @@ playwright-report/
 .local/
 *.log
 .claude-flow/
-plan[0-9]*.md
+plan*.md
 .next/
 .next-*/
 .library-dev-storage/
