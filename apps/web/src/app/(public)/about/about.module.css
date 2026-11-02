@@ -175,8 +175,9 @@
 .foundersGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 24px;
-  margin-top: 30px;
+  gap: 28px;
+  margin-top: 34px;
+  align-items: stretch;
 }
 
 /* plan12.md task 11: an asymmetric offset rather than two cards sitting in a perfectly even row —
@@ -184,8 +185,8 @@
    still credible). Desktop only: a vertical offset on a narrow single column would just look like
    uneven spacing rather than a considered layout choice. */
 @media (min-width: 901px) {
-  .foundersGrid > *:nth-child(2) {
-    margin-top: 36px;
+  .foundersGrid > * {
+    height: 100%;
   }
 }
 
@@ -200,6 +201,7 @@
      (card >= 35rem), in the two-column desktop layout and the single-column tablet one alike. */
   container-type: inline-size;
   position: relative;
+  height: 100%;
   background: var(--surface-1);
   border: 1px solid var(--border-subtle);
   border-top: 4px solid var(--accent-strong);
@@ -227,17 +229,24 @@
   transform: translateY(-7px);
 }
 
+/* The portrait and the name sit together as a header, the bio runs the full width underneath at a
+   comfortable measure. The body wrapper is display: contents so its two children (the name block and
+   the bio) become grid items of the card without any markup change. */
 .founderCardInner {
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-  padding: 26px;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: clamp(14px, 4.5cqw, 22px);
+  row-gap: 22px;
+  align-items: center;
+  align-content: start;
+  padding: clamp(20px, 6cqw, 30px) clamp(20px, 6cqw, 30px) clamp(22px, 6.5cqw, 32px);
+  height: 100%;
 }
 
-@container (min-width: 35rem) {
+@container (max-width: 17rem) {
   .founderCardInner {
-    flex-direction: row;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: start;
   }
 }
 
@@ -247,13 +256,14 @@
    upscale it. The Image fills the frame. */
 .founderPortraitFrame {
   position: relative;
-  flex: none;
-  width: min(100%, 200px);
+  width: clamp(84px, 30cqw, 132px);
   aspect-ratio: 1 / 1;
   overflow: hidden;
-  border-radius: 16px;
+  border-radius: 20px;
   border: 1px solid var(--border-subtle);
   background: var(--surface-sunken);
+  /* A thin ring in the brand colour, so a photo with a busy or dark background still reads as a deliberate portrait. */
+  box-shadow: 0 0 0 4px var(--surface-1), 0 0 0 5px color-mix(in srgb, var(--accent-strong) 55%, transparent);
 }
 
 .founderPortrait {
@@ -261,34 +271,51 @@
 }
 
 .founderBody {
-  flex: 1 1 0;
+  display: contents;
+}
+
+.founderBody > div:first-child {
+  grid-column: 2;
   min-width: 0;
 }
 
+@container (max-width: 17rem) {
+  .founderBody > div:first-child {
+    grid-column: 1;
+  }
+}
+
 .founderName {
-  font-size: 21px !important;
+  font-size: clamp(19px, 6.2cqw, 25px) !important;
   letter-spacing: -0.01em !important;
   margin: 0 !important;
 }
 
 .founderRole {
+  display: inline-block;
   font-family: var(--lt-font-mono);
   font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--fg-accent);
-  margin-top: 5px;
+  margin-top: 9px;
+  padding: 4px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent-strong) 45%, transparent);
+  border-radius: 999px;
 }
 
 .founderBio {
-  margin: 14px 0 0;
+  grid-column: 1 / -1;
+  margin: 0;
+  padding-top: 22px;
+  border-top: 1px solid var(--border-subtle);
 }
 
 .founderBio p {
   max-width: 64ch;
-  margin: 0 0 14px;
-  font-size: 15.5px;
-  line-height: 1.6;
+  margin: 0 0 16px;
+  font-size: 16px;
+  line-height: 1.7;
   color: var(--fg-ink);
 }
 

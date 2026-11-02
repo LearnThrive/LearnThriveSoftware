@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import * as m from "framer-motion/m";
 import { AnimatePresence, useReducedMotion } from "framer-motion";
+import { HumanCheck } from "@/components/forms/HumanCheck";
+import { useHumanCheck } from "@/components/forms/useHumanCheck";
 import { subjectOptions, yearGroups } from "@/lib/site";
 
 type FormValues = {
@@ -75,6 +77,9 @@ export function EnquiryForm() {
   // Abuse protection (route.ts, "Abuse protection"): a honeypot a person never sees, and how long the
   // form was open before it was sent. A second submit while one is in flight is ignored.
   const [trap, setTrap] = useState("");
+  // The site's own human check (lib/human-check.ts). It starts when the visitor first touches the form, so a visit that only
+  // reads the page (the home page carries this form) costs no request and no work.
+  const check = useHumanCheck({ auto: false });
   const openedAt = useRef(0);
   const submitting = useRef(false);
   useEffect(() => {
@@ -110,6 +115,14 @@ export function EnquiryForm() {
       return;
     }
 
+    const answer = check.getAnswer();
+    if (!answer) {
+      setServerError("The check that you are a person has not finished yet. Please wait a moment, then send again.");
+      setStatus("error");
+      window.requestAnimationFrame(() => serverErrorRef.current?.focus());
+      return;
+    }
+
     setErrors({});
     setStatus("submitting");
     setServerError("");
@@ -119,8 +132,10 @@ export function EnquiryForm() {
       const response = await fetch("/api/enquiry", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...values, website: trap, elapsedMs: Math.round(performance.now() - openedAt.current) }),
+        body: JSON.stringify({ ...values, website: trap, elapsedMs: Math.round(performance.now() - openedAt.current), humanCheck: answer }),
       });
+      // A challenge works once: ask for a fresh one unless the server never looked at it.
+      if (![413, 429, 503].includes(response.status)) check.renew();
 
       if (response.ok) {
         setStatus("success");
@@ -234,6 +249,7 @@ export function EnquiryForm() {
           className="enquiry-form"
           noValidate
           onSubmit={handleSubmit}
+          onFocus={check.start}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
@@ -480,11 +496,13 @@ export function EnquiryForm() {
             />
           </div>
 
+          <HumanCheck check={check} />
+
           <div className="form-actions">
             <button
               className="button button--primary"
               type="submit"
-              disabled={status === "submitting"}
+              disabled={status === "submitting" || check.state.status === "unavailable"}
               aria-busy={status === "submitting"}
             >
               <span>

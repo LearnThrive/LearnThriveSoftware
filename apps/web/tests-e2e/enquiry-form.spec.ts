@@ -15,6 +15,8 @@ async function fillValidForm(page: import('@playwright/test').Page) {
   await page
     .getByLabel('What support are you looking for?')
     .fill('Looking for weekly one-to-one support ahead of the summer exams.');
+  // The form's own human check starts when the first field is touched and finishes in well under a second.
+  await expect(page.getByText('Checked: you are a person.')).toBeVisible();
 }
 
 test.describe('EnquiryForm', () => {
