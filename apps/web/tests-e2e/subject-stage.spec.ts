@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { pinCapabilities } from './support';
 
 // plan15 Wave 9 section 13.1: the subject worlds. Each subject page has its own stage; on the full tier it is
 // driven by scroll (and, for maths, the cursor); everywhere else, and under reduced motion, it is the finished
@@ -81,6 +82,10 @@ test.describe('each subject has its own stage', () => {
 
 test.describe('on the full tier it responds to scroll', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
+  // The full tier needs a capable device as well as a wide fine-pointer viewport; a two-core CI runner is "light".
+  test.beforeEach(async ({ page }) => {
+    await pinCapabilities(page);
+  });
 
   test('maths: the marker travels along the curve as the section scrolls', async ({ page }) => {
     await page.goto('/maths-tuition');
