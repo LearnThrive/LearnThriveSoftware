@@ -145,7 +145,8 @@ Why: the tuition tables (migrations `0010`, `0011`) and the learner-identity fun
 
 ### 2.2 Start the local stack and run the real-stack suite
 - **Do.** `npm run supabase:start`, then `npm run test:realstack` (runs the data and web real-stack tests).
-- **Expect.** The 174 existing tests pass; the suite proves migrations apply from nothing, row-level security through the real API, and the narrow server role.
+- **Expect.** All 220 tests pass (204 data, 16 web, including `realstack.accounts` for 3.2 and 3.11); the suite proves migrations apply from nothing, row-level security through the real API, the narrow server role, and that real Auth takes the username accounts.
+- **Last run.** 3 November 2026, migrations `0001` to `0017`: 220 of 220, on a fresh database and on a populated `0016` database upgraded to `0017`. It found one bug, now fixed (the Paper Tutor's JSON was encoded twice; `docs/SUPABASE_REAL_STACK.md`, finding 14).
 - **Care.** The local stack publishes ports on all interfaces and serves an unauthenticated `/pg/query`; run `npm run supabase:stop` when finished.
 
 ### 2.3 Wire the unproven contracts into the real-stack files
@@ -541,12 +542,12 @@ Launch in two steps so the riskier part opens last.
 | --- | --- | --- |
 | 0 Decisions | Everything only the owners can answer | open |
 | 1 Repo | Clean `main`, CI green on GitHub, bundle check | open |
-| 2 Real stack | Tuition tables and identity work on real Supabase | open (Docker blocked) |
+| 2 Real stack | Tuition tables and identity work on real Supabase | 2.1 and 2.2 done locally (3 Nov 2026, 220 tests); 2.3 to 2.5 open |
 | 3 Build gaps | Classroom served, onboarding path, backfill tool | open |
 | 3.10 Tuition payments | Stripe sandbox flow, refunds, tamper and cross-family tests | open (product rules unanswered) |
 | 3.1 Classroom server | `serve.mjs` runs site, signalling and TURN endpoint on one origin | built and proven locally; not yet on Render |
-| 3.2 Username sign-in and admin-created accounts | Create parent, children and tutor; sign in by username; sign-up closed end to end | open |
-| 3.11 Tutor-admin | A tutor who is also an admin can teach and admin | open |
+| 3.2 Username sign-in and admin-created accounts | Create parent, children and tutor; sign in by username; sign-up closed end to end | built; real Auth and the operator script proven locally (`realstack.accounts`); the admin screen on real Auth, the reset email and the hosted accounts are not |
+| 3.11 Tutor-admin | A tutor who is also an admin can teach and admin | built; a teaching admin is made on the local stack, but its guards are not yet tested on real data |
 | 3.12 Careers in Supabase | Applications stored, admins review, files via expiring links | open |
 | 3.13 Cloudflare SFU, 10 students | An hour-long lesson with 11 people on real devices | built and tested against fakes; needs the keys and a real-device test |
 | 3.7 Purge tool | A purged person leaves only the documented exceptions | open |
