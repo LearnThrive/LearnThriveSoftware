@@ -14,10 +14,10 @@ import { uniqueLabel } from './support';
 // property under test (one origin, no cross-port navigation, no stale URLs) is identical either
 // way and doesn't depend on which port that one origin happens to be.
 
-async function login(page: Page, email: string, password: string) {
+async function login(page: Page, username: string, password: string) {
   await page.request.post('/api/auth/logout');
   await page.goto('/login');
-  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Username').fill(username);
   await page.locator('input[name="password"]').fill(password);
   await Promise.all([
     page.waitForURL(/\/dashboard$/),
@@ -25,8 +25,8 @@ async function login(page: Page, email: string, password: string) {
   ]);
 }
 
-const ADMIN = { email: 'admin@learnthrive.dev', password: 'dev-admin-pass' };
-const TUTOR = { email: 'tutor@learnthrive.dev', password: 'dev-tutor-pass' };
+const ADMIN = { username: 'dev.admin', password: 'dev-admin-pass' };
+const TUTOR = { username: 'dev.tutor', password: 'dev-tutor-pass' };
 
 /** The calendar's side panel (plan6 section 56) opens on event click rather than navigating
  * straight to the lesson — this drills through to the full detail page. Waits for the URL
@@ -59,12 +59,12 @@ test('the one-dev-server regression test: Home, Login, Admin dashboard, a Lesson
   await page.goto('/');
   await expect(page).toHaveURL(/\/$/);
   await page.goto('/login');
-  await expect(page.getByLabel('Email')).toBeVisible();
+  await expect(page.getByLabel('Username')).toBeVisible();
 
   // 3: Admin dashboard reachable after auth. /dashboard/admin itself is now a blind redirect to
   // /dashboard (plan6 section 50: Admin's Overview *is* /dashboard) — still a real same-origin
   // route to prove reachable, landing on real Admin-role content.
-  await login(page, ADMIN.email, ADMIN.password);
+  await login(page, ADMIN.username, ADMIN.password);
   await page.goto('/dashboard/admin');
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.locator('.app-usermenu__role')).toContainText('Admin');
@@ -103,7 +103,7 @@ test('the one-dev-server regression test: Home, Login, Admin dashboard, a Lesson
   // 4: the Lesson itself is reachable.
   await expect(page.locator('#main-content')).toContainText(lessonTitle);
 
-  await login(page, TUTOR.email, TUTOR.password);
+  await login(page, TUTOR.username, TUTOR.password);
   await page.goto(lessonUrl);
   // Join classroom is a real navigational Link styled as a button, not role="button", while it's
   // enabled — its disabled state (outside the join window) *is* an inert span, tested elsewhere.
@@ -152,7 +152,7 @@ test('the one-dev-server regression test: Home, Login, Admin dashboard, a Lesson
 });
 
 test('stale URL regression: no served page markup or route references the retired standalone classroom origin, TutorCruncher, or a hardcoded tunnel URL', async ({ page }) => {
-  await login(page, ADMIN.email, ADMIN.password);
+  await login(page, ADMIN.username, ADMIN.password);
 
   const routesToCheck = ['/', '/about', '/login', '/dashboard', '/dashboard/admin', '/dashboard/calendar'];
   for (const route of routesToCheck) {

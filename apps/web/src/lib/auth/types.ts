@@ -21,6 +21,8 @@ export interface AuthenticatedUser {
   role: Role;
   name: string;
   profileId?: string;
+  /** Set for an administrator who teaches: their tutor record. Read it through lib/auth/teaching.ts, never directly. */
+  tutorId?: string;
 }
 
 export type LoginFailureReason = "invalid_credentials" | "account_disabled";

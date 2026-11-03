@@ -25,7 +25,7 @@ export interface GoToTarget {
   href: string;
 }
 
-const CANDIDATES: Array<{ key: string; label: string; hrefFor: (role: Role) => string | null }> = [
+const CANDIDATES: Array<{ key: string; label: string; hrefFor: (role: Role, teaches: boolean) => string | null }> = [
   { key: "d", label: "Overview", hrefFor: () => "/dashboard" },
   { key: "c", label: "Calendar", hrefFor: () => "/dashboard/calendar" },
   { key: "l", label: "Lessons", hrefFor: () => "/dashboard/lessons" },
@@ -39,15 +39,15 @@ const CANDIDATES: Array<{ key: string; label: string; hrefFor: (role: Role) => s
       role === "ADMIN" ? "/dashboard/admin/people/students" : role === "TUTOR" ? "/dashboard/students" : role === "CLIENT" ? "/dashboard/children" : null,
   },
   { key: "a", label: "Assignments", hrefFor: (role) => (role === "ADMIN" ? "/dashboard/admin/assignments" : null) },
-  { key: "v", label: "Availability", hrefFor: (role) => (role === "TUTOR" ? "/dashboard/tutor/availability" : null) },
+  { key: "v", label: "Availability", hrefFor: (role, teaches) => (role === "TUTOR" || teaches ? "/dashboard/tutor/availability" : null) },
 ];
 
 /** The go-to sequences this role has: only pages that are in its own navigation. */
-export function goToTargetsFor(role: Role): GoToTarget[] {
-  const navigable = new Set(navigationFor(role).flatMap((section) => section.items.map((item) => item.href)));
+export function goToTargetsFor(role: Role, teaches = false): GoToTarget[] {
+  const navigable = new Set(navigationFor(role, { teaches }).flatMap((section) => section.items.map((item) => item.href)));
   const targets: GoToTarget[] = [];
   for (const candidate of CANDIDATES) {
-    const href = candidate.hrefFor(role);
+    const href = candidate.hrefFor(role, teaches);
     if (href && navigable.has(href)) targets.push({ key: candidate.key, label: candidate.label, href });
   }
   return targets;

@@ -3,14 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getDataProvider } from "@/lib/data/provider";
-import { requireRole } from "@/lib/auth/guard";
+import { requireTutor } from "@/lib/auth/guard";
 
-// Both actions operate on the *calling Tutor's own* profileId only — never a tutorId taken from
+// Both actions operate on the *calling Tutor's own* record only — never a tutorId taken from
 // form input — so one Tutor can never edit another's availability (an IDOR this specific design
-// choice rules out by construction, not just by convention).
+// choice rules out by construction, not just by convention). requireTutor() also admits an
+// administrator who teaches, on their own record; requireTutor() gives profileId as that record.
 
 export async function addAvailabilityAction(formData: FormData): Promise<void> {
-  const user = await requireRole(["TUTOR"]);
+  const user = await requireTutor();
   if (!user.profileId) throw new Error("Your account isn't linked to a Tutor profile yet.");
 
   const weekday = Number(formData.get("weekday"));
@@ -33,7 +34,7 @@ export async function addAvailabilityAction(formData: FormData): Promise<void> {
 }
 
 export async function removeAvailabilityAction(formData: FormData): Promise<void> {
-  const user = await requireRole(["TUTOR"]);
+  const user = await requireTutor();
   if (!user.profileId) throw new Error("Your account isn't linked to a Tutor profile yet.");
 
   const blockId = String(formData.get("blockId") ?? "");

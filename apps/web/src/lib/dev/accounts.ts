@@ -18,6 +18,9 @@ import type { Role } from "@/lib/auth/types";
  */
 export interface DevAccount {
   id: string;
+  /** What they sign in with. */
+  username: string;
+  /** Their linked email. */
   email: string;
   password: string;
   role: Role;
@@ -31,13 +34,15 @@ export interface DevAccount {
 }
 
 export const DEV_ACCOUNTS: readonly DevAccount[] = [
-  { id: "d0000000-0000-4000-8000-000000000001", email: "admin@learnthrive.dev", password: "dev-admin-pass", role: "ADMIN", name: "Alvi Hossain (Admin)", active: true, library: "none", inDevProvider: true },
-  { id: "d0000000-0000-4000-8000-000000000002", email: "tutor@learnthrive.dev", password: "dev-tutor-pass", role: "TUTOR", name: "Tahasin Hasan (Tutor)", active: true, domainId: SEED_IDS.tutorJamiePatel, library: "none", inDevProvider: true },
-  { id: "d0000000-0000-4000-8000-000000000003", email: "client@learnthrive.dev", password: "dev-client-pass", role: "CLIENT", name: "Abdurrahman Mustafa (Client)", active: true, domainId: SEED_IDS.clientSarahAhmed, library: "enrolled", inDevProvider: true },
-  { id: "d0000000-0000-4000-8000-000000000004", email: "student@learnthrive.dev", password: "dev-student-pass", role: "STUDENT", name: "Brian James Khalawon (Student)", active: true, domainId: SEED_IDS.studentAyaanAhmed, library: "enrolled", inDevProvider: true },
-  { id: "d0000000-0000-4000-8000-000000000005", email: "disabled@learnthrive.dev", password: "dev-disabled-pass", role: "STUDENT", name: "Disabled Test Account", active: false, library: "none", inDevProvider: true },
-  { id: "d0000000-0000-4000-8000-000000000006", email: "member@learnthrive.dev", password: "dev-member-pass", role: "CLIENT", name: "Library Member", active: true, library: "subscriber", inDevProvider: false },
-  { id: "d0000000-0000-4000-8000-000000000007", email: "visitor@learnthrive.dev", password: "dev-visitor-pass", role: "CLIENT", name: "New Visitor", active: true, library: "none", inDevProvider: false },
+  { id: "d0000000-0000-4000-8000-000000000001", username: "dev.admin", email: "admin@learnthrive.dev", password: "dev-admin-pass", role: "ADMIN", name: "Alvi Hossain (Admin)", active: true, library: "none", inDevProvider: true },
+  { id: "d0000000-0000-4000-8000-000000000002", username: "dev.tutor", email: "tutor@learnthrive.dev", password: "dev-tutor-pass", role: "TUTOR", name: "Tahasin Hasan (Tutor)", active: true, domainId: SEED_IDS.tutorJamiePatel, library: "none", inDevProvider: true },
+  { id: "d0000000-0000-4000-8000-000000000003", username: "dev.client", email: "client@learnthrive.dev", password: "dev-client-pass", role: "CLIENT", name: "Abdurrahman Mustafa (Client)", active: true, domainId: SEED_IDS.clientSarahAhmed, library: "enrolled", inDevProvider: true },
+  { id: "d0000000-0000-4000-8000-000000000004", username: "dev.student", email: "student@learnthrive.dev", password: "dev-student-pass", role: "STUDENT", name: "Brian James Khalawon (Student)", active: true, domainId: SEED_IDS.studentAyaanAhmed, library: "enrolled", inDevProvider: true },
+  { id: "d0000000-0000-4000-8000-000000000005", username: "dev.disabled", email: "disabled@learnthrive.dev", password: "dev-disabled-pass", role: "STUDENT", name: "Disabled Test Account", active: false, library: "none", inDevProvider: true },
+  { id: "d0000000-0000-4000-8000-000000000006", username: "dev.member", email: "member@learnthrive.dev", password: "dev-member-pass", role: "CLIENT", name: "Library Member", active: true, library: "subscriber", inDevProvider: false },
+  { id: "d0000000-0000-4000-8000-000000000007", username: "dev.visitor", email: "visitor@learnthrive.dev", password: "dev-visitor-pass", role: "CLIENT", name: "New Visitor", active: true, library: "none", inDevProvider: false },
+  // An administrator who teaches (docs/ROLE_PERMISSIONS.md): their domain record is a tutor's. `dev.admin` above is the one who does not.
+  { id: "d0000000-0000-4000-8000-000000000008", username: "dev.teaching-admin", email: "teaching-admin@learnthrive.dev", password: "dev-teaching-admin-pass", role: "ADMIN", name: "Meera Shah (Admin)", active: true, domainId: SEED_IDS.tutorMeeraShah, library: "none", inDevProvider: false },
 ];
 
 /** True only on a local development server. Production and the built-and-started site are never "development". */

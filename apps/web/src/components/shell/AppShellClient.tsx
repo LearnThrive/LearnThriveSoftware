@@ -19,6 +19,7 @@ import { useDelayedUnmount } from "@/lib/motion/useDelayedUnmount";
 import {
   getSidebarCollapsed, getSidebarCollapsedServer, setSidebarCollapsed, subscribeToSidebarPreference,
 } from "@/lib/ui/sidebarPreference";
+import { teaches } from "@/lib/auth/teaching";
 import type { AuthenticatedUser } from "@/lib/auth/types";
 
 const ROLE_LABELS: Record<AuthenticatedUser["role"], string> = {
@@ -307,7 +308,7 @@ export function AppShellClient({
       <Suspense fallback={null}><Toaster /></Suspense>
 
       {/* Ctrl/Cmd+K search, `?` shortcuts and "g then a letter" navigation: one host, this shell only. */}
-      {tuition ? <AppPaletteHost role={user.role} onSignOut={handleLogout} /> : null}
+      {tuition ? <AppPaletteHost role={user.role} teaches={teaches(user)} onSignOut={handleLogout} /> : null}
     </div>
     </SidebarContext.Provider>
   );

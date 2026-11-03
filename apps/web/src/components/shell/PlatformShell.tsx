@@ -11,6 +11,7 @@ import { getDataProvider } from "@/lib/data/provider";
 import { supervisedLearner } from "@/lib/learner/resolve";
 import { libraryPhase, libraryShows } from "@/lib/library-config";
 import { platformNavigation } from "@/lib/navigation/appNavigation";
+import { teaches } from "@/lib/auth/teaching";
 import { PORTAL_ENABLED } from "@/lib/portal";
 
 /**
@@ -40,9 +41,9 @@ export async function PlatformShell({ children, requireDashboard = false }: { ch
   const role = dashboardUser?.role ?? (who?.account.role ?? "CLIENT");
   const user: AuthenticatedUser = dashboardUser ?? {
     id: who!.account.profileId,
-    email: who!.user.email,
+    email: who!.account.linkedEmail ?? who!.user.email,
     role,
-    name: who!.account.displayName || who!.user.displayName || who!.user.email,
+    name: who!.account.displayName || who!.user.displayName || who!.account.username || who!.user.email,
     profileId: who!.account.profileId,
   };
   const unreadCount = tuition ? await getDataProvider().notifications.unreadCountForUser(user.id) : 0;
@@ -53,7 +54,7 @@ export async function PlatformShell({ children, requireDashboard = false }: { ch
   return (
     <AppShellClient
       user={user}
-      sections={platformNavigation({ role, tuition, studyBuddy, library, account })}
+      sections={platformNavigation({ role, tuition, studyBuddy, library, account, teaches: teaches(user) })}
       unreadCount={unreadCount}
       isDevelopment={process.env.NODE_ENV !== "production"}
       homeHref={home}

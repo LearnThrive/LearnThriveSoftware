@@ -42,10 +42,10 @@ async function runAxe(page: Page, label: string, tags: string[] = WCAG2) {
   }
 }
 
-async function login(page: Page, email: string, password: string) {
+async function login(page: Page, username: string, password: string) {
   await page.request.post('/api/auth/logout');
   await page.goto('/login');
-  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Username').fill(username);
   await page.locator('input[name="password"]').fill(password);
   await Promise.all([
     page.waitForURL(/\/dashboard$/),
@@ -53,8 +53,8 @@ async function login(page: Page, email: string, password: string) {
   ]);
 }
 
-const ADMIN = { email: 'admin@learnthrive.dev', password: 'dev-admin-pass' };
-const TUTOR = { email: 'tutor@learnthrive.dev', password: 'dev-tutor-pass' };
+const ADMIN = { username: 'dev.admin', password: 'dev-admin-pass' };
+const TUTOR = { username: 'dev.tutor', password: 'dev-tutor-pass' };
 
 test.describe('automated accessibility (axe-core: WCAG 2.2 AA on the public site, WCAG 2 A/AA in the app)', () => {
   // The marketing site's own entrance animations (home.module.css's lt-rise: opacity 0 -> 1 over
@@ -81,12 +81,12 @@ test.describe('automated accessibility (axe-core: WCAG 2.2 AA on the public site
   });
 
   test('Admin dashboard', async ({ page }) => {
-    await login(page, ADMIN.email, ADMIN.password);
+    await login(page, ADMIN.username, ADMIN.password);
     await runAxe(page, '/dashboard (Admin)');
   });
 
   test('Admin: People, Assignments, Calendar', async ({ page }) => {
-    await login(page, ADMIN.email, ADMIN.password);
+    await login(page, ADMIN.username, ADMIN.password);
     await page.goto('/dashboard/admin/people/students');
     await runAxe(page, '/dashboard/admin/people/students');
     await page.goto('/dashboard/admin/assignments');
@@ -96,7 +96,7 @@ test.describe('automated accessibility (axe-core: WCAG 2.2 AA on the public site
   });
 
   test('lesson detail and the calendar peek panel', async ({ page }) => {
-    await login(page, ADMIN.email, ADMIN.password);
+    await login(page, ADMIN.username, ADMIN.password);
     await page.goto('/dashboard/lessons/lesson-gcse-maths-upcoming');
     await runAxe(page, '/dashboard/lessons/lesson-gcse-maths-upcoming');
 
@@ -107,7 +107,7 @@ test.describe('automated accessibility (axe-core: WCAG 2.2 AA on the public site
   });
 
   test('Tutor dashboard and availability', async ({ page }) => {
-    await login(page, TUTOR.email, TUTOR.password);
+    await login(page, TUTOR.username, TUTOR.password);
     await runAxe(page, '/dashboard (Tutor)');
     await page.goto('/dashboard/tutor/availability');
     await runAxe(page, '/dashboard/tutor/availability');

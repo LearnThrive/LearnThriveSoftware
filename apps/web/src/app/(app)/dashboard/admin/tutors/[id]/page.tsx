@@ -15,6 +15,9 @@ import { PersonList, PersonRow } from "@/components/people/PersonRow";
 import { RecordList, RecordRow } from "@/components/records/RecordRow";
 import { formatDateOnly } from "@/lib/format";
 import { Field, FormActions } from "@/components/ui/Field";
+import { LoginCard } from "@/components/people/LoginCard";
+import { CreateLoginForm, UsernameField } from "@/components/people/LoginForms";
+import { createTutorLoginAction } from "@/lib/actions/accounts";
 import { linkTutorLoginAction } from "@/lib/actions/enrolment";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -90,26 +93,38 @@ export default async function TutorProfilePage({ params }: { params: Promise<{ i
         </div>
       </div>
 
-      {!tutor.userId ? (
-        <Card>
-          <CardHeader title="Give this tutor a login" />
-          <CardBody>
-            <p className="muted">
-              This tutor has no login yet. Ask them to create an account and confirm their email, then enter that address. Only a plain confirmed account can be linked: never one that
-              belongs to a family or a learner.
-            </p>
+      <LoginCard
+        profileId={tutor.userId}
+        returnTo={`/dashboard/admin/tutors/${tutor.id}`}
+        noLogin={
+          <>
+            <CreateLoginForm
+              action={createTutorLoginAction}
+              hidden={{ tutorId: tutor.id }}
+              submitLabel="Create login"
+              intro="This tutor has no login yet. This makes one and gives you a temporary password to hand over."
+            >
+              <UsernameField id="tutor-login-username" />
+              <Field label="Linked email" htmlFor="tutor-login-email" hint={`Leave empty to use ${tutor.email || "the address on this record"}.`}>
+                <input id="tutor-login-email" name="email" type="email" autoComplete="off" />
+              </Field>
+            </CreateLoginForm>
             <form action={linkTutorLoginAction} className="form">
+              <p className="muted">
+                Or link a login they already have, such as an administrator who also teaches: they stay an administrator and gain the tutor tools. A login that belongs to a family or a
+                learner cannot be linked.
+              </p>
               <input type="hidden" name="tutorId" value={tutor.id} />
-              <Field label="Their sign-in email address" htmlFor="tutor-login-email" required>
-                <input id="tutor-login-email" name="email" type="email" required autoComplete="off" />
+              <Field label="Username of their login" htmlFor="tutor-link-username" required>
+                <input id="tutor-link-username" name="username" required autoComplete="off" autoCapitalize="none" spellCheck={false} />
               </Field>
               <FormActions>
                 <button type="submit" className="btn btn--secondary">Link login</button>
               </FormActions>
             </form>
-          </CardBody>
-        </Card>
-      ) : null}
+          </>
+        }
+      />
 
       <div className="stat-grid">
         <StatTile label="Active students" value={studentIds.length} />

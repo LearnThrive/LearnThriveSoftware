@@ -1,6 +1,8 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
-import { DEV_TUNNEL_HOST_SUFFIXES } from '@learnthrive/shared/allowedHosts';
+// A relative path, not @learnthrive/shared/allowedHosts: Vite bundles a relative import into its config, but leaves a package import for Node
+// to load, and that file is TypeScript, which Node before 22.18 refuses. package.json's engines allow 22.12.
+import { DEV_TUNNEL_HOST_SUFFIXES } from '../../packages/shared/allowedHosts';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');

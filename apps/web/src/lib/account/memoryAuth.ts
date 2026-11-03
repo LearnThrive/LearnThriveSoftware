@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { hashPassword, verifyPassword } from "@/lib/auth/passwords";
 import { passwordError } from "./validation";
-import type { AccountAuth, AuthTokens, AuthUser, EmailLinkKind, SignUpInput } from "./types";
+import type { AccountAdmin, AccountAuth, AdminCreateFailure, AdminCreateInput, AuthTokens, AuthUser, EmailLinkKind, SignUpInput } from "./types";
 
 /**
  * The in-memory AccountAuth: local development and tests only (runtime.ts refuses it in production). It enforces the
@@ -29,6 +29,8 @@ interface UserRow {
 
 const ACCESS_MS = 60 * 60 * 1000;
 const LINK_MS = 60 * 60 * 1000;
+/** A reset link: the same 30 minutes the Supabase project is set to. */
+const RECOVERY_MS = 30 * 60 * 1000;
 const sha = (text: string) => createHash("sha256").update(text).digest("hex");
 
 export interface MemoryAuthOptions {
@@ -37,7 +39,7 @@ export interface MemoryAuthOptions {
   onUserCreated?: (user: { id: string; displayName: string; email: string; adultConfirmed: boolean }) => void;
 }
 
-export class MemoryAccountAuth implements AccountAuth {
+export class MemoryAccountAuth implements AccountAuth, AccountAdmin {
   readonly outbox: OutboxMessage[] = [];
   private readonly users = new Map<string, UserRow>(); // by email
   private readonly byId = new Map<string, UserRow>();
@@ -141,6 +143,8 @@ export class MemoryAccountAuth implements AccountAuth {
     if (!user) return { ok: false as const, reason: "invalid_token" as const };
     if (passwordError(newPassword)) return { ok: false as const, reason: "weak_password" as const };
     const row = this.byId.get(user.id)!;
+    // Supabase refuses the password already in use, which is what stops a temporary password being kept.
+    if (await verifyPassword(newPassword, row.passwordHash)) return { ok: false as const, reason: "weak_password" as const };
     row.passwordHash = await hashPassword(newPassword);
     // Changing the password ends every other session, as Supabase does on request; keep this one.
     const keep = sha(accessToken);
@@ -168,7 +172,62 @@ export class MemoryAccountAuth implements AccountAuth {
   async signOut(accessToken: string): Promise<void> {
     const session = this.access.get(sha(accessToken));
     if (!session) return;
-    for (const [key, s] of this.access) if (s.userId === session.userId) this.access.delete(key);
-    for (const [key, userId] of this.refreshTokens) if (userId === session.userId) this.refreshTokens.delete(key);
+    this.endSessions(session.userId);
+  }
+
+  async signOutOthers(accessToken: string): Promise<void> {
+    const keep = sha(accessToken);
+    const session = this.access.get(keep);
+    if (!session) return;
+    for (const [key, s] of this.access) if (s.userId === session.userId && key !== keep) this.access.delete(key);
+  }
+
+  private endSessions(userId: string): void {
+    for (const [key, s] of this.access) if (s.userId === userId) this.access.delete(key);
+    for (const [key, id] of this.refreshTokens) if (id === userId) this.refreshTokens.delete(key);
+  }
+
+  async createUser(input: AdminCreateInput): Promise<{ ok: true; id: string } | { ok: false; reason: AdminCreateFailure }> {
+    if (this.users.has(input.email)) return { ok: false, reason: "exists" };
+    if (passwordError(input.password)) return { ok: false, reason: "weak_password" };
+    const row: UserRow = { id: crypto.randomUUID(), email: input.email, displayName: input.displayName, passwordHash: await hashPassword(input.password), confirmed: true };
+    this.users.set(row.email, row);
+    this.byId.set(row.id, row);
+    this.options.onUserCreated?.({ id: row.id, displayName: row.displayName, email: row.email, adultConfirmed: input.adultConfirmed });
+    return { ok: true, id: row.id };
+  }
+
+  async setPassword(userId: string, password: string): Promise<{ ok: true } | { ok: false; reason: "weak_password" | "unavailable" }> {
+    const row = this.byId.get(userId);
+    if (!row) return { ok: false, reason: "unavailable" };
+    if (passwordError(password)) return { ok: false, reason: "weak_password" };
+    row.passwordHash = await hashPassword(password);
+    this.endSessions(userId);
+    return { ok: true };
+  }
+
+  async recoveryLink(email: string): Promise<{ tokenHash: string } | null> {
+    const row = this.users.get(email);
+    if (!row) return null;
+    const tokenHash = randomBytes(24).toString("base64url");
+    this.links.set(tokenHash, { userId: row.id, kind: "recovery", expiresAt: this.now() + RECOVERY_MS });
+    return { tokenHash };
+  }
+
+  async setDisabled(userId: string, disabled: boolean): Promise<boolean> {
+    const row = this.byId.get(userId);
+    if (!row) return false;
+    row.disabled = disabled;
+    if (disabled) this.endSessions(userId);
+    return true;
+  }
+
+  async deleteUser(userId: string): Promise<boolean> {
+    const row = this.byId.get(userId);
+    if (!row) return false;
+    this.endSessions(userId);
+    this.byId.delete(userId);
+    this.users.delete(row.email);
+    return true;
   }
 }

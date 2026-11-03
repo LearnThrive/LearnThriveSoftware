@@ -324,10 +324,13 @@ test("production: a form posted too fast is dropped", async (t) => {
   h.resetAccountLimiters();
   quiet(t);
   const rt = runtime();
-  const fast = await h.handleSignUp(post("signup", { ...FORM, elapsedMs: 300 }), { rt, jar: jar() });
+  const made = await rt.auth.createUser({ email: "someone@accounts.learnthrivetuition.co.uk", password: "a temporary password", displayName: "Someone", adultConfirmed: true });
+  assert.equal(await rt.store.accounts.provision({ profileId: made.id, username: "someone", linkedEmail: "someone@example.com", displayName: "Someone", role: "CLIENT", actor: null }), "ok");
+  const deps = { rt: { ...rt, admin: rt.auth }, jar: jar(), answerFloorMs: 0 };
+  const fast = await h.handleEmailLink(post("forgot", { username: "someone", elapsedMs: 300 }), deps, "reset");
   assert.equal(fast.status, 200);
   assert.equal(rt.outbox.length, 0);
-  const ok = await h.handleSignUp(post("signup", FORM), { rt, jar: jar() });
+  const ok = await h.handleEmailLink(post("forgot", { username: "someone" }), deps, "reset");
   assert.equal(ok.status, 200);
   assert.equal(rt.outbox.length, 1);
 });
@@ -441,7 +444,7 @@ test("forgot and resend: the same answer for every address; reset needs the emai
   assert.equal(known.status, 200);
   assert.deepEqual(await known.json(), await unknown.json());
   assert.equal(rt.outbox.filter((m) => m.kind === "recovery").length, 1, "only the real account was sent a link");
-  assert.equal((await h.handleEmailLink(post("forgot", { email: "bad" }), { rt, jar: jar() }, "reset")).status, 422);
+  assert.equal((await h.handleEmailLink(post("forgot", { email: "not an address" }), { rt, jar: jar() }, "reset")).status, 422);
   assert.equal((await h.handleEmailLink(post("resend", { email: FORM.email }), { rt, jar: jar() }, "verify")).status, 200);
 
   const noSession = await h.handleSetPassword(post("password", { password: "a brand new password" }), { rt, jar: jar() });
@@ -570,7 +573,7 @@ test("a disabled account is told so (after the right password) and a wrong passw
   assert.match(off.body.error, /disabled/);
   const guess = await h.handleSignIn(post("login", { email: "off@example.com", password: "not the password at all" }), { rt, jar: jar() });
   assert.equal(guess.status, 401, "a guesser learns nothing from the disabled state");
-  assert.deepEqual(await guess.json(), { error: "Email or password is not right." });
+  assert.deepEqual(await guess.json(), { error: "Username or password is not right." });
   const jarOff = jar();
   await h.handleSignIn(post("login", { email: "off@example.com", password: GOOD }), { rt, jar: jarOff });
   assert.equal(jarOff.values.size, 0, "no session for a disabled account");

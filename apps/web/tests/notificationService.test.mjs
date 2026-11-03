@@ -30,6 +30,26 @@ test("notifyProfiles: notifies every resolvable profileId in the list, skipping 
   assert.ok(notifications.some((n) => n.message === "Batch test message"));
 });
 
+test("on the database the recipients are real logins from the provider, never the development accounts", async (t) => {
+  const settings = { SUPABASE_URL: "https://p.supabase.co", SUPABASE_ANON_KEY: "k", DATABASE_URL: "postgres://x" };
+  for (const [key, value] of Object.entries(settings)) process.env[key] = value;
+  t.after(() => {
+    for (const key of Object.keys(settings)) delete process.env[key];
+  });
+  const sent = [];
+  const data = {
+    notifications: {
+      recipientFor: async (id) => (id === "tutor-1" ? "real-login" : null),
+      recipientsWithRole: async () => ["real-admin"],
+      create: async (input) => sent.push(input.userId),
+    },
+  };
+  await notifyRole(data, "ADMIN", "REPORT_AWAITING_APPROVAL", "A report is waiting.");
+  await notifyProfile(data, "tutor-1", "REPORT_AVAILABLE", "One for a real login.");
+  await notifyProfile(data, SEED_IDS.clientSarahAhmed, "REPORT_AVAILABLE", "A seeded record has no real login.");
+  assert.deepEqual(sent, ["real-admin", "real-login"]);
+});
+
 test("notifyRole: notifies every active user with the given role", async () => {
   const data = getDataProvider();
   await notifyRole(data, "ADMIN", "SCHEDULING_CONFLICT", "Conflict overridden");

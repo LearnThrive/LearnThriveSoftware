@@ -6,6 +6,8 @@ import type {
   AccessFacts,
   Account,
   DownloadEvent,
+  ProvisionInput,
+  ProvisionResult,
   Resource,
   FacetScope,
   ResourceFacets,
@@ -34,10 +36,21 @@ export interface AccountRepository {
   domainRef(profileId: string): Promise<string | null>;
   /** The profile that owns a family account, or null if there is no such account. For webhooks, which carry a client id. */
   getOwnerProfileId(clientId: string): Promise<string | null>;
-  /** The sign-in email address of a profile, for the billing emails. Server only. null if there is none. */
+  /** The tutor record this person teaches as, or null. Only an ACTIVE record counts: a tutor who has stopped does not teach. */
+  tutorRef(profileId: string): Promise<string | null>;
+  /** The address to write to for a profile: the linked one. Never the internal sign-in address of a username account. null if there is none. */
   getEmail(profileId: string): Promise<string | null>;
   /** The name printed on downloads. The caller has already cleaned it (at most 80 characters). Throws if there is no such profile. */
   updateDisplayName(profileId: string, displayName: string): Promise<void>;
+  /** The account with this username, or null. The caller has already lower-cased it. */
+  findByUsername(username: string): Promise<Account | null>;
+  /** Binds a brand new login to its record (docs/AUTHENTICATION.md). Never converts an existing person. */
+  provision(input: ProvisionInput): Promise<ProvisionResult>;
+  setMustChangePassword(profileId: string, required: boolean): Promise<void>;
+  /** Corrects a linked address, and those of the children of a parent. The caller audits it. */
+  setLinkedEmail(profileId: string, email: string): Promise<void>;
+  /** Records that a login was disabled (null: enabled again). Auth holds the ban itself. */
+  setLoginDisabled(profileId: string, at: Date | null): Promise<void>;
 }
 
 export interface ResourceRepository {

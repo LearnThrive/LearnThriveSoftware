@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { requireSession } from "@/lib/auth/guard";
+import { asTutor } from "@/lib/auth/teaching";
 import { createMetadata } from "@/lib/metadata";
 import { AdminDashboard } from "@/components/dashboards/AdminDashboard";
-import { TutorDashboard } from "@/components/dashboards/TutorDashboard";
+import { TeachingSection, TutorDashboard } from "@/components/dashboards/TutorDashboard";
 import { ClientDashboard } from "@/components/dashboards/ClientDashboard";
 import { StudentDashboard } from "@/components/dashboards/StudentDashboard";
 import { GettingStarted } from "@/components/dashboards/GettingStarted";
@@ -19,9 +20,10 @@ export const metadata: Metadata = createMetadata({
 // component rather than one page full of role conditionals.
 export default async function DashboardPage() {
   const user = await requireSession();
+  const teaching = user.role === "ADMIN" ? asTutor(user) : null;
 
   const dashboard =
-    user.role === "ADMIN" ? <AdminDashboard user={user} />
+    user.role === "ADMIN" ? <><AdminDashboard user={user} />{teaching ? <TeachingSection user={teaching} /> : null}</>
     : user.role === "TUTOR" ? <TutorDashboard user={user} />
     : user.role === "CLIENT" ? <ClientDashboard user={user} />
     : <StudentDashboard user={user} />;
