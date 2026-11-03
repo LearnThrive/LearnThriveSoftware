@@ -42,6 +42,10 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
+      # The classroom's own production build. Nothing else loads its Vite config, so this is the only check that it still loads on the oldest
+      # supported Node.
+      - run: npm run build --workspace=apps/classroom
+
       # Production build of the public site, with ONLY production-style settings: no email credentials,
       # the portal closed (the default), no development provider. This is what is deployed.
       # The one difference: CSP_UPGRADE_INSECURE=0 drops `upgrade-insecure-requests`, because this job serves the
