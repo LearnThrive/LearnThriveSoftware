@@ -96,12 +96,10 @@ test.describe('LearnThrive AI: the activity panel in the real chat', () => {
     await open(page);
     await ask(page, `[slow] ${HELD}`, { first: true });
     await expect(page.locator(`${ANSWER} ${PANEL}`)).toHaveAttribute('data-phase', 'running');
-    const tier = await page.locator('html').getAttribute('data-motion-tier');
-    // Counted after a moment, so the entrance animations of the page are over: what is left is what loops.
+    // Counted after a moment, so the entrance animations of the page are over: what is left is what loops. The ring
+    // turns on every tier (activity.module.css), so it is exactly one wherever this runs.
     await page.waitForTimeout(1200);
-    const loops = await spinners(page);
-    expect(loops).toBeLessThanOrEqual(1);
-    if (tier !== 'full') expect(loops).toBe(0);
+    expect(await spinners(page)).toBe(1);
     await page.getByRole('button', { name: 'Stop' }).click();
     await expect(page.getByRole('button', { name: 'Stop' })).toHaveCount(0);
     expect(await spinners(page)).toBe(0);
