@@ -110,6 +110,22 @@ export const PUBLIC_ROUTES = [
 ];
 
 /**
+ * The motion tier (lib/motion/capabilities.ts) reads navigator.hardwareConcurrency and deviceMemory, and a CI runner
+ * has two cores, which is "light": no hero backdrop, no scroll- or pointer-driven stage. A test of what a given tier
+ * does pins both before navigation, so the tier it gets is decided by the viewport, pointer and motion preference it
+ * set up, on any machine. The default (8 and 8) is a capable desktop.
+ */
+export async function pinCapabilities(page: Page, cores = 8, memory = 8) {
+  await page.addInitScript(
+    ({ cores, memory }) => {
+      Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => cores, configurable: true });
+      Object.defineProperty(navigator, 'deviceMemory', { get: () => memory, configurable: true });
+    },
+    { cores, memory },
+  );
+}
+
+/**
  * Counts React commits. React reports every commit to `__REACT_DEVTOOLS_GLOBAL_HOOK__` if one is
  * installed before it loads, so a stub hook is enough to answer "did this animation go through React
  * on every frame?" — the question plan11.md is built around — with a number instead of an opinion.
