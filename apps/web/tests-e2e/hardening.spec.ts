@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { uniqueLabel } from './support';
+import { dayInWeeks, lessonSlot, showMonthOf, uniqueLabel } from './support';
 
 // Plan section 85's IDOR/access-control adversarial test list. Several of its named attacks
 // (Parent accesses unrelated Student URL, Tutor accesses unassigned Student, Student accesses
@@ -66,18 +66,15 @@ test('lesson detail IDOR: a Tutor cannot view a lesson they are not assigned to'
 
   await page.goto('/dashboard/admin/lessons/new');
   await page.getByLabel('Tuition Assignment').selectOption({ label: assignmentTitle });
+  const slot = lessonSlot(dayInWeeks(2, 'Saturday'), '11:00');
   await page.locator('#lesson-title').fill(lessonTitle);
-  await page.locator('#lesson-date').fill('2026-11-21');
-  await page.locator('#lesson-time').fill('11:00');
+  await page.locator('#lesson-date').fill(slot.date);
+  await page.locator('#lesson-time').fill(slot.time);
   await page.getByRole('button', { name: 'Schedule lesson' }).click();
   await expect(page).toHaveURL(/\/dashboard\/calendar$/);
 
   await page.goto('/dashboard/calendar');
-  for (let i = 0; i < 12; i += 1) {
-    const title = await page.locator('.fc-toolbar-title').innerText();
-    if (title.includes('November 2026')) break;
-    await page.locator('.fc-next-button').click();
-  }
+  await showMonthOf(page, slot.date);
   await openLessonFromCalendar(page, lessonTitle);
   await expect(page).toHaveURL(/\/dashboard\/lessons\/(.+)/);
   const lessonUrl = page.url();
@@ -104,17 +101,14 @@ test('report approval IDOR: a Tutor never sees an Approve report control, even o
   await page.goto('/dashboard/admin/lessons/new');
   await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Brian' });
   const lessonTitle = uniqueLabel('Hardening report lesson');
+  const slot = lessonSlot(dayInWeeks(2, 'Sunday'), '12:00');
   await page.locator('#lesson-title').fill(lessonTitle);
-  await page.locator('#lesson-date').fill('2026-11-22');
-  await page.locator('#lesson-time').fill('12:00');
+  await page.locator('#lesson-date').fill(slot.date);
+  await page.locator('#lesson-time').fill(slot.time);
   await page.getByRole('button', { name: 'Schedule lesson' }).click();
   await expect(page).toHaveURL(/\/dashboard\/calendar$/);
 
-  for (let i = 0; i < 12; i += 1) {
-    const title = await page.locator('.fc-toolbar-title').innerText();
-    if (title.includes('November 2026')) break;
-    await page.locator('.fc-next-button').click();
-  }
+  await showMonthOf(page, slot.date);
   await openLessonFromCalendar(page, lessonTitle);
   await expect(page).toHaveURL(/\/dashboard\/lessons\/(.+)/);
   const lessonUrl = page.url();
