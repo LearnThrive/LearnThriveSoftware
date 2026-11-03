@@ -109,7 +109,8 @@ export function validApplication() {
   otherRelevant: "",
   times: ["Weekday evenings"],
   hoursPerWeek: "4 to 6 hours",
-  startDate: "2026-11-01",
+  // A week from today, never a fixed date: the rule refuses a start date in the past, so a fixed one stops passing once it goes by.
+  startDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
   privateSpace: true,
   rightToWork: "yes",
   dbsCertificate: "",
