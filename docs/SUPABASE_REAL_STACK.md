@@ -24,20 +24,21 @@ Everything not used is off (realtime, edge functions, analytics, the S3 protocol
 
 ## What ran
 
-`npm run test:realstack` runs everything below, one file at a time (the store test empties the local tables). **174 tests, 174 passed.**
+`npm run test:realstack` runs everything below, one file at a time (the store test empties the local tables). Last run 3 November 2026 at migration `0017`: **220 tests, 220 passed** (the first run, at `0009`, was 174 of 174).
 
 | What | Tests | Where |
 | --- | --- | --- |
-| All nine migrations (`0001` to `0009`) applied from nothing (`supabase db reset`) on real Postgres 17, each first time | n/a | CLI |
-| `packages/data/src/realstack.test.ts`, **66 tests in four groups**: (1) the adversarial row level security suite through PostgREST with **real user tokens** (cross-family reads, writes, re-parenting with and without a deliberately widened grant, role escalation, server-only tables, file paths, drafts, private helpers, the admin's limits); (2) Auth for real: sign-up, the emailed link, confirmation, password rules, reset, refresh rotation, sign-out, no anonymous sign-in, no social login; (3) Storage for real: private buckets, MIME and size limits, nobody but the server can list, read, write, delete, move or sign, a signed URL works and a changed, missing, swapped or expired one fails; (4) what the Data API exposes: only `public`, no GraphQL, the schema description shows an anonymous caller only the catalogue | 66 | `packages/data/src/realstack.test.ts` |
-| The Library store's 29-test contract on real Postgres through the production connection code, **directly, through the pooler, and as the narrow `learnthrive_server` role** | 87 | `realstack.store.test.ts` |
-| The narrow role: attributes, what it can and cannot do, exact grants, three functions only | 8 | `realstack.role.test.ts` |
+| All seventeen migrations (`0001` to `0017`) applied from nothing (`supabase db reset`) on real Postgres 17, each first time; `0017` also applied to a populated `0016` database (existing people untouched, its checks validated against their rows) and ran a second time cleanly | n/a | CLI |
+| `packages/data/src/realstack.test.ts`, **67 tests in four groups**: (1) the adversarial row level security suite through PostgREST with **real user tokens** (cross-family reads, writes, re-parenting with and without a deliberately widened grant, role escalation, server-only tables, file paths, drafts, private helpers, the admin's limits); (2) Auth for real: sign-up, the emailed link, confirmation, password rules, reset, refresh rotation, sign-out, no anonymous sign-in, no social login; (3) Storage for real: private buckets, MIME and size limits, nobody but the server can list, read, write, delete, move or sign, a signed URL works and a changed, missing, swapped or expired one fails; (4) what the Data API exposes: only `public`, no GraphQL, the schema description shows an anonymous caller only the catalogue | 67 | `packages/data/src/realstack.test.ts` |
+| The Library store's 43-test contract on real Postgres through the production connection code, **directly, through the pooler, and as the narrow `learnthrive_server` role** | 129 | `realstack.store.test.ts` |
+| The narrow role: attributes, what it can and cannot do, exact grants, six functions only | 8 | `realstack.role.test.ts` |
 | The site's real route handlers over real Auth, the production database connection and the mail catcher (sign-up, link, session, rename, token renewal and rotation, sign-out, reset) | 4 | `apps/web/tests/realstack.app.test.mjs` |
 | The real import script as a child process (dry run, one bad file stops everything, apply with the new and the legacy key formats through the pooler, re-apply, version 2), the download route from real Storage, the entitlement sync, the retention job (storage first, then rows) | 4 | `realstack.library.test.mjs` |
 | `promote-admin`: refusals change nothing, a promoted account really has administrator reach | 3 | `realstack.admin.test.mjs` |
-| `supabase-smoke`: 11 steps pass, nothing is left behind, an existing account is never touched | 2 | `realstack.smoke.test.mjs` |
+| Username accounts (3.2, 3.11): Auth accepts the internal `@accounts.learnthrivetuition.co.uk` address and a login the Admin API made there signs in; a wrong username and a wrong password get the same answer; `create-account` through the narrow role (a dry run writes nothing, then the staff, a family and a child are made; a wrong confirmation changes nothing; an existing passwords file is never overwritten) | 4 | `realstack.accounts.test.mjs` |
+| `supabase-smoke`: a full run passes every step, prints no key, and leaves no account, resource, file row, audit row or object behind | 1 | `realstack.smoke.test.mjs` |
 
-The probes (`scripts/supabase-verify.mjs`) against the stack: 15 pass, 0 fail, 5 notes. The unit suites stay green without the stack (PGlite 168, web 621).
+At the first run (`0009`) the probes (`scripts/supabase-verify.mjs`) against the stack gave 15 pass, 0 fail, 5 notes, and the unit suites stayed green without the stack (PGlite 168, web 621). The probes were not re-run at `0017`.
 
 ## What differed from the fakes, and the fix
 
@@ -56,6 +57,7 @@ The probes (`scripts/supabase-verify.mjs`) against the stack: 15 pass, 0 fail, 5
 | 11 | PostgREST refuses an anonymous caller with 401 and a signed-in one with 403, both SQLSTATE `42501`; an update RLS hides returns an empty list, not an error. | The suite asserts each. |
 | 12 | `postgres` (not a superuser) may **create and alter a `bypassrls` role**, but Postgres refuses even the words `NOSUPERUSER` or `NOREPLICATION` unless you are a superuser. | The script writes only the attributes it needs. |
 | 13 | The **local gateway exposes Studio's database tool**: `/pg/query` runs SQL as `postgres` with no key. | Local only (see below); `supabase-verify` fails it on a hosted project. |
+| 14 | **The Paper Tutor's JSON was encoded twice** (found at `0017`). The production driver (`postgres`) JSON-encodes any parameter the server types as `jsonb`, and the SQL provider passed text that was already JSON to `$n::jsonb`, so real Postgres stored a JSON string and the `paper_jobs` and `paper_assessment_versions` checks refused every begin, save and amend. PGlite passes text through, so it never showed. | The JSON goes in as text and is cast in the SQL (`$n::text::jsonb`), which both drivers treat the same way (`packages/data/src/library/sql.ts`). |
 
 ## The key-format decision
 

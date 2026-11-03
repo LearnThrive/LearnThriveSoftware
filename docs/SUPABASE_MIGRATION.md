@@ -6,7 +6,7 @@
 | --- | --- |
 | Postgres schema and Row Level Security (`supabase/migrations/0001` to `0009`) | **Proven twice**: in-process with PGlite (WASM Postgres, in every `npm test`), and on a **real local Supabase stack** (Postgres 17, Auth, PostgREST, Storage, the pooler), where all nine apply from nothing and the adversarial suite passes through the real API with real user tokens. See "Proof" below and `docs/SUPABASE_REAL_STACK.md`. |
 | A Supabase project (hosted) | **Exists (`learnthrive-prod`, London, Postgres 17) but is empty and untouched.** Nothing has been pushed to it: that needs the owner's approval after the dry run (`docs/SUPABASE_REAL_STACK.md`, "The hosted project"). The settings the owner applies by hand are in `docs/SUPABASE_DASHBOARD_CHECKLIST.md`. |
-| Local stack with the Supabase CLI (`npm run supabase:start`) | **Run.** CLI `supabase@2.121.0` (a pinned dev dependency, no install script), a reviewed `supabase/config.toml` with no keys, Docker images and versions listed in `docs/SUPABASE_REAL_STACK.md`. 174 real-stack tests: `npm run test:realstack`. |
+| Local stack with the Supabase CLI (`npm run supabase:start`) | **Run.** CLI `supabase@2.121.0` (a pinned dev dependency, no install script), a reviewed `supabase/config.toml` with no keys, Docker images and versions listed in `docs/SUPABASE_REAL_STACK.md`. 220 real-stack tests: `npm run test:realstack`. |
 | Library repositories (`packages/data/src/library`): accounts, resources, access facts, downloads, billing | **Built (plan19 phases C to E) and run on real Postgres.** `SqlLibraryStore` over a two-line `SqlExecutor`, and an in-memory twin, held to one 29-test contract that runs on the in-memory store, on PGlite, and on the real stack (directly, through the pooler, and as the narrow server role). See "The repositories" below. |
 | Account auth against Supabase Auth | **Built and run against real Auth** (`apps/web/src/lib/account/supabaseAuth.ts`, REST over `fetch`, no SDK): sign-up, the emailed link, confirmation, sign-in, refresh, reset, sign-out, through the site's real route handlers. Found and fixed on the real service: the 72-byte password limit and a stale name after a rename (`docs/SUPABASE_REAL_STACK.md`). The in-memory provider and the development auth provider are unchanged. |
 | The site's database role | **`learnthrive_server`** (`scripts/create-server-role.mjs`): proven on the real stack. See "A narrower role" below. |
@@ -133,11 +133,11 @@ Limits of the PGlite layer: PGlite is Postgres but not Supabase. Storage, PostgR
 ```bash
 npm run supabase:start       # the CLI (needs Docker); first run pulls the images
 npm run supabase:reset       # apply every migration from nothing (local only)
-npm run test:realstack       # 174 tests, one file at a time
+npm run test:realstack       # 220 tests, one file at a time
 npm run supabase:stop        # when you are done: the stack is open to the network (docs/SUPABASE_REAL_STACK.md)
 ```
 
-The same adversarial cases as `rls.test.ts` run **over HTTP with real user tokens** through PostgREST; Auth, Storage, the narrow role, the repositories, the import tool, the download route, the retention job and the operator scripts run against the real services. Every difference from PGlite and from the faked-`fetch` tests is recorded, with its fix, in `docs/SUPABASE_REAL_STACK.md` (nine migrations; three behaviours were wrong or missing and are now migrations `0008` and `0009` and code fixes). The tests are skipped without `SUPABASE_LOCAL=1`, and the harness refuses any address that is not this machine.
+The same adversarial cases as `rls.test.ts` run **over HTTP with real user tokens** through PostgREST; Auth, Storage, the narrow role, the repositories, the import tool, the download route, the retention job and the operator scripts run against the real services. Every difference from PGlite and from the faked-`fetch` tests is recorded, with its fix, in `docs/SUPABASE_REAL_STACK.md` (nine migrations at first; three behaviours were wrong or missing and are now migrations `0008` and `0009` and code fixes; the run at `0017` found one more, the Paper Tutor's JSON encoded twice). The tests are skipped without `SUPABASE_LOCAL=1`, and the harness refuses any address that is not this machine.
 
 ## Local development with the Supabase CLI
 
