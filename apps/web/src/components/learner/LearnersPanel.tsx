@@ -37,7 +37,8 @@ const message = (data: Record<string, unknown> | null, fallback: string) => (typ
  * supervised view under the guardian's own session), say that LearnThrive AI may be used, suspend or remove a login, and delete (never
  * read) a learner's conversations. Every decision is made by the server for the signed-in guardian; this only asks.
  */
-export function LearnersPanel() {
+/** `canInvite`: a guardian may invite a learner to sign in. Off in production, where LearnThrive makes every login (lib/account/selfService.ts). */
+export function LearnersPanel({ canInvite = true }: { canInvite?: boolean }) {
   const [data, setData] = useState<Listing | null>(null);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
@@ -146,7 +147,9 @@ export function LearnersPanel() {
               ) : null}
 
               {s.learnerStatus === null || s.learnerStatus === "revoked" ? (
-                s.canHaveOwnLogin ? (
+                !canInvite ? (
+                  <p className={styles.help}>LearnThrive sets up every login. Contact us if {s.displayName} needs one of their own.</p>
+                ) : s.canHaveOwnLogin ? (
                   <InviteForm student={s} onInvite={(email) => act(`/api/learners/${s.id}/invite`, "POST", email ? { email } : {}, "Invitation made.", (d) => d && setShown({ studentId: s.id, link: String(d.link), expiresAt: String(d.expiresAt) }))} />
                 ) : (
                   <p className={styles.help}>{s.displayName} is too young for a sign-in of their own. Use the supervised view above.</p>

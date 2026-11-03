@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { CalendarPlus } from "lucide-react";
 import { requireSession } from "@/lib/auth/guard";
+import { joinRoleFor } from "@/lib/auth/teaching";
 import { createMetadata } from "@/lib/metadata";
 import { getDataProvider } from "@/lib/data/provider";
 import { visibleLessonsFor } from "@/lib/scheduling/visibleLessons";
@@ -38,13 +39,10 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     ? allLessons.filter((lesson) => lesson.tutorId === tutorFilter)
     : allLessons;
 
-  const canJoinAtAll = user.role === "TUTOR" || user.role === "STUDENT";
-  const joinRole = user.role as "TUTOR" | "STUDENT";
-  const minutesBefore = user.role === "TUTOR" ? JOIN_WINDOW_MINUTES.TUTOR_BEFORE : JOIN_WINDOW_MINUTES.STUDENT_BEFORE;
-
   const calendarLessons: CalendarLesson[] = lessons.map((lesson) => {
-    const canJoin = canJoinAtAll && lesson.locationType === "ONLINE" && lesson.status !== "CANCELLED"
-      && (user.role === "TUTOR" ? lesson.tutorId === user.profileId : lesson.studentIds.includes(user.profileId ?? ""));
+    const joinRole = joinRoleFor(user, lesson);
+    const canJoin = joinRole !== null && lesson.locationType === "ONLINE" && lesson.status !== "CANCELLED";
+    const minutesBefore = joinRole === "TUTOR" ? JOIN_WINDOW_MINUTES.TUTOR_BEFORE : JOIN_WINDOW_MINUTES.STUDENT_BEFORE;
     return {
       id: lesson.id,
       title: lesson.title,

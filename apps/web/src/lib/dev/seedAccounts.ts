@@ -1,5 +1,6 @@
 import type { InMemoryLibraryStore } from "@learnthrive/data/library";
 import type { MemoryAccountAuth } from "@/lib/account/memoryAuth";
+import { internalEmailFor } from "@/lib/account/username";
 import { DEV_ACCOUNTS } from "./accounts";
 
 /**
@@ -15,9 +16,10 @@ import { DEV_ACCOUNTS } from "./accounts";
 export async function seedDevAccounts(auth: MemoryAccountAuth, store: InMemoryLibraryStore, now: Date = new Date()): Promise<void> {
   let familyStudent: string | null = null;
   for (const account of DEV_ACCOUNTS) {
-    if (auth.userIdFor(account.email)) continue;
-    await auth.seedUser({ id: account.id, email: account.email, displayName: account.name, password: account.password, disabled: !account.active });
-    store.seedProfile({ id: account.id, role: account.role, displayName: account.name, adultConfirmed: true, email: account.email });
+    const address = internalEmailFor(account.username);
+    if (auth.userIdFor(address)) continue;
+    await auth.seedUser({ id: account.id, email: address, displayName: account.name, password: account.password, disabled: !account.active });
+    store.seedProfile({ id: account.id, role: account.role, displayName: account.name, adultConfirmed: true, email: account.email, username: account.username, linkedEmail: account.email });
     if (account.role === "STUDENT" && account.library === "enrolled" && familyStudent) store.seedLearner(familyStudent, account.id);
     else if (account.library === "enrolled") {
       familyStudent = store.seedStudent(account.id, { displayName: "Brian", isMinor: false, yearGroup: "A Level" });

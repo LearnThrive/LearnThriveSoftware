@@ -34,39 +34,36 @@ describe("promote-admin on the real local stack", { skip: ENABLED ? false : "set
     await sql?.end({ timeout: 3 });
   });
 
-  const promote = (email, { host = "127.0.0.1", typed = email } = {}) =>
-    spawnSync(process.execPath, ["scripts/promote-admin.mjs", "--email", email, "--host", host], { cwd: WEB, encoding: "utf8", input: `${typed}\n`, env: { PATH: process.env.PATH, DATABASE_URL: url }, timeout: 30_000 });
+  const promote = (username, { host = "127.0.0.1", typed = username } = {}) =>
+    spawnSync(process.execPath, ["scripts/promote-admin.mjs", "--username", username, "--host", host], { cwd: WEB, encoding: "utf8", input: `${typed}\n`, env: { PATH: process.env.PATH, DATABASE_URL: url }, timeout: 30_000 });
   const roleOf = async (id) => (await sql`select role from public.profiles where id = ${id}`)[0].role;
-  async function account(name, { confirmed = true } = {}) {
+  async function account(name) {
     const email = `pa-${run}-${name}@example.com`;
-    const body = { email, password: "correct horse battery staple", ...(confirmed ? { email_confirm: true } : {}), user_metadata: { display_name: name, adult_confirmed: true } };
+    const body = { email, password: "correct horse battery staple", email_confirm: true, user_metadata: { display_name: name, adult_confirmed: true } };
     const made = await (await api("/auth/v1/admin/users", { method: "POST", body: JSON.stringify(body) })).json();
     created.push(made.id);
-    return { id: made.id, email };
+    const username = `pa-${run}-${name}`;
+    await sql`update public.profiles set username = ${username} where id = ${made.id}`;
+    return { id: made.id, email, username };
   }
 
-  test("an unknown address, an unconfirmed account and a wrong typed email change nothing", async () => {
-    const ghost = promote(`pa-${run}-ghost@example.com`);
+  test("an unknown username and a wrong typed username change nothing", async () => {
+    const ghost = promote(`pa-${run}-ghost`);
     assert.equal(ghost.status, 1);
-    assert.match(ghost.stderr, /no account with that address/);
-    const pending = await account("pending", { confirmed: false });
-    const early = promote(pending.email);
-    assert.equal(early.status, 1);
-    assert.match(early.stderr, /has not confirmed/);
-    assert.equal(await roleOf(pending.id), "CLIENT");
+    assert.match(ghost.stderr, /no account with that username/);
     const person = await account("careful");
-    const mismatch = promote(person.email, { typed: `pa-${run}-someone-else@example.com` });
+    const mismatch = promote(person.username, { typed: `pa-${run}-someone-else` });
     assert.equal(mismatch.status, 3);
     assert.match(mismatch.stderr, /did not match/);
     assert.equal(await roleOf(person.id), "CLIENT", "a wrong confirmation changes nothing");
-    const wrongHost = promote(person.email, { host: "localhost" });
+    const wrongHost = promote(person.username, { host: "localhost" });
     assert.equal(wrongHost.status, 3, "--host must be the connection's own host, written the same way");
     assert.equal(await roleOf(person.id), "CLIENT");
   });
 
-  test("a confirmed account is promoted once the operator types the address again; the output is one counter-only line and holds no email", async () => {
+  test("an account is promoted once the operator types the username again; the output is one counter-only line and holds no username", async () => {
     const person = await account("boss");
-    const r = promote(person.email);
+    const r = promote(person.username);
     assert.equal(r.status, 0, r.stdout + r.stderr);
     assert.equal(await roleOf(person.id), "ADMIN");
     const audit = JSON.parse(r.stdout.split("\n").find((l) => l.startsWith("{")));
@@ -74,10 +71,10 @@ describe("promote-admin on the real local stack", { skip: ENABLED ? false : "set
     assert.equal(audit.outcome, "promoted");
     assert.equal(audit.host, "127.0.0.1");
     assert.ok(Number.isInteger(audit.administrators) && audit.administrators >= 1);
-    assert.ok(!JSON.stringify(audit).includes(person.email) && !JSON.stringify(audit).includes("boss"), "the audit line has no email or name");
+    assert.ok(!JSON.stringify(audit).includes(person.username) && !JSON.stringify(audit).includes("boss"), "the audit line has no username or name");
     for (const out of [r.stdout, r.stderr]) assert.ok(!out.includes(new URL(url).password), "the connection password is never printed");
     // Promoting again is a no-op that says so.
-    const again = promote(person.email);
+    const again = promote(person.username);
     assert.equal(again.status, 0);
     assert.match(again.stdout, /already an administrator/);
     assert.equal(JSON.parse(again.stdout.split("\n").find((l) => l.startsWith("{"))).outcome, "already_admin");
@@ -86,7 +83,7 @@ describe("promote-admin on the real local stack", { skip: ENABLED ? false : "set
   test("the promotion takes effect for real: a fresh sign-in has administrator reach (all families, never conversations), and nobody else does", async () => {
     const boss = await account("boss2");
     const other = await account("other");
-    assert.equal(promote(boss.email).status, 0);
+    assert.equal(promote(boss.username).status, 0);
     const token = async (a) => (await (await api("/auth/v1/token?grant_type=password", { method: "POST", body: JSON.stringify({ email: a.email, password: "correct horse battery staple" }) })).json()).access_token;
     const read = async (a, table) => (await fetch(`${stack.API_URL}/rest/v1/${table}?select=id`, { headers: { apikey: stack.PUBLISHABLE_KEY, Authorization: `Bearer ${await token(a)}` } })).json();
     assert.ok((await read(boss, "profiles")).length >= 2, "an administrator reads profiles for support");

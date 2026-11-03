@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AccountAuthPanel } from "@/components/account/AccountAuthPanel";
 import { AccountShell } from "@/components/account/AccountShell";
 import { currentSession } from "@/lib/account/pages";
+import { selfServiceAccounts } from "@/lib/account/selfService";
 import { libraryTermsHref } from "@/lib/billing/offer";
 import { createMetadata } from "@/lib/metadata";
 
@@ -12,6 +13,8 @@ export const metadata: Metadata = {
 };
 
 export default async function SignUpPage() {
+  // LearnThrive makes every account: in production there is nothing to sign up for.
+  if (!selfServiceAccounts()) redirect("/login");
   const { rt, state } = await currentSession();
   if (state.status === "ok") redirect("/account");
   return (

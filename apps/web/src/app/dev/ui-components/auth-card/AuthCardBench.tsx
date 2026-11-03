@@ -40,7 +40,7 @@ function Demo() {
         onSubmit={(values, submittedIn) => {
           setErrors({});
           setLog(`${submittedIn}: ${values.email}, password of ${values.password.length} characters, 18 or over: ${values.confirmAdult ? "yes" : "no"}.`);
-          if (submittedIn === "sign-in" && values.password === "wrong-password-1") setErrors({ form: "Email or password is not right." });
+          if (submittedIn === "sign-in" && values.password === "wrong-password-1") setErrors({ form: "Username or password is not right." });
           else if (submittedIn === "sign-up" && values.email === "taken@example.com") setErrors({ email: "We could not use that email address. Try another, or sign in." });
           else if (submittedIn === "sign-up") {
             setKind("verify");
@@ -82,7 +82,7 @@ export function AuthCardBench() {
           <AuthCard mode="verify-sent" sentKind="reset" onSubmit={noop} />
         </State>
         <State id="sign-in-error" title="Sign in, form error">
-          <AuthCard mode="sign-in" onSubmit={noop} errors={{ form: "Email or password is not right." }} />
+          <AuthCard mode="sign-in" onSubmit={noop} errors={{ form: "Username or password is not right." }} />
         </State>
         <State id="sign-up-errors" title="Sign up, field errors">
           <AuthCard

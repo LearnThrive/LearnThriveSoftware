@@ -118,31 +118,30 @@ export function createSqlDataProvider(db: SqlExecutor): DataProvider {
       );
       return toTutor((await db.query<Row>(`${TUTOR_SELECT} where t.id = $1`, [rows[0]!.id]))[0]!);
     },
-    linkLogin: async (tutorId, email, actor) => {
+    linkLogin: async (tutorId, username, actor) => {
       if (!isId(tutorId)) return "no_tutor";
       const done = await db.query<Row>(
-        `with target as (select u.id from public.auth_user_by_email($2) u where u.email_confirmed),
+        `with target as (select p.id, p.role from public.profiles p where p.username = $2),
               ok as (
                 select t.id as tutor_id, tg.id as profile_id
                   from public.tutors t, target tg
                  where t.id = $1 and t.profile_id is null
-                   and (select p.role from public.profiles p where p.id = tg.id) = 'CLIENT'
+                   and tg.role in ('CLIENT', 'ADMIN')
                    and not exists (select 1 from public.clients c where c.owner_profile_id = tg.id)
                    and not exists (select 1 from public.learner_identities l where l.profile_id = tg.id)
                    and not exists (select 1 from public.tutors o where o.profile_id = tg.id))
             , upd as (update public.tutors t set profile_id = ok.profile_id from ok where t.id = ok.tutor_id returning t.id)
-            , role as (update public.profiles p set role = 'TUTOR' from ok where p.id = ok.profile_id returning 1)
+            , role as (update public.profiles p set role = 'TUTOR' from ok where p.id = ok.profile_id and p.role = 'CLIENT' returning 1)
             , audit as (insert into public.identity_audit (actor_profile_id, action) select $3, 'tutor_login_linked' from ok returning 1)
             select count(*)::int as n from upd`,
-        [tutorId, email.trim(), isId(actor) ? actor : null],
+        [tutorId, username.trim().toLowerCase(), isId(actor) ? actor : null],
       );
       if ((done[0]?.n ?? 0) > 0) return "ok";
       // Why not: told apart only so the admin can be told, never to guess.
       const tutor = (await db.query<Row>(`select profile_id from public.tutors where id = $1`, [tutorId]))[0];
       if (!tutor) return "no_tutor";
-      const account = (await db.query<Row>(`select id, email_confirmed from public.auth_user_by_email($1)`, [email.trim()]))[0];
-      if (!account || !account.email_confirmed) return "no_account";
-      return "not_eligible";
+      const account = (await db.query<Row>(`select id from public.profiles where username = $1`, [username.trim().toLowerCase()]))[0];
+      return account ? "not_eligible" : "no_account";
     },
     update: async (id, patch) => {
       const row = isId(id) ? await patchRow(db, "tutors", id, { display_name: patch.name?.trim(), subjects: patch.subjects, active: patch.active, contact_email: patch.email?.trim(), profile_id: patch.userId }) : null;
@@ -405,6 +404,20 @@ export function createSqlDataProvider(db: SqlExecutor): DataProvider {
     unreadCountForUser: async (userId) => (isId(userId) ? ((await db.query<Row>(`select count(*)::int as n from public.notifications where user_id = $1 and not read`, [userId]))[0]?.n ?? 0) : 0),
     create: async (input) => toNotification((await db.query<Row>(`insert into public.notifications (user_id, type, message, link) values ($1, $2, $3, $4) returning *`, [input.userId, input.type, input.message, input.link ?? null]))[0]!),
     markRead: async (id) => void (isId(id) ? await db.query(`update public.notifications set read = true where id = $1`, [id]) : undefined),
+    recipientFor: async (recordId) => {
+      if (!isId(recordId)) return null;
+      const rows = await db.query<Row>(
+        `select coalesce(
+           (select t.profile_id from public.tutors t where t.id = $1),
+           (select c.owner_profile_id from public.clients c where c.id = $1),
+           (select l.profile_id from public.learner_identities l where l.student_id = $1 and l.status = 'active')
+         ) as id`,
+        [recordId],
+      );
+      return rows[0]?.id ?? null;
+    },
+    recipientsWithRole: async (role) =>
+      (await db.query<Row>(`select id from public.profiles where role = $1 and login_disabled_at is null`, [role])).map((row) => row.id as string),
   };
 
   return { tutors, clients, students, assignments, lessons, availability, attendance, activity, reports, settings, notifications };

@@ -3,14 +3,15 @@ import { Plus, Users } from "lucide-react";
 import { requireRole } from "@/lib/auth/guard";
 import { createMetadata } from "@/lib/metadata";
 import { getDataProvider } from "@/lib/data/provider";
-import { createClientAction } from "@/lib/actions/people";
+import { createFamilyAccountAction } from "@/lib/actions/accounts";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { CreateLoginForm, UsernameField } from "@/components/people/LoginForms";
 import { PeopleTabs } from "@/components/people/PeopleTabs";
 import { PersonList, PersonRow } from "@/components/people/PersonRow";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Dialog } from "@/components/ui/Dialog";
-import { Field, FormActions } from "@/components/ui/Field";
+import { Field } from "@/components/ui/Field";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { formatLessonDayTime } from "@/lib/format";
 import { matchesQuery, peopleCounts } from "@/lib/people/peopleHelpers";
@@ -49,22 +50,20 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
           <Dialog
             trigger={<><Plus size={16} aria-hidden="true" />Add client</>}
             title="Add a client"
-            description="The parent or guardian responsible for a student."
+            description="The parent or guardian responsible for a student. This makes their family and their login."
           >
-            <form action={createClientAction} className="form">
+            <CreateLoginForm action={createFamilyAccountAction} submitLabel="Add client">
               <Field label="Full name" htmlFor="client-name" required>
                 <input id="client-name" name="name" required autoComplete="off" />
               </Field>
-              <Field label="Email" htmlFor="client-email" required hint="Used to identify them and, later, to contact them.">
+              <UsernameField id="client-username" />
+              <Field label="Email" htmlFor="client-email" required hint="Their linked email: password resets, notices and invoices go here. Their children's too.">
                 <input id="client-email" name="email" type="email" required autoComplete="off" />
               </Field>
               <Field label="Phone" htmlFor="client-phone">
                 <input id="client-phone" name="phone" type="tel" autoComplete="off" />
               </Field>
-              <FormActions>
-                <button type="submit" className="btn btn--primary">Add client</button>
-              </FormActions>
-            </form>
+            </CreateLoginForm>
           </Dialog>
         }
       />

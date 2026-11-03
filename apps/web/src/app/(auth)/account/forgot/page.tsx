@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { AccountAuthPanel } from "@/components/account/AccountAuthPanel";
 import { AccountShell } from "@/components/account/AccountShell";
 import { currentSession } from "@/lib/account/pages";
+import { selfServiceAccounts } from "@/lib/account/selfService";
 import { createMetadata } from "@/lib/metadata";
 
 export const metadata: Metadata = {
@@ -13,7 +14,7 @@ export default async function ForgotPage() {
   const { rt } = await currentSession();
   return (
     <AccountShell>
-      {rt ? <AccountAuthPanel initialMode="reset" /> : <p>Accounts are not open yet. Please check back soon.</p>}
+      {rt ? <AccountAuthPanel initialMode="reset" canSignUp={selfServiceAccounts()} /> : <p>Accounts are not open yet. Please check back soon.</p>}
     </AccountShell>
   );
 }

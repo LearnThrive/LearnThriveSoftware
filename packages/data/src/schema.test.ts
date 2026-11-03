@@ -142,6 +142,7 @@ describe("migrations", () => {
       "0014_chat_retrieval.sql",
       "0015_chat_message_model.sql",
       "0016_chat_message_activity.sql",
+      "0017_username_accounts.sql",
     ]);
     assert.deepEqual(
       applied.map((f) => Number(f.slice(0, 4))),

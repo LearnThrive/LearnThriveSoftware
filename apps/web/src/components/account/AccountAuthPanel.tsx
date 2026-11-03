@@ -35,7 +35,7 @@ const NOT_READY = "The check that you are a person has not finished yet. Please 
  * `next` is the page the person asked for before signing in ("" if none). The server decides where they land (`next` in its reply:
  * their dashboard, LearnThrive AI or account page, or the page asked for when their access includes it); this only passes the request on.
  */
-export function AccountAuthPanel({ initialMode = "sign-in", next = "", termsHref = "/terms" }: { initialMode?: Exclude<AuthMode, "verify-sent">; next?: string; termsHref?: string }) {
+export function AccountAuthPanel({ initialMode = "sign-in", next = "", termsHref = "/terms", canSignUp = true }: { initialMode?: Exclude<AuthMode, "verify-sent">; next?: string; termsHref?: string; canSignUp?: boolean }) {
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [sentKind, setSentKind] = useState<"verify" | "reset">("verify");
   const [errors, setErrors] = useState<AuthErrors>({});
@@ -68,7 +68,7 @@ export function AccountAuthPanel({ initialMode = "sign-in", next = "", termsHref
     email.current = values.email;
     try {
       if (submittedIn === "sign-in") {
-        const reply = await post("/api/account/login", { email: values.email, password: values.password, next });
+        const reply = await post("/api/account/login", { username: values.email, password: values.password, next });
         if (!reply) return setErrors({ form: NETWORK });
         if (reply.status === 200) {
           window.location.assign(reply.data?.next || next || "/account");
@@ -84,7 +84,7 @@ export function AccountAuthPanel({ initialMode = "sign-in", next = "", termsHref
       }
 
       const isSignUp = submittedIn === "sign-up";
-      const reply = await withCheck(isSignUp ? "/api/account/signup" : "/api/account/forgot", isSignUp ? { email: values.email, password: values.password, confirmAdult: values.confirmAdult } : { email: values.email });
+      const reply = await withCheck(isSignUp ? "/api/account/signup" : "/api/account/forgot", isSignUp ? { email: values.email, password: values.password, confirmAdult: values.confirmAdult } : { username: values.email });
       if (reply === "not-ready") return setErrors({ form: NOT_READY });
       if (!reply) return setErrors({ form: NETWORK });
       if (reply.status === 200) {
@@ -105,7 +105,7 @@ export function AccountAuthPanel({ initialMode = "sign-in", next = "", termsHref
     setBusy(true);
     setNotice("");
     try {
-      const reply = await withCheck(sentKind === "reset" ? "/api/account/forgot" : "/api/account/resend", { email: email.current });
+      const reply = await withCheck(sentKind === "reset" ? "/api/account/forgot" : "/api/account/resend", sentKind === "reset" ? { username: email.current } : { email: email.current });
       if (reply === "not-ready") setNotice(NOT_READY);
       else if (!reply) setNotice(NETWORK);
       else setNotice(reply.status === 200 ? "We have sent it again." : (reply.data?.error ?? "We could not send it just now. Please try again shortly."));
@@ -130,6 +130,7 @@ export function AccountAuthPanel({ initialMode = "sign-in", next = "", termsHref
           setMode(nextMode);
         }}
         links={{ privacy: "/privacy", terms: termsHref, forgotPassword: "/account/forgot" }}
+        canSignUp={canSignUp}
       />
       <p className={styles.notice} role="status" aria-live="polite">
         {notice}

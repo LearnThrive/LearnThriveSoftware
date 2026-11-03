@@ -27,7 +27,8 @@ async function open(page: Page) {
 }
 
 const demo = (page: Page) => page.getByTestId('demo');
-const email = (card: Locator) => card.getByLabel('Email', { exact: true });
+// The one text box: "Email" on the sign-up form, "Username" everywhere else.
+const email = (card: Locator) => card.getByLabel(/^(Email|Username)\b/);
 const password = (card: Locator) => card.getByLabel('Password', { exact: true });
 const summary = (card: Locator) => card.getByRole('alert');
 const log = (page: Page) => page.getByTestId('demo-log');
@@ -152,14 +153,14 @@ test.describe('AuthCard', () => {
   test('fields have real labels and the right input types and autocomplete values', async ({ page }) => {
     await open(page);
     const signIn = page.locator('[data-state="sign-in"]');
-    await expect(email(signIn)).toHaveAttribute('type', 'email');
+    await expect(email(signIn)).toHaveAttribute('type', 'text');
     // "username" on sign-in is what password managers key on (and is a WCAG 1.3.5 input-purpose token).
     await expect(email(signIn)).toHaveAttribute('autocomplete', 'username');
     await expect(password(signIn)).toHaveAttribute('autocomplete', 'current-password');
     const signUp = page.locator('[data-state="sign-up"]');
     await expect(email(signUp)).toHaveAttribute('autocomplete', 'email');
     await expect(password(signUp)).toHaveAttribute('autocomplete', 'new-password');
-    await expect(page.locator('[data-state="reset"]').getByLabel('Email', { exact: true })).toHaveAttribute('autocomplete', 'email');
+    await expect(page.locator('[data-state="reset"]').getByLabel('Username', { exact: true })).toHaveAttribute('autocomplete', 'username');
     // The adult confirmation is a required tick-box and never pre-ticked.
     const adult = signUp.getByRole('checkbox', { name: /18 or over/ });
     await expect(adult).toHaveAttribute('required', '');
@@ -209,7 +210,7 @@ test.describe('AuthCard', () => {
     await password(card).fill('wrong-password-1');
     await password(card).press('Enter');
     await expect(summary(card)).toBeFocused();
-    await expect(summary(card)).toContainText('Email or password is not right.');
+    await expect(summary(card)).toContainText('Username or password is not right.');
     await password(card).fill('another-password-2');
     await expect(summary(card)).toHaveCount(0);
     await password(card).press('Enter');
@@ -265,7 +266,7 @@ test.describe('AuthCard', () => {
     test(`the field outline is at least 3:1 against the card (WCAG 1.4.11), ${scheme}`, async ({ page }) => {
       await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
       await open(page);
-      const ratio = await page.locator('[data-state="sign-in"] input[type="email"]').evaluate((input) => {
+      const ratio = await page.locator('[data-state="sign-in"] input[name="username"]').evaluate((input) => {
         const parse = (value: string) => (value.match(/[\d.]+/g) ?? []).map(Number);
         const luminance = ([r, g, b]: number[]) => {
           const f = (c: number) => ((c /= 255) <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
@@ -287,13 +288,13 @@ test.describe('AuthCard', () => {
     await password(card).fill('wrong-password-1');
     await password(card).press('Enter');
     await expect(summary(card)).toBeFocused();
-    await expect(summary(card)).toContainText('Email or password is not right.');
+    await expect(summary(card)).toContainText('Username or password is not right.');
     await password(card).fill('wrong-password-2');
     await password(card).fill('wrong-password-1'); // editing hides it...
     await expect(summary(card)).toHaveCount(0);
     await password(card).press('Enter'); // ...and an identical answer to the next submit brings it back
     await expect(summary(card)).toBeFocused();
-    await expect(summary(card)).toContainText('Email or password is not right.');
+    await expect(summary(card)).toContainText('Username or password is not right.');
   });
 
   test('there is no "remember me" control anywhere, in any state', async ({ page }) => {
@@ -371,7 +372,7 @@ test.describe('AuthCard', () => {
   test('reduced motion: nothing is animating, and every one of the three switches makes transitions static', async ({ page }) => {
     await open(page);
     expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
-    const control = page.locator('[data-state="sign-in"] input[type="email"]').locator('..');
+    const control = page.locator('[data-state="sign-in"] input[name="username"]').locator('..');
     // The site's own reduced-motion rule may leave 0.00001s rather than 0s: both mean "no visible transition".
     const duration = () => control.evaluate((element) => Math.max(...getComputedStyle(element).transitionDuration.split(',').map(parseFloat)));
     expect(await duration()).toBeLessThan(0.001); // prefers-reduced-motion (emulated in beforeEach)
@@ -403,7 +404,7 @@ test.describe('AuthCard', () => {
     await email(card).fill('parent@example.com');
     await card.getByRole('button', { name: 'Send reset link' }).click();
     await expect(card.getByRole('heading', { name: 'Check your email' })).toBeFocused();
-    await expect(card).toContainText('If there is an account for parent@example.com');
+    await expect(card).toContainText('If there is an account called parent@example.com');
     expect(problems).toEqual([]);
   });
 });
