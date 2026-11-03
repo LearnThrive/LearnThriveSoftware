@@ -56,5 +56,7 @@ export async function accountPlatformUser(): Promise<AuthenticatedUser | null> {
   if (!who || !who.access.dashboard) return null;
   // A guardian viewing as a learner has the learner's view, not the family's: the dashboard (the family's lessons and billing) is closed.
   if (await inSupervisedView(who.rt, await nextJar(), who.account.profileId)) return null;
-  return toPlatformUser(who.user, who.account, await who.rt.store.accounts.domainRef(who.account.profileId));
+  const { accounts } = who.rt.store;
+  const [domainRef, tutorRef] = await Promise.all([accounts.domainRef(who.account.profileId), who.account.role === "ADMIN" ? accounts.tutorRef(who.account.profileId) : null]);
+  return toPlatformUser(who.user, who.account, domainRef, process.env, tutorRef);
 }

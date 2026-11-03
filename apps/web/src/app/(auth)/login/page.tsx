@@ -5,6 +5,7 @@ import { AccountShell } from "@/components/account/AccountShell";
 import { destinationFor } from "@learnthrive/data/library";
 import { currentAccess } from "@/lib/access/current";
 import { currentSession } from "@/lib/account/pages";
+import { selfServiceAccounts } from "@/lib/account/selfService";
 import { safeNextPath } from "@/lib/account/session";
 import { assistantClosed } from "@/lib/assistant/runtime";
 import { libraryTermsHref } from "@/lib/billing/offer";
@@ -17,8 +18,8 @@ export const metadata: Metadata = {
 };
 
 /**
- * The one front door (plan: LearnThrive AI inside the platform). Everybody signs in here with the same account (the Library's real
- * sign-in: verified email, lockout, Supabase in production): tutors, administrators, enrolled families and Library members alike. What a
+ * The one front door (plan: LearnThrive AI inside the platform). Everybody signs in here with the same account (a username LearnThrive
+ * gave them, lockout, Supabase in production): tutors, administrators, enrolled families and Library members alike. What a
  * person finds after signing in is decided by `destinationFor` from their role and their Library standing, not by which page they used:
  * staff and enrolled families open the dashboard, a subscriber opens LearnThrive AI, and the page they originally asked for is kept when
  * their access includes it. Someone already signed in who arrives here is sent on at once.
@@ -30,6 +31,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
 
   // A lapsed access token (they last signed in more than an hour ago): renew it and come straight back, instead of showing a form.
   if (state.status === "refresh_needed") redirect(`/api/account/refresh?next=${encodeURIComponent("/login" + (requested ? `?next=${encodeURIComponent(requested)}` : ""))}`);
+  // Every door turns someone on a temporary password back here, and this sends them to the one page they may use.
+  if (state.status === "password_change") redirect("/account/reset");
 
   if (state.status === "ok") {
     const who = await currentAccess();
@@ -38,7 +41,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
 
   return (
     <AccountShell>
-      {rt ? <AccountAuthPanel initialMode="sign-in" next={requested} termsHref={libraryTermsHref()} /> : <p>Accounts are not open yet. Please check back soon.</p>}
+      {rt ? <AccountAuthPanel initialMode="sign-in" next={requested} termsHref={libraryTermsHref()} canSignUp={selfServiceAccounts()} /> : <p>Accounts are not open yet. Please check back soon.</p>}
     </AccountShell>
   );
 }

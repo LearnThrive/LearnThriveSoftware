@@ -45,9 +45,12 @@ export function clearSessionCookies(jar: CookieJar): void {
   jar.delete(REFRESH_COOKIE);
 }
 
-// A short cache so one page view does not ask the auth server several times. Keyed by a hash, never the token.
+// A short cache so one page view does not ask the auth server several times. Keyed by a hash, never the token. On globalThis because a route
+// handler and a page are separate bundles with separate module state: a plain Map here meant a person who had just chosen a new password
+// was still sent back to choose one by every page, until the page's own copy expired (found in a real browser).
 const CACHE_MS = 30_000;
-const verified = new Map<string, { user: AuthUser; until: number }>();
+const g = globalThis as unknown as { __learnthriveVerified?: Map<string, { found: Found; until: number }> };
+const verified = (g.__learnthriveVerified ??= new Map());
 const key = (token: string) => createHash("sha256").update(token).digest("hex");
 
 export function forgetAccessToken(token: string): void {
@@ -58,31 +61,46 @@ export function resetSessionCache(): void {
   verified.clear();
 }
 
-async function userFor(rt: AccountRuntime, token: string, now: number): Promise<AuthUser | null> {
+interface Found {
+  user: AuthUser;
+  mustChangePassword: boolean;
+}
+
+/** Who holds this token. A disabled login is nobody within this cache's 30 seconds: Auth's ban stops a refresh, but an access token lasts its hour. */
+async function foundFor(rt: AccountRuntime, token: string, now: number): Promise<Found | null> {
   const k = key(token);
   const hit = verified.get(k);
-  if (hit && hit.until > now) return hit.user;
+  if (hit && hit.until > now) return hit.found;
   verified.delete(k);
   const user = await rt.auth.getUser(token);
-  if (user) {
-    verified.set(k, { user, until: now + CACHE_MS });
-    if (verified.size > 2000) for (const [oldKey, v] of verified) if (v.until <= now) verified.delete(oldKey);
-  }
-  return user;
+  if (!user) return null;
+  const account = await rt.store.accounts.getAccount(user.id);
+  if (account?.loginDisabled) return null;
+  const found: Found = { user, mustChangePassword: account?.mustChangePassword ?? false };
+  verified.set(k, { found, until: now + CACHE_MS });
+  if (verified.size > 2000) for (const [oldKey, v] of verified) if (v.until <= now) verified.delete(oldKey);
+  return found;
 }
 
 export type SessionState =
   | { status: "ok"; user: AuthUser }
+  /**
+   * Signed in on a temporary password. Every door in the site asks for "ok", so nothing opens until a new password is chosen: the only
+   * things that accept this state are the page and the route that choose it (docs/AUTHENTICATION.md).
+   */
+  | { status: "password_change"; user: AuthUser }
   /** The access token is missing or expired but a refresh token exists: renew, then try again. */
   | { status: "refresh_needed" }
   | { status: "none" };
+
+const stateOf = (found: Found): SessionState => (found.mustChangePassword ? { status: "password_change", user: found.user } : { status: "ok", user: found.user });
 
 /** Reads the session without changing any cookie. */
 export async function readSession(jar: CookieJar, rt: AccountRuntime, now: number = Date.now()): Promise<SessionState> {
   const access = jar.get(ACCESS_COOKIE);
   if (access) {
-    const user = await userFor(rt, access, now);
-    if (user) return { status: "ok", user };
+    const found = await foundFor(rt, access, now);
+    if (found) return stateOf(found);
   }
   return jar.get(REFRESH_COOKIE) ? { status: "refresh_needed" } : { status: "none" };
 }
@@ -101,8 +119,8 @@ export async function renewSession(jar: CookieJar, rt: AccountRuntime, now: numb
     return { status: "none" };
   }
   setSessionCookies(jar, tokens);
-  const user = await userFor(rt, tokens.accessToken, now);
-  return user ? { status: "ok", user } : { status: "none" };
+  const found = await foundFor(rt, tokens.accessToken, now);
+  return found ? stateOf(found) : { status: "none" };
 }
 
 /** Only a path on this site: starts with one slash, not two, no backslash, no scheme. Used for `next`. */

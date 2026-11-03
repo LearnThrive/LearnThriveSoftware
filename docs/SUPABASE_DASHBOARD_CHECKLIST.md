@@ -14,7 +14,7 @@ The owner answers these in chat; **where an answer is missing, the safest defaul
 
 | Decision | Value used | Basis |
 | --- | --- | --- |
-| Account creation | **Closed until the Library is opened, then open.** Families create their own accounts, so when `LIBRARY_ENABLED` is flipped, switch sign-ups on in the same step. Until then the site's routes are closed and the dashboard switch is off. | **Default** (not yet answered). Open sign-ups at launch is the site's design; closed before launch is the safe state. `supabase:verify -- --expect-signup closed` until then, `open` after. |
+| Account creation | **Closed, permanently.** LearnThrive makes every account through the Auth Admin API (`docs/AUTHENTICATION.md`, "Accounts are made, not signed up for"), so "Allow new users to sign up" stays off even when the Library opens. |
 | Staff multi-factor authentication | **Required for every dashboard member** (organisation setting). **For the website's own administrators it is NOT built**: no multi-factor sign-in exists in the site yet. Until it does: very few administrators, strong unique passwords, and the controlled way to make one (`docs/AUTHENTICATION.md`). | **Default**, and a gap to close. |
 | Session length and inactivity | JWT expiry 3600 s; time-box sessions to **30 days**; inactivity timeout **7 days** (Pro plan features). The site's own session cookies end when the browser closes. | **Default** (the figures plan19 suggested). |
 | Sender for authentication emails | Custom SMTP through **Resend**, from a LearnThrive address on a domain you verify with SPF and DKIM, for example `accounts@<your domain>`. Use a **separate Resend API key** for Auth (so it can be rotated alone). | **Default**: the address and domain are yours to choose; nothing here can verify them. |
@@ -28,8 +28,9 @@ The owner answers these in chat; **where an answer is missing, the safest defaul
 
 | Setting | Value | Dashboard path | Confirmed by |
 | --- | --- | --- | --- |
-| Allow new users to sign up | Off now; **on at launch** (see Decisions) | Authentication, Sign In / Providers, User Signups | probe `signup` (use `--expect-signup`) |
-| Confirm email | **On** | Authentication, Sign In / Providers, Email | probe `confirm-email`; local: the unconfirmed-sign-in test |
+| Allow new users to sign up | **Off, permanently** (see Decisions) | Authentication, Sign In / Providers, User Signups | probe `signup` (use `--expect-signup closed`) |
+| Confirm email | **On** (moot for real accounts: the Admin API makes them already confirmed) | Authentication, Sign In / Providers, Email | probe `confirm-email`; local: the unconfirmed-sign-in test |
+| Email OTP expiry | **1800** s: a reset link stops working after 30 minutes (`lib/account/resetEmail.ts`) | Authentication, Sign In / Providers, Email | dashboard only |
 | Allow anonymous sign-ins | **Off** | Authentication, Sign In / Providers | probe `providers`; local test "no anonymous sign-in" |
 | Email provider | On; **every other provider off** (Google, Apple, GitHub, phone, and the rest) | Authentication, Sign In / Providers | probe `providers` |
 | Allow manual linking | Off | Authentication, Sign In / Providers | dashboard only |

@@ -89,7 +89,7 @@ The hosted project (`learnthrive-prod`, London, Postgres 17) is **empty and was 
 3. **Advisors:** run the Security and Performance advisors (dashboard, Database, Advisors, or the CLI) and resolve every security warning in a new migration. The local stack cannot show hosted-only warnings.
 4. **The server role:** the owner generates the password (`node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`), then, in one shell session, `DATABASE_ADMIN_URL=... LEARNTHRIVE_SERVER_PASSWORD=... node scripts/create-server-role.mjs --host <host>` (typed confirmation). Re-run it after any migration that adds a table.
 5. **Probes:** `SUPABASE_URL=... SUPABASE_ANON_KEY=... npm run supabase:verify` (read only).
-6. **Smoke test:** `SMOKE_EMAIL=you+smoke@your-domain npm run supabase:smoke -- --host <api host> --mailbox prompt` (writes one test account, one resource and one file, and removes them).
+6. **Smoke test:** `npm run supabase:smoke -- --host <api host>`. It writes one test account on the internal domain, one resource and one file, removes them, and proves public sign-up is refused, a login made by the Admin API signs in, a temporary password shuts every door but choosing a new one, and a reset link works once. No mailbox is involved: nothing is sent.
 7. **First administrator:** `DATABASE_URL=... npm run db:promote-admin -- --email ... --host ...` after that person has signed up and confirmed.
 
 `LIBRARY_ENABLED` and the portal switch stay unset in production throughout.

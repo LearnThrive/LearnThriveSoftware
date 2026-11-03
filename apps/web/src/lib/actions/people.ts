@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { accountRuntime } from "@/lib/account/runtime";
 import { getDataProvider } from "@/lib/data/provider";
+import { mirrorStudent } from "@/lib/dev/memoryMirror";
 import { requireRole } from "@/lib/auth/guard";
 
 function text(formData: FormData, key: string): string {
@@ -32,24 +34,6 @@ export async function createTutorAction(formData: FormData): Promise<void> {
   redirect(`/dashboard/admin/people/tutors?toast=${encodeURIComponent(`${name} added as a tutor`)}`);
 }
 
-export async function createClientAction(formData: FormData): Promise<void> {
-  await requireRole(["ADMIN"]);
-  const name = text(formData, "name");
-  const email = text(formData, "email");
-  const phone = text(formData, "phone");
-  if (!name || !email) throw new Error("Name and email are required.");
-
-  const data = getDataProvider();
-  try {
-    await data.clients.create({ name, email, active: true, ...(phone ? { phone } : {}) });
-  } catch (error) {
-    // On the production database a client is an adult who signed up; an administrator cannot make one. Say so, not a server error.
-    redirect(`/dashboard/admin/people/clients?toast=${encodeURIComponent(error instanceof Error ? error.message : "That could not be added.")}`);
-  }
-  revalidatePath("/dashboard/admin/people/clients");
-  redirect(`/dashboard/admin/people/clients?toast=${encodeURIComponent(`${name} added as a client`)}`);
-}
-
 export async function createStudentAction(formData: FormData): Promise<void> {
   await requireRole(["ADMIN"]);
   const name = text(formData, "name");
@@ -66,6 +50,7 @@ export async function createStudentAction(formData: FormData): Promise<void> {
     redirect(`/dashboard/admin/people/students?toast=${encodeURIComponent(error instanceof Error ? error.message : "That could not be added.")}`);
   }
   if (clientId) await data.students.linkClient(clientId, student.id);
+  await mirrorStudent(await accountRuntime(), data, student.id);
   revalidatePath("/dashboard/admin/people/students");
   redirect(`/dashboard/admin/people/students?toast=${encodeURIComponent(`${name} added as a student`)}`);
 }
@@ -98,6 +83,8 @@ export async function createAssignmentAction(formData: FormData): Promise<void> 
     defaultDurationMinutes: 60,
     defaultLocationType: "ONLINE",
   });
+  const rt = await accountRuntime();
+  for (const studentId of studentIds) await mirrorStudent(rt, data, studentId);
   revalidatePath("/dashboard/admin/assignments");
   redirect(`/dashboard/admin/assignments?toast=${encodeURIComponent(`${title} created`)}`);
 }

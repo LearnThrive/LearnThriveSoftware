@@ -12,6 +12,7 @@ import { LessonList, LessonRow } from "@/components/lessons/LessonRow";
 import { PersonList, PersonRow } from "@/components/people/PersonRow";
 import { formatDateOnly, formatLessonDayTime } from "@/lib/format";
 import { RecordList, RecordRow } from "@/components/records/RecordRow";
+import { LoginCard } from "@/components/people/LoginCard";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -81,6 +82,8 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
         <StatTile label="Upcoming lessons" value={upcoming.length} />
         <StatTile label="Approved reports" value={reports.length} />
       </div>
+
+      <LoginCard profileId={client.userId} returnTo={`/dashboard/admin/clients/${client.id}`} noLogin={<p className="muted">This client has no login.</p>} />
 
       <div className="profile-grid">
         <div className="stack">

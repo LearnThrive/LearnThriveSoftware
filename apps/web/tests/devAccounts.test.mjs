@@ -7,6 +7,7 @@ import { loadTsFrom } from "./_tsLoader.mjs";
 const dev = loadTsFrom(import.meta.url, "../src/lib/dev/accounts.ts");
 const { seedDevAccounts } = loadTsFrom(import.meta.url, "../src/lib/dev/seedAccounts.ts");
 const { toPlatformUser } = loadTsFrom(import.meta.url, "../src/lib/access/platformUser.ts");
+const { internalEmailFor, usernameError } = loadTsFrom(import.meta.url, "../src/lib/account/username.ts");
 const { MemoryAccountAuth } = loadTsFrom(import.meta.url, "../src/lib/account/memoryAuth.ts");
 const { getAuthProvider } = loadTsFrom(import.meta.url, "../src/lib/auth/devProvider.ts");
 const { InMemoryLibraryStore } = loadTsFrom(import.meta.url, "../../../packages/data/src/library/memory.ts");
@@ -19,7 +20,8 @@ test("the list: unique ids and addresses, all on the reserved .dev domain, a rol
   assert.equal(new Set(accounts.map((a) => a.id)).size, accounts.length, "ids are unique");
   assert.equal(new Set(accounts.map((a) => a.email.toLowerCase())).size, accounts.length, "addresses are unique");
   for (const a of accounts) {
-    assert.match(a.email, /^[a-z]+@learnthrive\.dev$/, a.email);
+    assert.match(a.email, /^[a-z-]+@learnthrive\.dev$/, a.email);
+    assert.equal(usernameError(a.username), undefined, a.username);
     assert.match(a.id, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/, "a real UUID shape, so nothing that validates ids refuses it");
     assert.ok(["ADMIN", "TUTOR", "CLIENT", "STUDENT"].includes(a.role));
   }
@@ -42,9 +44,10 @@ test("seeding: every account signs in (the disabled one is refused as disabled) 
     "student@learnthrive.dev": "enrolled",
     "member@learnthrive.dev": "library",
     "visitor@learnthrive.dev": "none",
+    "teaching-admin@learnthrive.dev": "staff",
   };
   for (const account of dev.DEV_ACCOUNTS) {
-    const result = await auth.signIn(account.email, account.password);
+    const result = await auth.signIn(internalEmailFor(account.username), account.password);
     if (!account.active) {
       assert.equal(result.ok, false);
       assert.equal(result.reason, "account_disabled", account.email);

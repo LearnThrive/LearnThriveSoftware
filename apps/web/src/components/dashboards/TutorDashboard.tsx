@@ -10,8 +10,7 @@ import { LessonSection, NextLessonCard, TodaySchedule, greeting } from "@/compon
 import { PersonList, PersonRow } from "@/components/people/PersonRow";
 import { formatLongDate, formatRelative } from "@/lib/format";
 
-/** Plan6 section 52: a Tutor's home is about teaching — next lesson first, then what they owe. */
-export async function TutorDashboard({ user }: { user: AuthenticatedUser }) {
+async function teachingFor(user: AuthenticatedUser) {
   const data = getDataProvider();
   const now = new Date();
   const [buckets, students] = await Promise.all([
@@ -30,7 +29,13 @@ export async function TutorDashboard({ user }: { user: AuthenticatedUser }) {
     const report = await data.reports.forLesson(lesson.id);
     if (!report || report.status === "DRAFT") outstanding.push({ lessonId: lesson.id, title: lesson.title, startAt: lesson.startAt });
   }
+  return { now, buckets, students, describe, outstanding };
+}
 
+/** Plan6 section 52: a Tutor's home is about teaching — next lesson first, then what they owe. */
+export async function TutorDashboard({ user }: { user: AuthenticatedUser }) {
+  const teaching = await teachingFor(user);
+  const { now, buckets } = teaching;
   return (
     <>
       <PageHeader
@@ -40,7 +45,25 @@ export async function TutorDashboard({ user }: { user: AuthenticatedUser }) {
           ? `You have ${buckets.todays.length} lesson${buckets.todays.length === 1 ? "" : "s"} today.`
           : "Nothing scheduled today."}
       />
+      <TeachingPanels {...teaching} />
+    </>
+  );
+}
 
+/** An administrator who teaches: the same panels below their own home, scoped to their teaching (`asTutor`). */
+export async function TeachingSection({ user }: { user: AuthenticatedUser }) {
+  const teaching = await teachingFor(user);
+  return (
+    <section aria-labelledby="your-teaching" style={{ marginTop: "var(--space-6)" }}>
+      <h2 id="your-teaching" className="section-heading">Your teaching</h2>
+      <TeachingPanels {...teaching} />
+    </section>
+  );
+}
+
+function TeachingPanels({ buckets, students, describe, outstanding }: Awaited<ReturnType<typeof teachingFor>>) {
+  return (
+    <>
       <NextLessonCard
         lesson={buckets.next}
         subtitle={buckets.next ? describe(buckets.next) : undefined}

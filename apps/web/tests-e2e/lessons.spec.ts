@@ -1,13 +1,13 @@
 import { test, expect, type Page } from '@playwright/test';
 import { uniqueLabel } from './support';
 
-async function login(page: Page, email: string, password: string) {
+async function login(page: Page, username: string, password: string) {
   // /login redirects an already-authenticated visitor straight to /dashboard (deliberate,
   // tested behaviour — see auth.spec.ts) — so a test that logs in as a second identity without
   // logging out first would never even see the login form. Always start from a clean session.
   await page.request.post('/api/auth/logout');
   await page.goto('/login');
-  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Username').fill(username);
   await page.locator('input[name="password"]').fill(password);
   await Promise.all([
     page.waitForURL(/\/dashboard$/),
@@ -30,19 +30,19 @@ async function openLessonFromCalendar(page: Page, eventText?: string) {
   ]);
 }
 
-const ADMIN = { email: 'admin@learnthrive.dev', password: 'dev-admin-pass' };
-const TUTOR = { email: 'tutor@learnthrive.dev', password: 'dev-tutor-pass' };
-const CLIENT = { email: 'client@learnthrive.dev', password: 'dev-client-pass' };
-const STUDENT = { email: 'student@learnthrive.dev', password: 'dev-student-pass' };
+const ADMIN = { username: 'dev.admin', password: 'dev-admin-pass' };
+const TUTOR = { username: 'dev.tutor', password: 'dev-tutor-pass' };
+const CLIENT = { username: 'dev.client', password: 'dev-client-pass' };
+const STUDENT = { username: 'dev.student', password: 'dev-student-pass' };
 
 test('the calendar shows the seeded demo lessons to Admin', async ({ page }) => {
-  await login(page, ADMIN.email, ADMIN.password);
+  await login(page, ADMIN.username, ADMIN.password);
   await page.goto('/dashboard/calendar');
   await expect(page.locator('.fc-event')).not.toHaveCount(0);
 });
 
 test('clicking a calendar lesson opens the peek panel with its summary, and "View full details" reaches the full page', async ({ page }) => {
-  await login(page, ADMIN.email, ADMIN.password);
+  await login(page, ADMIN.username, ADMIN.password);
   await page.goto('/dashboard/calendar');
   await page.locator('.fc-event').first().click();
   await expect(page.locator('.lesson-peek__panel')).toBeVisible();
@@ -52,7 +52,7 @@ test('clicking a calendar lesson opens the peek panel with its summary, and "Vie
 });
 
 test('Admin can schedule a single (non-recurring) lesson, which appears on the calendar', async ({ page }) => {
-  await login(page, ADMIN.email, ADMIN.password);
+  await login(page, ADMIN.username, ADMIN.password);
   await page.goto('/dashboard/admin/lessons/new');
   await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Brian' });
   const lessonTitle = uniqueLabel('Algebra revision');
@@ -74,7 +74,7 @@ test('Admin can schedule a single (non-recurring) lesson, which appears on the c
 });
 
 test('scheduling an overlapping lesson warns about the conflict, and "Schedule anyway" proceeds', async ({ page }) => {
-  await login(page, ADMIN.email, ADMIN.password);
+  await login(page, ADMIN.username, ADMIN.password);
   await page.goto('/dashboard/admin/lessons/new');
   await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Brian' });
   await page.locator('#lesson-title').fill(uniqueLabel('Double-booked test lesson'));
@@ -90,7 +90,7 @@ test('scheduling an overlapping lesson warns about the conflict, and "Schedule a
 });
 
 test('Admin can schedule a recurring lesson, producing multiple independent occurrences', async ({ page }) => {
-  await login(page, ADMIN.email, ADMIN.password);
+  await login(page, ADMIN.username, ADMIN.password);
   await page.goto('/dashboard/admin/lessons/new');
   await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Brian' });
   const lessonTitle = uniqueLabel('Weekly recurring practice');
@@ -116,7 +116,7 @@ test('lesson detail: Admin sees admin-only controls that a Tutor does not', asyn
   // Complements hardening.spec.ts's "a Tutor cannot reach the Admin-only reschedule/cancel
   // actions" test, which proves the same button is absent for a Tutor on this identical lesson —
   // together they show the control is genuinely gated on role, not just untested either way.
-  await login(page, ADMIN.email, ADMIN.password);
+  await login(page, ADMIN.username, ADMIN.password);
   await page.goto('/dashboard/lessons/lesson-gcse-maths-upcoming');
   await expect(page.getByRole('button', { name: 'Cancel lesson' })).toBeVisible();
 });
@@ -130,7 +130,7 @@ test('lesson detail IDOR: a Student cannot view a lesson they are not on', async
   const assignmentTitle = uniqueLabel('Unrelated Assignment');
   const lessonTitle = uniqueLabel('Unrelated lesson');
 
-  await login(page, ADMIN.email, ADMIN.password);
+  await login(page, ADMIN.username, ADMIN.password);
   await page.goto('/dashboard/admin/people/students');
   await page.getByRole('button', { name: 'Add student' }).click();
   await page.locator('#student-name').fill(studentName);
@@ -171,13 +171,13 @@ test('lesson detail IDOR: a Student cannot view a lesson they are not on', async
   const lessonUrl = page.url();
 
   // Now log in as the *seeded* Student (unrelated to this new lesson) and try to view it directly.
-  await login(page, STUDENT.email, STUDENT.password);
+  await login(page, STUDENT.username, STUDENT.password);
   await page.goto(lessonUrl);
   await expect(page).toHaveURL(/\/403$/);
 });
 
 test('Tutor sees only their own lessons on the calendar', async ({ page }) => {
-  await login(page, TUTOR.email, TUTOR.password);
+  await login(page, TUTOR.username, TUTOR.password);
   await page.goto('/dashboard/calendar');
   // The seeded Tutor (Tahasin Hasan) has the seeded GCSE Maths lessons — at least one should show.
   await expect(page.locator('.fc-event').first()).toBeVisible();
@@ -188,7 +188,7 @@ test('Tutor sees only their own lessons on the calendar', async ({ page }) => {
 });
 
 test('Admin can cancel a planned lesson, which then shows as cancelled', async ({ page }) => {
-  await login(page, ADMIN.email, ADMIN.password);
+  await login(page, ADMIN.username, ADMIN.password);
   await page.goto('/dashboard/admin/lessons/new');
   await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Brian' });
   const lessonTitle = uniqueLabel('Lesson to cancel');
@@ -212,7 +212,7 @@ test('Admin can cancel a planned lesson, which then shows as cancelled', async (
 });
 
 test('a Tutor can add and remove their own availability', async ({ page }) => {
-  await login(page, TUTOR.email, TUTOR.password);
+  await login(page, TUTOR.username, TUTOR.password);
   await page.goto('/dashboard/tutor/availability');
   await page.getByRole('button', { name: 'Add hours' }).click();
   await page.getByLabel('Day of week').selectOption('5'); // Friday
@@ -226,7 +226,7 @@ test('a Tutor can add and remove their own availability', async ({ page }) => {
 });
 
 test('a Client only sees lessons belonging to their own Students on the calendar', async ({ page }) => {
-  await login(page, CLIENT.email, CLIENT.password);
+  await login(page, CLIENT.username, CLIENT.password);
   await page.goto('/dashboard/calendar');
   // The seeded Client (Abdurrahman Mustafa) should see the seeded GCSE Maths lessons but not the
   // "Unrelated lesson" created for a different family earlier in this suite.
@@ -234,7 +234,7 @@ test('a Client only sees lessons belonging to their own Students on the calendar
 });
 
 test('a Tutor sees a disabled Join Classroom indicator outside the join window, for the seeded upcoming online lesson', async ({ page }) => {
-  await login(page, TUTOR.email, TUTOR.password);
+  await login(page, TUTOR.username, TUTOR.password);
   await page.goto('/dashboard/lessons/lesson-gcse-maths-upcoming');
   // Outside the join window this renders as inert text, not a live link — there is deliberately
   // no clickable "Join classroom" control to find in this state (plan6 section 59).
@@ -243,20 +243,20 @@ test('a Tutor sees a disabled Join Classroom indicator outside the join window, 
 });
 
 test('a Client never sees a Join Classroom control (only the assigned Tutor or Student can join)', async ({ page }) => {
-  await login(page, CLIENT.email, CLIENT.password);
+  await login(page, CLIENT.username, CLIENT.password);
   await page.goto('/dashboard/lessons/lesson-gcse-maths-upcoming');
   await expect(page.getByRole('link', { name: 'Join classroom' })).toHaveCount(0);
   await expect(page.locator('[aria-disabled="true"]', { hasText: 'Classroom opens' })).toHaveCount(0);
 });
 
 test('lesson detail surfaces a joinError message from the query string', async ({ page }) => {
-  await login(page, TUTOR.email, TUTOR.password);
+  await login(page, TUTOR.username, TUTOR.password);
   await page.goto('/dashboard/lessons/lesson-gcse-maths-upcoming?joinError=This%20lesson%20has%20been%20cancelled.');
   await expect(page.locator('[role="alert"]')).toContainText('This lesson has been cancelled.');
 });
 
 test('a Tutor cannot complete a lesson until every Student has an attendance record, then can once marked, with the event on the activity timeline', async ({ page }) => {
-  await login(page, ADMIN.email, ADMIN.password);
+  await login(page, ADMIN.username, ADMIN.password);
   await page.goto('/dashboard/admin/lessons/new');
   await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Brian' });
   const lessonTitle = uniqueLabel('Lesson to complete');
@@ -278,7 +278,7 @@ test('a Tutor cannot complete a lesson until every Student has an attendance rec
   await expect(page).toHaveURL(/\/dashboard\/lessons\/(.+)/);
   const lessonUrl = page.url();
 
-  await login(page, TUTOR.email, TUTOR.password);
+  await login(page, TUTOR.username, TUTOR.password);
   await page.goto(lessonUrl);
   // The button's own label never changes; the reason it's disabled is a separate hint tied to it
   // via aria-describedby (plan6 section 88) rather than crammed into the accessible name.
@@ -298,7 +298,7 @@ test('a Tutor cannot complete a lesson until every Student has an attendance rec
 });
 
 test('a required lesson report blocks completion until submitted, and internal Tutor notes never reach the Client view even after approval', async ({ page }) => {
-  await login(page, ADMIN.email, ADMIN.password);
+  await login(page, ADMIN.username, ADMIN.password);
   await page.goto('/dashboard/admin/lessons/new');
   await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Brian' });
   const lessonTitle = uniqueLabel('Lesson needing a report');
@@ -318,7 +318,7 @@ test('a required lesson report blocks completion until submitted, and internal T
   await expect(page).toHaveURL(/\/dashboard\/lessons\/(.+)/);
   const lessonUrl = page.url();
 
-  await login(page, TUTOR.email, TUTOR.password);
+  await login(page, TUTOR.username, TUTOR.password);
   await page.goto(lessonUrl);
   await page.locator('select[aria-label="Attendance status for Brian James Khalawon"]').selectOption('ATTENDED');
   await page.getByRole('button', { name: 'Mark', exact: true }).click();
@@ -339,7 +339,7 @@ test('a required lesson report blocks completion until submitted, and internal T
   await completeButton.click();
   await expect(page.locator('#main-content')).toContainText(/completed/i);
 
-  await login(page, ADMIN.email, ADMIN.password);
+  await login(page, ADMIN.username, ADMIN.password);
   await page.goto('/dashboard/notifications');
   await expect(page.locator('.notification-list')).toContainText('is awaiting approval');
   await page.goto(lessonUrl);
@@ -347,7 +347,7 @@ test('a required lesson report blocks completion until submitted, and internal T
   await page.getByRole('button', { name: 'Approve report' }).click();
   await expect(page.locator('#main-content')).toContainText(/approved/i);
 
-  await login(page, CLIENT.email, CLIENT.password);
+  await login(page, CLIENT.username, CLIENT.password);
   await expect(page.locator('.app-topbar__badge')).toBeVisible();
   await page.goto('/dashboard/notifications');
   await expect(page.locator('.notification-list')).toContainText('A new report is available');

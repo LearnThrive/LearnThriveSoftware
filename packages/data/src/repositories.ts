@@ -15,11 +15,12 @@ export interface TutorRepository {
   create(input: Omit<Tutor, "id" | "createdAt">): Promise<Tutor>;
   update(id: string, patch: Partial<Omit<Tutor, "id" | "createdAt">>): Promise<Tutor>;
   /**
-   * Gives a tutor record a login: the person who already has a CONFIRMED account with this email address becomes that tutor (role TUTOR).
-   * Refused for an account that owns a family, is a learner, is already staff, or whose address is not confirmed, and for a tutor who
-   * already has a login: nobody is ever converted by guessing. Audited. 'unsupported' where the provider has no real accounts (development).
+   * Gives a tutor record a login: the person with this username becomes that tutor. A CLIENT becomes a TUTOR; an ADMIN stays an ADMIN and
+   * gains the tutor tools (docs/ROLE_PERMISSIONS.md), so nobody is ever demoted. Refused for an account that owns a family, is a learner or
+   * already teaches, and for a tutor who already has a login: nobody is ever converted by guessing. Audited. 'unsupported' where the
+   * provider has no real accounts (development).
    */
-  linkLogin(tutorId: string, email: string, actor: string): Promise<"ok" | "no_tutor" | "no_account" | "not_eligible" | "unsupported">;
+  linkLogin(tutorId: string, username: string, actor: string): Promise<"ok" | "no_tutor" | "no_account" | "not_eligible" | "unsupported">;
 }
 
 export interface ClientRepository {
@@ -97,6 +98,10 @@ export interface NotificationRepository {
   unreadCountForUser(userId: string): Promise<number>;
   create(input: Omit<Notification, "id" | "createdAt" | "read">): Promise<Notification>;
   markRead(id: string): Promise<void>;
+  /** The login behind a tutor, family or student record, or null: many records have none, and they simply get no notification. */
+  recipientFor(recordId: string): Promise<string | null>;
+  /** Every login with this role, except one that has been disabled. */
+  recipientsWithRole(role: "ADMIN" | "TUTOR" | "CLIENT" | "STUDENT"): Promise<string[]>;
 }
 
 export interface ReportRepository {
