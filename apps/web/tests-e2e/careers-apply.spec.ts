@@ -413,9 +413,9 @@ test.describe('when the server says no', () => {
     await expect(page.getByLabel('Last name')).toHaveValue('Smith');
   });
 
-  test('a closed, rate-limited or unavailable answer is shown plainly with the email way to apply', async ({ page }) => {
-    for (const [status, text] of [[503, 'Online applications are not open yet.'], [429, 'Too many applications from this connection.'], [502, 'Nothing has been sent.'], [413, 'Your application is too large.']] as const) {
-      await page.unroute('**/api/careers/apply').catch(() => undefined);
+  // One test per answer: each fills in the whole form (about 25 s on CI), so all four in one test ran past the 90 s limit.
+  for (const [kind, status, text] of [['a closed', 503, 'Online applications are not open yet.'], ['a rate-limited', 429, 'Too many applications from this connection.'], ['an unavailable', 502, 'Nothing has been sent.'], ['a too-large', 413, 'Your application is too large.']] as const) {
+    test(`${kind} answer (${status}) is shown plainly with the email way to apply`, async ({ page }) => {
       await mockPost(page, '**/api/careers/apply', { status, json: { error: `${text} Please email info@learnthrivetuition.co.uk.` } });
       await page.goto('/careers/apply?role=maths-tutor');
       await fillApplication(page);
@@ -427,8 +427,8 @@ test.describe('when the server says no', () => {
       await expect(panel).toContainText(text);
       await expect(panel.getByRole('link', { name: 'info@learnthrivetuition.co.uk' })).toBeVisible();
       await expect(submit(page)).toBeEnabled();
-    }
-  });
+    });
+  }
 
   test('a rejected human check asks for a fresh challenge', async ({ page }) => {
     const challenges: string[] = [];
