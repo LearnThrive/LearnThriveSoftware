@@ -34,6 +34,9 @@ function toFile(row: Row): ResourceFile {
   return { id: row.id, resourceId: row.resource_id, storagePath: row.storage_path, bytes: Number(row.bytes), contentType: row.content_type, checksumSha256: row.checksum_sha256 };
 }
 
+// JSON is written as text and cast in the SQL (`$n::text::jsonb`), never as `$n::jsonb`: the postgres driver JSON-encodes any parameter
+// the server types as jsonb, so already-encoded text was stored as a JSON string and the paper tables' checks refused it. PGlite passes
+// text through, which hid this until the real stack ran it.
 const json = <T>(value: unknown, fallback: T): T => (value === null || value === undefined ? fallback : typeof value === "string" ? (JSON.parse(value) as T) : (value as T));
 
 function toPaperJob(row: Row): PaperJobRecord {
@@ -950,9 +953,9 @@ export class SqlLibraryStore implements LibraryStore {
              select $1, $5, 1, 'ai', 'system', j.checkpoints -> $5, j.updated_at from j, cur where cur.v = 0 returning version),
            nxt as (
              insert into public.paper_assessment_versions (job_id, question_id, version, kind, actor_kind, actor_id, value, note, created_at)
-             select $1, $5, greatest(cur.v, 1) + 1, $6, $7, $8::uuid, $9::jsonb, $10, $11 from j, cur returning version),
+             select $1, $5, greatest(cur.v, 1) + 1, $6, $7, $8::uuid, $9::text::jsonb, $10, $11 from j, cur returning version),
            upd as (
-             update public.paper_jobs set checkpoints = checkpoints || jsonb_build_object($5::text, $9::jsonb), updated_at = $11
+             update public.paper_jobs set checkpoints = checkpoints || jsonb_build_object($5::text, $9::text::jsonb), updated_at = $11
               where id = $1 and exists (select 1 from nxt) returning id)
            select (select version from nxt) as version`,
           [jobId, staff, owner.clientId, owner.studentId, questionId, change.kind, change.actorKind, change.actorId, JSON.stringify(change.value), change.note, now],
@@ -1003,7 +1006,7 @@ export class SqlLibraryStore implements LibraryStore {
       let rows: Row[];
       try {
         rows = await this.db.query<Row>(
-          `update public.paper_jobs set state = 'solving', mode = $4, selected_ids = $5::jsonb, lease_owner = $6, lease_expires_at = $7, attempts = 1, progress = '[]'::jsonb, updated_at = $8
+          `update public.paper_jobs set state = 'solving', mode = $4, selected_ids = $5::text::jsonb, lease_owner = $6, lease_expires_at = $7, attempts = 1, progress = '[]'::jsonb, updated_at = $8
             where id = $3 and client_id = $1 and student_id is not distinct from $2::uuid and state = 'ready' returning *`,
           [owner.clientId, owner.studentId, id, input.mode, input.selectedIds === null ? null : JSON.stringify(input.selectedIds), worker.id, new Date(now.getTime() + worker.leaseMs), now],
         );
@@ -1020,10 +1023,10 @@ export class SqlLibraryStore implements LibraryStore {
       const json = (value: unknown) => (value === undefined ? null : JSON.stringify(value));
       const rows = await this.db.query<Row>(
         `update public.paper_jobs set
-           questions = coalesce($3::jsonb, questions),
-           progress = coalesce($4::jsonb, progress),
+           questions = coalesce($3::text::jsonb, questions),
+           progress = coalesce($4::text::jsonb, progress),
            message = case when $5::boolean then $6 else message end,
-           checkpoints = case when $7::text is null then checkpoints else checkpoints || jsonb_build_object($7::text, $8::jsonb) end,
+           checkpoints = case when $7::text is null then checkpoints else checkpoints || jsonb_build_object($7::text, $8::text::jsonb) end,
            lease_expires_at = $9, updated_at = $10
           where id = $1 and lease_owner = $2 and state in ('extracting', 'solving') returning *`,
         [id, workerId, json(patch.questions), json(patch.progress), patch.message !== undefined, patch.message ?? null, patch.checkpoint?.questionId ?? null, json(patch.checkpoint?.value), new Date(now.getTime() + worker.leaseMs), now],
