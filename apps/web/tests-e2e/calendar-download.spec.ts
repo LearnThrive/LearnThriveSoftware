@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { uniqueLabel } from './support';
+import { dayInWeeks, lessonSlot, uniqueLabel } from './support';
 
 // plan15 feature A4: "Add to calendar". The download is an authenticated route that can return only lessons
 // the person can already see (a lesson they cannot see is the same 404 as one that does not exist), and the
@@ -83,9 +83,10 @@ test('a lesson the person cannot see is a 404 (no existence oracle), and the Adm
 
   await page.goto('/dashboard/admin/lessons/new');
   await page.getByLabel('Tuition Assignment').selectOption({ label: assignmentTitle });
+  const slot = lessonSlot(dayInWeeks(3, 'Tuesday'), '11:00');
   await page.locator('#lesson-title').fill(lessonTitle);
-  await page.locator('#lesson-date').fill('2026-11-24');
-  await page.locator('#lesson-time').fill('11:00');
+  await page.locator('#lesson-date').fill(slot.date);
+  await page.locator('#lesson-time').fill(slot.time);
   await page.getByRole('button', { name: 'Schedule lesson' }).click();
   await expect(page).toHaveURL(/\/dashboard\/calendar$/);
 

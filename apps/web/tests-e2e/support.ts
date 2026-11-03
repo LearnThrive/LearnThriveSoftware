@@ -1,4 +1,4 @@
-import { test } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 
 /** Every spec here runs against one shared dev server (see playwright.config.ts) whose data
  * provider is in-memory and lives as long as that server does — including across a *retry* of the
@@ -18,6 +18,62 @@ import { test } from '@playwright/test';
 export function uniqueLabel(base: string): string {
   const { retry } = test.info();
   return retry === 0 ? base : `${base} (retry ${retry})`;
+}
+
+const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const;
+type Weekday = (typeof WEEKDAYS)[number];
+const DAY_MS = 86_400_000;
+
+/** Today's date in London, as UTC midnight: the scheduling form reads its date and time as London wall-clock time, and
+ * whole-day steps from UTC midnight never cross a clock change. */
+function londonToday(): Date {
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit' })
+    .formatToParts(new Date()).reduce<Record<string, string>>((acc, p) => { acc[p.type] = p.value; return acc; }, {});
+  return new Date(Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day)));
+}
+
+const isoDay = (date: Date) => date.toISOString().slice(0, 10);
+
+/** A lesson day (yyyy-mm-dd) counted from today rather than written down, so the test can never outlive it: `weekday`
+ * of the Monday-to-Sunday week (the calendar's own) `weeksAhead` weeks after this one. Two or more weeks ahead is clear
+ * of both seeded lessons (the upcoming one is always within the next seven days) and of the lessons other specs book
+ * for later today to reach the join window and "starting soon". Give each test its own day. */
+export function dayInWeeks(weeksAhead: number, weekday: Weekday): string {
+  const today = londonToday();
+  const monday = today.getTime() - ((today.getUTCDay() + 6) % 7) * DAY_MS;
+  return isoDay(new Date(monday + (weeksAhead * 7 + WEEKDAYS.indexOf(weekday)) * DAY_MS));
+}
+
+/** The first `weekday` of the month after the one `weeksAhead` weeks from today. It falls on day 1 to 7, so a weekly
+ * series starting there has its first three lessons in one calendar month, all on screen together. */
+export function firstOfNextMonth(weeksAhead: number, weekday: Weekday): string {
+  const then = new Date(londonToday().getTime() + weeksAhead * 7 * DAY_MS);
+  const first = new Date(Date.UTC(then.getUTCFullYear(), then.getUTCMonth() + 1, 1));
+  return isoDay(new Date(first.getTime() + ((WEEKDAYS.indexOf(weekday) - (first.getUTCDay() + 6) % 7 + 7) % 7) * DAY_MS));
+}
+
+/** The date and time fields for a lesson on `day` at `time` (London), an hour later on each retry. A retry shares its
+ * first attempt's in-memory data (see uniqueLabel), so booking the same slot again would get the scheduling-clash
+ * warning instead of the calendar. Lessons default to an hour, so attempts never overlap, and the day stays put, so
+ * the weekday and the calendar month the test looks at do too. */
+export function lessonSlot(day: string, time: string): { date: string; time: string } {
+  const [hour, minute] = time.split(':');
+  return { date: day, time: `${String(Number(hour) + test.info().retry).padStart(2, '0')}:${minute}` };
+}
+
+/** Moves the calendar, which opens on the current month, forward to the month holding `day`, however many weeks ahead
+ * that is. Each step waits for the title to change rather than reading it straight back after the click. */
+export async function showMonthOf(page: Page, day: string) {
+  const [year, month] = day.split('-').map(Number);
+  const target = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'long', year: 'numeric' }).format(Date.UTC(year, month - 1, 1));
+  const title = page.locator('.fc-toolbar-title');
+  for (let i = 0; i < 12; i += 1) {
+    const shown = await title.innerText();
+    if (shown === target) break;
+    await page.locator('.fc-next-button').click();
+    await expect(title).not.toHaveText(shown);
+  }
+  await expect(title).toHaveText(target);
 }
 
 /** Every public marketing route — shared by the motion specs, which all sweep the whole site. */
