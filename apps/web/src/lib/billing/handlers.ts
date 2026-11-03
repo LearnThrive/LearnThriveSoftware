@@ -164,7 +164,7 @@ export async function handleCheckout(request: Request, deps: BillingDeps): Promi
       priceId,
       clientId,
       customerId: await rt.store.billing.getStripeCustomerId(clientId),
-      email: session.user.email,
+      email: (await rt.store.accounts.getEmail(session.user.id)) ?? session.user.email,
       successUrl: `${base}/account/billing/success?session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: `${base}/pricing?checkout=cancelled`,
       consentVersion: CONSENT_VERSION,

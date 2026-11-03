@@ -56,4 +56,31 @@ export interface AccountAuth {
   refresh(refreshToken: string): Promise<AuthTokens | null>;
   /** Ends the session everywhere it is held. Never throws. */
   signOut(accessToken: string): Promise<void>;
+  /** Ends every session of this person but the one holding this token, after a password change. Never throws. */
+  signOutOthers(accessToken: string): Promise<void>;
+}
+
+export type AdminCreateFailure = "exists" | "weak_password" | "unavailable";
+
+export interface AdminCreateInput {
+  /** The internal address built from the username (username.ts). Never mailed. */
+  email: string;
+  password: string;
+  displayName: string;
+  adultConfirmed: boolean;
+}
+
+/**
+ * What only an administrator's server-side call may do, over Supabase's Auth Admin API with the secret key: nothing here is reachable from a
+ * browser. A login made here is confirmed from the start, because nobody ever opens a link at its internal address.
+ */
+export interface AccountAdmin {
+  createUser(input: AdminCreateInput): Promise<{ ok: true; id: string } | { ok: false; reason: AdminCreateFailure }>;
+  /** Sets a temporary password and ends every session of that person. */
+  setPassword(userId: string, password: string): Promise<{ ok: true } | { ok: false; reason: "weak_password" | "unavailable" }>;
+  /** A one-time recovery token for this internal address, sending nothing: the site emails the linked address itself. */
+  recoveryLink(email: string): Promise<{ tokenHash: string } | null>;
+  setDisabled(userId: string, disabled: boolean): Promise<boolean>;
+  /** Removes a login that could not be bound to its record. */
+  deleteUser(userId: string): Promise<boolean>;
 }

@@ -2,7 +2,7 @@
 
 ## Status: one sign-in (the account layer), plus a development-only staff provider
 
-There is **one sign-in page, `/login`**, and it is the Library's account sign-in (the one LearnThrive AI always used): real sign-up with a verified email, lockout, Supabase Auth in production, an in-memory stand-in in development. Tutors, administrators, enrolled families and Library members all use it; what a person finds afterwards follows from who they are ("One sign-in" below). The development provider described under "The abstraction" still exists for local work, but nothing in the UI posts to it any more.
+There is **one sign-in page, `/login`**: a **username and password**, lockout, Supabase Auth in production, an in-memory stand-in in development. **LearnThrive makes every account**: nobody signs up (see "Accounts are made, not signed up for"). Tutors, administrators, enrolled families and Library members all use the one page; what a person finds afterwards follows from who they are ("One sign-in" below). The development provider described under "The abstraction" still exists for local work, but nothing in the UI posts to it any more.
 
 Everything from "The abstraction" down to "Route protection" describes the **development-only** provider. It is not production-ready, and the code itself refuses to run as production auth — see "Production safety" below. The real thing is the account layer under "Library accounts"; what is still missing for the signed-in app in production is its *data* (the dashboard runs on in-memory demo records), not its sign-in — see "One sign-in" below.
 
@@ -81,9 +81,44 @@ Three helpers in `apps/web/src/lib/auth/guard.ts`, used from Server Components a
 
 **Navigation.** The dashboard menu gains a "Learning" section (LearnThrive AI, Library) for anyone whose access includes them, shown only where the page behind the link is open (LearnThrive AI configured and approved; the Library catalogue open). The member area (`/library/**`, `/account`) gains a "Dashboard" link for staff and enrolled families. They are two frames over one account, not one embedded in the other. The Library's old address, `/account/sign-in`, redirects to `/login` and keeps `next`.
 
+## Accounts are made, not signed up for
+
+Decided 2 November 2026 (launch checklist 0.2, 0.3). LearnThrive creates every account, and people sign in with a **username**: young children have no email, and it is easier for everyone.
+
+**The internal address.** Supabase Auth requires an email address, so each username has a fixed one built from it: `<username>@accounts.learnthrivetuition.co.uk` (`lib/account/username.ts`). It only ever goes to Auth. Nothing is sent to it, the browser never sees it, and it is never shown: `public.auth_email()` answers the linked address first, so no caller can reach it by accident. Give that domain a **null MX record** (`0 .`) so it can receive nothing; a real-stack test (`tests/realstack.accounts.test.mjs`) proves Auth accepts it. Because the address comes straight from the username, signing in needs no lookup, and an unknown username takes the same path as a known one.
+
+**The linked email.** Every account has a real address on `profiles.linked_email`, for resets, notices and invoices: their own, or for a learner **their parent's**. A parent's change carries to their children. A change is audited, by id only.
+
+**Usernames** are 3 to 30 lower-case letters and digits, with single dots, dashes or underscores between them, unique, with a reserved list (`admin`, `support`, `learnthrive` and so on). A child's is generated, a word and four digits, and is never built from their name or school (the Children's Code: collect no more than needed). The name shown inside the app is a separate field.
+
+**Who makes what.** Each path is an administrator's server action in `lib/actions/accounts.ts`, which re-checks `ADMIN` and takes the role from the code, never the form.
+
+| Who | Where | What it does |
+| --- | --- | --- |
+| A family | People > Clients > Add client | The login and the family together: a family cannot exist without its account holder |
+| A child | The student's page > Login | Their login, linked to their parent, with a generated username unless one is given |
+| A tutor | The tutor's page > Login | A login for that record, or links an existing login (an administrator stays an administrator: `docs/ROLE_PERMISSIONS.md`) |
+| An administrator | `scripts/create-account.mjs` only | Never a screen. `promote-admin` (below) remains for an account that already exists |
+
+`lib/account/provision.ts` does the work: the Auth Admin API makes the login, already confirmed, then `public.provision_account` binds it to its username, linked email, role and record in **one transaction**. If that refuses, the login is deleted again, so a person is never half made. Only a brand new login qualifies, whatever is asked for, so nobody can be converted. The secret key (`SUPABASE_SERVICE_ROLE_KEY`) stays on the server; without it, making an account says so and changes nothing.
+
+**The temporary password** is 20 random characters, shown **once** to the administrator, on the screen that asked. It is in no URL, log or table, and Auth keeps only its hash. Hand it over by a secure route; if it is lost, issue another.
+
+**The first sign-in.** `profiles.must_change_password` puts the session in the `password_change` state (`lib/account/session.ts`). Every door in the site asks for `ok`, so nothing opens: pages lead to `/account/reset` and routes answer 401. The only things that accept the state are that page and `POST /api/account/password`. A temporary password cannot be kept.
+
+**A forgotten password.** A person gives their username and the site emails a one-time link to the **linked** address (a child's to their parent), through Resend (`lib/account/resetEmail.ts`). Supabase's Admin API makes the token and sends nothing, because it would write to the internal address; the link then opens the same `/account/confirm` page as before, and a POST spends it, so a mail scanner cannot use it up. It works once, and stops after 30 minutes: that is the project's **Email OTP expiry**, which must be set to 1800 seconds (`docs/SUPABASE_DASHBOARD_CHECKLIST.md`). The answer and the time it takes are the same for every username, at most 3 emails an hour go to one account, a disabled login gets none, and a successful change signs out every other session.
+
+**An administrator's reset** is the fallback, after confirming who they are speaking to (for a child, a call to the parent): a new temporary password, the old one stops working, audited.
+
+**Leaving.** Disabling a login bans it in Auth and records it on the profile, which ends any open session within the 30-second cache. It can be restored. Ending assignments is separate, and the purge is launch checklist task 3.7.
+
+**Telling nobody who exists.** A wrong username and a wrong password give the same message, and the lockout counts failures per username whether it exists or not. In production a refused sign-in and a reset request both take at least 900 ms (`ANSWER_FLOOR_MS`): Auth answers an unknown address sooner than it can check a password, so the time taken would otherwise tell.
+
+**Self-service is shut in production.** `selfServiceAccounts()` (`lib/account/selfService.ts`) is false there, so the sign-up page goes to `/login`, and `/api/account/signup`, `/api/account/resend` and the learner invitation, sign-up and accept routes answer 403 with "LearnThrive sets up every account for you". An email address is not a login. Supabase's own sign-ups stay off too, so a direct call to Auth fails as well (`supabase:verify -- --expect-signup closed`). Those flows remain on a local server and in the tests, where the Library's journeys still run on them.
+
 ## Library accounts (plan19 phase C)
 
-The Library has real sign-up. It is a **separate layer** from the development accounts above: the development provider and `/api/auth/**` still exist only for local work and still refuse to run in production; the account layer lives in `apps/web/src/lib/account/` and is reached only through `AccountAuth` (`types.ts`).
+The Library's self-service sign-up below is **local only now**: see "Accounts are made, not signed up for". The rest of this section still describes the layer every account uses. It is a **separate layer** from the development accounts above: the development provider and `/api/auth/**` still exist only for local work and still refuse to run in production; the account layer lives in `apps/web/src/lib/account/` and is reached only through `AccountAuth` (`types.ts`).
 
 | Piece | File | Notes |
 | --- | --- | --- |
@@ -130,14 +165,11 @@ cd apps/web
 DATABASE_URL=<the server connection string> npm run db:promote-admin -- --email person@example.com --host <the database host>
 ```
 
-It refuses unless **all** hold: `--host` is given and is the host of `DATABASE_URL` (even for a local database, `--host 127.0.0.1`); the address already has an account whose email is **confirmed**; the operator **types the email address again** at the prompt; and, for a database that is not on this machine, also types the host, at a real terminal. It writes `profiles.role` through the server connection and prints one counter-only JSON line to the console (host, outcome, how many administrators there are now): never the email or a name. The person must sign in again for it to take effect. An administrator's reach (read accounts for support, never conversations or consents) is proved by a real-stack test.
+It refuses unless **all** hold: `--host` is given and is the host of `DATABASE_URL` (even for a local database, `--host 127.0.0.1`); the username belongs to an account; the operator **types the username again** at the prompt; and, for a database that is not on this machine, also types the host, at a real terminal. It writes `profiles.role` through the server connection and prints one counter-only JSON line to the console (host, outcome, how many administrators there are now): never the username or a name. The person must sign in again for it to take effect. An administrator's reach (read accounts for support, never conversations or consents) is proved by a real-stack test.
 
-**A tutor** is a `public.tutors` row with a display name and the person's `profile_id`, not a login role of its own. Link one with a single SQL statement in the dashboard's SQL editor, as `postgres`, after the person has signed up and confirmed:
+**The launch accounts** are made by `scripts/create-account.mjs`, from a list kept outside this repository: `npm run db:create-account`. Its header has the format. It is a dry run unless given `--apply --passwords <a new file>`; it refuses a list or a passwords file inside this repository, an existing passwords file, a wrong `--host`, and a local database without `--local-stack`; and it asks for the host and the number of accounts to be typed. The temporary passwords go to that file and nowhere else. The console gets counters only.
 
-```sql
-update public.profiles set role = 'TUTOR' where id = '<the profile id>';
-insert into public.tutors (profile_id, display_name) values ('<the profile id>', '<the name families see>');
-```
+**A tutor** is a `public.tutors` row with a display name and the person's `profile_id`, not a login role of its own: make the login from the tutor's page (above).
 
 To take a role away: `update public.profiles set role = 'CLIENT' where id = '<the profile id>'`, then ban and sign the person out (`docs/SUPABASE_RUNBOOK.md`). **Multi-factor sign-in for administrators is not built**: until it is, keep the administrator list very short.
 
@@ -154,5 +186,5 @@ Tested here: validation, lockout, both providers (Supabase against a faked `fetc
 - Password reset (deliberately deferred — plan section 7 explicitly says not to build this infrastructure yet).
 - Account lockout after repeated failed attempts (a "disabled" account exists as a distinct state, but nothing currently *transitions* an account into it automatically).
 - CSRF protection beyond `SameSite=Lax` (adequate for same-site form/fetch submissions from this app's own pages; would need revisiting if this app ever needs to accept authenticated cross-site requests).
-- Multi-factor authentication, **including for the website's own administrators** (see the checklist's decisions).
+- Multi-factor authentication, **including for the website's own administrators** (see the checklist's decisions). Four administrators on a password alone is an open decision: launch checklist 3.6.
 - Any of this surviving a server restart (that is the development provider; the Supabase-backed accounts do).

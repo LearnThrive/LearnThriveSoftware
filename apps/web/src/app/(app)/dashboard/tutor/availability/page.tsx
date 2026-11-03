@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { CalendarClock, Plus } from "lucide-react";
-import { requireRole } from "@/lib/auth/guard";
+import { requireTutor } from "@/lib/auth/guard";
 import { createMetadata } from "@/lib/metadata";
 import { getDataProvider } from "@/lib/data/provider";
 import { addAvailabilityAction, removeAvailabilityAction } from "@/lib/actions/availability";
@@ -20,7 +20,7 @@ export const metadata: Metadata = createMetadata({
 const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export default async function TutorAvailabilityPage() {
-  const user = await requireRole(["TUTOR"]);
+  const user = await requireTutor();
   if (!user.profileId) {
     return (
       <>

@@ -29,6 +29,10 @@ interface Profile {
   displayName: string;
   adultConfirmed: boolean;
   email: string | null;
+  username: string | null;
+  linkedEmail: string | null;
+  mustChangePassword: boolean;
+  loginDisabled: boolean;
 }
 
 interface EntitlementRow {
@@ -66,6 +70,8 @@ function facet(values: Array<string | null>): Facet[] {
 export class InMemoryLibraryStore implements LibraryStore {
   private profiles = new Map<string, Profile>();
   private clients = new Map<string, string>(); // profileId -> clientId
+  private domainRefs = new Map<string, string>(); // profileId -> the domain record a login was bound to
+  private tutorRefs = new Map<string, string>(); // profileId -> the tutor record they teach as
   private students = new Map<string, StudentRecord>();
   /** Guardian links (client_students): the owner's is created with the student; a second guardian's by seedGuardianLink. */
   private links: Array<{ clientId: string; studentId: string; status: LinkStatus }> = [];
@@ -90,15 +96,39 @@ export class InMemoryLibraryStore implements LibraryStore {
   private usage = new Map<string, number>();
   private consentRows: Array<{ profileId: string; kind: string; version: string; textSha256: string; at: Date }> = [];
 
-  seedProfile(input: { id?: string; role?: AccountRole; displayName?: string; adultConfirmed?: boolean; email?: string } = {}): string {
+  seedProfile(input: { id?: string; role?: AccountRole; displayName?: string; adultConfirmed?: boolean; email?: string; username?: string; linkedEmail?: string; mustChangePassword?: boolean } = {}): string {
     const id = input.id ?? randomUUID();
-    this.profiles.set(id, { id, role: input.role ?? "CLIENT", displayName: input.displayName ?? "", adultConfirmed: input.adultConfirmed ?? true, email: input.email ?? null });
+    this.profiles.set(id, {
+      id,
+      role: input.role ?? "CLIENT",
+      displayName: input.displayName ?? "",
+      adultConfirmed: input.adultConfirmed ?? true,
+      email: input.email ?? null,
+      username: input.username ?? null,
+      linkedEmail: input.linkedEmail ?? null,
+      mustChangePassword: input.mustChangePassword ?? false,
+      loginDisabled: false,
+    });
     return id;
   }
 
-  seedStudent(profileId: string, options: { displayName?: string; yearGroup?: string | null; isMinor?: boolean } = {}): string {
+  hasStudent(studentId: string): boolean {
+    return this.students.has(studentId);
+  }
+
+  /** Every audit row, for tests. */
+  auditEntries(): IdentityAuditEntry[] {
+    return [...this.auditRows];
+  }
+
+  /** The domain record a login belongs to, for a record the development provider holds (the Postgres store finds it in the tables). */
+  seedDomainRef(profileId: string, domainId: string): void {
+    this.domainRefs.set(profileId, domainId);
+  }
+
+  seedStudent(profileId: string, options: { id?: string; displayName?: string; yearGroup?: string | null; isMinor?: boolean } = {}): string {
     const clientId = this.clientFor(profileId);
-    const studentId = randomUUID();
+    const studentId = options.id ?? randomUUID();
     this.students.set(studentId, { id: studentId, clientId, displayName: options.displayName ?? "Student", yearGroup: options.yearGroup ?? null, isMinor: options.isMinor ?? true, accessMode: "none", active: true });
     this.links.push({ clientId, studentId, status: "active" });
     return studentId;
@@ -181,6 +211,21 @@ export class InMemoryLibraryStore implements LibraryStore {
     this.auditRows.push({ at: now, actorProfileId: actor, action, clientId, studentId });
   }
 
+  private accountOf(profile: Profile): Account {
+    return {
+      profileId: profile.id,
+      role: profile.role,
+      displayName: profile.displayName,
+      adultConfirmed: profile.adultConfirmed,
+      clientId: this.clients.get(profile.id) ?? null,
+      learner: this.learnerOf(profile.id),
+      username: profile.username,
+      linkedEmail: profile.linkedEmail,
+      mustChangePassword: profile.mustChangePassword,
+      loginDisabled: profile.loginDisabled,
+    };
+  }
+
   private activeLink(clientId: string, studentId: string): boolean {
     return this.links.some((l) => l.clientId === clientId && l.studentId === studentId && l.status === "active");
   }
@@ -189,8 +234,11 @@ export class InMemoryLibraryStore implements LibraryStore {
     getAccount: async (profileId) => {
       const profile = this.profiles.get(profileId);
       if (!profile) return null;
-      const account: Account = { profileId, role: profile.role, displayName: profile.displayName, adultConfirmed: profile.adultConfirmed, clientId: this.clients.get(profileId) ?? null, learner: this.learnerOf(profileId) };
-      return account;
+      return this.accountOf(profile);
+    },
+    findByUsername: async (username) => {
+      const profile = [...this.profiles.values()].find((p) => p.username === username);
+      return profile ? this.accountOf(profile) : null;
     },
     ensureClient: async (profileId) => {
       if (!this.profiles.has(profileId)) throw new Error("no such profile");
@@ -198,14 +246,77 @@ export class InMemoryLibraryStore implements LibraryStore {
       if (this.learnerOf(profileId)) throw new Error("a learner cannot own a family account");
       return this.clientFor(profileId);
     },
-    // The in-memory store has no tuition domain of its own: development maps accounts to the seeded records (apps/web lib/dev/accounts.ts).
-    domainRef: async () => null,
-    getEmail: async (profileId) => this.profiles.get(profileId)?.email ?? null,
+    // The in-memory store has no tuition domain of its own: development maps the seeded accounts in apps/web lib/dev/accounts.ts, and a login
+    // made on a local server is recorded here.
+    domainRef: async (profileId) => this.domainRefs.get(profileId) ?? null,
+    tutorRef: async (profileId) => this.tutorRefs.get(profileId) ?? null,
+    getEmail: async (profileId) => {
+      const profile = this.profiles.get(profileId);
+      return profile?.linkedEmail ?? profile?.email ?? null;
+    },
     getOwnerProfileId: async (clientId) => [...this.clients].find(([, id]) => id === clientId)?.[0] ?? null,
     updateDisplayName: async (profileId, displayName) => {
       const profile = this.profiles.get(profileId);
       if (!profile) throw new Error("no such profile");
       profile.displayName = displayName;
+    },
+    provision: async (input) => {
+      const needsTutor = input.role === "TUTOR";
+      const needsStudent = input.role === "STUDENT";
+      if ((needsTutor && !input.tutorId) || (!needsTutor && input.role !== "ADMIN" && input.tutorId) || needsStudent !== Boolean(input.studentId)) return "not_eligible";
+      const profile = this.profiles.get(input.profileId);
+      if (!profile) return "no_profile";
+      if (profile.username !== null || profile.role !== "CLIENT" || this.clients.has(profile.id) || this.learnerOf(profile.id) || this.tutorRefs.has(profile.id)) return "not_eligible";
+      if ([...this.profiles.values()].some((p) => p.username === input.username)) return "username_taken";
+      if (input.tutorId && [...this.tutorRefs.values()].includes(input.tutorId)) return "not_eligible";
+      const now = input.now ?? new Date();
+      let clientId: string | null = null;
+      if (input.studentId) {
+        const student = this.students.get(input.studentId);
+        const link = this.links.find((l) => l.studentId === input.studentId && l.status === "active");
+        const taken = this.identities.get(input.studentId);
+        if (!student?.active || !link || (taken && taken.status !== "revoked")) return "not_eligible";
+        clientId = link.clientId;
+        this.identities.delete(input.studentId);
+        this.seedLearner(input.studentId, profile.id);
+        this.domainRefs.set(profile.id, input.studentId);
+      }
+      if (input.tutorId) {
+        this.tutorRefs.set(profile.id, input.tutorId);
+        this.domainRefs.set(profile.id, input.tutorId);
+      }
+      Object.assign(profile, {
+        username: input.username,
+        linkedEmail: input.linkedEmail.toLowerCase(),
+        displayName: input.displayName.trim().slice(0, 80),
+        role: input.role,
+        mustChangePassword: true,
+        adultConfirmed: input.role !== "STUDENT",
+      });
+      if (input.role === "CLIENT") {
+        clientId = this.clientFor(profile.id);
+        this.domainRefs.set(profile.id, clientId);
+      }
+      this.audit(input.actor, "account_created", clientId, input.studentId ?? null, now);
+      return "ok";
+    },
+    setMustChangePassword: async (profileId, required) => {
+      const profile = this.profiles.get(profileId);
+      if (profile) profile.mustChangePassword = required;
+    },
+    setLinkedEmail: async (profileId, email) => {
+      const profile = this.profiles.get(profileId);
+      if (profile) profile.linkedEmail = email;
+      // A child's address is their parent's, so it follows a parent's change.
+      const clientId = this.clients.get(profileId);
+      for (const identity of this.identities.values()) {
+        const child = this.profiles.get(identity.profileId);
+        if (child && this.students.get(identity.studentId)?.clientId === clientId) child.linkedEmail = email;
+      }
+    },
+    setLoginDisabled: async (profileId, at) => {
+      const profile = this.profiles.get(profileId);
+      if (profile) profile.loginDisabled = at !== null;
     },
   };
 

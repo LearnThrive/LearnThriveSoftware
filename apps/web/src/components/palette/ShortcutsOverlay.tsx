@@ -17,11 +17,13 @@ export function ShortcutsOverlay({
   open,
   onClose,
   role,
+  teaches = false,
   mac,
 }: {
   open: boolean;
   onClose: () => void;
   role: Role;
+  teaches?: boolean;
   mac: boolean;
 }) {
   const dialog = useDelayedUnmount(open, 160);
@@ -50,7 +52,7 @@ export function ShortcutsOverlay({
   }, [open, onClose]);
 
   if (!dialog.rendered) return null;
-  const targets = goToTargetsFor(role);
+  const targets = goToTargetsFor(role, teaches);
   const mod = mac ? "⌘" : "Ctrl";
 
   return (

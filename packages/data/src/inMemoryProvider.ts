@@ -13,6 +13,7 @@ import type {
 // and the two seed systems stay cross-referenced deterministically rather than by coincidence.
 export const SEED_IDS = {
   tutorJamiePatel: "tutor-jamie-patel",
+  tutorMeeraShah: "tutor-meera-shah",
   clientSarahAhmed: "client-sarah-ahmed",
   studentAyaanAhmed: "student-ayaan-ahmed",
   assignmentGcseMaths: "assignment-gcse-maths-ayaan",
@@ -216,7 +217,7 @@ class InMemoryActivityRepository implements ActivityRepository {
 }
 
 class InMemoryNotificationRepository implements NotificationRepository {
-  constructor(private readonly store: Map<string, Notification>) {}
+  constructor(private readonly store: Map<string, Notification>, private readonly people: Array<Map<string, { userId?: string }>>) {}
   async forUser(userId: string) {
     return [...this.store.values()].filter((n) => n.userId === userId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
@@ -231,6 +232,13 @@ class InMemoryNotificationRepository implements NotificationRepository {
   async markRead(id: string) {
     const existing = this.store.get(id);
     if (existing) this.store.set(id, { ...existing, read: true });
+  }
+  // A record made on a local server may carry its login. apps/web adds the development accounts (lib/data/provider.ts).
+  async recipientFor(recordId: string) {
+    return this.people.map((records) => records.get(recordId)?.userId).find(Boolean) ?? null;
+  }
+  async recipientsWithRole(): Promise<string[]> {
+    return [];
   }
 }
 
@@ -281,6 +289,10 @@ function seedProvider(): DataProvider {
   const notificationStore = new Map<string, Notification>();
   const links: ClientStudentLink[] = [];
 
+  // The tutor record of the development administrator who teaches (apps/web lib/dev/accounts.ts).
+  tutorStore.set(SEED_IDS.tutorMeeraShah, {
+    id: SEED_IDS.tutorMeeraShah, name: "Meera Shah", email: "teaching-admin@learnthrive.dev", subjects: ["English"], active: true, createdAt: now(),
+  });
   tutorStore.set(SEED_IDS.tutorJamiePatel, {
     id: SEED_IDS.tutorJamiePatel, name: "Tahasin Hasan", email: "tutor@learnthrive.dev",
     subjects: ["Mathematics"], active: true, createdAt: now(),
@@ -360,7 +372,7 @@ function seedProvider(): DataProvider {
     activity: new InMemoryActivityRepository(activityStore),
     reports: new InMemoryReportRepository(reportStore, lessonStore),
     settings: new InMemorySettingsRepository({ requireReportApproval: true }),
-    notifications: new InMemoryNotificationRepository(notificationStore),
+    notifications: new InMemoryNotificationRepository(notificationStore, [tutorStore, clientStore, studentStore]),
   };
 }
 

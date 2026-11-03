@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import { LEARNER_AI_CONSENT, directLoginAllowed, type AccessMode, type LinkStatus } from "@learnthrive/data/library";
+import { accountsAreMadeForYou } from "@/lib/account/handlers";
 import type { AccountRuntime } from "@/lib/account/runtime";
+import { selfServiceAccounts } from "@/lib/account/selfService";
 import { renewSession, safeNextPath, setSessionCookies, type CookieJar } from "@/lib/account/session";
 import { parseDisplayName, parseEmail, emailError, passwordError } from "@/lib/account/validation";
 import { SlidingWindowLimiter, clientAddress } from "@/lib/rate-limit";
@@ -137,6 +139,8 @@ export async function handleInvite(request: Request, deps: LearnerDeps, studentI
   const g = await guardianGate(request, deps, "learners-invite", true);
   if (!g.ok) return g.response;
   const env = deps.env ?? process.env;
+  // A learner's login is made by an administrator (lib/account/provision.ts), never by an invitation, in production.
+  if (!selfServiceAccounts(env)) return accountsAreMadeForYou();
   if (!limits.invite.allow(`${g.profileId}`)) return refuse(429, "rate_limited", "Too many invitations. Please try again later.");
   const id = idOf(studentId);
   if (!id) return refuse(404, "not_found", "We could not find that learner.");
@@ -238,6 +242,7 @@ export async function handleInvitationPeek(request: Request, deps: LearnerDeps):
   const env = deps.env ?? process.env;
   if (!originAllowed(request, env)) return jsonResponse(403, { error: "Forbidden." });
   if (!deps.rt) return UNAVAILABLE();
+  if (!selfServiceAccounts(env)) return accountsAreMadeForYou();
   if (!limits.accept.allow(clientAddress(request.headers, env))) return refuse(429, "rate_limited", "Too many attempts. Please try again later.");
   const body = await readBody(request);
   const token = typeof body?.token === "string" ? body.token : "";
@@ -256,6 +261,7 @@ export async function handleLearnerSignUp(request: Request, deps: LearnerDeps): 
   const env = deps.env ?? process.env;
   if (!originAllowed(request, env)) return jsonResponse(403, { error: "Forbidden." });
   if (!deps.rt) return UNAVAILABLE();
+  if (!selfServiceAccounts(env)) return accountsAreMadeForYou();
   if (!limits.signup.allow(clientAddress(request.headers, env))) return refuse(429, "rate_limited", "Too many attempts. Please try again later.");
   const body = await readBody(request);
   if (!body) return refuse(400, "bad_request", "We could not read that.");
@@ -288,6 +294,7 @@ export async function handleAcceptInvitation(request: Request, deps: LearnerDeps
   const env = deps.env ?? process.env;
   if (!originAllowed(request, env)) return jsonResponse(403, { error: "Forbidden." });
   if (!deps.rt) return UNAVAILABLE();
+  if (!selfServiceAccounts(env)) return accountsAreMadeForYou();
   if (!limits.accept.allow(clientAddress(request.headers, env))) return refuse(429, "rate_limited", "Too many attempts. Please try again later.");
   const session = await renewSession(deps.jar, deps.rt);
   if (session.status !== "ok") return refuse(401, "signed_out", "Please sign in first, then open your invitation link again.");

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { accountRuntime } from "@/lib/account/runtime";
+import { parseUsername, usernameFormatError } from "@/lib/account/username";
 import { requireRole } from "@/lib/auth/guard";
 import { getDataProvider } from "@/lib/data/provider";
 
@@ -95,15 +96,15 @@ export async function removeAssignmentStudentAction(formData: FormData): Promise
 export async function linkTutorLoginAction(formData: FormData): Promise<void> {
   const admin = await requireRole(["ADMIN"]);
   const tutorId = field(formData, "tutorId");
-  const email = field(formData, "email").toLowerCase();
-  if (!ID.test(tutorId) || !email.includes("@") || email.length > 254) throw new Error("Enter the tutor's sign-in email address.");
-  const result = await getDataProvider().tutors.linkLogin(tutorId, email, admin.id);
+  const username = parseUsername(formData.get("username"));
+  if (!ID.test(tutorId) || usernameFormatError(username)) throw new Error("Enter the username of their login.");
+  const result = await getDataProvider().tutors.linkLogin(tutorId, username, admin.id);
   const path = `/dashboard/admin/tutors/${tutorId}`;
   const message: Record<typeof result, string> = {
-    ok: "Login linked. They now sign in as this tutor.",
+    ok: "Login linked. They now teach as this tutor.",
     no_tutor: "There is no such tutor.",
-    no_account: "There is no confirmed account with that address. Ask them to create one and confirm their email first.",
-    not_eligible: "That account cannot become this tutor (it is a family or learner account, is staff already, or this tutor already has a login).",
+    no_account: "There is no login with that username.",
+    not_eligible: "That login cannot become this tutor (it is a family or learner account, is a tutor already, or this tutor already has a login).",
     unsupported: "Logins are linked in the production database only.",
   };
   back(path, message[result]);

@@ -3,7 +3,7 @@ import type { ChatExport, ChatFileChunkRecord, ChatFileRecord, ChatMessageRecord
 import type { AccessMode, IdentityAuditEntry, InvitationPeek, IdentityRepository, InvitationRecord, LearnerContext, LinkStatus, StudentRecord } from "./identity";
 import { PAPER_JOB_DAYS, PAPER_JOB_MAX_ATTEMPTS, type AssessmentVersion, type PaperJobKind, type PaperJobRecord, type PaperJobRepository, type PaperJobState } from "./papers";
 import type { AccessRepository, AccountRepository, BillingRepository, ChatRepository, DownloadRepository, LibraryStore, ResourceRepository, SqlExecutor } from "./ports";
-import type { AccessFacts, Account, Facet, FacetScope, Level, Resource, ResourceFacets, ResourceFile, ResourcePage, ResourceQuery, ResourceType } from "./types";
+import type { AccessFacts, Account, Facet, FacetScope, Level, ProvisionResult, Resource, ResourceFacets, ResourceFile, ResourcePage, ResourceQuery, ResourceType } from "./types";
 
 const DEFAULT_LIMIT = 24;
 const MAX_LIMIT = 100;
@@ -143,20 +143,36 @@ const PUBLISHED = "published_at is not null and published_at <= $1";
 export class SqlLibraryStore implements LibraryStore {
   constructor(private readonly db: SqlExecutor) {}
 
+  /** `condition` is one of two fixed strings in this file, never anything from a request. */
+  private async accountWhere(condition: string, value: string): Promise<Account | null> {
+    const rows = await this.db.query<Row>(
+      `select p.id, p.role, p.display_name, p.adult_confirmed_at, p.username, p.linked_email, p.must_change_password, p.login_disabled_at, c.id as client_id
+         from public.profiles p left join public.clients c on c.owner_profile_id = p.id
+        where ${condition}`,
+      [value],
+    );
+    const row = rows[0];
+    if (!row) return null;
+    const learner = row.role === "STUDENT" ? ((await this.db.query<Row>(`${LEARNER_SELECT} where l.profile_id = $1`, [row.id]))[0] ?? null) : null;
+    return {
+      profileId: row.id,
+      role: row.role,
+      displayName: row.display_name,
+      adultConfirmed: row.adult_confirmed_at !== null,
+      clientId: row.client_id,
+      learner: learner ? toLearner(learner) : null,
+      username: row.username,
+      linkedEmail: row.linked_email,
+      mustChangePassword: row.must_change_password,
+      loginDisabled: row.login_disabled_at !== null,
+    };
+  }
+
   accounts: AccountRepository = {
     getAccount: async (profileId) => {
-      const rows = await this.db.query<Row>(
-        `select p.id, p.role, p.display_name, p.adult_confirmed_at, c.id as client_id
-           from public.profiles p left join public.clients c on c.owner_profile_id = p.id
-          where p.id = $1`,
-        [profileId],
-      );
-      const row = rows[0];
-      if (!row) return null;
-      const learner = row.role === "STUDENT" ? ((await this.db.query<Row>(`${LEARNER_SELECT} where l.profile_id = $1`, [profileId]))[0] ?? null) : null;
-      const account: Account = { profileId: row.id, role: row.role, displayName: row.display_name, adultConfirmed: row.adult_confirmed_at !== null, clientId: row.client_id, learner: learner ? toLearner(learner) : null };
-      return account;
+      return this.accountWhere("p.id = $1", profileId);
     },
+    findByUsername: async (username) => this.accountWhere("p.username = $1", username),
     ensureClient: async (profileId) => {
       const rows = await this.db.query<Row>(
         `with ins as (
@@ -180,8 +196,12 @@ export class SqlLibraryStore implements LibraryStore {
       );
       return rows[0]?.id ?? null;
     },
+    tutorRef: async (profileId) => {
+      const rows = await this.db.query<Row>(`select id from public.tutors where profile_id = $1 and active`, [profileId]);
+      return rows[0]?.id ?? null;
+    },
     getEmail: async (profileId) => {
-      // Through a function: the site's database role has no access to the auth schema (migration 0009).
+      // Through a function: the site's database role has no access to the auth schema (migration 0009). It answers the linked address first (0017).
       const rows = await this.db.query<Row>(`select public.auth_email($1) as email`, [profileId]);
       return rows[0]?.email ?? null;
     },
@@ -192,6 +212,32 @@ export class SqlLibraryStore implements LibraryStore {
     updateDisplayName: async (profileId, displayName) => {
       const rows = await this.db.query<Row>(`update public.profiles set display_name = $2 where id = $1 returning id`, [profileId, displayName]);
       if (!rows[0]) throw new Error("no such profile");
+    },
+    provision: async (input) => {
+      const rows = await this.db.query<Row>(
+        `select public.provision_account($1, $2, $3, $4, $5, $6, $7, $8, $9) as result`,
+        [input.profileId, input.username, input.linkedEmail, input.displayName, input.role, input.tutorId ?? null, input.studentId ?? null, input.actor, input.now ?? new Date()],
+      );
+      return rows[0]!.result as ProvisionResult;
+    },
+    setMustChangePassword: async (profileId, required) => {
+      await this.db.query(`update public.profiles set must_change_password = $2 where id = $1`, [profileId, required]);
+    },
+    setLinkedEmail: async (profileId, email) => {
+      // A child's address is their parent's, so it follows a parent's change.
+      await this.db.query(
+        `update public.profiles set linked_email = $2
+          where id = $1
+             or id in (select l.profile_id
+                         from public.learner_identities l
+                         join public.students s on s.id = l.student_id
+                         join public.clients c on c.id = s.client_id
+                        where c.owner_profile_id = $1)`,
+        [profileId, email],
+      );
+    },
+    setLoginDisabled: async (profileId, at) => {
+      await this.db.query(`update public.profiles set login_disabled_at = $2 where id = $1`, [profileId, at]);
     },
   };
 

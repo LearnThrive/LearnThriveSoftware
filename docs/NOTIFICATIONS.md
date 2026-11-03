@@ -24,6 +24,8 @@ returns nothing for most of them, and `notifyProfile()`/`notifyProfiles()`
 in that case rather than erroring. This is a real, load-bearing limitation of the dev-only auth
 layer, not a bug: a notification with no resolvable recipient has nowhere to go.
 
+**Recipients are real logins.** The data provider resolves them: `notifications.recipientFor(recordId)` for a tutor, family or student record, and `recipientsWithRole(role)` for everyone with a role, leaving out a disabled login. Only the in-memory backend looks at the development accounts. On the database a made-up recipient would not merely go unread: `notifications.user_id` is a foreign key, so the insert fails and takes the report or lesson that raised it with it.
+
 ### What actually triggers a notification today
 
 | Trigger | Recipient | Type |

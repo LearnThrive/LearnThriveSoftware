@@ -48,8 +48,14 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
     <div className={styles.page}>
       <h1>Your account</h1>
       <dl className={styles.details}>
+        {account.username ? (
+          <>
+            <dt>Username</dt>
+            <dd>{account.username}</dd>
+          </>
+        ) : null}
         <dt>Email</dt>
-        <dd>{user.email}</dd>
+        <dd>{account.linkedEmail ?? user.email}</dd>
         <dt>Library</dt>
         <dd>{access}</dd>
       </dl>

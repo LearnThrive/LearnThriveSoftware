@@ -9,8 +9,9 @@ const facts = (over: Partial<AccessFacts>): AccessFacts => ({ ...none, ...over }
 const learner = (over: Partial<LearnerContext> = {}): LearnerContext => ({
   studentId: "stu-1", familyClientId: "fam-1", status: "active", displayName: "Kid", yearGroup: "Year 9", isMinor: true, accessMode: "direct", guardianActive: true, ...over,
 });
-const guardian = (over: Partial<Account> = {}): Account => ({ profileId: "p-guardian", role: "CLIENT", displayName: "G", adultConfirmed: true, clientId: "fam-1", learner: null, ...over });
-const student = (l: LearnerContext | null = learner()): Account => ({ profileId: "p-learner", role: "STUDENT", displayName: "K", adultConfirmed: false, clientId: null, learner: l });
+const login = { username: null, linkedEmail: null, mustChangePassword: false, loginDisabled: false };
+const guardian = (over: Partial<Account> = {}): Account => ({ profileId: "p-guardian", role: "CLIENT", displayName: "G", adultConfirmed: true, clientId: "fam-1", learner: null, ...login, ...over });
+const student = (l: LearnerContext | null = learner()): Account => ({ profileId: "p-learner", role: "STUDENT", displayName: "K", adultConfirmed: false, clientId: null, learner: l, ...login });
 const open = { minorsApproved: true };
 
 test("a guardian acts as themselves: own chats, adult operations, LearnThrive AI on any Library right", () => {

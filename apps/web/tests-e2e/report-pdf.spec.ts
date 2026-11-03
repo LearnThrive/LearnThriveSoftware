@@ -4,10 +4,10 @@ import { test, expect, type Page } from '@playwright/test';
 // approved ones, and never a tutor's private fields. The file layout is a unit test (tests/reportPdf.test.mjs).
 
 const ACCOUNTS = {
-  admin: { email: 'admin@learnthrive.dev', password: 'dev-admin-pass' },
-  tutor: { email: 'tutor@learnthrive.dev', password: 'dev-tutor-pass' },
-  client: { email: 'client@learnthrive.dev', password: 'dev-client-pass' },
-  student: { email: 'student@learnthrive.dev', password: 'dev-student-pass' },
+  admin: { username: 'dev.admin', password: 'dev-admin-pass' },
+  tutor: { username: 'dev.tutor', password: 'dev-tutor-pass' },
+  client: { username: 'dev.client', password: 'dev-client-pass' },
+  student: { username: 'dev.student', password: 'dev-student-pass' },
 } as const;
 
 const SEED_REPORT = 'report-gcse-maths-completed-approved';
@@ -19,7 +19,7 @@ const PRIVATE_NOTE = 'seemed tired today';
 async function login(page: Page, who: keyof typeof ACCOUNTS) {
   await page.request.post('/api/auth/logout');
   await page.goto('/login');
-  await page.getByLabel('Email').fill(ACCOUNTS[who].email);
+  await page.getByLabel('Username').fill(ACCOUNTS[who].username);
   await page.locator('input[name="password"]').fill(ACCOUNTS[who].password);
   await Promise.all([page.waitForURL(/\/dashboard$/), page.getByRole('button', { name: 'Sign in' }).click()]);
 }

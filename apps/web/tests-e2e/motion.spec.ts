@@ -9,10 +9,10 @@ import { uniqueLabel } from './support';
 // values would be the brittle kind section 76 explicitly says to avoid, and would break on every
 // future duration/easing tweak for no functional reason.
 
-async function login(page: Page, email: string, password: string) {
+async function login(page: Page, username: string, password: string) {
   await page.request.post('/api/auth/logout');
   await page.goto('/login');
-  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Username').fill(username);
   await page.locator('input[name="password"]').fill(password);
   await Promise.all([
     page.waitForURL(/\/dashboard$/),
@@ -20,7 +20,7 @@ async function login(page: Page, email: string, password: string) {
   ]);
 }
 
-const ADMIN = { email: 'admin@learnthrive.dev', password: 'dev-admin-pass' };
+const ADMIN = { username: 'dev.admin', password: 'dev-admin-pass' };
 
 test.describe('motion — reduced motion path', () => {
   test.beforeEach(async ({ page }) => {
@@ -28,7 +28,7 @@ test.describe('motion — reduced motion path', () => {
   });
 
   test('a Dialog still opens and closes, with no lingering hidden panel left behind', async ({ page }) => {
-    await login(page, ADMIN.email, ADMIN.password);
+    await login(page, ADMIN.username, ADMIN.password);
     await page.goto('/dashboard/admin/people/students');
     await page.getByRole('button', { name: 'Add student' }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
@@ -41,7 +41,7 @@ test.describe('motion — reduced motion path', () => {
   });
 
   test('the account menu opens and closes cleanly', async ({ page }) => {
-    await login(page, ADMIN.email, ADMIN.password);
+    await login(page, ADMIN.username, ADMIN.password);
     await page.getByRole('button', { name: 'Account menu' }).click();
     await expect(page.getByRole('menuitem', { name: 'Log out' })).toBeVisible();
 
@@ -50,7 +50,7 @@ test.describe('motion — reduced motion path', () => {
   });
 
   test('QuickCreateMenu opens and its items are immediately usable', async ({ page }) => {
-    await login(page, ADMIN.email, ADMIN.password);
+    await login(page, ADMIN.username, ADMIN.password);
     await page.getByRole('button', { name: 'Create' }).click();
     const studentItem = page.getByRole('menuitem', { name: 'Student' });
     await expect(studentItem).toBeVisible();
@@ -62,7 +62,7 @@ test.describe('motion — reduced motion path', () => {
 
   test('the mobile nav drawer opens, closes on its own X, and reopening still works', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await login(page, ADMIN.email, ADMIN.password);
+    await login(page, ADMIN.username, ADMIN.password);
     await page.getByRole('button', { name: 'Open navigation' }).click();
     await expect(page.getByRole('dialog', { name: 'Navigation' })).toBeVisible();
 
@@ -81,7 +81,7 @@ test.describe('motion — reduced motion path', () => {
   });
 
   test('a toast still appears and can be dismissed', async ({ page }) => {
-    await login(page, ADMIN.email, ADMIN.password);
+    await login(page, ADMIN.username, ADMIN.password);
     await page.goto('/dashboard/admin/people/tutors');
     await page.getByRole('button', { name: 'Add tutor' }).click();
     await page.locator('#tutor-name').fill(uniqueLabel('Reduced Motion Test Tutor'));
@@ -99,7 +99,7 @@ test('FilterTabs: the sliding indicator never blocks or misreports which filter 
   // Full motion, not reduced — this is the one component with client-measured positioning
   // (ResizeObserver + getBoundingClientRect), so it's the one worth checking with the real
   // animation path active, not just the reduced-motion one covered above.
-  await login(page, ADMIN.email, ADMIN.password);
+  await login(page, ADMIN.username, ADMIN.password);
   await page.goto('/dashboard/admin/people/students');
   // Scoped to .filter-tabs — the sidebar nav has its own "Clients" link on this same page, and
   // both are real navigational links to the same URL by design (plan6 section 39: People is

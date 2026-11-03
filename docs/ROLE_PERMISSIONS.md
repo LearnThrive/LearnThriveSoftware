@@ -11,6 +11,34 @@ equal a Student (a Client can have multiple Students, and vice versa — see
 `docs/DOMAIN_MODEL.md`'s `ClientStudentLink`). `STAFF` is named as a future possibility in the
 plan behind this migration and is deliberately not built — see `docs/PRODUCTION_GAPS.md`.
 
+## A tutor who is also an administrator
+
+A person has **one role**. "Teaches" is not a second role: it is a **capability**, derived from a
+linked tutor record (`tutors.profile_id` is this person, and the record is active). This is the
+model chosen for launch checklist task 3.11; the alternative, a set of roles per profile, would
+have meant changing every guard, the database and the audit trail for no gain.
+
+| Account | Role | Tutor record | Admin screens | Tutor tools |
+| --- | --- | --- | --- | --- |
+| Administrator who teaches | `ADMIN` | yes | yes | yes |
+| Administrator only | `ADMIN` | no | yes | no |
+| Tutor | `TUTOR` | yes | no | yes |
+
+The rules, all in `apps/web/src/lib/auth/teaching.ts` so they are decided once:
+
+- **Whose lesson is it?** `teachesLesson(user, lesson)` compares the lesson's tutor with the
+  person's tutor record, never the role. An administrator teaching a lesson joins, marks and
+  reports on it as its tutor. An administrator **not** teaching it acts as an administrator: they
+  can manage it but cannot join its classroom as its tutor.
+- **Tutor tools** (availability, My students) use `requireTutor()`, not `requireRole(["TUTOR"])`.
+- **`asTutor(user)`** gives a tutor-scoped copy of the user for the tutor pages' queries, so those
+  pages run unchanged and see only that person's own lessons and students. It only ever narrows
+  what is shown: nothing grants access on the strength of it.
+- **Linking a login to a tutor record** never demotes anyone: a `CLIENT` becomes `TUTOR`, an
+  `ADMIN` stays `ADMIN`. An account that owns a family, is a learner, is already a tutor, or a
+  tutor record that already has a login, is refused (`linkLogin`).
+- Promotion to `ADMIN` is still a controlled script, never a screen (`docs/AUTHENTICATION.md`).
+
 ## Enforcement model
 
 Authorization is enforced **server-side only, at every layer that can mutate or reveal data** —
@@ -35,7 +63,7 @@ regardless of what a higher layer already decided:
 | `/login` | Anyone unauthenticated (already-authenticated visitors are sent on: staff and enrolled families to `/dashboard`, a Library subscriber to LearnThrive AI, anyone else to `/account`) |
 | `/dashboard`, `/dashboard/calendar`, `/dashboard/notifications`, `/dashboard/lessons/[id]` | Any authenticated user *whose access includes the dashboard* (staff and enrolled families; a Library subscriber is sent to LearnThrive AI, see `docs/AUTHENTICATION.md` "One sign-in") — content and IDOR-filtered per role within the page |
 | `/dashboard/admin/**` (people, assignments, lesson creation, per-person profiles) | `ADMIN` only |
-| `/dashboard/tutor/availability` | `TUTOR` only |
+| `/dashboard/tutor/availability`, `/dashboard/students` | Anyone who teaches: a `TUTOR`, or an `ADMIN` with a linked tutor record |
 | `/api/auth/login`, `/api/auth/logout` | Anyone (these routes *are* the authentication mechanism) |
 
 ## What's enforced today, by action
@@ -44,8 +72,8 @@ regardless of what a higher layer already decided:
 | --- | --- | --- |
 | `createTutorAction`/`createClientAction`/`createStudentAction`/`createAssignmentAction` | `ADMIN` | n/a — Admin manages everyone |
 | `createLessonAction`/`rescheduleLessonAction`/`cancelLessonAction` | `ADMIN` | n/a |
-| `addAvailabilityAction`/`removeAvailabilityAction` | `TUTOR` | operates only on the calling Tutor's own `profileId` — never a `tutorId` from form input |
-| `joinClassroomAction` | `TUTOR`/`STUDENT` | assigned to the specific Lesson, online, not cancelled, within the join window (`docs/CLASSROOM_INTEGRATION.md`) |
+| `addAvailabilityAction`/`removeAvailabilityAction` | Anyone who teaches | operates only on the caller's own tutor record — never a `tutorId` from form input |
+| `joinClassroomAction` | The lesson's tutor (a `TUTOR`, or an `ADMIN` who teaches it) or one of its `STUDENT`s | assigned to the specific Lesson, online, not cancelled, within the join window (`docs/CLASSROOM_INTEGRATION.md`) |
 | `markAttendanceAction`/`completeLessonAction` | `TUTOR`/`ADMIN` | Tutor must be the Lesson's own Tutor |
 | `saveReportDraftAction`/`submitReportAction` | `TUTOR`/`ADMIN` | same |
 | `approveReportAction` | `ADMIN` only | — |

@@ -1,4 +1,5 @@
 import { asBoolean, asString, cleanLine, isPlainEmail } from "@/lib/forms-common";
+import { parseUsername } from "./username";
 
 /**
  * What the account routes accept. Pure; the forms use the same limits only to save a round trip, the routes repeat
@@ -11,6 +12,7 @@ export const EMAIL_MAX = 160;
 export const NAME_MAX = 80;
 
 export interface AccountErrors {
+  /** The one text box of the sign-in card. */
   email?: string;
   password?: string;
   confirmAdult?: string;
@@ -61,9 +63,10 @@ export function validateSignUp(f: SignUpFields): AccountErrors {
   return e;
 }
 
-export function parseSignIn(raw: unknown): { email: string; password: string } {
+/** `email` is the same field under its old name, for the accounts of the public sign-up on a local server (selfService.ts). */
+export function parseSignIn(raw: unknown): { username: string; password: string } {
   const r = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
-  return { email: parseEmail(r.email), password: asString(r.password) };
+  return { username: parseUsername(r.username ?? r.email), password: asString(r.password) };
 }
 
 /** A token_hash from an email link: opaque, URL-safe, bounded. Anything else is rejected before it reaches the provider. */

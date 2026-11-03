@@ -13,6 +13,9 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { LessonList, LessonRow } from "@/components/lessons/LessonRow";
 import { formatDateOnly } from "@/lib/format";
 import { RecordList, RecordRow } from "@/components/records/RecordRow";
+import { LoginCard } from "@/components/people/LoginCard";
+import { CreateLoginForm, UsernameField } from "@/components/people/LoginForms";
+import { createLearnerLoginAction } from "@/lib/actions/accounts";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -140,6 +143,22 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
         </div>
 
         <div className="stack">
+          <LoginCard
+            profileId={student.userId}
+            returnTo={`/dashboard/admin/students/${student.id}`}
+            childLinked
+            noLogin={
+              <CreateLoginForm
+                action={createLearnerLoginAction}
+                hidden={{ studentId: student.id }}
+                submitLabel="Create login"
+                intro="This student has no login of their own. It will be linked to their parent, whose email receives its password resets."
+              >
+                <UsernameField id="student-login-username" required={false} hint="Leave empty to generate one. Never use a child's name or school." />
+              </CreateLoginForm>
+            }
+          />
+
           <Card>
             <CardHeader title="Details" />
             <CardBody>

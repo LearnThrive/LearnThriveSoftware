@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login');
-  await page.getByLabel('Email').fill('admin@learnthrive.dev');
+  await page.getByLabel('Username').fill('dev.admin');
   await page.locator('input[name="password"]').fill('dev-admin-pass');
   await Promise.all([
     page.waitForURL(/\/dashboard$/),
@@ -61,7 +61,7 @@ test('a new Tuition Assignment appears in the list and on the Tutor profile', as
 
 test('a Tutor cannot reach /dashboard/admin/people — redirected to /403', async ({ page }) => {
   await page.goto('/login');
-  await page.getByLabel('Email').fill('tutor@learnthrive.dev');
+  await page.getByLabel('Username').fill('dev.tutor');
   await page.locator('input[name="password"]').fill('dev-tutor-pass');
   await Promise.all([
     page.waitForURL(/\/dashboard$/),

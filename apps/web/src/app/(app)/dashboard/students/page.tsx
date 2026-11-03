@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { GraduationCap } from "lucide-react";
-import { requireRole } from "@/lib/auth/guard";
+import { requireTutor } from "@/lib/auth/guard";
 import { createMetadata } from "@/lib/metadata";
 import { getDataProvider } from "@/lib/data/provider";
 import { lessonBucketsFor, nextLessonForStudent, visibleStudentsFor } from "@/lib/dashboard/queries";
@@ -19,7 +19,7 @@ export const metadata: Metadata = createMetadata({
 // A Tutor's own students — everyone on one of their tuition assignments, and nobody else
 // (plan6 section 18: no admin management navigation for a tutor).
 export default async function TutorStudentsPage() {
-  const user = await requireRole(["TUTOR"]);
+  const user = await requireTutor();
   const data = getDataProvider();
   const [students, buckets] = await Promise.all([
     visibleStudentsFor(data, user),
