@@ -222,11 +222,12 @@ describe("the Library on the real local stack", { skip: ENABLED ? false : "set S
     const owner = await person("Retention Example");
     const when = new Date();
     const chat = rt.store.chat;
-    const sessionRow = await chat.createSession(owner.clientId, {}, when);
+    const adult = { clientId: owner.clientId, studentId: null }; // the adult's own chat (a ChatOwner since 0010)
+    const sessionRow = await chat.createSession(adult, {}, when);
     const path = `${sessionRow.id}/${run}.png`;
     const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
     await chatStorage.put(path, png, "image/png");
-    const file = await chat.addFile(owner.clientId, sessionRow.id, { storagePath: path, bytes: png.length, contentType: "image/png" }, when);
+    const file = await chat.addFile(adult, sessionRow.id, { storagePath: path, bytes: png.length, contentType: "image/png" }, when);
     assert.ok(file.id);
     assert.deepEqual([...(await chatStorage.read(path))], [...png], "the object is stored");
     const later = new Date(when.getTime() + 8 * 86_400_000); // uploads are kept 7 days
