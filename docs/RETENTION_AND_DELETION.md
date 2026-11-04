@@ -61,6 +61,36 @@ These live in the database and in a private storage bucket, not in the mailbox, 
 | Voice audio | never stored (it is processed in memory and discarded) | n/a |
 | Safeguarding flags | the lead's own record, outside the app; the app keeps an opaque reference only | the safeguarding lead, under the school's safeguarding policy, not this job |
 
-**Backups (plan20).** The deadlines above apply to the **live** database and to Storage. A database backup keeps what the job removed until the backup ages out (the plan's backup retention in days, and point-in-time recovery if it is on: the owner confirms both in the dashboard and states them on the privacy page, `apps/web/LEGAL_REVIEW.md`). Uploaded **files are not in database backups** (confirm on the day), so a file removed by the job is gone for good. **A restore must not undo a deletion:** after any restore, before reopening the site, run the retention job and re-apply every deletion request since the backup's date (`docs/SUPABASE_RUNBOOK.md`, section 2). The retention job's order, storage objects first and then rows, is proved on a real Supabase stack, including that a storage failure purges nothing.
+## When a student or a tutor leaves: the purge tool
+
+The table above is about data that ages out on a clock. This is about a person who has gone. The decision (`docs/LAWFUL_BASES.md`, 2
+November 2026) is that **their records are purged**, and the tool for it is launch checklist 3.7, built in migrations `0018` and `0019`.
+
+**The pause comes first.** Nothing can be purged until an administrator marks the record as left, which deletes nothing and can be
+undone. The purge becomes possible **30 days** later (`PURGE_DELAY_DAYS` in `packages/data/src/repositories.ts`), so a mistake has time
+to be noticed. An administrator may bring that date forward — to today, if the person has asked — but **never push it back**: the
+database refuses a later date, and refuses the purge itself until the date has passed, so no caller can skip the wait.
+
+**Then the purge, in one transaction.** A typed phrase confirms it after the screen has listed exactly what goes and what stays:
+
+| | Goes | Stays, and why |
+| --- | --- | --- |
+| A student | the record, its guardian links, the learner login (profile and Auth user), attendance, invitations, audit rows, notifications, their AI conversations and uploads, and any lesson that was only theirs | a lesson a sibling is still on, with this child's link and attendance removed and **their name taken out** of its title, notes, timeline and report; the assignment, likewise scrubbed, and ended if nobody is left on it |
+| A tutor | the record, the login, availability, notifications | the lessons they taught, the assignments and the reports they wrote, all moved to one archived "Former tutor" row so the history survives without naming them. A report stays with the student's record until that student is purged |
+| A family | each child as above, then the family account and the parent's login, their conversations and notifications | nothing of the family itself |
+
+**What is kept on purpose**, as `LAWFUL_BASES.md` confirms: financial records (the period the accountant sets, usually 6 years — none
+are held in this app yet), safeguarding records (separately, by the safeguarding lead), and unsuccessful applications. The preview says
+all of this on screen before anything is deleted.
+
+**The log holds no personal data.** `public.data_purges` records the date, the administrator, the kind (`STUDENT`, `TUTOR`, `FAMILY`)
+and row **counts**. Deliberately no student, client or tutor id, no name, no email — so the log cannot become the record the purge was
+meant to remove. That means it cannot tell you *who* was purged: work that out from your own offboarding notes.
+
+**Order, and why.** Stored files go **before** any row (a file whose row is gone can never be found again, the same rule as the
+retention job), then the login is disabled, then the rows and the log row in one transaction, then the Auth user. If the last step
+fails the purge still stands and the login stays disabled.
+
+**Backups (plan20).** The deadlines above apply to the **live** database and to Storage. A database backup keeps what the job removed until the backup ages out (the plan's backup retention in days, and point-in-time recovery if it is on: the owner confirms both in the dashboard and states them on the privacy page, `apps/web/LEGAL_REVIEW.md`). Uploaded **files are not in database backups** (confirm on the day), so a file removed by the job is gone for good. **A restore must not undo a deletion:** after any restore, before reopening the site, run the retention job, re-apply every deletion request since the backup's date, **and re-run every purge** in `public.data_purges` from after that date (`docs/SUPABASE_RUNBOOK.md`, section 2). The privacy notice says both things: that a backup keeps a copy of a deleted record until it ages out, and that a restore is followed by re-applying the deletions. The retention job's order, storage objects first and then rows, is proved on a real Supabase stack, including that a storage failure purges nothing.
 
 A family can delete one chat or all chats and export everything from the LearnThrive AI screen. **Erasing a whole family record:** the chat rows cascade with the record, but uploaded files in storage do not, so first use "Delete all my chats" for that family (or call the delete-all route as them), run the retention job once, and only then erase the record; otherwise files whose rows are gone will not be found by the job. The monthly check should also confirm the job ran: its output is counters only (files removed, chats purged), never content.

@@ -41,6 +41,14 @@ Outstanding factual qualifications:
 - Provider categories, retention principles, lawful bases, transfer wording, and safeguarding disclosure language cannot be final until the data map and responsibilities above are approved.
 - The source and local production-browser checks found no cookies, local/session storage or third-party requests. This does not verify the live hosting/CDN configuration. Audit response headers, deployed scripts, consent-exempt storage, and third-party requests on the live domain before publication and after each hosting or feature change.
 - Re-check both notices before adding analytics, pixels, embeds, chat, booking, payment, CRM, portals, video platforms, or recording. Non-essential storage/access must not run before any required consent or other control is implemented.
+- **Added 4 November 2026 to the Retention section of `/privacy`** (launch checklist 3.7.4), from the decision already confirmed in
+  `docs/LAWFUL_BASES.md`: that a student's or tutor's records are deleted when they leave, apart from financial records, safeguarding
+  records and unsuccessful applications; that a deletion is confirmed first and waited on; and that a backup keeps a copy of a deleted
+  record until the backup ages out, with the deletions re-applied after any restore. This goes some way towards item 4 under "Decisions
+  required now" (periods or criteria instead of "only as long as necessary"), for leavers specifically. **Still for the owners:** the
+  financial-records period, which the accountant sets (the notice says "the period required for tax" rather than naming 6 years); and
+  whether the 30-day pause the tool uses before a purge is the period they want, since the notice says only that we "wait before it
+  happens". The wording is editorial, not legally approved.
 - The Privacy and Cookie pages now display **20 October 2026** as their last-reviewed date (the Library waitlist change, below), and the Safeguarding page displays **9 October 2026** (the careers, safeguarding-agreement and subject-request changes). These are editorial review dates, not evidence of company or professional legal approval.
 
 ## Browser storage added by plan 15 (for legal review)
