@@ -138,29 +138,36 @@ None of these can be defaulted by an engineer. For each, write the answer and th
 
 ## Phase 2: Prove the tuition database on a real Supabase stack
 
-Why: the tuition tables (migrations `0010`, `0011`) and the learner-identity functions have only ever run on PGlite (in-process Postgres). Docker would not start on the dev machine, so the real service has never run them.
+Why: the tuition tables (migrations `0010`, `0011`) and the learner-identity functions had only ever run on PGlite (in-process Postgres), because Docker would not start on the dev machine. **This whole phase is now done locally (4 November 2026); only the hosted project is left, in Phase 4.**
 
-### 2.1 Get Docker running
+### 2.1 Get Docker running - DONE
 - Open Docker Desktop once and finish any first-run or WSL prompt until `docker ps` works. If the engine will not start, use another machine; this blocks everything in this phase.
 
-### 2.2 Start the local stack and run the real-stack suite
+### 2.2 Start the local stack and run the real-stack suite - DONE
 - **Do.** `npm run supabase:start`, then `npm run test:realstack` (runs the data and web real-stack tests).
-- **Expect.** All 220 tests pass (204 data, 16 web, including `realstack.accounts` for 3.2 and 3.11); the suite proves migrations apply from nothing, row-level security through the real API, the narrow server role, and that real Auth takes the username accounts.
-- **Last run.** 3 November 2026, migrations `0001` to `0017`: 220 of 220, on a fresh database and on a populated `0016` database upgraded to `0017`. It found one bug, now fixed (the Paper Tutor's JSON was encoded twice; `docs/SUPABASE_REAL_STACK.md`, finding 14).
+- **Expect.** All 307 tests pass (291 data, 16 web, including `realstack.accounts` for 3.2 and 3.11); the suite proves migrations apply from nothing, row-level security through the real API, the narrow server role, and that real Auth takes the username accounts.
+- **Last run.** 4 November 2026, migrations `0001` to `0017`: **307 of 307**, on a database reset from nothing. It was 220 on 3 November, before 2.3 added the identity and domain-provider contracts; that run found one bug, now fixed (the Paper Tutor's JSON was encoded twice; `docs/SUPABASE_REAL_STACK.md`, finding 14).
 - **Care.** The local stack publishes ports on all interfaces and serves an unauthenticated `/pg/query`; run `npm run supabase:stop` when finished.
 
-### 2.3 Wire the unproven contracts into the real-stack files
-- The ledger lists these as undone: add the **identity**, **data provider** (lessons, attendance, reports, notifications, availability, settings) and **paper jobs** contracts (`identityContract.ts`, `dataProviderContract.ts`) to the `realstack.*.test.ts` files the way the Library contract is, so they run against real Postgres directly, through the pooler, and as the `learnthrive_server` role.
-- Update `create-server-role.mjs` grants if any new table or function is unreachable by the role (a test pins this on purpose).
+### 2.3 Wire the unproven contracts into the real-stack files - DONE (4 November 2026)
+- **Done.** `packages/data/src/realstack.identity.test.ts` (19 tests) and `realstack.data.test.ts` (10 tests) run the identity and domain-provider contracts the way `realstack.store.test.ts` runs the Library one: **directly, through the transaction pooler, and as the narrow `learnthrive_server` role** - 87 new tests, so the suite is 307. Both are in `packages/data/scripts/realstack.mjs`, one file at a time.
+- **Paper jobs were already there.** The Paper Tutor's durable-job contract is part of `libraryContract` ("papers: durable jobs", 8 tests), which `realstack.store.test.ts` has run all three ways since 3 November; it is what found finding 14.
+- **No grant change was needed.** `create-server-role.mjs` already grants data access on every table in `public` and execute on exactly the six project functions the repositories call, so nothing was unreachable; `realstack.role.test.ts` still pins that list unchanged.
+- **One contract bug fixed, not weakened.** `dataProviderContract.ts` hard-coded a recurrence id, so a second run against the same database saw the first run's series. It now generates one (`randomUUID`), which keeps the assertion exactly as strong. `resetPublicData` also puts back the seeded `platform_settings` singleton that truncation removes.
 
-### 2.4 Test the real flows against real Auth
-- With the local stack and `npm run dev:supabase`, walk through today's flow: guardian sign-up, email confirm (read the email in the local mail catcher), sign-in, create a learner invitation, learner sign-up, accept; refresh; password reset; sign-out. Repeat with the admin-created flow once 3.2 is built (sign-ups off, set-password email, sign-in).
-- Run the migration upgrade path: `supabase db reset`, and apply the later migrations to a populated copy (the ledger lists "upgrade-from-populated-copy" as undone).
+### 2.4 Test the real flows against real Auth - DONE for the admin-created flow (4 November 2026)
+- **Done.** `npm run test:e2e:realstack --workspace=apps/web` (`apps/web/playwright.realstack.config.ts`) runs a dev server on the local stack (`LEARNTHRIVE_SUPABASE_USE=1`, the same switch `npm run dev:supabase` sets) and walks the admin-created flow in a browser on real GoTrue and real Postgres: the first administrator, made by the real operator script, signs in on its temporary password and is held on `/account/reset` with the dashboard, the account pages and `/api/account/me` all shut until it chooses one; that administrator then creates a parent, a child (generated username), a tutor and the assignment that joins them through the admin screens; each of the three signs in on their temporary password, must change it, reaches their own dashboard, and finds the temporary password no longer works; a forgotten password is reset by the real one-time link, which works once; signing out closes the dashboard again. 5 tests, all passing.
+- **It found a real bug, now fixed:** "Create login" threw the temporary password away before it could be read (`docs/SUPABASE_REAL_STACK.md`, finding 15).
+- **The one gap.** The site sends its reset link through **Resend's HTTP API**, not SMTP, so on a machine with no Resend key nothing is posted and the **local mail catcher never sees it** (finding 17). The link itself is real - asked of real Auth and spent end to end - but the delivery hop belongs to Phase 5. GoTrue's own mail to the catcher is still proved by `apps/web/tests/realstack.app.test.mjs`.
+- **The email sign-up flow** (guardian sign-up, confirm by the emailed link, learner invitation and accept) is not what launch uses: public sign-up is closed (3.2.5). It is proved against real Auth and the real mail catcher by `realstack.app.test.mjs`, and the invitation and acceptance rules by the identity contract on the real stack (2.3), rather than by a browser walk.
+- **Migration paths.** `supabase db reset` applied all seventeen migrations from nothing on real Postgres again on 4 November. Applying the later migrations to a populated copy was done on 3 November (`0017` onto a populated `0016`; `docs/SUPABASE_REAL_STACK.md`).
 
-### 2.5 Re-audit tuition scoping on the SQL provider
-- The ledger says the staff dashboards' per-role scoping was not re-audited page by page on the SQL provider. For each dashboard page, confirm with two families and two tutors that nobody sees another's students, lessons, reports, attendance or notifications, including by guessing ids in the URL. Add Playwright/real-stack tests for any gap found.
+### 2.5 Re-audit tuition scoping on the SQL provider - DONE (4 November 2026)
+- **Done, and written down in `docs/SCOPING_AUDIT.md`.** `apps/web/tests-e2e-realstack/scoping.spec.ts` (7 tests) audits every dashboard page as an administrator, an administrator who teaches, two tutors, two families' parents and a learner, on the SQL provider on the real stack, with two families of two children each and a tutor apiece. It covers the overview, calendar, lessons and lesson detail, reports, notifications, settings, children, progress, my students, availability, activity and every admin screen, plus `/api/reports/pdf`, `/api/lessons/<id>/ics` and `/api/learners/<id>/*` - each tried with the **other** family's and the other tutor's real ids in the URL, and a control with the person's own.
+- **Result: no cross-family or cross-tutor leak.** Nothing had to be added for a scoping gap, because none was found. A tutor's private notes reach no family and no learner; the tutor-admin guards of 3.11 hold on real data (the tutor tools are scoped to their own teaching, and another tutor's lesson offers them no way in as its tutor); an administrator who does not teach has both tutor pages shut as well as hidden.
+- **Note for whoever reads the tests:** a page a person may not see answers with the not-found page but an HTTP **200**, because the dashboard streams its loading shell before `notFound()` runs. The audit checks what the page says.
 
-**Phase 2 done when:** the real-stack suite (with the new contracts) passes, a full guardian→learner flow works on real Auth, and the scoping audit is written down.
+**Phase 2 done when:** the real-stack suite (with the new contracts) passes, a full guardian→learner flow works on real Auth, and the scoping audit is written down. **MET, 4 November 2026:** 307 of 307 on `npm run test:realstack` with the identity, domain-provider and paper-job contracts in it; the admin-created flow (the one launch uses) walked end to end in a browser on real Auth, 12 of 12 on `npm run test:e2e:realstack`; the audit is `docs/SCOPING_AUDIT.md`. Two things stay unproved locally and are named above: the Resend delivery hop for the reset email (Phase 5), and anything at all about the hosted project (Phase 4).
 
 ---
 
@@ -542,12 +549,12 @@ Launch in two steps so the riskier part opens last.
 | --- | --- | --- |
 | 0 Decisions | Everything only the owners can answer | open |
 | 1 Repo | Clean `main`, CI green on GitHub, bundle check | open |
-| 2 Real stack | Tuition tables and identity work on real Supabase | 2.1 and 2.2 done locally (3 Nov 2026, 220 tests); 2.3 to 2.5 open |
+| 2 Real stack | Tuition tables and identity work on real Supabase | **done locally (4 Nov 2026)**: 307 real-stack tests and 12 real-stack browser tests pass; scoping audit in `docs/SCOPING_AUDIT.md`. The reset email's Resend hop and the hosted project remain |
 | 3 Build gaps | Classroom served, onboarding path, backfill tool | open |
 | 3.10 Tuition payments | Stripe sandbox flow, refunds, tamper and cross-family tests | open (product rules unanswered) |
 | 3.1 Classroom server | `serve.mjs` runs site, signalling and TURN endpoint on one origin | built and proven locally; not yet on Render |
-| 3.2 Username sign-in and admin-created accounts | Create parent, children and tutor; sign in by username; sign-up closed end to end | built; real Auth and the operator script proven locally (`realstack.accounts`); the admin screen on real Auth, the reset email and the hosted accounts are not |
-| 3.11 Tutor-admin | A tutor who is also an admin can teach and admin | built; a teaching admin is made on the local stack, but its guards are not yet tested on real data |
+| 3.2 Username sign-in and admin-created accounts | Create parent, children and tutor; sign in by username; sign-up closed end to end | built; real Auth, the operator script and **the admin screen** proven locally (`realstack.accounts`, `tests-e2e-realstack`); the reset link is proven but its **delivery through Resend** is not, nor are the hosted accounts |
+| 3.11 Tutor-admin | A tutor who is also an admin can teach and admin | built; **its guards are now tested on real data** (4 Nov 2026, `tests-e2e-realstack/scoping.spec.ts`): tutor tools scoped to their own teaching, no way into another tutor's lesson as its tutor |
 | 3.12 Careers in Supabase | Applications stored, admins review, files via expiring links | open |
 | 3.13 Cloudflare SFU, 10 students | An hour-long lesson with 11 people on real devices | built and tested against fakes; needs the keys and a real-device test |
 | 3.7 Purge tool | A purged person leaves only the documented exceptions | open |
