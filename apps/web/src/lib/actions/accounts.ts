@@ -84,10 +84,13 @@ export async function createTutorLoginAction(_previous: LoginFormState, formData
     tutorId,
     actor: admin.id,
   });
-  if (result.status === "created") {
-    if (rt.memory) await data.tutors.update(tutorId, { userId: result.profileId });
-    revalidatePath(`/dashboard/admin/tutors/${tutorId}`);
-  }
+  // Deliberately NO revalidatePath: it re-renders this very page inside the action's own response (Next 16: "When updateTag,
+  // revalidatePath, or refresh runs, Next.js re-renders the current route server-side and includes a newly rendered RSC Payload in the
+  // action's response"). The form that shows the temporary password is rendered only while the person has no login, so the re-render
+  // would replace it with the login card and the password, shown once and stored nowhere, would be gone before it could be read.
+  // Found on the real Supabase stack: on the development backend the student's and tutor's record kept no login reference, so the form
+  // happened to survive (launch checklist 2.4). The page is server-rendered again the next time it is asked for.
+  if (result.status === "created" && rt.memory) await data.tutors.update(tutorId, { userId: result.profileId });
   return answer(result);
 }
 
@@ -110,7 +113,7 @@ export async function createLearnerLoginAction(_previous: LoginFormState, formDa
   const new_ = (username: string) => createLogin(rt, { username, linkedEmail: linkedEmail.toLowerCase(), displayName: student.name, role: "STUDENT", studentId, actor: admin.id });
   let result = await new_(chosen || generateChildUsername());
   for (let tries = 1; !chosen && result.status === "refused" && result.reason === "username_taken" && tries < USERNAME_TRIES; tries += 1) result = await new_(generateChildUsername());
-  if (result.status === "created") revalidatePath(`/dashboard/admin/students/${studentId}`);
+  // No revalidatePath, for the reason given in createTutorLoginAction: it would take the one-time password off the screen.
   return answer(result);
 }
 
