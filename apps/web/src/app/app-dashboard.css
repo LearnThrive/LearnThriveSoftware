@@ -264,6 +264,10 @@
   transition: transform var(--duration-fast) var(--app-ease);
 }
 .calendar-wrap .fc-daygrid-event { padding: 2px 5px; }
+/* FullCalendar colours a block event's text itself (`.fc-h-event` / `.fc-v-event .fc-event-main`: white, made for its own
+   blue). On the pale status tones above that white fails contrast, so the text keeps the event's own colour. Every lesson
+   in the week and day views is a block, and so is one in the month view that crosses midnight. */
+.calendar-wrap .fc-event .fc-event-main { color: inherit; }
 /* plan11.md task 16 (audit A-04): FullCalendar month views can hold dozens of these at once, and
    `filter` forces its own render surface per hovered event. A dark, low-opacity overlay fading in
    reads as close to the same "slightly dimmed" feedback as filter: brightness(0.96) did, entirely
