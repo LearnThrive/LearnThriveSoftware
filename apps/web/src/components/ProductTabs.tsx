@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
-import { AnimatePresence, useReducedMotion } from "framer-motion";
+import { useReducedMotion } from "framer-motion";
 import * as m from "framer-motion/m";
 import { motionDuration, motionEase, motionSpring } from "@/lib/motion/tokens";
 import styles from "./ProductTabs.module.css";
@@ -151,26 +151,41 @@ export function ProductTabs() {
           );
         })}
       </div>
-      {/* initial/exit's y values stay constant regardless of reduceMotion, matching Reveal.tsx
+      {/* `initial`'s y value stays constant regardless of reduceMotion, matching Reveal.tsx
           and ProductStoryScene.tsx's fix for the same underlying issue: Motion bakes the
           initial value into SSR'd HTML, and reduceMotion() can read differently between server
           and a real reduced-motion client's first render, so branching these specific values
-          risks a hydration mismatch. The duration branch below is enough on its own. */}
-      <AnimatePresence mode="wait" initial={false}>
-        <m.div
-          key={active}
-          id={`${baseId}-panel-${active}`}
-          role="tabpanel"
-          aria-labelledby={`${baseId}-tab-${active}`}
-          tabIndex={0}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -4 }}
-          transition={{ duration: reduceMotion ? 0.08 : motionDuration.standard, ease: motionEase.gentle }}
-        >
-          <ActivePanel />
-        </m.div>
-      </AnimatePresence>
+          risks a hydration mismatch. The duration branch below is enough on its own.
+
+          No AnimatePresence here, deliberately. It used to wrap this in `mode="wait"`, which
+          unmounts the outgoing panel and mounts the incoming one only once the outgoing one's exit
+          animation reports that it has finished. That leaves a window with no tabpanel in the
+          document at all — and if the exit never reports completion, the window never closes: the
+          tablist still says a tab is selected, aria-controls still points at it, and there is
+          nothing there. That is exactly the state the 2026-11-03 CI run recorded for
+          product-tabs.spec.ts:71 — the Parents tab focused with aria-selected="true", and
+          '#platform' >> text="Lesson report" resolving to *zero* elements for the full 10 s. Given
+          this file, no other arrangement can produce that: whenever a panel is mounted it is the
+          one `active` names, so zero matches means nothing was mounted.
+
+          Changing the key on a plain m.div instead makes React swap the panels in a single commit,
+          so there is never a moment without a tabpanel and the content of the newly selected tab is
+          in the document as soon as the tab says it is selected. The cost is the outgoing panel's
+          fade-out. With `mode="wait"` that fade was sequential anyway — the old panel faded out and
+          collapsed the container to nothing before the new one began — so losing it also removes a
+          visible height jump between tabs, which is what this component's own test is named for. */}
+      <m.div
+        key={active}
+        id={`${baseId}-panel-${active}`}
+        role="tabpanel"
+        aria-labelledby={`${baseId}-tab-${active}`}
+        tabIndex={0}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: reduceMotion ? 0.08 : motionDuration.standard, ease: motionEase.gentle }}
+      >
+        <ActivePanel />
+      </m.div>
     </div>
   );
 }
