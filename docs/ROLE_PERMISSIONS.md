@@ -78,6 +78,9 @@ regardless of what a higher layer already decided:
 | `saveReportDraftAction`/`submitReportAction` | `TUTOR`/`ADMIN` | same |
 | `approveReportAction` | `ADMIN` only | — |
 | `markNotificationReadAction` | any authenticated user | only their own notifications |
+| `createFamilyAccountAction`/`createTutorLoginAction`/`createLearnerLoginAction`/`issueTemporaryPasswordAction`/`setLoginDisabledAction`/`changeLinkedEmailAction` | `ADMIN` only | the role comes from the code, never the form, so no posted value can make an administrator (`docs/AUTHENTICATION.md`) |
+| `markLeftAction`/`cancelLeftAction`/`bringForwardAction` | `ADMIN` only | the pause before a purge (launch checklist 3.7.3). The date can only be brought forward, never pushed back |
+| `purgeStudentAction`/`purgeTutorAction`/`purgeFamilyAction` | `ADMIN` only | the record must already be marked as left and out of its pause — enforced in the database too (migration 0019), so no caller can skip it — and the administrator must type the confirmation phrase |
 
 ## What each role actually sees
 

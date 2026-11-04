@@ -15,7 +15,9 @@ import { formatDateOnly } from "@/lib/format";
 import { RecordList, RecordRow } from "@/components/records/RecordRow";
 import { LoginCard } from "@/components/people/LoginCard";
 import { CreateLoginForm, UsernameField } from "@/components/people/LoginForms";
+import { PurgePanel } from "@/components/people/PurgePanel";
 import { createLearnerLoginAction } from "@/lib/actions/accounts";
+import { purgeStudentAction } from "@/lib/actions/purge";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -32,11 +34,12 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
   const student = await data.students.get(id);
   if (!student) notFound();
 
-  const [clients, assignments, lessons, tutors] = await Promise.all([
+  const [clients, assignments, lessons, tutors, purge] = await Promise.all([
     data.students.clientsFor(student.id),
     data.assignments.forStudent(student.id),
     data.lessons.forStudent(student.id),
     data.tutors.list(),
+    data.purges.previewStudent(student.id),
   ]);
 
   const nowIso = new Date().toISOString();
@@ -158,6 +161,19 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
               </CreateLoginForm>
             }
           />
+
+          {purge && (
+            <PurgePanel
+              preview={purge}
+              kind="STUDENT"
+              action={purgeStudentAction}
+              id={student.id}
+              returnTo={`/dashboard/admin/students/${student.id}`}
+              confirmation="PURGE STUDENT"
+              title="Purge this student"
+              description="For a student who has left. Their records are removed, apart from what another child's lessons still need."
+            />
+          )}
 
           <Card>
             <CardHeader title="Details" />
