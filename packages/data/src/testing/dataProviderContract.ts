@@ -4,6 +4,7 @@
  * assertions are about THOSE records, so a provider may hold others.
  */
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { describe, test } from "node:test";
 import type { DataProvider } from "../repositories";
 
@@ -144,7 +145,8 @@ export function dataProviderContract(name: string, make: () => Promise<{ harness
       const other = await tutor("Other");
       const asg = await assignment(t.id, [ava.id]);
       const asg2 = await assignment(other.id, [ben.id]);
-      const recurrenceId = "11111111-1111-4111-8111-111111111111";
+      // A fresh id each run: a provider may hold records from an earlier run against the same database (the real stack does).
+      const recurrenceId = randomUUID();
       const first = await lesson(asg, { recurrenceId, notes: "Quadratics" });
       assert.ok(first.id && first.createdAt && first.updatedAt);
       assert.deepEqual([first.studentIds, first.clientIds, first.notes, first.recurrenceId], [[ava.id], [f.clientId], "Quadratics", recurrenceId]);
