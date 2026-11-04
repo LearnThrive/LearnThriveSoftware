@@ -40,7 +40,9 @@ The site does not ask for health or special educational needs information, but t
 
 The purge has the short, defined exceptions in the table above, which are also confirmed: **financial records** (usually 6 years for tax; the accountant confirms the period), **safeguarding records** (kept separately with restricted access, for as long as the safeguarding policy and legal advice require), **unsuccessful applications** (up to 6 months after the decision, or 12 if the applicant agreed to be kept; identity documents 6 months), and **enquiries that never became tuition** (12 months). These exist because the law or child protection requires them, not as a way of keeping people's data: everything else is removed.
 
-The purge is built as a tool (launch checklist 3.7): it shows what will go and what stays and why, runs on an admin's confirmation, and leaves a log with no personal data. Backups keep a purged record until they age out, which the privacy notice says.
+The purge is built as a tool (launch checklist 3.7, **built and proven on a real Supabase stack on 4 November 2026**; migrations `0018` and `0019`, and `docs/RETENTION_AND_DELETION.md`): the record is first **marked as left**, which deletes nothing and can be undone; **30 days** later it can be purged, and an administrator may bring that date forward but never push it back. The screen then shows what will go and what stays and why, and the purge runs on a typed confirmation, in one transaction, leaving a log with the date, the administrator, the kind and row counts and **no personal data at all** — so the log cannot say who was purged. Backups keep a purged record until they age out, which the privacy notice says, along with the fact that deletions are re-applied after a restore.
+
+**Still for the owners:** whether 30 days is the pause they want, and the financial-records period the accountant sets (the privacy notice currently says "the period required for tax" rather than naming six years).
 
 ## Children's rights and parents
 

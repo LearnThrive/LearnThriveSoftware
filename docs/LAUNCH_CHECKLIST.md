@@ -237,7 +237,35 @@ Each task says whether it is **required** for launch or **optional**.
 ### 3.6 Staff MFA (required or accepted risk per 0.5)
 - The Supabase organisation members must use MFA (set in the dashboard, Phase 4). For the site's own admins MFA is not built; either build it or record the accepted risk and keep to few admins.
 
-### 3.7 Purge tool for people who have left (required)
+### 3.7 Purge tool for people who have left — BUILT AND PROVEN LOCALLY (4 November 2026)
+
+**Built:** migrations `0018_purges.sql` (the log and the three operations) and `0019_leaving.sql` (the pause), the `PurgeRepository` on
+both providers, `lib/actions/purge.ts`, `components/people/PurgePanel.tsx`, and the panel on the student, tutor and client pages.
+Written up in `docs/RETENTION_AND_DELETION.md` ("When a student or a tutor leaves"), with the privacy notice and the runbook updated.
+
+| Sub-item | State |
+| --- | --- |
+| 3.7.1 Student purge | **done**, including the family offer only once no child is left |
+| 3.7.2 Tutor purge | **done**, history moved to one archived "Former tutor" row |
+| 3.7.3 Preview, and a delay the admin can shorten | **done**: marked as left, then 30 days, brought forward but never pushed back, refused in the database as well as the screen |
+| 3.7.4 Backups | **done in words**: the privacy notice says a backup keeps a copy until it ages out, and the runbook's restore step re-runs the purges since the backup |
+| 3.7.5 A log without personal data | **done**: `public.data_purges` holds the date, the administrator, the kind and counts, and nothing else |
+| 3.7.6 Tests | **done**: the sweep, the sign-in, the non-admin and the untouched sibling, all on the real stack (below) |
+| Rehearsal purge on staging | **NOT DONE**: there is no staging project yet (Phase 4) |
+
+**What the tests prove** (`npm run test:realstack` and `npm run test:e2e:realstack`): the contract runs on the in-memory provider,
+PGlite and real Postgres three ways; after a purge a sweep of **every column of every table** (walked from `information_schema`, so a
+table added later is included) finds neither the person's id nor their name, and neither does the storage bucket or `auth.users`; the
+learner could sign in before and cannot after; the log row holds no id, name, username or domain; the sibling, their shared lesson, its
+scrubbed report, the family and the family next door are untouched; a second purge writes no second log row; the database refuses a
+purge that was never marked as left or is still inside its pause; and a tutor, a parent, a learner and a stranger are each refused all
+three of the panel's endpoints, replayed with the form's own action id.
+
+**Two defects the real stack found, both fixed:** an assignment kept the purged child's name in its title (the admin screen asks for a
+title like "GCSE Mathematics — Brian", so that is the normal case), and the preview promised that an emptied assignment is ended while
+the SQL function did not do it.
+
+**The original description, for reference:**
 
 **Decision (0.4):** when a student or a tutor leaves, LearnThrive **purges their records**, apart from the exceptions confirmed in `LAWFUL_BASES.md`: financial records (kept for the period the accountant sets, usually 6 years), safeguarding records (kept separately, as Tahasin and the safeguarding policy require), and unsuccessful applications (6 or 12 months). Nothing like this exists: deleting a student today leaves the learner's `auth.users`/`profiles` row and any stored files behind.
 - **3.7.1 Student purge.** An admin action that, after a typed confirmation, removes in one audited step: the student record and its links, the learner login (the profile and the Supabase Auth user), attendance, lesson reports and progress, notifications, any stored files, and their name from lesson records (or anonymises lesson rows that must remain for scheduling history). Keep the exceptions above, with the minimum identifying data they need. If the family has no other children, offer to purge the family record and the parent's login too.
@@ -559,7 +587,7 @@ Launch in two steps so the riskier part opens last.
 | 3.11 Tutor-admin | A tutor who is also an admin can teach and admin | built; **its guards are now tested on real data** (4 Nov 2026, `tests-e2e-realstack/scoping.spec.ts`): tutor tools scoped to their own teaching, no way into another tutor's lesson as its tutor |
 | 3.12 Careers in Supabase | Applications stored, admins review, files via expiring links | open |
 | 3.13 Cloudflare SFU, 10 students | An hour-long lesson with 11 people on real devices | built and tested against fakes; needs the keys and a real-device test |
-| 3.7 Purge tool | A purged person leaves only the documented exceptions | open |
+| 3.7 Purge tool | A purged person leaves only the documented exceptions | **built and proven locally** (4 Nov 2026): the pause, the purge, the counts-only log, and the sweep that finds nothing. The staging rehearsal waits for Phase 4 |
 | 4 Hosted Supabase | Project migrated, configured, smoke-tested, first admin | open |
 | 5 Domain and email | Deliverable mail, DNS ready | open |
 | 6 Render | Service running with a validated environment | open |

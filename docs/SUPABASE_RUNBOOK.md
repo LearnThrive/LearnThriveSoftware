@@ -47,14 +47,15 @@ Dashboard, Project Settings, Database, reset the password. The site does not use
 
 ## 2. Restoring from a backup
 
-Supabase backups hold the **database**. **They do not hold uploaded files** (the objects in Storage; confirm on the day in Supabase's documentation). A restore also **brings back rows the retention job and families had already deleted**, so a restore must not be the last step.
+Supabase backups hold the **database**. **They do not hold uploaded files** (the objects in Storage; confirm on the day in Supabase's documentation). A restore also **brings back rows the retention job, families and the purge tool had already deleted**, so a restore must not be the last step. A resurrected purge is the worst case: the person was told their records were gone (the privacy notice says a backup keeps a copy until it ages out, and that a restore is followed by re-applying the deletions).
 
 1. **Close the site** (unset `LIBRARY_ENABLED`, redeploy). Note the time and the backup you are restoring.
 2. Restore in the dashboard (Database, Backups; or point-in-time to a chosen minute). Roles and passwords can differ after a restore: **re-run `scripts/create-server-role.mjs`** so `learnthrive_server` has the right grants and password, and update Render's `DATABASE_URL`. Remember the pooler's 10 to 16 second cache and one-minute breaker.
 3. **Re-apply every deletion since the backup's date, before anyone is let in:**
    - run the retention job (`npm run assistant:retention` in `apps/web`): it deletes expired chats and uploads, objects first, then rows;
+   - **re-run every purge** made since the backup (launch checklist 3.7). `select at, kind, counts from public.data_purges where at > '<the backup's time>' order by at` lists them, and deliberately **does not say who they were about**, so work out each person from your own offboarding notes, not from this table. Purge each again from their profile page: mark as left, bring the date forward to today, then purge. Their `left_at` and `purge_after` were restored with everything else, so the pause does not have to be waited out twice;
    - for each family that asked to delete a chat or its account since the backup, delete again (the account page's own "delete" actions, or `delete from auth.users` through the dashboard for erased accounts);
-   - a restore that resurrected a deleted account is a **personal-data incident**: record it and decide with the owners whether anyone must be told.
+   - a restore that resurrected a deleted account or an un-purged person is a **personal-data incident**: record it and decide with the owners whether anyone must be told.
 4. Check the schema is what the code expects: `npx supabase db push --dry-run` should list nothing to apply (or only newer migrations), and `npm run supabase:verify` must show no FAIL.
 5. Run the smoke test (`npm run supabase:smoke`, `docs/SUPABASE_REAL_STACK.md`) and sign in as a test family.
 6. **Reopen the site** and write down what was restored, from when, and what was re-deleted.

@@ -275,6 +275,22 @@ export default function PrivacyPage() {
                 <Link href="/careers/privacy">applicant privacy notice</Link>.
               </p>
               <p>
+                When a student or a tutor leaves us, we delete their records.
+                We keep only what we have to: financial records, for the period
+                required for tax; safeguarding records, which are held
+                separately for as long as child protection requires; and
+                unsuccessful applications, as set out in the{" "}
+                <Link href="/careers/privacy">applicant privacy notice</Link>.
+                A deletion is not reversible, so we confirm it first and wait
+                before it happens.
+              </p>
+              <p>
+                Our database is backed up. A record we have deleted stays in a
+                backup until that backup ages out, after which it is gone from
+                there too. If we ever had to restore from a backup, we would
+                re-apply the deletions made since it was taken.
+              </p>
+              <p>
                 We use reasonable organisational and technical measures suited
                 to the nature of the information. No website or email system is
                 completely secure, so please use care when deciding what to
