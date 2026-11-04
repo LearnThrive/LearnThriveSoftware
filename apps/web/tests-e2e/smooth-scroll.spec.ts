@@ -193,6 +193,7 @@ test.describe('how it scrolls', () => {
       // ?smooth=0 too (measured: data-motion-tier="full" with data-smooth-scroll absent).
       await page.waitForSelector('html[data-motion-tier]');
       if (smooth) await expectSmoothOn(page);
+      await trackLastScroll(page);
       await page.mouse.move(700, 400);
       await page.mouse.wheel(0, 700);
       await expect.poll(() => scrollY(page), { timeout: 4000 }).toBeGreaterThan(600);
@@ -201,15 +202,14 @@ test.describe('how it scrolls', () => {
       await expect(page).toHaveURL(/\/about$/);
       await page.goBack();
       await expect(page).toHaveURL(/\/subjects/);
-      // Back re-renders the page in dev mode, and the browser restores the position only once
-      // there is a page tall enough to restore it in. Waiting for "two readings in a row were the
-      // same" could be satisfied by two readings taken before restoration had started at all —
-      // which is how CI came to report a landing of 0 for the native journey on a retry, in a test
-      // whose entire subject is where Back lands. Wait for the client to be live again, then for
-      // the page to have actually stopped moving for a while, before reading the landing.
+      // Back re-renders the page in dev mode, and Next restores the position only once there is a
+      // page to restore it into — many frames after popstate, not one or two. Waiting for "two
+      // readings in a row were the same" could be satisfied by two readings taken before
+      // restoration had started at all, in a test whose entire subject is where Back lands. Wait
+      // for the client to be live again, then for the page to have actually stopped moving.
       await page.waitForSelector('html[data-motion-tier]');
       await trackLastScroll(page);
-      await expect.poll(() => msSinceLastScroll(page), { timeout: 10_000 }).toBeGreaterThan(400);
+      await expect.poll(() => msSinceLastScroll(page), { timeout: 10_000 }).toBeGreaterThan(600);
       const landed = await scrollY(page);
       await context.close();
       return landed;
@@ -244,10 +244,18 @@ test.describe('anchors', () => {
     await expect(page).toHaveURL(/#how$/);
     await expect.poll(() => scrollY(page), { timeout: 5000 }).toBeGreaterThan(500);
     // Let the anchor scroll finish before pressing Back. ">500" only says the glide has got past
-    // 500, not that it has arrived, so Back could land in the middle of the animation — a harsher
-    // scenario than the one this test is named for, and one it cannot distinguish from a real
-    // fault. Going back mid-glide is how the page came to rest at 306 and stay there for the full
-    // 20 s (seen on CI, and reproduced locally at --repeat-each=5 with CI=1).
+    // 500, not that it has arrived, so Back could otherwise land in the middle of the animation —
+    // a harsher scenario than the one this test is named for, and one it cannot tell apart from a
+    // real fault.
+    //
+    // This test is not fully fixed, and the remainder is a product residual rather than a test
+    // one. SmoothScroll.tsx's popstate handling was the main cause (it pinned the page at its
+    // pre-restore position; see that file) and fixing it took this from 2 failures in 10 to 1 in
+    // 10 at --repeat-each=10 with CI=1. The survivor comes to rest at 108 with the threshold at
+    // 80 — close, and consistent with the restore meeting the document's 96px
+    // scroll-padding-top rather than with anything being stuck. Left for a separate change: it
+    // needs a decision about what Back from an anchor should land on, which is a visual call, and
+    // it is not one of the flakes this branch set out to fix.
     await expect.poll(() => msSinceLastScroll(page), { timeout: 8000 }).toBeGreaterThan(300);
     await page.goBack();
     await expect(page).not.toHaveURL(/#how/);
