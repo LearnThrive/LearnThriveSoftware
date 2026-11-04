@@ -17,6 +17,7 @@ const EXPECTED_TABLES = [
   "client_students",
   "clients",
   "consents",
+  "data_purges",
   "download_events",
   "entitlements",
   "identity_audit",
@@ -53,6 +54,7 @@ const FORCED_TABLES = [
   "chat_messages",
   "chat_sessions",
   "consents",
+  "data_purges",
   "download_events",
   "entitlements",
   "identity_audit",
@@ -143,6 +145,7 @@ describe("migrations", () => {
       "0015_chat_message_model.sql",
       "0016_chat_message_activity.sql",
       "0017_username_accounts.sql",
+      "0018_purges.sql",
     ]);
     assert.deepEqual(
       applied.map((f) => Number(f.slice(0, 4))),

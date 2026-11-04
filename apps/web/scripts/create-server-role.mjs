@@ -59,6 +59,9 @@ export function grantStatements(verifier) {
     `grant execute on function public.create_learner_invitation(uuid, uuid, uuid, text, text, timestamptz, integer, timestamptz), public.accept_learner_invitation(text, uuid, text, timestamptz) to ${ROLE}`,
     // Binding a new login to its record (migration 0017): one transaction that locks what it changes.
     `grant execute on function public.provision_account(uuid, text, text, text, text, uuid, uuid, uuid, timestamptz) to ${ROLE}`,
+    // The purge operations (migration 0018): each is one transaction, and each writes the log row itself.
+    `grant execute on function private.purge_student(uuid), private.purge_tutor(uuid), private.purge_family(uuid) to ${ROLE}`,
+    `grant execute on function public.purge_student(uuid, uuid), public.purge_tutor(uuid, uuid), public.purge_family(uuid, uuid) to ${ROLE}`,
     `grant usage on schema private to ${ROLE}`,
     `grant execute on function private.tags_to_text(text[]) to ${ROLE}`,
   ];

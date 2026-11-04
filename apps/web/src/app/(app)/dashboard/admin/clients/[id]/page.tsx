@@ -13,6 +13,8 @@ import { PersonList, PersonRow } from "@/components/people/PersonRow";
 import { formatDateOnly, formatLessonDayTime } from "@/lib/format";
 import { RecordList, RecordRow } from "@/components/records/RecordRow";
 import { LoginCard } from "@/components/people/LoginCard";
+import { PurgePanel } from "@/components/people/PurgePanel";
+import { purgeFamilyAction } from "@/lib/actions/purge";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -29,10 +31,11 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
   const client = await data.clients.get(id);
   if (!client) notFound();
 
-  const [children, lessons, tutors] = await Promise.all([
+  const [children, lessons, tutors, purge] = await Promise.all([
     data.students.studentsFor(client.id),
     data.lessons.forClient(client.id),
     data.tutors.list(),
+    data.purges.previewFamily(client.id),
   ]);
 
   const nowIso = new Date().toISOString();
@@ -84,6 +87,19 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
       </div>
 
       <LoginCard profileId={client.userId} returnTo={`/dashboard/admin/clients/${client.id}`} noLogin={<p className="muted">This client has no login.</p>} />
+
+      {/* 3.7.1: the family record and the parent's login are only offered once no child is left on it. */}
+      {children.length === 0 && purge && (
+        <PurgePanel
+          preview={purge}
+          action={purgeFamilyAction}
+          id={client.id}
+          returnTo={`/dashboard/admin/clients/${client.id}`}
+          confirmation="PURGE FAMILY"
+          title="Purge this family"
+          description="For a family that has left. Every child must already be purged; this removes the family account and the parent's login."
+        />
+      )}
 
       <div className="profile-grid">
         <div className="stack">

@@ -17,7 +17,9 @@ import { formatDateOnly } from "@/lib/format";
 import { Field, FormActions } from "@/components/ui/Field";
 import { LoginCard } from "@/components/people/LoginCard";
 import { CreateLoginForm, UsernameField } from "@/components/people/LoginForms";
+import { PurgePanel } from "@/components/people/PurgePanel";
 import { createTutorLoginAction } from "@/lib/actions/accounts";
+import { purgeTutorAction } from "@/lib/actions/purge";
 import { linkTutorLoginAction } from "@/lib/actions/enrolment";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -37,11 +39,12 @@ export default async function TutorProfilePage({ params }: { params: Promise<{ i
   const tutor = await data.tutors.get(id);
   if (!tutor) notFound();
 
-  const [assignments, allLessons, availability, allStudents] = await Promise.all([
+  const [assignments, allLessons, availability, allStudents, purge] = await Promise.all([
     data.assignments.forTutor(tutor.id),
     data.lessons.forTutor(tutor.id),
     data.availability.forTutor(tutor.id),
     data.students.list(),
+    data.purges.previewTutor(tutor.id),
   ]);
 
   const nowIso = new Date().toISOString();
@@ -125,6 +128,18 @@ export default async function TutorProfilePage({ params }: { params: Promise<{ i
           </>
         }
       />
+
+      {purge && (
+        <PurgePanel
+          preview={purge}
+          action={purgeTutorAction}
+          id={tutor.id}
+          returnTo={`/dashboard/admin/tutors/${tutor.id}`}
+          confirmation="PURGE TUTOR"
+          title="Purge this tutor"
+          description="For a tutor who has stopped working with us. Their lessons and reports stay, without their name on them."
+        />
+      )}
 
       <div className="stat-grid">
         <StatTile label="Active students" value={studentIds.length} />
