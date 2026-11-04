@@ -5,9 +5,10 @@ import type {
 } from "./domain";
 import type {
   ActivityRepository, AssignmentRepository, AttendanceRepository, AvailabilityRepository, ClientRepository, DataProvider, LessonRepository,
-  NotificationRepository, PurgeItem, PurgeKept, PurgePreview, PurgeRecord, PurgeRepository, ReportRepository, SettingsRepository, StudentRepository, TutorRepository,
+  NotificationRepository, PurgeItem, PurgeKept, PurgeKind, PurgeLeaving, PurgePreview, PurgeRecord, PurgeRepository, ReportRepository,
+  SettingsRepository, StudentRepository, TutorRepository,
 } from "./repositories";
-import { ARCHIVED_TUTOR_ID, PURGE_NOTES } from "./repositories";
+import { ARCHIVED_TUTOR_ID, PURGE_DELAY_DAYS, PURGE_NOTES } from "./repositories";
 
 // Fixed, well-known ids for the seeded demo people (plan section 89's scenario) — not random,
 // so apps/web's auth seed (devProvider.ts) can set matching AuthenticatedUser.profileId values
@@ -297,6 +298,57 @@ class InMemoryPurgeRepository implements PurgeRepository {
     private readonly log: PurgeRecord[],
   ) {}
 
+  /**
+   * Who has been marked as left, keyed "KIND:id". Kept here rather than on the domain records: it is a concern of the purge tool
+   * alone (launch checklist 3.7.3), and the database keeps it in columns on the three tables (migration 0019).
+   */
+  private readonly leaving = new Map<string, { leftAt: string; purgeAfter: string; leftBy: string }>();
+
+  /**
+   * The record a kind's leaving date belongs to, or undefined. The archived "Former tutor" row is deliberately not one: it is a place
+   * to hang history, not a person, so it can never be marked as left and therefore never purged.
+   */
+  private holder(kind: PurgeKind, id: string): { id: string } | undefined {
+    if (kind === "TUTOR") return id === ARCHIVED_TUTOR_ID ? undefined : this.tutors.get(id);
+    return kind === "STUDENT" ? this.students.get(id) : this.clients.get(id);
+  }
+
+  private leavingOf(kind: PurgeKind, id: string): PurgeLeaving {
+    const held = this.leaving.get(`${kind}:${id}`);
+    if (!held) return { leftAt: null, purgeAfter: null, readiness: "not_left" };
+    return { leftAt: held.leftAt, purgeAfter: held.purgeAfter, readiness: new Date(held.purgeAfter).getTime() > Date.now() ? "not_due" : "due" };
+  }
+
+  /** A purge is never a surprise: not marked as left, or still inside its delay, means no. */
+  private ready(kind: PurgeKind, id: string): boolean {
+    return this.leavingOf(kind, id).readiness === "due";
+  }
+
+  async markLeft(kind: PurgeKind, id: string, actor: string): Promise<PurgeLeaving | null> {
+    if (!this.holder(kind, id)) return null;
+    const key = `${kind}:${id}`;
+    // Marking again keeps the first date, so the clock cannot be restarted to put a purge off.
+    if (!this.leaving.has(key)) {
+      const at = new Date();
+      this.leaving.set(key, { leftAt: at.toISOString(), purgeAfter: new Date(at.getTime() + PURGE_DELAY_DAYS * 86_400_000).toISOString(), leftBy: actor });
+    }
+    return this.leavingOf(kind, id);
+  }
+
+  async cancelLeft(kind: PurgeKind, id: string): Promise<boolean> {
+    if (!this.holder(kind, id)) return false;
+    return this.leaving.delete(`${kind}:${id}`);
+  }
+
+  async bringForward(kind: PurgeKind, id: string, when: Date): Promise<PurgeLeaving | null> {
+    const key = `${kind}:${id}`;
+    const held = this.leaving.get(key);
+    if (!this.holder(kind, id) || !held) return null;
+    // Only ever earlier: the pause can be shortened, never extended.
+    if (when.getTime() < new Date(held.purgeAfter).getTime()) this.leaving.set(key, { ...held, purgeAfter: when.toISOString() });
+    return this.leavingOf(kind, id);
+  }
+
   private ofStudent(studentId: string) {
     const lessons = [...this.lessons.values()].filter((l) => l.studentIds.includes(studentId));
     const sole = lessons.filter((l) => l.studentIds.length === 1);
@@ -352,6 +404,7 @@ class InMemoryPurgeRepository implements PurgeRepository {
       profileIds: student.userId ? [student.userId] : [],
       files: [],
       notes: PURGE_NOTES,
+      ...this.leavingOf("STUDENT", studentId),
     };
   }
 
@@ -419,6 +472,7 @@ class InMemoryPurgeRepository implements PurgeRepository {
   }
 
   async purgeStudent(studentId: string, actor: string): Promise<PurgeRecord | null> {
+    if (!this.ready("STUDENT", studentId)) return null;
     const counts = this.removeStudent(studentId);
     if (!counts) return null;
     const record: PurgeRecord = { id: randomUUID(), kind: "STUDENT", actorId: actor, counts, at: now() };
@@ -451,11 +505,12 @@ class InMemoryPurgeRepository implements PurgeRepository {
       profileIds: tutor.userId ? [tutor.userId] : [],
       files: [],
       notes: PURGE_NOTES,
+      ...this.leavingOf("TUTOR", tutorId),
     };
   }
 
   async purgeTutor(tutorId: string, actor: string): Promise<PurgeRecord | null> {
-    if (tutorId === ARCHIVED_TUTOR_ID) return null;
+    if (tutorId === ARCHIVED_TUTOR_ID || !this.ready("TUTOR", tutorId)) return null;
     const tutor = this.tutors.get(tutorId);
     if (!tutor) return null;
     const assignments = [...this.assignments.values()].filter((a) => a.tutorId === tutorId);
@@ -508,12 +563,13 @@ class InMemoryPurgeRepository implements PurgeRepository {
       profileIds: [...new Set([...children.flatMap((c) => c.profileIds), ...(client.userId ? [client.userId] : [])])],
       files: children.flatMap((c) => c.files),
       notes: PURGE_NOTES,
+      ...this.leavingOf("FAMILY", clientId),
     };
   }
 
   async purgeFamily(clientId: string, actor: string): Promise<PurgeRecord | null> {
     const client = this.clients.get(clientId);
-    if (!client) return null;
+    if (!client || !this.ready("FAMILY", clientId)) return null;
     const studentIds = [...new Set(this.links.filter((l) => l.clientId === clientId).map((l) => l.studentId))];
     const totals: Record<string, number> = {};
     for (const id of studentIds) {

@@ -4,9 +4,10 @@ import type {
 } from "./domain";
 import type {
   ActivityRepository, AssignmentRepository, AttendanceRepository, AvailabilityRepository, ClientRepository, DataProvider, LessonRepository,
-  NotificationRepository, PurgeItem, PurgeKept, PurgePreview, PurgeRecord, PurgeRepository, ReportRepository, SettingsRepository, StudentRepository, TutorRepository,
+  NotificationRepository, PurgeItem, PurgeKept, PurgeKind, PurgeLeaving, PurgePreview, PurgeReadiness, PurgeRecord, PurgeRepository, ReportRepository,
+  SettingsRepository, StudentRepository, TutorRepository,
 } from "./repositories";
-import { ARCHIVED_TUTOR_ID, PURGE_NOTES } from "./repositories";
+import { ARCHIVED_TUTOR_ID, PURGE_DELAY_DAYS, PURGE_NOTES } from "./repositories";
 import type { SqlExecutor } from "./library/ports";
 
 /**
@@ -465,6 +466,27 @@ export function createSqlDataProvider(db: SqlExecutor): DataProvider {
     return rows[0]!;
   };
 
+  /** Which table holds a kind's leaving date. Never built from a caller's string: PurgeKind is a closed union. */
+  const LEAVING_TABLE: Record<PurgeKind, string> = { STUDENT: "students", TUTOR: "tutors", FAMILY: "clients" };
+
+  const readiness = (leftAt: unknown, purgeAfter: unknown, now = Date.now()): PurgeReadiness => {
+    if (!leftAt || !purgeAfter) return "not_left";
+    return new Date(purgeAfter as string).getTime() > now ? "not_due" : "due";
+  };
+
+  /**
+   * The archived "Former tutor" row is a place to hang history, not a person, so it can never be marked as left and therefore never
+   * purged. `previewTutor` and the database's own `private.purge_tutor` refuse it too; this is the third door.
+   */
+  const isPerson = (kind: PurgeKind, id: string) => isId(id) && !(kind === "TUTOR" && id === ARCHIVED_TUTOR_ID);
+
+  /** The leaving state of one record, as the preview reports it. */
+  const leavingOf = async (kind: PurgeKind, id: string): Promise<PurgeLeaving> => {
+    const rows = await db.query<Row>(`select left_at, purge_after from public.${LEAVING_TABLE[kind]} where id = $1`, [id]);
+    const row = rows[0];
+    return { leftAt: row?.left_at ? iso(row.left_at) : null, purgeAfter: row?.purge_after ? iso(row.purge_after) : null, readiness: readiness(row?.left_at, row?.purge_after) };
+  };
+
   const purges: PurgeRepository = {
     previewStudent: async (studentId) => {
       if (!isId(studentId)) return null;
@@ -494,6 +516,7 @@ export function createSqlDataProvider(db: SqlExecutor): DataProvider {
         profileIds: profiles.map((r) => r.profile_id as string),
         files: files.map((r) => r.storage_path as string),
         notes: PURGE_NOTES,
+        ...(await leavingOf("STUDENT", studentId)),
       };
     },
     previewTutor: async (tutorId) => {
@@ -528,6 +551,7 @@ export function createSqlDataProvider(db: SqlExecutor): DataProvider {
         profileIds: profiles.map((r) => r.profile_id as string),
         files: [],
         notes: PURGE_NOTES,
+        ...(await leavingOf("TUTOR", tutorId)),
       };
     },
     previewFamily: async (clientId) => {
@@ -566,6 +590,7 @@ export function createSqlDataProvider(db: SqlExecutor): DataProvider {
         profileIds: [...new Set([...children.flatMap((c) => c.profileIds), owner[0].owner_profile_id as string])],
         files: files.map((r) => r.storage_path as string),
         notes: PURGE_NOTES,
+        ...(await leavingOf("FAMILY", clientId)),
       };
     },
     purgeStudent: async (studentId, actor) => {
@@ -588,6 +613,35 @@ export function createSqlDataProvider(db: SqlExecutor): DataProvider {
       if (rows[0]?.result !== "ok" || !rows[0]?.log_id) return null;
       const logged = await db.query<Row>(`select * from public.data_purges where id = $1`, [rows[0].log_id]);
       return logged[0] ? toPurge(logged[0]) : null;
+    },
+    markLeft: async (kind, id, actor) => {
+      if (!isPerson(kind, id)) return null;
+      const table = LEAVING_TABLE[kind];
+      // `where left_at is null` so marking twice keeps the first date: the clock cannot be restarted to put a purge off.
+      await db.query(
+        `update public.${table} set left_at = now(), left_by = $2, purge_after = now() + ($3 || ' days')::interval where id = $1 and left_at is null`,
+        [id, actorId(actor), String(PURGE_DELAY_DAYS)],
+      );
+      const state = await leavingOf(kind, id);
+      return state.leftAt ? state : null;
+    },
+    cancelLeft: async (kind, id) => {
+      if (!isPerson(kind, id)) return false;
+      const rows = await db.query<Row>(
+        `update public.${LEAVING_TABLE[kind]} set left_at = null, left_by = null, purge_after = null where id = $1 and left_at is not null returning id`,
+        [id],
+      );
+      return rows.length > 0;
+    },
+    bringForward: async (kind, id, when) => {
+      if (!isPerson(kind, id)) return null;
+      // Only ever earlier: `purge_after > $2` is the whole rule, and it also refuses a record that was never marked as left.
+      await db.query(
+        `update public.${LEAVING_TABLE[kind]} set purge_after = $2 where id = $1 and left_at is not null and purge_after > $2`,
+        [id, when.toISOString()],
+      );
+      const state = await leavingOf(kind, id);
+      return state.leftAt ? state : null;
     },
     recent: async (limit) =>
       (await db.query<Row>(`select * from public.data_purges order by at desc, id desc limit $1`, [Math.min(Math.max(Math.trunc(limit), 0), 500)])).map(toPurge),

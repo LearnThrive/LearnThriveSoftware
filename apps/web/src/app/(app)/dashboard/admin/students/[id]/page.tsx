@@ -165,6 +165,7 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
           {purge && (
             <PurgePanel
               preview={purge}
+              kind="STUDENT"
               action={purgeStudentAction}
               id={student.id}
               returnTo={`/dashboard/admin/students/${student.id}`}

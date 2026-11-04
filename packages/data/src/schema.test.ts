@@ -146,6 +146,7 @@ describe("migrations", () => {
       "0016_chat_message_activity.sql",
       "0017_username_accounts.sql",
       "0018_purges.sql",
+      "0019_leaving.sql",
     ]);
     assert.deepEqual(
       applied.map((f) => Number(f.slice(0, 4))),
@@ -755,7 +756,8 @@ describe("profiles and family structure", () => {
     const cols = await db.asOwner((q) =>
       q.query<{ column_name: string }>("select column_name from information_schema.columns where table_name = 'students' order by ordinal_position"),
     );
-    assert.deepEqual(cols.map((c) => c.column_name), ["id", "client_id", "display_name", "year_group", "is_minor", "active", "created_at", "access_mode"]);
+    // The leaving columns (0019) are the purge tool's pause, not contact details: still no email and no auth user here.
+    assert.deepEqual(cols.map((c) => c.column_name), ["id", "client_id", "display_name", "year_group", "is_minor", "active", "created_at", "access_mode", "left_at", "left_by", "purge_after"]);
     const f = await createFamily(db, { name: "Link", students: ["Kid"] });
     const links = await db.asOwner((q) => q.query("select client_id, student_id from public.client_students"));
     assert.deepEqual(links.filter((l) => l.student_id === f.studentIds[0]), [{ client_id: f.clientId, student_id: f.studentIds[0] }]);
