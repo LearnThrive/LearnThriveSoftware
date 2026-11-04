@@ -51,15 +51,18 @@ state is unverified. Env files exist (`apps/web/.env`); values are never printed
 
 ### Not done in workstream 1 (precise)
 
-- **No real-Supabase evidence.** Docker Desktop's engine will not start on this machine (the process starts and exits, no window; `docker ps` reports no
-  `dockerDesktopLinuxEngine` pipe). Needs the owner to open Docker Desktop once and finish any first-run/WSL prompt. Until then: invitations through real
-  GoTrue, the narrow `learnthrive_server` role calling the two new functions (`realstack.role.test.ts` expects them), real concurrency on accept, direct
-  authenticated-user RLS over the real API, Storage denial, restart/multi-instance persistence, `supabase db reset` + upgrade-from-populated-copy. Next
-  command once Docker is up: `npm run supabase:start` then `npm run test:realstack` (the contracts `identityContract.ts` and `dataProviderContract.ts`
-  should also be wired into `realstack.*.test.ts` the way `libraryContract` is).
+- ~~**No real-Supabase evidence.**~~ **SETTLED 2026-11-04** (launch checklist 2.2 to 2.5). Docker runs; the local stack has run every migration from
+  nothing on real Postgres 17, and `npm run test:realstack` is **307 of 307**. The contracts `identityContract.ts` and `dataProviderContract.ts` are now
+  wired into `realstack.identity.test.ts` and `realstack.data.test.ts` the way `libraryContract` is, and run three ways each: directly, through the
+  transaction pooler, and as the narrow `learnthrive_server` role (which needed no new grant). Invitations through real GoTrue, real concurrency on
+  accept, authenticated-user RLS over the real API, Storage denial, `supabase db reset` and the upgrade from a populated copy are all covered.
+  `docs/SUPABASE_REAL_STACK.md` records what differed from the fakes.
 - Backfill/migration dry-run tooling for real families (duplicate and missing-link detection, never matching by name) is not written.
 - Staff-side suspension/revocation of a learner has store support but no screen; invitation emails are not sent by the app (link shown once).
-- The staff dashboards' per-role scoping on the SQL provider was not re-audited page by page; only the contract and the in-memory e2e ran.
+- ~~The staff dashboards' per-role scoping on the SQL provider was not re-audited page by page.~~ **DONE 2026-11-04:** audited page by page on the SQL
+  provider on the real stack, with two families and two tutors, including guessed ids in the URL, and written up in `docs/SCOPING_AUDIT.md`
+  (`apps/web/tests-e2e-realstack/scoping.spec.ts`). No cross-family or cross-tutor leak was found. The admin-created flow was walked in a browser on
+  real Auth at the same time and did find one bug, now fixed: "Create login" threw the temporary password away before it could be read.
 - Orphan reporting (learner `profiles` left after a student is deleted) and deletion of a learner's storage files are listed, not built.
 - Seed data reaches production bundles only if `getDataProvider`'s in-memory branch is not tree-shaken; the guarantee today is the runtime refusal
   (tested), not bundle absence. `npm run check:bundle` has not been run against a production build.
@@ -139,18 +142,20 @@ Brief: `LearnThrive_Ollama_Three_Model_Claude_Code_Prompt.md` (untracked, not co
 
 ## Blockers
 
-- Docker will not start: no real-stack evidence for workstreams 1, 4 (migrations 0012, 0013 on a real database) or 5. Migrations 0012 and 0013 were applied to PGlite
-  only, including the second-application idempotency test.
+- ~~Docker will not start~~ **cleared 2026-11-04**: migrations `0012` and `0013` have now been applied to real Postgres 17 from nothing, and the Paper
+  Tutor's durable-job contract runs on the real stack three ways (it is part of `libraryContract`). That run found the double-encoded JSON bug
+  (`docs/SUPABASE_REAL_STACK.md`, finding 14), now fixed.
 - Stripe MCP needs interactive OAuth (workstream 3).
 - Nothing about real exam papers, boards' mark schemes or real handwriting can be claimed.
 
 ## Next steps, in order
 
-1. Docker up, then real-stack runs for workstream 1 (above) and wire the two new contracts into the real-stack files.
+1. ~~Docker up, then real-stack runs for workstream 1 and wire the two new contracts into the real-stack files.~~ **DONE 2026-11-04.**
 2. Workstream 2 is done. Workstream 4 and 5 need real data (see owner decisions 3): run `npm run paper:bench -- --provider ollama` once papers are in the manifest.
 3. Workstream 3: `claude plugin install stripe@claude-plugins-official`, Stripe MCP OAuth, `stripe_implementation_planner`; audit `lib/billing/*`; tuition
    invoicing, tax plumbing, webhook evidence with the Stripe CLI; deployment preparation (clean-stack apply, upgrade dry run, backup/restore, checklist).
-4. Wire the new contracts (papers repository, identity, data provider) into the real-stack files and run them once Docker is up.
+4. ~~Wire the new contracts (papers repository, identity, data provider) into the real-stack files and run them once Docker is up.~~ **DONE 2026-11-04**:
+   papers were already there through `libraryContract`; identity and the data provider are now `realstack.identity.test.ts` and `realstack.data.test.ts`.
 5. Add a tutor-facing review screen on top of `/api/tutor/papers/<id>`; today it is an API only.
 6. Final regression, runbook, handoff document.
 

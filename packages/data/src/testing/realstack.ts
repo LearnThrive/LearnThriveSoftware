@@ -117,10 +117,19 @@ export async function waitUntilConnects(url: string, { settleMs = 18_000, retryM
 
 export type Sql = ReturnType<typeof openDb>;
 
+/**
+ * The one row `public.platform_settings` is supposed to hold (migration 0011 seeds it; it is a singleton, not data). Truncating the
+ * public tables takes it away, and then the settings repository has nothing to update, so put it back.
+ */
+export async function ensurePlatformSettings(sql: Sql): Promise<void> {
+  await sql`insert into public.platform_settings (singleton) values (true) on conflict (singleton) do nothing`;
+}
+
 /** Empties every table in public (and only on this machine) so a test that needs a fresh database has one. Never takes a URL. */
 export async function resetPublicData(sql: Sql): Promise<void> {
   const tables = (await sql`select relname from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r'`).map((r) => `public.${r.relname}`);
   await sql.unsafe(`truncate ${tables.join(", ")} restart identity cascade`);
+  await ensurePlatformSettings(sql); // a seeded singleton, not data: the database should look as the migrations left it, only empty
 }
 
 /** Direct SQL as the stack's postgres role (it owns the tables: fixtures, grants and catalogue checks only). */
