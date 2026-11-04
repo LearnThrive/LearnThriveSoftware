@@ -5,6 +5,11 @@ import { defineConfig, devices } from '@playwright/test';
 // Next.js server and real cookies, not just unit-testable pure functions).
 export default defineConfig({
   testDir: './tests-e2e',
+  // Compiles the routes this suite only ever reaches by clicking, once per dev server, before any
+  // test runs — see tests-e2e/global-setup.ts for the measurements. Playwright starts the
+  // webServers above before globalSetup (the web-server plugin is a plugin-setup task, and those
+  // run ahead of global setups), so all four are already answering by the time it runs.
+  globalSetup: './tests-e2e/global-setup.ts',
   // A CI runner has two vCPUs and compiles each dev route on first use, so a test there needs more time (and fewer neighbours) than on a laptop.
   timeout: process.env.CI ? 90_000 : 30_000,
   expect: { timeout: process.env.CI ? 10_000 : 5_000 },
