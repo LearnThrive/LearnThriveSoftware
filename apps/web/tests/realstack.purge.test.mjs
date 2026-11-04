@@ -180,6 +180,28 @@ describe("the purge tool on the real local stack", { skip: ENABLED ? false : "se
     assert.deepEqual(await sweepBucket([fixture.chatId]), [fixture.objectPath], "the upload is in the bucket");
   });
 
+  test("the database refuses a purge that was never marked as left, or is still inside its pause", async () => {
+    // Asked of the function directly, not through the provider: this is the rule that cannot be skipped by any caller (0019).
+    const direct = async () => (await sql`select result from public.purge_student(${fixture.leaving}::uuid, ${fixture.parent}::uuid)`)[0].result;
+    assert.equal(await direct(), "not_left", "nobody has said they left");
+    assert.equal(await provider.purges.purgeStudent(fixture.leaving, fixture.parent), null, "and the provider says no too");
+    assert.equal((await provider.purges.previewStudent(fixture.leaving)).readiness, "not_left");
+
+    const marked = await provider.purges.markLeft("STUDENT", fixture.leaving, fixture.parent);
+    assert.ok(marked.leftAt && marked.purgeAfter, "marking records when and until when");
+    assert.equal(marked.readiness, "not_due");
+    assert.equal(await direct(), "not_due", "the pause has not run out");
+    assert.equal(await provider.purges.purgeStudent(fixture.leaving, fixture.parent), null);
+    assert.ok(await provider.students.get(fixture.leaving), "nothing was deleted by any of that");
+
+    // A later date is refused; an earlier one is the administrator's to choose.
+    const later = new Date(new Date(marked.purgeAfter).getTime() + 86_400_000);
+    assert.equal((await provider.purges.bringForward("STUDENT", fixture.leaving, later)).purgeAfter, marked.purgeAfter, "never pushed back");
+    const brought = await provider.purges.bringForward("STUDENT", fixture.leaving, new Date(Date.now() - 1000));
+    assert.equal(brought.readiness, "due", "brought forward, it is ready; the purge itself is the test after next");
+    assert.ok(await provider.students.get(fixture.leaving), "and still nothing has been deleted");
+  });
+
   test("the preview names the files and logins, and does not name the person", async () => {
     const preview = await provider.purges.previewStudent(fixture.leaving);
     assert.ok(preview);

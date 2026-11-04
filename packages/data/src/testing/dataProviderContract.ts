@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { describe, test } from "node:test";
 import type { DataProvider } from "../repositories";
-import { ARCHIVED_TUTOR_ID } from "../repositories";
+import { ARCHIVED_TUTOR_ID, PURGE_DELAY_DAYS } from "../repositories";
 
 export interface DataHarness {
   provider: DataProvider;
@@ -254,6 +254,54 @@ export function dataProviderContract(name: string, make: () => Promise<{ harness
       await p.notifications.markRead("00000000-0000-4000-8000-000000000000");
     });
 
+    /** Marks a record as left and brings the purge date into the past, which is what an administrator does before purging today. */
+    const readyToPurge = async (kind: "STUDENT" | "TUTOR" | "FAMILY", id: string, actor: string) => {
+      assert.ok(await p.purges.markLeft(kind, id, actor), `${kind} should be markable as left`);
+      const brought = await p.purges.bringForward(kind, id, new Date(Date.now() - 1000));
+      assert.equal(brought?.readiness, "due", `${kind} should be purgeable once the date is brought forward`);
+    };
+
+    test("the purge tool: nothing is purged until it is marked as left and the pause has run out", async () => {
+      const f = await h.family("Pause");
+      const kid = await student(f.clientId, "Paused Child");
+      const actor = await h.login();
+
+      const before = await p.purges.previewStudent(kid.id);
+      assert.equal(before?.readiness, "not_left", "a record nobody has marked as left is not ready");
+      assert.equal(before?.leftAt, null);
+      assert.equal(before?.purgeAfter, null);
+      assert.equal(await p.purges.purgeStudent(kid.id, actor), null, "and asking anyway does nothing");
+      assert.ok(await p.students.get(kid.id), "the student is still there");
+
+      const marked = await p.purges.markLeft("STUDENT", kid.id, actor);
+      assert.ok(marked?.leftAt, "marking records when they left");
+      const delay = new Date(marked!.purgeAfter!).getTime() - new Date(marked!.leftAt!).getTime();
+      assert.ok(Math.abs(delay - PURGE_DELAY_DAYS * 86_400_000) < 60_000, `the pause is ${PURGE_DELAY_DAYS} days, got ${delay}ms`);
+      assert.equal(marked!.readiness, "not_due");
+      assert.equal(await p.purges.purgeStudent(kid.id, actor), null, "inside the pause, a purge still does nothing");
+      assert.ok(await p.students.get(kid.id));
+
+      // Marking again must not restart the clock: that would be a way to put a purge off for ever.
+      const again = await p.purges.markLeft("STUDENT", kid.id, actor);
+      assert.equal(again?.leftAt, marked!.leftAt, "the first leaving date stands");
+      assert.equal(again?.purgeAfter, marked!.purgeAfter);
+
+      // The pause can be shortened, never extended.
+      const later = new Date(new Date(marked!.purgeAfter!).getTime() + 86_400_000);
+      assert.equal((await p.purges.bringForward("STUDENT", kid.id, later))?.purgeAfter, marked!.purgeAfter, "a later date is refused");
+      const sooner = new Date(Date.now() + 86_400_000);
+      assert.equal((await p.purges.bringForward("STUDENT", kid.id, sooner))?.readiness, "not_due", "a day away is still not due");
+
+      // They came back: the clock is cleared and nothing was lost.
+      assert.equal(await p.purges.cancelLeft("STUDENT", kid.id), true);
+      assert.equal((await p.purges.previewStudent(kid.id))?.readiness, "not_left");
+      assert.equal(await p.purges.cancelLeft("STUDENT", kid.id), false, "cancelling twice says so");
+      assert.ok(await p.students.get(kid.id), "nothing was deleted by any of this");
+
+      assert.equal(await p.purges.markLeft("STUDENT", "00000000-0000-4000-8000-000000000000", actor), null, "there is no such student");
+      assert.equal(await p.purges.bringForward("STUDENT", kid.id, new Date()), null, "and one not marked as left cannot be brought forward");
+    });
+
     test("the purge tool: a student goes, a sibling and another family stay, and the log holds counts only", async () => {
       const mine = await h.family("Purge");
       const other = await h.family("Untouched");
@@ -271,8 +319,10 @@ export function dataProviderContract(name: string, make: () => Promise<{ harness
       await p.attendance.upsert({ lessonId: shared.id, studentId: leaving.id, status: "LATE", markedBy: marker, markedAt: START });
       await p.reports.create({ lessonId: own.id, tutorId: t.id, status: "APPROVED", publicSummary: "Leaving Child did well" });
 
+      await readyToPurge("STUDENT", leaving.id, marker);
       const preview = await p.purges.previewStudent(leaving.id);
       assert.ok(preview, "a preview is offered before anything is deleted");
+      assert.equal(preview!.readiness, "due");
       assert.equal(preview!.kind, "STUDENT");
       assert.ok(preview!.removes.some((item) => item.count > 0), "it says what will go");
       assert.ok(preview!.keeps.some((item) => item.count > 0), "and what stays, with a reason");
@@ -324,9 +374,15 @@ export function dataProviderContract(name: string, make: () => Promise<{ harness
       const preview = await p.purges.previewTutor(leaving.id);
       assert.ok(preview);
       assert.equal(preview!.kind, "TUTOR");
+      assert.equal(preview!.readiness, "not_left", "a tutor is not purgeable until someone says they have left");
       assert.equal(await p.purges.previewTutor(ARCHIVED_TUTOR_ID), null, "the archive row is not a person to purge");
+      assert.equal(await p.purges.markLeft("TUTOR", ARCHIVED_TUTOR_ID, await h.login()), null, "nor can it be marked as left");
+      assert.equal(await p.purges.cancelLeft("TUTOR", ARCHIVED_TUTOR_ID), false);
+      assert.equal(await p.purges.bringForward("TUTOR", ARCHIVED_TUTOR_ID, new Date()), null);
 
-      assert.ok(await p.purges.purgeTutor(leaving.id, await h.login()));
+      const actor = await h.login();
+      await readyToPurge("TUTOR", leaving.id, actor);
+      assert.ok(await p.purges.purgeTutor(leaving.id, actor));
       assert.equal(await p.tutors.get(leaving.id), null, "the tutor record is gone");
       assert.ok(await p.tutors.get(staying.id), "another tutor is untouched");
       const keptLesson = await p.lessons.get(taught.id);
@@ -346,12 +402,20 @@ export function dataProviderContract(name: string, make: () => Promise<{ harness
       const t = await tutor("Family Tutor");
       await assignment(t.id, [one.id, two.id]);
 
+      const actor = await h.login();
+      const early = await p.purges.previewFamily(f.clientId);
+      assert.equal(early?.readiness, "not_left");
+      assert.equal(await p.purges.purgeFamily(f.clientId, actor), null, "a family is not purged before it is marked as left either");
+
+      await readyToPurge("FAMILY", f.clientId, actor);
       const preview = await p.purges.previewFamily(f.clientId);
       assert.ok(preview);
       assert.equal(preview!.kind, "FAMILY");
+      assert.equal(preview!.readiness, "due");
       assert.ok(preview!.profileIds.length >= 1, "the parent's login is listed for removal");
 
-      const record = await p.purges.purgeFamily(f.clientId, await h.login());
+      // The children go with the family on its decision: each child does not need a leaving date of its own.
+      const record = await p.purges.purgeFamily(f.clientId, actor);
       assert.ok(record);
       assert.equal(record!.kind, "FAMILY");
       assert.equal(await p.students.get(one.id), null);

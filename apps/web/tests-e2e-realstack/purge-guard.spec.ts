@@ -23,8 +23,9 @@ let studentId = '';
 let lessonId = '';
 let assignmentId = '';
 let page_url = '';
-/** The form's own fields, read from the administrator's page. */
-let replay: Record<string, string> = {};
+/** Each form's own fields, read from the administrator's page: the three POST endpoints the panel offers. */
+const replays: { mark?: Replay; forward?: Replay; purge?: Replay } = {};
+type Replay = Record<string, string>;
 
 const NAME = () => `Disposable-${f.run}`;
 
@@ -59,31 +60,74 @@ test.afterAll(async () => {
 
 const stillThere = async () => (await sql`select count(*)::int as n from public.students where id = ${studentId}`)[0]!.n === 1;
 
+/**
+ * Everything needed to post one of the panel's forms by hand: its fields, and the `$ACTION_ID_<hash>` Next puts in a form so it works
+ * without JavaScript. The hash is build-specific, so it is read rather than written down.
+ *
+ * Read from the SERVER-RENDERED HTML, not from the live DOM: React drops that hidden field once the page hydrates, so reading the DOM
+ * is a race that passes or fails on how quickly hydration finishes. `page.request` carries the browser's cookies, so this is fetched
+ * as the signed-in administrator.
+ */
+async function replayOf(page: Page, url: string, button: string): Promise<Replay> {
+  const html = await (await page.request.get(url)).text();
+  // These forms are small and all come from one component, so splitting on the tags is enough; there is no nesting to get wrong.
+  for (const chunk of html.split('<form').slice(1)) {
+    const body = chunk.split('</form>')[0] ?? '';
+    if (!body.includes(`>${button}<`)) continue;
+    const actionId = /name="(\$ACTION_ID_[0-9a-f]+)"/.exec(body)?.[1];
+    expect(actionId, `the ${button} form posts a server action`).toBeTruthy();
+    const replay: Replay = { [actionId!]: '' };
+    for (const field of body.matchAll(/name="([a-zA-Z]+)"(?:\s+value="([^"]*)")?/g)) replay[field[1]!] = field[2] ?? '';
+    return replay;
+  }
+  throw new Error(`no form with a ${button} button in ${url}`);
+}
+
 /** Waits for the page's content, not its streamed loading shell (see docs/SCOPING_AUDIT.md). */
 async function settled(page: Page, path: string) {
   await page.goto(path);
   await expect(page.locator('main')).not.toContainText('Loading…', { timeout: 60_000 });
 }
 
-test('an administrator is shown the panel, and a wrong phrase purges nothing', async ({ page }) => {
+test('the pause comes first: no purge is offered until they are marked as left and the date is brought forward', async ({ page }) => {
   await signIn(page, f.admin.username, f.admin.password);
   await settled(page, page_url);
   await expect(page.getByText('Purge this student')).toBeVisible();
+  // Anchored on the heading, not on a button: which buttons the panel offers is exactly what changes as the pause runs.
+  const card = page.locator('.card').filter({ hasText: 'Purge this student' });
+
+  // Nothing to confirm yet: the only thing on offer is marking them as left.
+  await expect(page.getByRole('button', { name: 'Purge for good' }), 'no purge before the pause').toHaveCount(0);
+  await expect(card.getByRole('button', { name: 'Mark as left' })).toBeVisible();
+  replays.mark = await replayOf(page, page_url, 'Mark as left');
+  await card.getByRole('button', { name: 'Mark as left' }).click();
+  await expect(page.locator('main')).not.toContainText('Loading…', { timeout: 60_000 });
+
+  // Marked, and waiting. Still nothing to confirm, and the record is untouched.
+  await settled(page, page_url);
+  await expect(card.getByText('Can be purged from')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Purge for good' }), 'still no purge inside the pause').toHaveCount(0);
+  expect(await stillThere()).toBe(true);
+  const [row] = await sql`select left_at, purge_after, left_by from public.students where id = ${studentId}`;
+  expect(row!.left_at, 'the leaving date is recorded').not.toBeNull();
+  expect(row!.left_by, 'and who said so').toBe(f.admin.profileId);
+  expect(new Date(String(row!.purge_after)).getTime(), 'with the pause ahead of us').toBeGreaterThan(Date.now());
+
+  // Bring it forward to today, which is the administrator's to do.
+  replays.forward = { ...(await replayOf(page, page_url, 'Bring it forward')), purgeAfter: new Date().toISOString().slice(0, 10) };
+  await card.locator('input[name="purgeAfter"]').fill(new Date().toISOString().slice(0, 10));
+  await card.getByRole('button', { name: 'Bring it forward' }).click();
+  await settled(page, page_url);
+  await expect(page.getByRole('button', { name: 'Purge for good' }), 'now it can be confirmed').toBeVisible();
   await expect(page.getByText('This removes, in one step:')).toBeVisible();
   // The preview says what goes, and names no one. Scoped to the panel: the page around it is this student's own profile, which
   // of course shows their name in its header.
-  const card = page.locator('.card').filter({ has: page.getByRole('button', { name: 'Purge for good' }) });
   const panel = await card.innerText();
   expect(panel).toContain('The student record');
   expect(panel, 'the preview itself never names the person').not.toContain(NAME());
 
   const form = page.locator('form').filter({ has: page.getByRole('button', { name: 'Purge for good' }) });
-  const fields = await form.locator('input').evaluateAll((els) => els.map((el) => [el.getAttribute('name') ?? '', el.getAttribute('value') ?? ''] as [string, string]));
-  // The action id is a build-specific hash, so it is read here rather than written down.
-  replay = Object.fromEntries(fields.filter(([name]) => name).map(([name, value]) => [name, value]));
-  const actionId = Object.keys(replay).find((name) => name.startsWith('$ACTION_ID_'));
-  expect(actionId, 'the form posts a server action').toBeTruthy();
-  replay.confirm = 'PURGE STUDENT';
+  replays.purge = { ...(await replayOf(page, page_url, 'Purge for good')), confirm: 'PURGE STUDENT' };
 
   await form.getByLabel(/Type PURGE STUDENT to confirm/).fill('purge it please');
   await form.getByRole('button', { name: 'Purge for good' }).click();
@@ -99,13 +143,18 @@ test('a tutor, a parent, a learner and a stranger cannot run it, even with the f
     ['the learner', f.ashford.enrolled.learner.username, f.ashford.enrolled.learner.password],
   ] as const;
 
+  // All three of the panel's endpoints, not only the purge: marking as left and moving the date are administrators' work too.
+  const endpoints = [['purge', replays.purge!], ['mark as left', replays.mark!], ['bring forward', replays.forward!]] as const;
+
   for (const [label, username, password] of who) {
     await signIn(page, username, password);
-    const reply = await page.request.post(page_url, { multipart: replay, failOnStatusCode: false });
-    // The database is the claim. The status is not: the action redirects and Playwright follows it, so a refusal arrives as a 200
-    // from /403 — which is why the final URL is checked instead of the code.
-    expect(await stillThere(), `${label} must not be able to purge`).toBe(true);
-    expect(reply.url(), `${label}: the action should have sent them to /403`).toMatch(/\/403$/);
+    for (const [what, body] of endpoints) {
+      const reply = await page.request.post(page_url, { multipart: body, failOnStatusCode: false });
+      // The database is the claim. The status is not: the action redirects and Playwright follows it, so a refusal arrives as a 200
+      // from /403 — which is why the final URL is checked instead of the code.
+      expect(await stillThere(), `${label} must not be able to ${what}`).toBe(true);
+      expect(reply.url(), `${label}: ${what} should have sent them to /403`).toMatch(/\/403$/);
+    }
     // And the screen the panel lives on is shut to them as well.
     await page.goto(page_url);
     await expect(page, `${label} cannot open the page either`).toHaveURL(/\/403$/);
@@ -113,9 +162,11 @@ test('a tutor, a parent, a learner and a stranger cannot run it, even with the f
   }
 
   // Signed out entirely: the guard sends them to the sign-in instead.
-  const stranger = await page.request.post(page_url, { multipart: replay, failOnStatusCode: false });
-  expect(await stillThere(), 'a stranger must not be able to purge').toBe(true);
-  expect(stranger.url(), 'a stranger is sent to sign in').toMatch(/\/login/);
+  for (const [what, body] of endpoints) {
+    const stranger = await page.request.post(page_url, { multipart: body, failOnStatusCode: false });
+    expect(await stillThere(), `a stranger must not be able to ${what}`).toBe(true);
+    expect(stranger.url(), `a stranger asking to ${what} is sent to sign in`).toMatch(/\/login/);
+  }
 });
 
 test('an administrator with the right phrase purges it, and the log records only counts', async ({ page }) => {

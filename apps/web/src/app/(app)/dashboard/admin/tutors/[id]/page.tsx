@@ -132,6 +132,7 @@ export default async function TutorProfilePage({ params }: { params: Promise<{ i
       {purge && (
         <PurgePanel
           preview={purge}
+          kind="TUTOR"
           action={purgeTutorAction}
           id={tutor.id}
           returnTo={`/dashboard/admin/tutors/${tutor.id}`}

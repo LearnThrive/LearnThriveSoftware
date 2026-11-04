@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { PurgeKind, PurgePreview } from "@learnthrive/data/repositories";
+import { PURGE_DELAY_DAYS } from "@learnthrive/data/repositories";
 import { accountRuntime } from "@/lib/account/runtime";
 import { setLoginDisabled } from "@/lib/account/provision";
 import { requireRole } from "@/lib/auth/guard";
@@ -25,6 +26,18 @@ const CONFIRMATION: Record<PurgeKind, string> = {
 };
 
 const ID = /^[0-9a-zA-Z-]{8,64}$/;
+/** A date typed into the "bring it forward" field, as a date input sends it. */
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+const KINDS: PurgeKind[] = ["STUDENT", "TUTOR", "FAMILY"];
+const parseKind = (value: string): PurgeKind | null => (KINDS.includes(value as PurgeKind) ? (value as PurgeKind) : null);
+
+/** Where each kind's page lives, for the toast to land back on. */
+const HOME: Record<PurgeKind, string> = {
+  STUDENT: "/dashboard/admin/people/students",
+  TUTOR: "/dashboard/admin/people/tutors",
+  FAMILY: "/dashboard/admin/people/clients",
+};
 
 function field(formData: FormData, key: string): string {
   const value = formData.get(key);
@@ -77,6 +90,12 @@ async function run(kind: PurgeKind, formData: FormData, fallback: string): Promi
     : kind === "TUTOR" ? await data.purges.previewTutor(id)
     : await data.purges.previewFamily(id);
   if (!preview) back(path, "There is nothing to purge for that record");
+  // The database refuses this as well (migration 0019). Checking here is so the administrator is told why, rather than being told
+  // there was nothing to purge.
+  if (preview.readiness === "not_left") back(path, "Mark them as left first: a purge waits so it is never a surprise");
+  if (preview.readiness === "not_due") {
+    back(path, `This cannot be purged until ${new Date(preview.purgeAfter!).toLocaleDateString("en-GB")}. Bring the date forward first if it must go sooner.`);
+  }
 
   let toast: string;
   try {
@@ -85,6 +104,54 @@ async function run(kind: PurgeKind, formData: FormData, fallback: string): Promi
     back(path, error instanceof Error ? error.message : "That could not be done. Nothing was changed.");
   }
   back(kind === "STUDENT" ? "/dashboard/admin/people/students" : kind === "TUTOR" ? "/dashboard/admin/people/tutors" : "/dashboard/admin/people/clients", toast);
+}
+
+/**
+ * The pause before a purge (launch checklist 3.7.3). Marking as left changes nothing else and deletes nothing: it records the decision
+ * and starts the clock. It can be undone, and the date can be brought forward but never pushed back.
+ */
+export async function markLeftAction(formData: FormData): Promise<void> {
+  const admin = await requireRole(["ADMIN"]);
+  const kind = parseKind(field(formData, "kind"));
+  const id = field(formData, "id");
+  const path = returnPath(formData, kind ? HOME[kind] : "/dashboard");
+  if (!kind || !ID.test(id)) back(path, "There is no such record");
+  const state = await getDataProvider().purges.markLeft(kind, id, admin.id);
+  if (!state?.purgeAfter) back(path, "That could not be changed");
+  back(path, `Marked as left. It can be purged from ${new Date(state.purgeAfter).toLocaleDateString("en-GB")} (${PURGE_DELAY_DAYS} days).`);
+}
+
+export async function cancelLeftAction(formData: FormData): Promise<void> {
+  await requireRole(["ADMIN"]);
+  const kind = parseKind(field(formData, "kind"));
+  const id = field(formData, "id");
+  const path = returnPath(formData, kind ? HOME[kind] : "/dashboard");
+  if (!kind || !ID.test(id)) back(path, "There is no such record");
+  const undone = await getDataProvider().purges.cancelLeft(kind, id);
+  back(path, undone ? "No longer marked as left. Nothing was deleted." : "That was not marked as left");
+}
+
+export async function bringForwardAction(formData: FormData): Promise<void> {
+  await requireRole(["ADMIN"]);
+  const kind = parseKind(field(formData, "kind"));
+  const id = field(formData, "id");
+  const path = returnPath(formData, kind ? HOME[kind] : "/dashboard");
+  if (!kind || !ID.test(id)) back(path, "There is no such record");
+  const typed = field(formData, "purgeAfter");
+  if (!DATE_ONLY.test(typed)) back(path, "Give the date as a day on the calendar");
+  // The START of that day, so "can be purged from <date>" is literally true and choosing today means it can go today. The end of the
+  // day would have made "bring it forward to today" mean tomorrow.
+  const when = new Date(`${typed}T00:00:00.000Z`);
+  if (Number.isNaN(when.getTime())) back(path, "Give the date as a day on the calendar");
+  const state = await getDataProvider().purges.bringForward(kind, id, when);
+  if (!state?.purgeAfter) back(path, "Mark them as left first");
+  const landed = new Date(state.purgeAfter);
+  back(
+    path,
+    landed.getTime() <= when.getTime()
+      ? `It can now be purged from ${landed.toLocaleDateString("en-GB")}.`
+      : `The date can only be brought forward; it stays ${landed.toLocaleDateString("en-GB")}.`,
+  );
 }
 
 export async function purgeStudentAction(formData: FormData): Promise<void> {

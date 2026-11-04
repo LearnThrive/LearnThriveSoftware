@@ -92,6 +92,7 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
       {children.length === 0 && purge && (
         <PurgePanel
           preview={purge}
+          kind="FAMILY"
           action={purgeFamilyAction}
           id={client.id}
           returnTo={`/dashboard/admin/clients/${client.id}`}

@@ -133,6 +133,13 @@ export type PurgeKind = "STUDENT" | "TUTOR" | "FAMILY";
  */
 export const ARCHIVED_TUTOR_ID = "00000000-0000-4000-8000-0000000000fe";
 
+/**
+ * How long a record waits between being marked as left and becoming purgeable (launch checklist 3.7.3). Held here, not in the
+ * database, so the screen and the date written on the row can never disagree; an administrator may bring the date forward, which is
+ * the whole point of the pause, and the database enforces only "not before the date on the row" (migration 0019).
+ */
+export const PURGE_DELAY_DAYS = 30;
+
 /** The lawful-bases position every purge preview states (docs/LAWFUL_BASES.md). */
 export const PURGE_NOTES = [
   "A purge is final. The records listed above are deleted, not archived.",
@@ -152,7 +159,18 @@ export interface PurgeKept extends PurgeItem {
   reason: string;
 }
 
-export interface PurgePreview {
+/** Why a purge may not go ahead yet. `due` means nothing is in the way. */
+export type PurgeReadiness = "due" | "not_left" | "not_due";
+
+export interface PurgeLeaving {
+  /** When they were marked as left, or null while they are still with us. */
+  leftAt: string | null;
+  /** The earliest they may be purged. Null until they are marked as left. */
+  purgeAfter: string | null;
+  readiness: PurgeReadiness;
+}
+
+export interface PurgePreview extends PurgeLeaving {
   kind: PurgeKind;
   /** What will be deleted, by what it is. */
   removes: PurgeItem[];
@@ -180,10 +198,27 @@ export interface PurgeRepository {
   previewStudent(studentId: string): Promise<PurgePreview | null>;
   previewTutor(tutorId: string): Promise<PurgePreview | null>;
   previewFamily(clientId: string): Promise<PurgePreview | null>;
-  /** Removes the records and writes the log row, in one transaction. null when there was nothing to purge. */
+  /**
+   * Removes the records and writes the log row, in one transaction. null when there was nothing to purge **or when the record is not
+   * ready** (not marked as left, or still inside its delay): a purge is never a surprise.
+   */
   purgeStudent(studentId: string, actor: string): Promise<PurgeRecord | null>;
   purgeTutor(tutorId: string, actor: string): Promise<PurgeRecord | null>;
   purgeFamily(clientId: string, actor: string): Promise<PurgeRecord | null>;
+
+  /**
+   * Marks a record as left: it records who said so and when, and sets the earliest purge date `PURGE_DELAY_DAYS` ahead. Marking again
+   * changes nothing (the first date stands, so the clock cannot be restarted to buy time). null when there is no such record.
+   */
+  markLeft(kind: PurgeKind, id: string, actor: string): Promise<PurgeLeaving | null>;
+  /** They came back, or it was a mistake: the leaving date and the purge date go, and nothing was deleted. false when it was not marked. */
+  cancelLeft(kind: PurgeKind, id: string): Promise<boolean>;
+  /**
+   * Brings the purge date forward, which is the administrator's to do (3.7.3). Refuses a date LATER than the one on the record, so the
+   * pause can be shortened but never extended into an excuse to keep the data. null when there is no such record or it is not marked as left.
+   */
+  bringForward(kind: PurgeKind, id: string, when: Date): Promise<PurgeLeaving | null>;
+
   /** Newest first. Counts only, so this is safe to show an administrator. */
   recent(limit: number): Promise<PurgeRecord[]>;
 }
