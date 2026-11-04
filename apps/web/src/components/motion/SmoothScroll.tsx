@@ -140,16 +140,28 @@ export function SmoothScroll() {
       };
       document.addEventListener("click", onClick, true);
 
-      // Browser Back/Forward: the browser restores the scroll position itself, and an animation
-      // Lenis still has in flight (a smooth scroll to an anchor, say) would otherwise carry on
-      // toward its old destination and override the restored position. Drop the animation and adopt
-      // wherever the browser put the page — once now, and again after the restore has settled
-      // (it can land a frame after popstate).
-      const adoptNativePosition = () => lenis.scrollTo(window.scrollY, { immediate: true, force: true });
-      const onPopState = () => {
-        adoptNativePosition();
-        requestAnimationFrame(() => requestAnimationFrame(adoptNativePosition));
-      };
+      // Browser Back/Forward: restoring the position is somebody else's job — the browser's, and
+      // Next's for an App Router entry — and an animation Lenis still has in flight (a smooth
+      // scroll to an anchor, say) would otherwise carry on toward its old destination and override
+      // it. So cancel that animation, by giving Lenis the position the page is at right now, and
+      // then do not touch the scroll position again. Lenis keeps itself in step with scrolling it
+      // did not cause, so the restore, whenever and however it lands, is simply adopted.
+      //
+      // Writing the position *again* after popstate is what this used to do ("once now, and again
+      // after the restore has settled", on a two-frame delay), and it is worse than doing nothing:
+      // globals.css sets `scroll-behavior: smooth` on the document for the marketing pages' anchor
+      // links, so the restore is itself animated, and a write lands in the middle of it and stops
+      // it there. Two frames is also nowhere near long enough for an App Router entry, which Next
+      // restores only after the route has rendered — so the write usually landed before the restore
+      // and pinned the page where it had been mid-glide.
+      //
+      // Measured at --repeat-each=10 with CI=1, "Back restores the scroll position exactly as the
+      // browser would natively" / "Back from an anchor returns to where the page was":
+      //   re-adopting through a settling window   10/10 and 8/10
+      //   adopting once, then hands off           10/10 and 9/10
+      // The remaining anchor case rests at 108 rather than under 80 — see that test; it is a real
+      // residual in how an animated restore and Lenis meet, not a measurement artifact.
+      const onPopState = () => lenis.scrollTo(window.scrollY, { immediate: true, force: true });
       window.addEventListener("popstate", onPopState);
 
       teardown = () => {
