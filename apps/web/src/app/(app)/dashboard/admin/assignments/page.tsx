@@ -61,7 +61,8 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
               <Field label="Tutor" htmlFor="assignment-tutor" required>
                 <select id="assignment-tutor" name="tutorId" required defaultValue="">
                   <option value="" disabled>Choose a tutor</option>
-                  {tutors.map((tutor) => <option key={tutor.id} value={tutor.id}>{tutor.name}</option>)}
+                  {/* Inactive tutors are not offered: that includes the archived "Former tutor" row a purge uses for history (0018). */}
+                  {tutors.filter((tutor) => tutor.active).map((tutor) => <option key={tutor.id} value={tutor.id}>{tutor.name}</option>)}
                 </select>
               </Field>
               <Field label="Student(s)" htmlFor="assignment-students" required hint="Hold Ctrl or Cmd to choose more than one.">

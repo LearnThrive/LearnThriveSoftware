@@ -4,8 +4,9 @@ import type {
 } from "./domain";
 import type {
   ActivityRepository, AssignmentRepository, AttendanceRepository, AvailabilityRepository, ClientRepository, DataProvider, LessonRepository,
-  NotificationRepository, ReportRepository, SettingsRepository, StudentRepository, TutorRepository,
+  NotificationRepository, PurgeItem, PurgeKept, PurgePreview, PurgeRecord, PurgeRepository, ReportRepository, SettingsRepository, StudentRepository, TutorRepository,
 } from "./repositories";
+import { ARCHIVED_TUTOR_ID, PURGE_NOTES } from "./repositories";
 import type { SqlExecutor } from "./library/ports";
 
 /**
@@ -420,5 +421,177 @@ export function createSqlDataProvider(db: SqlExecutor): DataProvider {
       (await db.query<Row>(`select id from public.profiles where role = $1 and login_disabled_at is null`, [role])).map((row) => row.id as string),
   };
 
-  return { tutors, clients, students, assignments, lessons, availability, attendance, activity, reports, settings, notifications };
+  /**
+   * The purge tool (3.7). The deletions themselves are migration 0018's functions, so each purge is one transaction: this reads what a
+   * purge would touch (the preview), calls the function, and returns the log row it wrote. The id of the person purged is never stored.
+   */
+  const counts = (raw: unknown): Record<string, number> => {
+    const out: Record<string, number> = {};
+    for (const [key, value] of Object.entries((raw ?? {}) as Record<string, unknown>)) out[key] = Number(value ?? 0);
+    return out;
+  };
+  const toPurge = (r: Row): PurgeRecord => ({ id: r.id, kind: r.kind, actorId: r.actor_profile_id ?? null, counts: counts(r.counts), at: iso(r.at) });
+  const items = (pairs: Array<[string, number]>): PurgeItem[] => pairs.filter(([, n]) => n > 0).map(([what, n]) => ({ what, count: n }));
+  /** Kept records are grouped by what they are, and a reason always survives: the preview must say why something stays. */
+  const kept = (list: PurgeKept[]): PurgeKept[] => {
+    const totals = new Map<string, { count: number; reason: string }>();
+    for (const item of list) {
+      const seen = totals.get(item.what);
+      totals.set(item.what, { count: (seen?.count ?? 0) + item.count, reason: seen?.reason ?? item.reason });
+    }
+    return [...totals.entries()].filter(([, value]) => value.count > 0).map(([what, value]) => ({ what, count: value.count, reason: value.reason }));
+  };
+  const actorId = (actor: string) => (isId(actor) ? actor : null);
+
+  const studentFacts = async (studentId: string) => {
+    const rows = await db.query<Row>(
+      `select
+         (select count(*) from public.lesson_students x where x.student_id = $1)::int as lesson_links,
+         (select count(*) from public.lesson_students x where x.student_id = $1
+            and (select count(*) from public.lesson_students y where y.lesson_id = x.lesson_id) = 1)::int as sole_lessons,
+         (select count(*) from public.lesson_attendance a where a.student_id = $1)::int as attendance,
+         (select count(*) from public.lesson_reports r join public.lesson_students x on x.lesson_id = r.lesson_id
+           where x.student_id = $1 and (select count(*) from public.lesson_students y where y.lesson_id = r.lesson_id) = 1)::int as reports_removed,
+         (select count(*) from public.lesson_reports r join public.lesson_students x on x.lesson_id = r.lesson_id
+           where x.student_id = $1 and (select count(*) from public.lesson_students y where y.lesson_id = r.lesson_id) > 1)::int as reports_kept,
+         (select count(*) from public.assignment_students x where x.student_id = $1)::int as assignment_links,
+         (select count(*) from public.client_students c where c.student_id = $1)::int as guardian_links,
+         (select count(*) from public.learner_identities l where l.student_id = $1)::int as logins,
+         (select count(*) from public.notifications n where n.user_id in (select l.profile_id from public.learner_identities l where l.student_id = $1))::int as notifications,
+         (select count(*) from public.chat_sessions c where c.student_id = $1)::int as chats,
+         (select count(*) from public.chat_files f join public.chat_sessions c on c.id = f.session_id where c.student_id = $1)::int as chat_files`,
+      [studentId],
+    );
+    return rows[0]!;
+  };
+
+  const purges: PurgeRepository = {
+    previewStudent: async (studentId) => {
+      if (!isId(studentId)) return null;
+      const found = await db.query<Row>(`select id from public.students where id = $1`, [studentId]);
+      if (!found[0]) return null;
+      const f = await studentFacts(studentId);
+      const profiles = await db.query<Row>(`select profile_id from public.learner_identities where student_id = $1`, [studentId]);
+      const files = await db.query<Row>(`select f.storage_path from public.chat_files f join public.chat_sessions c on c.id = f.session_id where c.student_id = $1`, [studentId]);
+      const shared = Math.max(Number(f.lesson_links) - Number(f.sole_lessons), 0);
+      return {
+        kind: "STUDENT",
+        removes: items([
+          ["Lessons that exist only for this student (with their attendance, report and timeline)", Number(f.sole_lessons)],
+          ["Their attendance on lessons another student is still on", Number(f.attendance)],
+          ["Reports on lessons only this student attended", Number(f.reports_removed)],
+          ["Assignments they are on (removed from the assignment; an empty one is ended)", Number(f.assignment_links)],
+          ["Guardian links", Number(f.guardian_links)],
+          ["Their learner login and its linked email", Number(f.logins)],
+          ["Notifications", Number(f.notifications)],
+          ["LearnThrive AI conversations and their uploads", Number(f.chats)],
+          ["The student record", 1],
+        ]),
+        keeps: [
+          ...(shared ? [{ what: "Lessons another student is still on (their name is taken out of the title and notes)", count: shared, reason: "Another child's record needs the lesson." }] : []),
+          ...(Number(f.reports_kept) ? [{ what: "Reports on lessons another student is still on", count: Number(f.reports_kept), reason: "The report covers a lesson another child still attends." }] : []),
+        ] as PurgeKept[],
+        profileIds: profiles.map((r) => r.profile_id as string),
+        files: files.map((r) => r.storage_path as string),
+        notes: PURGE_NOTES,
+      };
+    },
+    previewTutor: async (tutorId) => {
+      if (!isId(tutorId) || tutorId === ARCHIVED_TUTOR_ID) return null;
+      const rows = await db.query<Row>(
+        `select
+           (select count(*) from public.tuition_assignments a where a.tutor_id = t.id)::int as assignments,
+           (select count(*) from public.lessons l where l.tutor_id = t.id)::int as lessons,
+           (select count(*) from public.lesson_reports r where r.tutor_id = t.id)::int as reports,
+           (select count(*) from public.tutor_availability_blocks b where b.tutor_id = t.id)::int as blocks,
+           (select count(*) from public.notifications n where n.user_id = t.profile_id)::int as notifications,
+           case when t.profile_id is null then 0 else 1 end as logins
+         from public.tutors t where t.id = $1`,
+        [tutorId],
+      );
+      const f = rows[0];
+      if (!f) return null;
+      const profiles = await db.query<Row>(`select profile_id from public.tutors where id = $1 and profile_id is not null`, [tutorId]);
+      return {
+        kind: "TUTOR",
+        removes: items([
+          ["Tutor record", 1],
+          ["Their login and its linked email", Number(f.logins)],
+          ["Availability blocks", Number(f.blocks)],
+          ["Notifications", Number(f.notifications)],
+        ]),
+        keeps: [
+          ...(Number(f.assignments) ? [{ what: "Assignments they taught (moved to the archived tutor and ended)", count: Number(f.assignments), reason: "A family's lesson history has to stay; the assignment is ended so nothing new is booked." }] : []),
+          ...(Number(f.lessons) ? [{ what: "Lessons they taught (moved to the archived tutor so their name is gone)", count: Number(f.lessons), reason: "Scheduling history for the students who attended." }] : []),
+          ...(Number(f.reports) ? [{ what: "Reports they wrote (moved to the archived tutor)", count: Number(f.reports), reason: "The report belongs to the student's record until that student is purged." }] : []),
+        ] as PurgeKept[],
+        profileIds: profiles.map((r) => r.profile_id as string),
+        files: [],
+        notes: PURGE_NOTES,
+      };
+    },
+    previewFamily: async (clientId) => {
+      if (!isId(clientId)) return null;
+      const owner = await db.query<Row>(`select owner_profile_id from public.clients where id = $1`, [clientId]);
+      if (!owner[0]) return null;
+      const students = await db.query<Row>(`select id from public.students where client_id = $1`, [clientId]);
+      const children = (await Promise.all(students.map((s) => purges.previewStudent(s.id as string)))).filter((p): p is PurgePreview => Boolean(p));
+      const total = (list: Array<{ what: string; count: number }>) => {
+        const sums = new Map<string, number>();
+        for (const item of list) sums.set(item.what, (sums.get(item.what) ?? 0) + item.count);
+        return items([...sums.entries()]);
+      };
+      const parent = await db.query<Row>(
+        `select (select count(*) from public.notifications where user_id = $1)::int as notifications,
+                (select count(*) from public.chat_sessions where client_id = $2)::int as chats`,
+        [owner[0].owner_profile_id, clientId],
+      );
+      const files = await db.query<Row>(
+        `select f.storage_path from public.chat_files f join public.chat_sessions c on c.id = f.session_id
+          where c.client_id = $1 or c.student_id in (select id from public.students where client_id = $1)`,
+        [clientId],
+      );
+      return {
+        kind: "FAMILY",
+        removes: [
+          ...total(children.flatMap((c) => c.removes)),
+          ...items([
+            ["The family account", 1],
+            ["The parent's login and its linked email", 1],
+            ["Notifications", Number(parent[0]?.notifications) + 0],
+            ["LearnThrive AI conversations of the parent", Number(parent[0]?.chats) + 0],
+          ]),
+        ],
+        keeps: kept(children.flatMap((c) => c.keeps)),
+        profileIds: [...new Set([...children.flatMap((c) => c.profileIds), owner[0].owner_profile_id as string])],
+        files: files.map((r) => r.storage_path as string),
+        notes: PURGE_NOTES,
+      };
+    },
+    purgeStudent: async (studentId, actor) => {
+      if (!isId(studentId)) return null;
+      const rows = await db.query<Row>(`select result, log_id from public.purge_student($1, $2)`, [studentId, actorId(actor)]);
+      if (rows[0]?.result !== "ok" || !rows[0]?.log_id) return null;
+      const logged = await db.query<Row>(`select * from public.data_purges where id = $1`, [rows[0].log_id]);
+      return logged[0] ? toPurge(logged[0]) : null;
+    },
+    purgeTutor: async (tutorId, actor) => {
+      if (!isId(tutorId)) return null;
+      const rows = await db.query<Row>(`select result, log_id from public.purge_tutor($1, $2)`, [tutorId, actorId(actor)]);
+      if (rows[0]?.result !== "ok" || !rows[0]?.log_id) return null;
+      const logged = await db.query<Row>(`select * from public.data_purges where id = $1`, [rows[0].log_id]);
+      return logged[0] ? toPurge(logged[0]) : null;
+    },
+    purgeFamily: async (clientId, actor) => {
+      if (!isId(clientId)) return null;
+      const rows = await db.query<Row>(`select result, log_id from public.purge_family($1, $2)`, [clientId, actorId(actor)]);
+      if (rows[0]?.result !== "ok" || !rows[0]?.log_id) return null;
+      const logged = await db.query<Row>(`select * from public.data_purges where id = $1`, [rows[0].log_id]);
+      return logged[0] ? toPurge(logged[0]) : null;
+    },
+    recent: async (limit) =>
+      (await db.query<Row>(`select * from public.data_purges order by at desc, id desc limit $1`, [Math.min(Math.max(Math.trunc(limit), 0), 500)])).map(toPurge),
+  };
+
+  return { tutors, clients, students, assignments, lessons, availability, attendance, activity, reports, settings, notifications, purges };
 }
