@@ -123,9 +123,11 @@ None of these can be defaulted by an engineer. For each, write the answer and th
 ### 1.3 Run the whole quality gate on a clean checkout
 - **Do.** `npm ci`, then from the repo root `npm run typecheck`, `npm run lint`, `npm test`, `npm run build` (the build also builds `apps/classroom` and typechecks `apps/realtime`). For the web app: `npm run check:bundle --workspace=apps/web` against the production build, which also confirms no seed data or secret reaches the browser bundle. The ledger notes this was never run against a production build.
 - **Done when.** All pass; paste the counts into the release notes.
+- **Mostly evidenced (4 November 2026), on an existing checkout rather than a clean one.** From the repo root: typecheck clean, lint 0 errors (9 old warnings), `npm test` 1020 web and 322 data (1 skipped) with classroom and realtime green, `apps/classroom` and `apps/web` production builds both fine. **`check:bundle` ran against a production build for the first time**: 1371 browser-reachable files searched against 19 sentinel secrets, none present. **Still to do: the `npm ci` clean-checkout part**, which is the point of the task - CI does it on every run, which is some assurance, but it has not been done here. (Note that `check:bundle` builds into `.next-bundle-check` and Next appends that directory to `tsconfig.json`; do not commit that.)
 
-### 1.4 Prove the CI workflow on GitHub
-- `.github/workflows/ci.yml` has never executed on GitHub (`DEPLOYMENT_READINESS.md` 16.6). Open a pull request, watch lint, typecheck, tests, build and the production smoke suite (Chromium, Firefox, WebKit) pass, then merge. Fix anything environment-specific that fails.
+### 1.4 Prove the CI workflow on GitHub - DONE (4 November 2026)
+- **Done.** `.github/workflows/ci.yml` has executed on GitHub. The blocking `verify` job (lint, typecheck, unit tests, both builds, then the production smoke suite in Chromium, Firefox and WebKit against `serve.mjs`) went green on **pull requests 8 and 9**, and the main-only `e2e` job - the full dev-server Playwright suite, about 70 minutes - went green on **both merges to `main`**. Nothing environment-specific had to be fixed.
+- The same `verify` steps were reproduced locally on PR 9 before it was opened, and agreed: lint 0 errors, typecheck clean, 1020 web and 322 data unit tests, both builds, 248 passed and 44 skipped across the three browsers.
 
 ### 1.5 Fix the stale pieces
 - Correct the claim that company mailboxes are on IONOS. IONOS is the domain registrar and DNS only (0.4). It appears in `docs/DEPLOYMENT.md`, `docs/RENDER.md`, `docs/RETENTION_AND_DELETION.md`, the marketing repo's `DEPLOYMENT_PLAN.md` and possibly the privacy page; `legal-faqs.tsx` currently says Google Workspace/Gmail, which is probably right: confirm and make everything agree.
@@ -548,7 +550,7 @@ Launch in two steps so the riskier part opens last.
 | Phase | What it proves | Status |
 | --- | --- | --- |
 | 0 Decisions | Everything only the owners can answer | open |
-| 1 Repo | Clean `main`, CI green on GitHub, bundle check | open |
+| 1 Repo | Clean `main`, CI green on GitHub, bundle check | **1.4 done** (CI green on GitHub, 4 Nov 2026) and the bundle check run; 1.1, 1.2 and 1.5 open, and 1.3 still wants a clean `npm ci` checkout |
 | 2 Real stack | Tuition tables and identity work on real Supabase | **done locally (4 Nov 2026)**: 307 real-stack tests and 12 real-stack browser tests pass; scoping audit in `docs/SCOPING_AUDIT.md`. The reset email's Resend hop and the hosted project remain |
 | 3 Build gaps | Classroom served, onboarding path, backfill tool | open |
 | 3.10 Tuition payments | Stripe sandbox flow, refunds, tamper and cross-family tests | open (product rules unanswered) |

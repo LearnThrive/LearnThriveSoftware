@@ -58,7 +58,7 @@ Legend: **PASS** verified, with the evidence named · **OWNER** blocked on somet
 | Image pipeline applied | **PASS** | Wave 8 (see the audit). |
 | Production Lighthouse (mobile and desktop) per route, with budgets | **NOT RUN** | Lighthouse is not installed here and installing it is a download that was not authorised. Motion profiles (`npm run profile:motion`) were measured instead — see the completion report. Run Lighthouse on staging. |
 | INP checked by interacting (menu, accordion, form, palette, theme toggle) | **NOT RUN** | The interactions are exercised by the e2e suites; INP itself was not measured. |
-| Firefox and WebKit Playwright projects | **PASS** (configured) / **NOT RUN** locally | `playwright.prod.config.ts` adds Firefox, WebKit and an iPhone profile with `PW_CROSS_BROWSER=1`; CI installs and runs them. The browsers are not installed on the author's machine, so they have not been run. |
+| Firefox and WebKit Playwright projects | **PASS** | `playwright.prod.config.ts` adds Firefox, WebKit and an iPhone profile with `PW_CROSS_BROWSER=1`. Run on GitHub (CI installs all three), and run locally once the browsers were installed, 4 November 2026: 248 passed, 44 skipped against a production build served by `serve.mjs`. |
 | Safari/iOS behaviour of Lenis, View Transitions, WebGL, `backdrop-filter`, `animation-timeline` | **NOT RUN** | No Safari/iOS device or engine was available. Each enhancement is feature-gated and degrades to the static or native behaviour (Lenis is fine-pointer only). Do a manual pass on an iPhone and a Mac before launch. |
 
 ## 16.6 Reliability and operations
@@ -68,7 +68,7 @@ Legend: **PASS** verified, with the evidence named · **OWNER** blocked on somet
 | `/api/health` | **PASS** | `{"status":"ok"}`, `Cache-Control: no-store`, no secrets (smoke). |
 | Global error boundaries | **PASS** | `error.tsx` and `global-error.tsx` (Wave 10); branded 404. |
 | Optional error-reporting hook behind env | **OWNER** | Not added: no vendor without the owner's decision. |
-| CI workflow | **PASS** (written) / **NOT RUN** on GitHub | `.github/workflows/ci.yml`; its commands are the ones run locally. It has not yet executed on GitHub. |
+| CI workflow | **PASS** | `.github/workflows/ci.yml` has now executed on GitHub (4 November 2026): `verify` green on pull requests 8 and 9, and the main-only `e2e` job green on both merges. Launch checklist 1.4. |
 | `docs/DEPLOYMENT.md`: hosting, realtime not deployed, rollback, smoke checklist | **PASS** | Written. The hosting target itself is **OWNER**. |
 
 ## 16.7 Privacy, legal and accessibility
