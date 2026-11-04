@@ -4,7 +4,7 @@ name: CI
 #   verify    lint, typecheck, unit tests, production build, then the production smoke suite
 #             (apps/web/tests-prod) in Chromium, Firefox and WebKit against `next start`.  BLOCKING.
 #   e2e       the full dev-server Playwright suite (apps/web/tests-e2e), Chromium. Runs on pushes to
-#             main only: it is the slow one (about 6 minutes) and needs a quiet machine.  BLOCKING there.
+#             main only: it is the slow one (about 70 minutes) and needs a quiet machine.  BLOCKING there.
 #   audit     `npm audit --omit=dev`, reported, never blocking (known exceptions: docs/DEPLOYMENT_READINESS.md).
 #
 # The branch and deploy process is in docs/DEPLOYMENT.md.
@@ -89,7 +89,8 @@ jobs:
   e2e:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    # The suite took 71 and 73.5 minutes on a two-vCPU runner (November 2026): 75 left no room for a slower machine.
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
