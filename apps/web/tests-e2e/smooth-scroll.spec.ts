@@ -23,6 +23,23 @@ async function expectSmoothOn(page: Page) {
   await expect(page.locator('html')).toHaveAttribute('data-smooth-scroll', 'on');
 }
 
+/**
+ * Records when the page last actually moved, so a test can wait for scrolling to *stop* instead of
+ * guessing that it already has. "Has the position been the same for the last two polls" is not the
+ * same question: wheel and restore scrolling arrive as a series of separate events, and under CPU
+ * load two polls can both land inside one gap between them.
+ */
+async function trackLastScroll(page: Page) {
+  await page.evaluate(() => {
+    const w = window as unknown as { __lastScrollAt: number };
+    w.__lastScrollAt = performance.now();
+    window.addEventListener('scroll', () => { w.__lastScrollAt = performance.now(); }, { passive: true });
+  });
+}
+
+const msSinceLastScroll = (page: Page) =>
+  page.evaluate(() => performance.now() - (window as unknown as { __lastScrollAt: number }).__lastScrollAt);
+
 test.describe('where it runs', () => {
   test('on a capable desktop (full tier, fine pointer) it is on', async ({ page }) => {
     await pinCapabilities(page);
@@ -106,9 +123,18 @@ test.describe('how it scrolls', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/');
     await expectSmoothOn(page);
+    await trackLastScroll(page);
     await page.mouse.move(700, 400);
     for (let i = 0; i < 6; i++) await page.mouse.wheel(0, 12);
     await expect.poll(() => scrollY(page), { timeout: 3000 }).toBeGreaterThan(40);
+    // Wait for the stream to have finished *arriving* before sampling it. `page.mouse.wheel`
+    // dispatches six separate events, and the last of them can land after the ">40" threshold
+    // above is crossed — so reading the position straight afterwards sampled a mid-stream value and
+    // called it "settled". 400 ms later the rest of the stream had been applied and the test
+    // reported movement it had caused itself. That is the CI flake of 2026-11-03, reproduced
+    // locally with CI=1 at --repeat-each=5 with the same numbers it failed with on CI
+    // ("Expected: <= 2, Received: 12" — one whole 12 px delta arriving late).
+    await expect.poll(() => msSinceLastScroll(page), { timeout: 8000 }).toBeGreaterThan(300);
     // Native scrolling applies each small delta in full, quickly; smoothing would still be gliding.
     const settled = await scrollY(page);
     await page.waitForTimeout(400);
@@ -159,6 +185,13 @@ test.describe('how it scrolls', () => {
       const page = await context.newPage();
       await pinCapabilities(page);
       await page.goto(url);
+      // Both journeys must start from the same state to be comparable. The smooth one already
+      // waited for hydration without meaning to — `expectSmoothOn` cannot pass until Lenis has
+      // attached — while the native one went straight to scrolling, hydrated or not. So the two
+      // landings being compared below were measured under different conditions. This gate applies
+      // to both: html[data-motion-tier] is MotionRuntime's post-hydration marker and is set on
+      // ?smooth=0 too (measured: data-motion-tier="full" with data-smooth-scroll absent).
+      await page.waitForSelector('html[data-motion-tier]');
       if (smooth) await expectSmoothOn(page);
       await page.mouse.move(700, 400);
       await page.mouse.wheel(0, 700);
@@ -168,8 +201,15 @@ test.describe('how it scrolls', () => {
       await expect(page).toHaveURL(/\/about$/);
       await page.goBack();
       await expect(page).toHaveURL(/\/subjects/);
-      let last = -1;
-      await expect.poll(async () => { const now = await scrollY(page); const settled = now === last; last = now; return settled; }, { timeout: 5000 }).toBe(true);
+      // Back re-renders the page in dev mode, and the browser restores the position only once
+      // there is a page tall enough to restore it in. Waiting for "two readings in a row were the
+      // same" could be satisfied by two readings taken before restoration had started at all —
+      // which is how CI came to report a landing of 0 for the native journey on a retry, in a test
+      // whose entire subject is where Back lands. Wait for the client to be live again, then for
+      // the page to have actually stopped moving for a while, before reading the landing.
+      await page.waitForSelector('html[data-motion-tier]');
+      await trackLastScroll(page);
+      await expect.poll(() => msSinceLastScroll(page), { timeout: 10_000 }).toBeGreaterThan(400);
       const landed = await scrollY(page);
       await context.close();
       return landed;
@@ -199,9 +239,16 @@ test.describe('anchors', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/');
     await expectSmoothOn(page);
+    await trackLastScroll(page);
     await page.locator('a[href="#how"]').first().click();
     await expect(page).toHaveURL(/#how$/);
     await expect.poll(() => scrollY(page), { timeout: 5000 }).toBeGreaterThan(500);
+    // Let the anchor scroll finish before pressing Back. ">500" only says the glide has got past
+    // 500, not that it has arrived, so Back could land in the middle of the animation — a harsher
+    // scenario than the one this test is named for, and one it cannot distinguish from a real
+    // fault. Going back mid-glide is how the page came to rest at 306 and stay there for the full
+    // 20 s (seen on CI, and reproduced locally at --repeat-each=5 with CI=1).
+    await expect.poll(() => msSinceLastScroll(page), { timeout: 8000 }).toBeGreaterThan(300);
     await page.goBack();
     await expect(page).not.toHaveURL(/#how/);
     // The browser restores the position the page had before the jump; Lenis must not carry on
