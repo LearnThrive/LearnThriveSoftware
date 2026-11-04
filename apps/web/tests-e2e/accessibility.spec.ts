@@ -106,6 +106,20 @@ test.describe('automated accessibility (axe-core: WCAG 2.2 AA on the public site
     await runAxe(page, 'calendar with the lesson peek panel open');
   });
 
+  // The week view draws every lesson as a block, which FullCalendar gives white text. The month view does that only for a lesson
+  // that crosses midnight, which the seed's week-old lesson does only when the server starts late in the evening, so this is the
+  // check that runs whatever the time.
+  test('the calendar week view, with a lesson in it', async ({ page }) => {
+    await login(page, ADMIN.username, ADMIN.password);
+    await page.goto('/dashboard/calendar');
+    await page.locator('.fc-timeGridWeek-button').click();
+    await page.locator('.fc-timeGridWeek-view').waitFor();
+    // The seeded upcoming lesson is next Tuesday: in this week on a Monday, in the next one otherwise.
+    if ((await page.locator('.fc-event').count()) === 0) await page.locator('.fc-next-button').click();
+    await expect(page.locator('.fc-event').first()).toBeVisible();
+    await runAxe(page, 'calendar week view with a lesson');
+  });
+
   test('Tutor dashboard and availability', async ({ page }) => {
     await login(page, TUTOR.username, TUTOR.password);
     await runAxe(page, '/dashboard (Tutor)');
