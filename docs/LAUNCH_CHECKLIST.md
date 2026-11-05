@@ -224,9 +224,34 @@ Each task says whether it is **required** for launch or **optional**.
 - **3.2.9 Tests.** Playwright: admin creates a family with two children and a tutor; each signs in with the temporary password, is forced to change it, and sees exactly the right things; a second family sees nothing of the first. Real-stack tests (Docker): the Admin API call works with the narrow server role and the secret key; a non-admin, a tutor and a parent cannot call the action; a duplicate username, a reserved name and an `ADMIN` role request are refused; Supabase's public sign-up endpoint fails; wrong-username and wrong-password responses are indistinguishable; the lockout works on the username.
 - **Done when.** An admin can create a parent, two children and a tutor in the dashboard; each can sign in with a username and a temporary password and must change it; a forgotten password can be reset by a link sent to the linked email (a child's to the parent); public sign-up and the Supabase email flows are closed end to end; the cross-family tests pass; and the four staff accounts exist on the hosted project.
 
-### 3.3 Backfill and migration tooling for real data (required before loading families)
-- Write the dry-run tool the ledger says is missing: detect duplicate and missing guardian-student links in whatever source you are importing from (spreadsheet or TutorCruncher export), report them, and only then load. Never match people by name.
-- Define the source of truth for current tutors, families, students, assignments and upcoming lessons, and who checks the loaded data.
+### 3.3 Backfill and migration tooling for real data — BUILT (5 November 2026); the source of truth is still the owners' answer
+
+**Built:** `apps/web/src/lib/backfill/source.ts` (the checker, pure), `apps/web/scripts/backfill-check.mjs`
+(`npm run backfill:check`), and `apps/web/tests/backfill.test.mjs`. Written up in `docs/BACKFILL.md`, with the source shape and the
+order the load happens in.
+
+- **The dry run exists and is read-only by construction.** It reads one JSON file and writes nothing — no database, no connection string,
+  no host — so it cannot leave a project half loaded. It refuses a file inside the repository, because the file holds real people.
+- **Guardian links follow the schema.** Every student must name its one owning family (`students.client_id`); the database's trigger
+  writes that link, so a student with no family, or an unknown one, stops the load (`MISSING_FAMILY`, `UNKNOWN_FAMILY`). `links` holds
+  second guardians only: one naming an unknown student or family (`ORPHAN_LINK`) or repeated (`DUPLICATE_LINK`) stops the load, and each
+  valid one is a `SECOND_GUARDIAN` warning for the owning family to confirm. There is no admin screen for adding a second guardian yet,
+  so they are recorded at sign-off rather than loaded.
+- **"LOADABLE" means the rows would go in as written:** the checker applies the database's own limits (name lengths, a lesson's 5–600
+  minutes, `locationType`), requires a valid email for tutors and parents (password resets go there, a child's to the parent), and
+  requires a lesson time with its offset.
+- **People are matched by `externalId` only.** A row without one, or one that is an email address, is an error; a student whose surname
+  matches a family is reported as `LOOKS_LIKE_FAMILY` and **not linked**; two people with the same name stay two people
+  (`DUPLICATE_NAME`, a warning). A student's surname is flagged (`FULL_NAME`): only a first name or nickname is stored.
+- **The report carries no name or address:** every finding names a record as `students/S-31`, so it can be filed or pasted safely.
+- **No bulk loader, on purpose.** `public.provision_account` creates the `clients` row for a parent and refuses if one exists, so a family
+  exists only once its account is made: staff through `create-account.mjs` (3.2.8), then one family at a time in the admin screens, with
+  each step audited. A re-runnable `--apply` would need externalId bookkeeping, and the real export has not been seen yet.
+- **Still open (the owners' answer):** which system is authoritative for current tutors, families, students, assignments and upcoming
+  lessons, on what date the export is taken, and who signs off each loaded family. `file.source` is a warning until an export names
+  itself, and 9.3's "verify with them on a call" is the check that remains a person's job.
+
+**Done when:** this is ticked on a real export, with every warning read and a named person recorded against each loaded family.
 
 ### 3.4 Lesson reminders and invitation emails (optional for launch)
 - Reminders are derived when a page renders and nothing is sent; there is no scheduler. Invitation links are shown once to the guardian rather than emailed. If you want emailed reminders or invitations, build a scheduled job and a delivery path through Resend, with approved wording and an unsubscribe/preferences rule. Otherwise state clearly in the onboarding guide that notifications are in-app only.

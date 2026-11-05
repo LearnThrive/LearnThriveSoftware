@@ -42,6 +42,8 @@
     "db:create-server-role": "node scripts/create-server-role.mjs",
     "db:promote-admin": "node scripts/promote-admin.mjs",
     "db:create-account": "node --import tsx scripts/create-account.mjs",
+    "backfill:check": "node --import tsx scripts/backfill-check.mjs",
+    "backfill:template": "node --import tsx scripts/backfill-check.mjs --write-template",
     "supabase:smoke": "node --import tsx scripts/supabase-smoke.mjs",
     "env:template": "node scripts/env-docs.mjs --template",
     "paper:live": "node --import tsx scripts/paper-live-check.mjs",
