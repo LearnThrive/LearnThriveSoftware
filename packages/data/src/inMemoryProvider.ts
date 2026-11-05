@@ -5,8 +5,10 @@ import type {
 } from "./domain";
 import type {
   ActivityRepository, AssignmentRepository, AttendanceRepository, AvailabilityRepository, ClientRepository, DataProvider, LessonRepository,
-  NotificationRepository, ReportRepository, SettingsRepository, StudentRepository, TutorRepository,
+  NotificationRepository, PurgeItem, PurgeKept, PurgeKind, PurgeLeaving, PurgePreview, PurgeRecord, PurgeRepository, ReportRepository,
+  SettingsRepository, StudentRepository, TutorRepository,
 } from "./repositories";
+import { ARCHIVED_TUTOR_ID, PURGE_DELAY_DAYS, PURGE_NOTES } from "./repositories";
 
 // Fixed, well-known ids for the seeded demo people (plan section 89's scenario) — not random,
 // so apps/web's auth seed (devProvider.ts) can set matching AuthenticatedUser.profileId values
@@ -276,6 +278,328 @@ class InMemorySettingsRepository implements SettingsRepository {
   }
 }
 
+const ARCHIVED_TUTOR: Tutor = { id: ARCHIVED_TUTOR_ID, name: "Former tutor", email: "", subjects: [], active: false, createdAt: new Date(0).toISOString() };
+
+const stripName = (text: string | undefined, name: string): string | undefined => (text && name ? text.split(name).join("Student") : text);
+
+class InMemoryPurgeRepository implements PurgeRepository {
+  constructor(
+    private readonly tutors: Map<string, Tutor>,
+    private readonly clients: Map<string, Client>,
+    private readonly students: Map<string, Student>,
+    private readonly assignments: Map<string, TuitionAssignment>,
+    private readonly lessons: Map<string, Lesson>,
+    private readonly availability: Map<string, TutorAvailabilityBlock>,
+    private readonly attendance: Map<string, LessonAttendanceRecord>,
+    private readonly activity: Map<string, LessonActivityEvent>,
+    private readonly reports: Map<string, LessonReport>,
+    private readonly notifications: Map<string, Notification>,
+    private readonly links: ClientStudentLink[],
+    private readonly log: PurgeRecord[],
+  ) {}
+
+  /**
+   * Who has been marked as left, keyed "KIND:id". Kept here rather than on the domain records: it is a concern of the purge tool
+   * alone (launch checklist 3.7.3), and the database keeps it in columns on the three tables (migration 0019).
+   */
+  private readonly leaving = new Map<string, { leftAt: string; purgeAfter: string; leftBy: string }>();
+
+  /**
+   * The record a kind's leaving date belongs to, or undefined. The archived "Former tutor" row is deliberately not one: it is a place
+   * to hang history, not a person, so it can never be marked as left and therefore never purged.
+   */
+  private holder(kind: PurgeKind, id: string): { id: string } | undefined {
+    if (kind === "TUTOR") return id === ARCHIVED_TUTOR_ID ? undefined : this.tutors.get(id);
+    return kind === "STUDENT" ? this.students.get(id) : this.clients.get(id);
+  }
+
+  private leavingOf(kind: PurgeKind, id: string): PurgeLeaving {
+    const held = this.leaving.get(`${kind}:${id}`);
+    if (!held) return { leftAt: null, purgeAfter: null, readiness: "not_left" };
+    return { leftAt: held.leftAt, purgeAfter: held.purgeAfter, readiness: new Date(held.purgeAfter).getTime() > Date.now() ? "not_due" : "due" };
+  }
+
+  /** A purge is never a surprise: not marked as left, or still inside its delay, means no. */
+  private ready(kind: PurgeKind, id: string): boolean {
+    return this.leavingOf(kind, id).readiness === "due";
+  }
+
+  async markLeft(kind: PurgeKind, id: string, actor: string): Promise<PurgeLeaving | null> {
+    if (!this.holder(kind, id)) return null;
+    const key = `${kind}:${id}`;
+    // Marking again keeps the first date, so the clock cannot be restarted to put a purge off.
+    if (!this.leaving.has(key)) {
+      const at = new Date();
+      this.leaving.set(key, { leftAt: at.toISOString(), purgeAfter: new Date(at.getTime() + PURGE_DELAY_DAYS * 86_400_000).toISOString(), leftBy: actor });
+    }
+    return this.leavingOf(kind, id);
+  }
+
+  async cancelLeft(kind: PurgeKind, id: string): Promise<boolean> {
+    if (!this.holder(kind, id)) return false;
+    return this.leaving.delete(`${kind}:${id}`);
+  }
+
+  async bringForward(kind: PurgeKind, id: string, when: Date): Promise<PurgeLeaving | null> {
+    const key = `${kind}:${id}`;
+    const held = this.leaving.get(key);
+    if (!this.holder(kind, id) || !held) return null;
+    // Only ever earlier: the pause can be shortened, never extended.
+    if (when.getTime() < new Date(held.purgeAfter).getTime()) this.leaving.set(key, { ...held, purgeAfter: when.toISOString() });
+    return this.leavingOf(kind, id);
+  }
+
+  private ofStudent(studentId: string) {
+    const lessons = [...this.lessons.values()].filter((l) => l.studentIds.includes(studentId));
+    const sole = lessons.filter((l) => l.studentIds.length === 1);
+    const shared = lessons.filter((l) => l.studentIds.length > 1);
+    const soleIds = new Set(sole.map((l) => l.id));
+    const sharedIds = new Set(shared.map((l) => l.id));
+    return {
+      sole, shared, soleIds, sharedIds,
+      attendance: [...this.attendance.values()].filter((r) => r.studentId === studentId),
+      reportsRemoved: [...this.reports.values()].filter((r) => soleIds.has(r.lessonId)).length,
+      reportsKept: [...this.reports.values()].filter((r) => sharedIds.has(r.lessonId)).length,
+      assignments: [...this.assignments.values()].filter((a) => a.studentIds.includes(studentId)),
+      guardianLinks: this.links.filter((l) => l.studentId === studentId).length,
+    };
+  }
+
+  private items(pairs: Array<[string, number]>): PurgeItem[] {
+    return pairs.filter(([, count]) => count > 0).map(([what, count]) => ({ what, count }));
+  }
+
+  /** Kept records are grouped by what they are, and a reason always survives: the preview must say why something stays. */
+  private kept(items: PurgeKept[]): PurgeKept[] {
+    const totals = new Map<string, { count: number; reason: string }>();
+    for (const item of items) {
+      const seen = totals.get(item.what);
+      totals.set(item.what, { count: (seen?.count ?? 0) + item.count, reason: seen?.reason ?? item.reason });
+    }
+    return [...totals.entries()].filter(([, value]) => value.count > 0).map(([what, value]) => ({ what, count: value.count, reason: value.reason }));
+  }
+
+  async previewStudent(studentId: string): Promise<PurgePreview | null> {
+    const student = this.students.get(studentId);
+    if (!student) return null;
+    const f = this.ofStudent(studentId);
+    const logins = student.userId ? 1 : 0;
+    const notifications = student.userId ? [...this.notifications.values()].filter((n) => n.userId === student.userId).length : 0;
+    return {
+      kind: "STUDENT",
+      removes: this.items([
+        ["Lessons that exist only for this student (with their attendance, report and timeline)", f.sole.length],
+        ["Their attendance on lessons another student is still on", f.attendance.length],
+        ["Reports on lessons only this student attended", f.reportsRemoved],
+        ["Assignments they are on (removed from the assignment; an empty one is ended)", f.assignments.length],
+        ["Guardian links", f.guardianLinks],
+        ["Their learner login and its linked email", logins],
+        ["Notifications", notifications],
+        ["The student record", 1],
+      ]),
+      keeps: [
+        ...(f.shared.length ? [{ what: "Lessons another student is still on (their name is taken out of the title and notes)", count: f.shared.length, reason: "Another child's record needs the lesson." }] : []),
+        ...(f.reportsKept ? [{ what: "Reports on lessons another student is still on", count: f.reportsKept, reason: "The report covers a lesson another child still attends." }] : []),
+      ] as PurgeKept[],
+      profileIds: student.userId ? [student.userId] : [],
+      files: [],
+      notes: PURGE_NOTES,
+      ...this.leavingOf("STUDENT", studentId),
+    };
+  }
+
+  private removeStudent(studentId: string): Record<string, number> | null {
+    const student = this.students.get(studentId);
+    if (!student) return null;
+    const f = this.ofStudent(studentId);
+    const name = student.name;
+
+    for (const lesson of f.shared) {
+      this.lessons.set(lesson.id, { ...lesson, studentIds: lesson.studentIds.filter((id) => id !== studentId), title: stripName(lesson.title, name) ?? lesson.title, notes: stripName(lesson.notes, name), updatedAt: now() });
+    }
+    for (const lesson of f.sole) this.lessons.delete(lesson.id);
+    for (const [key, record] of [...this.attendance.entries()]) if (record.studentId === studentId) this.attendance.delete(key);
+    for (const [id, report] of [...this.reports.entries()]) if (f.soleIds.has(report.lessonId)) this.reports.delete(id);
+    for (const [id, event] of [...this.activity.entries()]) {
+      if (f.soleIds.has(event.lessonId)) this.activity.delete(id);
+      else if (f.sharedIds.has(event.lessonId)) this.activity.set(id, { ...event, message: stripName(event.message, name) ?? event.message });
+    }
+    for (const [id, report] of [...this.reports.entries()]) {
+      if (!f.sharedIds.has(report.lessonId)) continue;
+      this.reports.set(id, {
+        ...report,
+        publicSummary: stripName(report.publicSummary, name) ?? report.publicSummary,
+        progress: stripName(report.progress, name),
+        areasForImprovement: stripName(report.areasForImprovement, name),
+        nextSteps: stripName(report.nextSteps, name),
+        internalTutorNotes: stripName(report.internalTutorNotes, name),
+        updatedAt: now(),
+      });
+    }
+    let assignmentsEnded = 0;
+    for (const assignment of f.assignments) {
+      const studentIds = assignment.studentIds.filter((id) => id !== studentId);
+      if (studentIds.length === 0 && assignment.status !== "ENDED") assignmentsEnded += 1;
+      this.assignments.set(assignment.id, {
+        ...assignment,
+        studentIds,
+        // An assignment survives a purge (it is the parent of lessons a sibling may still have), so its free text is scrubbed the way a
+        // shared lesson's is. The admin screen asks for a title like "GCSE Mathematics - Brian", so this is the normal case, not an edge one.
+        title: stripName(assignment.title, name) ?? assignment.title,
+        defaultLessonNotes: stripName(assignment.defaultLessonNotes, name),
+        status: studentIds.length === 0 ? "ENDED" : assignment.status,
+      });
+    }
+    const notifications = student.userId ? [...this.notifications.entries()].filter(([, n]) => n.userId === student.userId) : [];
+    for (const [id] of notifications) this.notifications.delete(id);
+    for (let i = this.links.length - 1; i >= 0; i -= 1) if (this.links[i]!.studentId === studentId) this.links.splice(i, 1);
+    this.students.delete(studentId);
+
+    return {
+      lessonsRemoved: f.sole.length,
+      lessonsKept: f.shared.length,
+      attendanceRemoved: f.attendance.length,
+      reportsRemoved: f.reportsRemoved,
+      reportsKept: f.reportsKept,
+      assignmentLinksRemoved: f.assignments.length,
+      assignmentsEnded,
+      guardianLinksRemoved: f.guardianLinks,
+      loginsRemoved: student.userId ? 1 : 0,
+      notificationsRemoved: notifications.length,
+      chatsRemoved: 0,
+      chatFilesRemoved: 0,
+    };
+  }
+
+  async purgeStudent(studentId: string, actor: string): Promise<PurgeRecord | null> {
+    if (!this.ready("STUDENT", studentId)) return null;
+    const counts = this.removeStudent(studentId);
+    if (!counts) return null;
+    const record: PurgeRecord = { id: randomUUID(), kind: "STUDENT", actorId: actor, counts, at: now() };
+    this.log.push(record);
+    return record;
+  }
+
+  async previewTutor(tutorId: string): Promise<PurgePreview | null> {
+    if (tutorId === ARCHIVED_TUTOR_ID) return null;
+    const tutor = this.tutors.get(tutorId);
+    if (!tutor) return null;
+    const assignments = [...this.assignments.values()].filter((a) => a.tutorId === tutorId);
+    const lessons = [...this.lessons.values()].filter((l) => l.tutorId === tutorId);
+    const reports = [...this.reports.values()].filter((r) => r.tutorId === tutorId);
+    const blocks = [...this.availability.values()].filter((b) => b.tutorId === tutorId);
+    const notifications = tutor.userId ? [...this.notifications.values()].filter((n) => n.userId === tutor.userId).length : 0;
+    return {
+      kind: "TUTOR",
+      removes: this.items([
+        ["Tutor record", 1],
+        ["Their login and its linked email", tutor.userId ? 1 : 0],
+        ["Availability blocks", blocks.length],
+        ["Notifications", notifications],
+      ]),
+      keeps: [
+        ...(assignments.length ? [{ what: "Assignments they taught (moved to the archived tutor and ended)", count: assignments.length, reason: "A family's lesson history has to stay; the assignment is ended so nothing new is booked." }] : []),
+        ...(lessons.length ? [{ what: "Lessons they taught (moved to the archived tutor so their name is gone)", count: lessons.length, reason: "Scheduling history for the students who attended." }] : []),
+        ...(reports.length ? [{ what: "Reports they wrote (moved to the archived tutor)", count: reports.length, reason: "The report belongs to the student's record until that student is purged." }] : []),
+      ] as PurgeKept[],
+      profileIds: tutor.userId ? [tutor.userId] : [],
+      files: [],
+      notes: PURGE_NOTES,
+      ...this.leavingOf("TUTOR", tutorId),
+    };
+  }
+
+  async purgeTutor(tutorId: string, actor: string): Promise<PurgeRecord | null> {
+    if (tutorId === ARCHIVED_TUTOR_ID || !this.ready("TUTOR", tutorId)) return null;
+    const tutor = this.tutors.get(tutorId);
+    if (!tutor) return null;
+    const assignments = [...this.assignments.values()].filter((a) => a.tutorId === tutorId);
+    const lessons = [...this.lessons.values()].filter((l) => l.tutorId === tutorId);
+    const reports = [...this.reports.values()].filter((r) => r.tutorId === tutorId);
+    const blocks = [...this.availability.values()].filter((b) => b.tutorId === tutorId);
+    const notifications = tutor.userId ? [...this.notifications.entries()].filter(([, n]) => n.userId === tutor.userId) : [];
+
+    if (!this.tutors.has(ARCHIVED_TUTOR_ID)) this.tutors.set(ARCHIVED_TUTOR_ID, { ...ARCHIVED_TUTOR });
+    for (const assignment of assignments) this.assignments.set(assignment.id, { ...assignment, tutorId: ARCHIVED_TUTOR_ID, status: "ENDED" });
+    for (const lesson of lessons) this.lessons.set(lesson.id, { ...lesson, tutorId: ARCHIVED_TUTOR_ID, updatedAt: now() });
+    for (const report of reports) this.reports.set(report.id, { ...report, tutorId: ARCHIVED_TUTOR_ID, updatedAt: now() });
+    for (const block of blocks) this.availability.delete(block.id);
+    for (const [id] of notifications) this.notifications.delete(id);
+    this.tutors.delete(tutorId);
+
+    const record: PurgeRecord = {
+      id: randomUUID(), kind: "TUTOR", actorId: actor, at: now(),
+      counts: {
+        assignmentsEnded: assignments.length,
+        lessonsAnonymised: lessons.length,
+        reportsAnonymised: reports.length,
+        availabilityBlocksRemoved: blocks.length,
+        notificationsRemoved: notifications.length,
+        loginsRemoved: tutor.userId ? 1 : 0,
+      },
+    };
+    this.log.push(record);
+    return record;
+  }
+
+  async previewFamily(clientId: string): Promise<PurgePreview | null> {
+    const client = this.clients.get(clientId);
+    if (!client) return null;
+    const studentIds = this.links.filter((l) => l.clientId === clientId).map((l) => l.studentId);
+    const children = (await Promise.all(studentIds.map((id) => this.previewStudent(id)))).filter((p): p is PurgePreview => Boolean(p));
+    const sum = (items: Array<{ what: string; count: number }>) => {
+      const totals = new Map<string, number>();
+      for (const item of items) totals.set(item.what, (totals.get(item.what) ?? 0) + item.count);
+      return this.items([...totals.entries()]);
+    };
+    const notifications = client.userId ? [...this.notifications.values()].filter((n) => n.userId === client.userId).length : 0;
+    return {
+      kind: "FAMILY",
+      removes: [
+        ...sum(children.flatMap((c) => c.removes)),
+        ...this.items([["The family account", 1], ["The parent's login and its linked email", client.userId ? 1 : 0], ["Notifications", notifications]]),
+      ],
+      keeps: this.kept(children.flatMap((c) => c.keeps)),
+      profileIds: [...new Set([...children.flatMap((c) => c.profileIds), ...(client.userId ? [client.userId] : [])])],
+      files: children.flatMap((c) => c.files),
+      notes: PURGE_NOTES,
+      ...this.leavingOf("FAMILY", clientId),
+    };
+  }
+
+  async purgeFamily(clientId: string, actor: string): Promise<PurgeRecord | null> {
+    const client = this.clients.get(clientId);
+    if (!client || !this.ready("FAMILY", clientId)) return null;
+    const studentIds = [...new Set(this.links.filter((l) => l.clientId === clientId).map((l) => l.studentId))];
+    const totals: Record<string, number> = {};
+    for (const id of studentIds) {
+      const counts = this.removeStudent(id);
+      if (!counts) continue;
+      for (const [key, value] of Object.entries(counts)) totals[key] = (totals[key] ?? 0) + value;
+    }
+    const notifications = client.userId ? [...this.notifications.entries()].filter(([, n]) => n.userId === client.userId) : [];
+    for (const [id] of notifications) this.notifications.delete(id);
+    for (let i = this.links.length - 1; i >= 0; i -= 1) if (this.links[i]!.clientId === clientId) this.links.splice(i, 1);
+    this.clients.delete(clientId);
+
+    const record: PurgeRecord = {
+      id: randomUUID(), kind: "FAMILY", actorId: actor, at: now(),
+      counts: {
+        ...totals,
+        familiesRemoved: 1,
+        parentNotificationsRemoved: notifications.length,
+        loginsRemoved: (totals.loginsRemoved ?? 0) + (client.userId ? 1 : 0),
+      },
+    };
+    this.log.push(record);
+    return record;
+  }
+
+  async recent(limit: number): Promise<PurgeRecord[]> {
+    return [...this.log].sort((a, b) => b.at.localeCompare(a.at)).slice(0, Math.min(Math.max(Math.trunc(limit), 0), 500));
+  }
+}
+
 function seedProvider(): DataProvider {
   const tutorStore = new Map<string, Tutor>();
   const clientStore = new Map<string, Client>();
@@ -287,6 +611,7 @@ function seedProvider(): DataProvider {
   const activityStore = new Map<string, LessonActivityEvent>();
   const reportStore = new Map<string, LessonReport>();
   const notificationStore = new Map<string, Notification>();
+  const purgeStore: PurgeRecord[] = [];
   const links: ClientStudentLink[] = [];
 
   // The tutor record of the development administrator who teaches (apps/web lib/dev/accounts.ts).
@@ -373,6 +698,10 @@ function seedProvider(): DataProvider {
     reports: new InMemoryReportRepository(reportStore, lessonStore),
     settings: new InMemorySettingsRepository({ requireReportApproval: true }),
     notifications: new InMemoryNotificationRepository(notificationStore, [tutorStore, clientStore, studentStore]),
+    purges: new InMemoryPurgeRepository(
+      tutorStore, clientStore, studentStore, assignmentStore, lessonStore, availabilityStore, attendanceStore, activityStore, reportStore,
+      notificationStore, links, purgeStore,
+    ),
   };
 }
 
