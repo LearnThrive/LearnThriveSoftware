@@ -57,7 +57,12 @@ state is unverified. Env files exist (`apps/web/.env`); values are never printed
   transaction pooler, and as the narrow `learnthrive_server` role (which needed no new grant). Invitations through real GoTrue, real concurrency on
   accept, authenticated-user RLS over the real API, Storage denial, `supabase db reset` and the upgrade from a populated copy are all covered.
   `docs/SUPABASE_REAL_STACK.md` records what differed from the fakes.
-- Backfill/migration dry-run tooling for real families (duplicate and missing-link detection, never matching by name) is not written.
+- ~~Backfill/migration dry-run tooling for real families (duplicate and missing-link detection, never matching by name) is not written.~~
+  **BUILT 2026-11-05** as `npm run backfill:check` (launch checklist 3.3): a pure checker with its own tests, reading one file and
+  writing nothing, so a student with no owning family, or a duplicate or orphaned second-guardian link, is found before any family is
+  loaded, and every value is checked against the database's own limits. It never matches by name — a surname that looks like a family
+  is reported and left unlinked. `docs/BACKFILL.md`. The load stays with 3.2.8 and the admin screens; second guardians have no admin
+  screen yet and are recorded at sign-off.
 - ~~Orphan reporting and deletion of a learner's storage files are listed, not built.~~ **BUILT 2026-11-04** as the purge tool (launch
   checklist 3.7, migrations `0018` and `0019`): a person who has left is marked as left, waits 30 days unless an administrator brings
   the date forward, and is then removed in one transaction with their stored files going first. A real-stack sweep of every column of
