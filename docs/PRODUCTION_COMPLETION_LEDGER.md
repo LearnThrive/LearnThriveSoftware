@@ -63,6 +63,11 @@ state is unverified. Env files exist (`apps/web/.env`); values are never printed
   loaded, and every value is checked against the database's own limits. It never matches by name — a surname that looks like a family
   is reported and left unlinked. `docs/BACKFILL.md`. The load stays with 3.2.8 and the admin screens; second guardians have no admin
   screen yet and are recorded at sign-off.
+- ~~Orphan reporting and deletion of a learner's storage files are listed, not built.~~ **BUILT 2026-11-04** as the purge tool (launch
+  checklist 3.7, migrations `0018` and `0019`): a person who has left is marked as left, waits 30 days unless an administrator brings
+  the date forward, and is then removed in one transaction with their stored files going first. A real-stack sweep of every column of
+  every table, the bucket and `auth.users` finds nothing of them afterwards, and they can no longer sign in. The log holds counts only.
+  The staging rehearsal in 3.7's "done when" still waits for Phase 4.
 - Staff-side suspension/revocation of a learner has store support but no screen; invitation emails are not sent by the app (link shown once).
 - ~~The staff dashboards' per-role scoping on the SQL provider was not re-audited page by page.~~ **DONE 2026-11-04:** audited page by page on the SQL
   provider on the real stack, with two families and two tutors, including guessed ids in the URL, and written up in `docs/SCOPING_AUDIT.md`
