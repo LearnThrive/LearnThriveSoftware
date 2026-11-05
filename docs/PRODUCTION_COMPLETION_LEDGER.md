@@ -57,7 +57,12 @@ state is unverified. Env files exist (`apps/web/.env`); values are never printed
   transaction pooler, and as the narrow `learnthrive_server` role (which needed no new grant). Invitations through real GoTrue, real concurrency on
   accept, authenticated-user RLS over the real API, Storage denial, `supabase db reset` and the upgrade from a populated copy are all covered.
   `docs/SUPABASE_REAL_STACK.md` records what differed from the fakes.
-- Backfill/migration dry-run tooling for real families (duplicate and missing-link detection, never matching by name) is not written.
+- ~~Backfill/migration dry-run tooling for real families (duplicate and missing-link detection, never matching by name) is not written.~~
+  **BUILT 2026-11-05** as `npm run backfill:check` (launch checklist 3.3): a pure checker with its own tests, reading one file and
+  writing nothing, so a student with no owning family, or a duplicate or orphaned second-guardian link, is found before any family is
+  loaded, and every value is checked against the database's own limits. It never matches by name — a surname that looks like a family
+  is reported and left unlinked. `docs/BACKFILL.md`. The load stays with 3.2.8 and the admin screens; second guardians have no admin
+  screen yet and are recorded at sign-off.
 - Staff-side suspension/revocation of a learner has store support but no screen; invitation emails are not sent by the app (link shown once).
 - ~~The staff dashboards' per-role scoping on the SQL provider was not re-audited page by page.~~ **DONE 2026-11-04:** audited page by page on the SQL
   provider on the real stack, with two families and two tutors, including guessed ids in the URL, and written up in `docs/SCOPING_AUDIT.md`

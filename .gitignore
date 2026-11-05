@@ -75,3 +75,7 @@ experiments/nemotron-voicechat/.env.example
 docs/screenshots/website-review/
 docs/screenshots.zip
 apps/web/scripts/website-review.mjs
+
+# Supabase CLI local state (branch name, cached project ref and versions): per machine, never source.
+supabase/.branches/
+supabase/.temp/
