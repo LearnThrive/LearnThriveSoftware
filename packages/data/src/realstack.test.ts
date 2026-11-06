@@ -659,9 +659,10 @@ describe("the real local Supabase stack", { skip: ENABLED ? false : "set SUPABAS
       for (const [bucket, name] of [["library", "a.pdf"], ["library", "b.pdf"], ["chat-uploads", "a.png"]]) await call("DELETE", `/object/${bucket}/${folder}/${name}`, { key: s.secret });
     });
 
-    test("both buckets exist, are private, carry their limits, and storage.objects has row level security with NO policy for anyone", async () => {
-      const buckets = await own("select id, public, file_size_limit::int as lim, allowed_mime_types as mime from storage.buckets where id in ('library','chat-uploads') order by id");
+    test("the buckets exist, are private, carry their limits, and storage.objects has row level security with NO policy for anyone", async () => {
+      const buckets = await own("select id, public, file_size_limit::int as lim, allowed_mime_types as mime from storage.buckets where id in ('library','chat-uploads','careers') order by id");
       assert.deepEqual(buckets, [
+        { id: "careers", public: false, lim: 3 * 1024 * 1024, mime: ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "image/jpeg", "image/png"] },
         { id: "chat-uploads", public: false, lim: 15 * 1024 * 1024, mime: ["image/jpeg", "image/png", "application/pdf"] },
         { id: "library", public: false, lim: 25 * 1024 * 1024, mime: ["application/pdf"] },
       ]);
@@ -679,6 +680,26 @@ describe("the real local Supabase stack", { skip: ENABLED ? false : "set SUPABAS
       assert.equal((await put("chat-uploads", `${folder}/a.gif`, new Uint8Array([71, 73, 70, 56]), "image/gif")).body.statusCode, "415", "chat-uploads takes JPEG, PNG and PDF only");
     });
 
+    test("careers takes exactly what the apply route stores: PDF, Word, JPEG and PNG up to 3 MB, and nothing else", async () => {
+      // The content types the route sends (apps/web/src/app/api/careers/apply/route.ts, STORED). A mismatch here would turn real
+      // applications away, so each is put for real and then removed.
+      const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+      const accepted: Array<[string, string]> = [["a.pdf", "application/pdf"], ["a.docx", DOCX], ["a.jpg", "image/jpeg"], ["a.png", "image/png"]];
+      for (const [name, type] of accepted) {
+        const r = await put("careers", `${folder}/${name}`, PDF, type);
+        assert.equal(r.status, 200, `${type}: ${JSON.stringify(r.body).slice(0, 120)}`);
+      }
+      assert.equal((await put("careers", `${folder}/x.txt`, PDF, "text/plain")).body.statusCode, "415", "careers refuses other types");
+      const big = new Uint8Array(3 * 1024 * 1024 + 1024);
+      big.set(PDF);
+      assert.equal((await put("careers", `${folder}/big.pdf`, big, "application/pdf")).body.statusCode, "413", "and anything over 3 MB");
+      // The server reads it back the way the file route does: a signed link made for the request.
+      const made = await sign("careers", `${folder}/a.pdf`, 60);
+      assert.equal(made.status, 200);
+      assert.equal((await fetch(`${s.api}/storage/v1${made.body.signedURL}`)).status, 200);
+      for (const [name] of accepted) await call("DELETE", `/object/careers/${folder}/${name}`, { key: s.secret });
+    });
+
     test("the bucket enforces its size limit: just over 25 MB is refused for the library", async () => {
       const big = new Uint8Array(25 * 1024 * 1024 + 1024);
       big.set(PDF);
@@ -688,7 +709,7 @@ describe("the real local Supabase stack", { skip: ENABLED ? false : "set SUPABAS
 
     test("anonymous callers and signed-in people can neither list, read, write, delete, move nor sign: the bucket looks empty and closed", async () => {
       for (const [who, token] of [["anon", null], ["alice", as("alice")], ["admin", as("admin")]] as const) {
-        for (const bucket of ["library", "chat-uploads"]) {
+        for (const bucket of ["library", "chat-uploads", "careers"]) {
           const list = await call("POST", `/object/list/${bucket}`, { token, json: { prefix: folder, limit: 100 } });
           assert.ok(list.status === 200 && Array.isArray(list.body) && list.body.length === 0, `${who} listing ${bucket}: ${list.status} ${JSON.stringify(list.body).slice(0, 100)}`);
         }
