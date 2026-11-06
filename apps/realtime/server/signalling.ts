@@ -15,6 +15,7 @@ import type {
   JoinedRoom, MediaState, Participant, ParticipantRole, PollState, PollVisibility, RoomSettings, RoomTimerState,
   ServerToClientEvents, SfuPublication, SfuTrackInfo, SignalCandidate, SignalDescription, TimerMode, UnderstandingCheckState, UnderstandingStatus,
 } from '@learnthrive/shared/protocol';
+import { clientAddress } from './clientAddress';
 import { logOutcome } from './log';
 import { createSfuService, sfuFromEnv, type SfuApi } from './sfu';
 
@@ -283,7 +284,8 @@ export function createSignallingServer(options?: {
     const keyId = process.env.CLOUDFLARE_TURN_KEY_ID?.trim();
     const apiToken = process.env.CLOUDFLARE_TURN_API_TOKEN?.trim();
     if (!keyId || !apiToken) { response.status(503).json({ error: 'TURN is not configured on this server.' }); return; }
-    if (!turnRateLimiter.allow(request.ip ?? 'unknown')) {
+    // Not request.ip: behind Render's proxy that is the proxy's address, which put every visitor in one bucket (clientAddress.ts).
+    if (!turnRateLimiter.allow(clientAddress(request.headers, request.socket.remoteAddress))) {
       logOutcome('classroom-turn', 'rate_limited');
       response.status(429).json({ error: 'Too many TURN credential requests. Please slow down.' });
       return;
