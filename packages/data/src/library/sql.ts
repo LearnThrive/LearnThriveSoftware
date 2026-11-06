@@ -426,6 +426,10 @@ export class SqlLibraryStore implements LibraryStore {
       const rows = await this.db.query<Row>(`${LEARNER_SELECT} where l.student_id = $1`, [studentId]);
       return rows[0] ? toLearner(rows[0]) : null;
     },
+    learnerLogin: async (studentId) => {
+      const rows = await this.db.query<Row>(`select l.profile_id, l.status from public.learner_identities l where l.student_id = $1`, [studentId]);
+      return rows[0] ? { profileId: rows[0].profile_id, status: rows[0].status as LinkStatus } : null;
+    },
     createInvitation: async (input) => {
       const rows = await this.db.query<Row>(`select * from public.create_learner_invitation($1, $2, $3, $4, $5, $6, $7, $8)`, [
         input.clientId, input.studentId, input.invitedBy, input.email, input.tokenHash, input.expiresAt, input.maxPerDay, input.now,

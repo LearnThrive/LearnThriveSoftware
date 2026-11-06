@@ -17,6 +17,7 @@ import { LoginCard } from "@/components/people/LoginCard";
 import { CreateLoginForm, UsernameField } from "@/components/people/LoginForms";
 import { PurgePanel } from "@/components/people/PurgePanel";
 import { createLearnerLoginAction } from "@/lib/actions/accounts";
+import { learnerLogin } from "@/lib/account/loginDetails";
 import { purgeStudentAction } from "@/lib/actions/purge";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -34,13 +35,18 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
   const student = await data.students.get(id);
   if (!student) notFound();
 
-  const [clients, assignments, lessons, tutors, purge] = await Promise.all([
+  const [clients, assignments, lessons, tutors, purge, login] = await Promise.all([
     data.students.clientsFor(student.id),
     data.assignments.forStudent(student.id),
     data.lessons.forStudent(student.id),
     data.tutors.list(),
     data.purges.previewStudent(student.id),
+    learnerLogin(student.id),
   ]);
+  // `student.userId` names only an active login, so a login the parent suspended is found here instead. A removed one counts as none: the
+  // student can be given a new login. The fallback is the development seed, whose learners have no login record of their own.
+  const removed = login?.status === "revoked";
+  const loginProfileId = login ? (removed ? undefined : login.profileId) : student.userId;
 
   const nowIso = new Date().toISOString();
   const tutorNames = new Map(tutors.map((tutor) => [tutor.id, tutor.name]));
@@ -147,15 +153,16 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
 
         <div className="stack">
           <LoginCard
-            profileId={student.userId}
+            profileId={loginProfileId}
             returnTo={`/dashboard/admin/students/${student.id}`}
             childLinked
+            learner={login && !removed ? { studentId: student.id, status: login.status } : undefined}
             noLogin={
               <CreateLoginForm
                 action={createLearnerLoginAction}
                 hidden={{ studentId: student.id }}
                 submitLabel="Create login"
-                intro="This student has no login of their own. It will be linked to their parent, whose email receives its password resets."
+                intro={`${removed ? "This student's last login was removed." : "This student has no login of their own."} A new one will be linked to their parent, whose email receives its password resets.`}
               >
                 <UsernameField id="student-login-username" required={false} hint="Leave empty to generate one. Never use a child's name or school." />
               </CreateLoginForm>

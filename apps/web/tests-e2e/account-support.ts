@@ -10,14 +10,15 @@ const WCAG22 = ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'];
 export const PASSWORD = 'correct horse battery staple';
 export const ACCESS = 'learnthrive_acct';
 
-export async function expectAxeClean(page: Page, label: string) {
+/** `within` limits the check to one part of the page (a CSS selector), for a test about that part alone. */
+export async function expectAxeClean(page: Page, label: string, within?: string) {
   // The shell fades in; axe measures contrast against whatever is on screen, so let the entrance finish first.
   await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== 'running'));
   await page.addScriptTag({ content: AXE_SOURCE });
-  const results = (await page.evaluate(async (tags) => {
+  const results = (await page.evaluate(async ({ tags, within }) => {
     // @ts-expect-error injected global, no types installed for the browser build
-    return await window.axe.run(document, { runOnly: { type: 'tag', values: tags } });
-  }, WCAG22)) as { violations: Array<{ id: string; impact: string | null; help: string; nodes: Array<{ target: string[] }> }> };
+    return await window.axe.run(within ? { include: [within] } : document, { runOnly: { type: 'tag', values: tags } });
+  }, { tags: WCAG22, within })) as { violations: Array<{ id: string; impact: string | null; help: string; nodes: Array<{ target: string[] }> }> };
   const lines = results.violations.map((v) => `[${v.impact}] ${v.id}: ${v.help}\n  ${v.nodes.map((n) => n.target.join(' ')).join('\n  ')}`);
   expect(results.violations, `${label}: ${results.violations.length} violation(s)\n\n${lines.join('\n\n')}`).toEqual([]);
 }
