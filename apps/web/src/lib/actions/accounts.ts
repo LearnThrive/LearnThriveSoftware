@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { generateChildUsername } from "@/lib/account/credentials";
-import { changeLinkedEmail, createLogin, issueTemporaryPassword, setLoginDisabled, type Created, type Refused } from "@/lib/account/provision";
+import { changeLearnerLogin, changeLinkedEmail, createLogin, issueTemporaryPassword, setLoginDisabled, type Created, type LearnerLoginChange, type Refused } from "@/lib/account/provision";
 import { accountRuntime, type AccountRuntime } from "@/lib/account/runtime";
 import { parseUsername } from "@/lib/account/username";
 import { parseEmail } from "@/lib/account/validation";
@@ -147,6 +147,21 @@ export async function setLoginDisabledAction(formData: FormData): Promise<void> 
   if (profileId === admin.id) back(path, "You cannot disable your own login");
   const done = rt && ID.test(profileId) ? await setLoginDisabled(rt, profileId, disable, admin.id) : false;
   back(path, !done ? "That could not be changed" : disable ? "Login disabled" : "Login enabled");
+}
+
+const LEARNER_CHANGES: Record<LearnerLoginChange, string> = { suspend: "Login suspended", restore: "Login restored", remove: "Login removed" };
+
+/** A child's login: suspend, restore or remove it (launch checklist 3.5). Removing it needs the box ticked, which the form makes required. */
+export async function setLearnerLoginAction(formData: FormData): Promise<void> {
+  const admin = await requireRole(["ADMIN"]);
+  const rt = await runtime();
+  const path = returnPath(formData);
+  const studentId = field(formData, "studentId");
+  const change = field(formData, "change");
+  if (change !== "suspend" && change !== "restore" && change !== "remove") back(path, "That could not be changed");
+  if (change === "remove" && field(formData, "confirm") !== "yes") back(path, "Tick the box to confirm the login should be removed");
+  const done = rt && ID.test(studentId) ? await changeLearnerLogin(rt, studentId, change, admin.id) : false;
+  back(path, done ? LEARNER_CHANGES[change] : "That could not be changed");
 }
 
 export async function changeLinkedEmailAction(formData: FormData): Promise<void> {

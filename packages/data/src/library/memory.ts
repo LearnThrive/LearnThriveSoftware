@@ -438,6 +438,10 @@ export class InMemoryLibraryStore implements LibraryStore {
       const identity = this.identities.get(studentId);
       return identity ? this.contextFor(identity) : null;
     },
+    learnerLogin: async (studentId) => {
+      const identity = this.identities.get(studentId);
+      return identity ? { profileId: identity.profileId, status: identity.status } : null;
+    },
     createInvitation: async (input) => {
       const student = this.students.get(input.studentId);
       if (!student || !student.active || student.clientId !== input.clientId || !this.activeLink(input.clientId, input.studentId)) return { ok: false, reason: "not_found" };

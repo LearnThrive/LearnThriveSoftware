@@ -215,18 +215,22 @@ export function identityContract(name: string, make: () => Promise<{ harness: Id
 
     test("suspending, restoring and revoking a learner is audited and takes effect at once; revoked can be re-invited", async () => {
       const f = await family();
+      assert.equal(await store.identity.learnerLogin(f.studentId), null, "no login yet");
       const { plain } = await invite(f);
       const learner = await h.profile({ adult: false });
       assert.equal((await accept(plain, learner, email())).ok, true);
       const set = (status: LinkStatus, who: string | null = f.clientId) => store.identity.setLearnerStatus({ studentId: f.studentId, clientId: who, status, actor: f.guardian, now: now() });
+      assert.deepEqual(await store.identity.learnerLogin(f.studentId), { profileId: learner, status: "active" });
       assert.equal(await set("suspended"), true);
       assert.equal((await store.accounts.getAccount(learner))?.learner?.status, "suspended");
+      assert.deepEqual(await store.identity.learnerLogin(f.studentId), { profileId: learner, status: "suspended" }, "an administrator still finds a suspended login");
       assert.equal(await set("active"), true);
       assert.equal((await store.accounts.getAccount(learner))?.learner?.status, "active");
       assert.equal(await set("revoked", null), true, "staff (no family) may too");
       const after = await store.accounts.getAccount(learner);
       assert.equal(after?.learner?.status, "revoked");
       assert.equal(after?.learner?.accessMode, "none", "revoking the login closes the way in");
+      assert.deepEqual(await store.identity.learnerLogin(f.studentId), { profileId: learner, status: "revoked" });
       assert.deepEqual((await store.identity.auditFor(f.studentId)).map((a) => a.action), ["learner_revoked", "learner_restored", "learner_suspended", "invitation_accepted", "invitation_created"]);
       assert.equal(JSON.stringify(await store.identity.auditFor(f.studentId)).includes("@"), false, "the audit trail holds ids and actions, never an address");
       // The student can be invited again and bound to a NEW login; the revoked one stays revoked and cannot be reused.
@@ -235,6 +239,7 @@ export function identityContract(name: string, make: () => Promise<{ harness: Id
       const fresh = await h.profile({ adult: false });
       assert.equal((await accept(next.plain, fresh, email())).ok, true);
       assert.equal((await store.accounts.getAccount(fresh))?.learner?.status, "active");
+      assert.deepEqual(await store.identity.learnerLogin(f.studentId), { profileId: fresh, status: "active" }, "the new login replaces the revoked one");
       const reuse = await invite(f);
       assert.deepEqual(reuse.made, { ok: false, reason: "already_learner" });
     });

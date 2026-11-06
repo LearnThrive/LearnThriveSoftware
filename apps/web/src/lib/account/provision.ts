@@ -103,6 +103,22 @@ export async function setLoginDisabled(rt: AccountRuntime, profileId: string, di
   return true;
 }
 
+export type LearnerLoginChange = "suspend" | "restore" | "remove";
+
+/**
+ * Staff suspend, restore or remove a child's login (launch checklist 3.5), the same switch the parent has, so each sees what the other did.
+ * Suspended: they can still sign in but nothing opens, and either side can restore it. Removed: final, the old username is disabled as well
+ * so it cannot sign in at all, and a new login can be made for the student. A removed login is never brought back. Audited by the store.
+ */
+export async function changeLearnerLogin(rt: AccountRuntime, studentId: string, change: LearnerLoginChange, actor: string): Promise<boolean> {
+  const login = await rt.store.identity.learnerLogin(studentId);
+  if (!login || login.status === "revoked") return false;
+  const status = change === "suspend" ? "suspended" : change === "restore" ? "active" : "revoked";
+  if (!(await rt.store.identity.setLearnerStatus({ studentId, clientId: null, status, actor, now: new Date() }))) return false;
+  if (status === "revoked" && rt.admin) await setLoginDisabled(rt, login.profileId, true, actor);
+  return true;
+}
+
 /** Corrects a linked address. A parent's change carries to their children, whose resets go to it. Audited: ids only, never the address. */
 export async function changeLinkedEmail(rt: AccountRuntime, profileId: string, email: string, actor: string): Promise<Refused | { status: "changed" }> {
   const problem = emailError(email);
