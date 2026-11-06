@@ -150,6 +150,12 @@ test.describe('development surfaces do not exist in production', () => {
   test('the dev reset endpoint is a 404', async ({ request }) => {
     expect((await request.post('/api/dev/reset')).status()).toBe(404);
   });
+  test('the dev careers seed and the admin application routes are a 404 to a visitor', async ({ request }) => {
+    expect((await request.post('/api/dev/careers-seed')).status()).toBe(404);
+    const id = '00000000-0000-4000-8000-000000000001';
+    expect((await request.get(`/api/admin/careers/${id}/export`)).status()).toBe(404);
+    expect((await request.get(`/api/admin/careers/${id}/files/${id}`)).status()).toBe(404);
+  });
 });
 
 test.describe('crawlers and operations', () => {

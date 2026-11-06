@@ -1,17 +1,18 @@
 # Retention and deletion: what is kept, where, and who deletes it
 
-For the owners. The website stores **nothing** about applications, reconfirmations, subject requests, Library waitlist sign-ups or enquiries: each is sent by email and then handled by hand. So deleting means deleting emails and copies. This page sets out the rules you chose, where each kind of data actually lives, and a log to keep. It is a draft for the owners and their adviser to approve, not legal advice.
+For the owners. **Online tutor applications are stored in the app** (launch checklist 3.12, see "Tutor applications in the app" below) and are deleted from its admin screen. The website stores **nothing** about reconfirmations, subject requests, Library waitlist sign-ups or enquiries, or about an application someone emails in: each is sent by email and then handled by hand, so deleting those means deleting emails and copies. This page sets out the rules you chose, where each kind of data actually lives, and a log to keep. It is a draft for the owners and their adviser to approve, not legal advice.
 
 ## Where the data is
 
 | Place | What is in it |
 | --- | --- |
-| The **info@ mailbox on Google Workspace** (or the careers address, when there is one) | Every application with its attachments, every reconfirmation, every subject request, Library waitlist sign-up and enquiry. This is the main place. (Waitlist sign-ups go to `LIBRARY_WAITLIST_EMAIL`, then `ENQUIRY_EMAIL`, then the site address. Someone who uses the page's "email us" link instead of the form writes to the site address, so check that mailbox too.) |
-| **Resend's sending log** | A copy of each email the website sent through Resend, including the applicant's files attached to the message to you. Check Resend's own retention setting and what you can delete from its dashboard: it was not verified here. |
+| **The app: Supabase (London)** | Every online tutor application: the answers, the agreement record, the files (private `careers` bucket), internal notes, and the history of who changed or opened what. Administrators only, at `/dashboard/admin/careers`. |
+| The **info@ mailbox on Google Workspace** (or the careers address, when there is one) | A short notice that an online application arrived (reference and role only, no personal content); any application emailed in with its attachments, and applications from before the app stored them; every reconfirmation, every subject request, Library waitlist sign-up and enquiry. This is the main place. (Waitlist sign-ups go to `LIBRARY_WAITLIST_EMAIL`, then `ENQUIRY_EMAIL`, then the site address. Someone who uses the page's "email us" link instead of the form writes to the site address, so check that mailbox too.) |
+| **Resend's sending log** | A copy of each email the website sent through Resend: the applicant's confirmation and the notice to you (neither carries files), and, for applications from before the app stored them, the applicant's files attached to the message to you. Check Resend's own retention setting and what you can delete from its dashboard: it was not verified here. |
 | Your **spreadsheets and devices** | The tutor list, the reconfirmation tracker, the subject-request tally, anything downloaded or forwarded. |
 | **Render's logs** | Only outcomes: a reference, a status, counts and sizes. No names, addresses, answers or file content. |
 
-Holding identity scans in a shared mailbox is a real security risk. Limit who can open it, use a strong password and two-step verification on every account that can, do not forward identity documents, and end the practice when a proper secure store exists.
+Holding identity scans in a shared mailbox is a real security risk. Online applications no longer put them there. For anything still in the mailbox from before, limit who can open it, use a strong password and two-step verification on every account that can, do not forward identity documents, and delete them on the schedule below.
 
 ## The rules
 
@@ -41,6 +42,18 @@ The privacy notices (`/careers/privacy`, `/privacy`) state the same periods. If 
 Keep a spreadsheet with one row per person or batch: who, what kind of data, the message(s) it is in (date and subject), the date it arrived, the date it is due for deletion and why, the date it was deleted, who deleted it, and the places checked (mailbox, deleted items, Resend, other copies).
 
 For tutors with identity documents on file, add a row when they start and **a due date of 12 months after they stop working with LearnThrive** the day they stop. For unsuccessful applicants the due date is 6 months after the decision, and 12 months for an application kept for future roles. When someone asks you to delete their information, or withdraws, do it promptly and say so; keep only what the law or a safeguarding duty requires you to keep.
+
+## Tutor applications in the app (launch checklist 3.12)
+
+An online application is stored, not emailed: migration `0020_careers.sql`, the private `careers` bucket, and the screens at `/dashboard/admin/careers` (administrators only). The rules above apply unchanged; what changes is where you do it.
+
+- **The clock starts from the status.** Setting an application to *Unsuccessful* or *Withdrawn* records the decision date and works out the deletion dates from it (6 months; 12 if they asked to be kept for future roles; identity documents at 6 months either way). Reopening it clears them. An *Accepted* applicant becomes a tutor, so their application has no automatic date: when they stop working with LearnThrive, delete it from its page (their identity documents 12 months after they stop).
+- **Monthly.** The top of the Applications page lists what is due within the next 31 days: whole applications, and applications whose identity documents are due. Delete each from its page, choosing *Its retention period has ended*. Nothing is deleted automatically.
+- **Identity documents.** Once you have checked them, use *Record identity as seen* and then *Delete identity documents*: the app keeps who saw them and when, never a copy.
+- **DBS.** *Record DBS as seen* keeps only how (certificate or Update Service), the date and who. Never note a certificate number.
+- **A request to see or delete.** *Export (subject access)* downloads everything held about the applicant as one file (their files are downloaded separately from the same page). *Delete for good* with the reason *The applicant asked us to delete it* removes the answers, the files, the notes and the history together.
+- **What deletion leaves behind.** A log row in `careers_deletions`: the date, the administrator, the reason and how many files. Never the reference, the name or the email. A database backup keeps a copy until it ages out; a restore must be followed by deleting again whatever had been deleted since (`docs/SUPABASE_RUNBOOK.md`).
+- **Every file opened is recorded** against the application, with who opened it, and shown in its History.
 
 ## A note on DBS information
 

@@ -1,5 +1,8 @@
+import { randomUUID } from "node:crypto";
+import type { ApplicationFileKind, NewApplicationFile } from "@learnthrive/data/careers";
 import { buildAgreementRecord } from "@/lib/agreement-record";
-import { buildConfirmationEmail, buildInternalEmail, type DocumentSummary } from "@/lib/careers-apply-email";
+import { buildConfirmationEmail, buildNewApplicationNotice } from "@/lib/careers-apply-email";
+import { careersFiles, careersStore } from "@/lib/careers/store";
 import { applicationsOpen, careersConfig, maxApplicationRequestBytes } from "@/lib/careers-config";
 import {
   checkFileBasics,
@@ -15,7 +18,7 @@ import {
 import { inspectFile } from "@/lib/careers-files-server";
 import { parseApplication, validateApplication } from "@/lib/careers-validation";
 import { openRoles } from "@/lib/careers";
-import { createMailer, destinationFor, readEmailConfig, sendEmail, type EmailAttachment } from "@/lib/email";
+import { createMailer, destinationFor, readEmailConfig, sendEmail } from "@/lib/email";
 import { asString } from "@/lib/forms-common";
 import { humanCheckAvailable, verifyHumanCheck } from "@/lib/human-check";
 import { SlidingWindowLimiter, clientAddress } from "@/lib/rate-limit";
@@ -24,20 +27,22 @@ import { currentAgreement } from "@/lib/safeguarding-agreement";
 import { siteConfig } from "@/lib/site";
 
 /**
- * Receives a tutor application: fields and files in one multipart post (POST /api/careers/apply), emails
- * them to the hiring team with the files attached, and confirms to the applicant. There is no database and
- * nothing is written to disk: the files live in memory for the length of the request.
+ * Receives a tutor application: fields and files in one multipart post (POST /api/careers/apply), stores them
+ * (launch checklist 3.12: the files in the private `careers` bucket, the answers in Postgres), tells the hiring
+ * team that one has arrived WITHOUT any personal content, and confirms to the applicant. Administrators read it
+ * in the dashboard (/dashboard/admin/careers).
  *
  * Order matters. Cheap refusals come first (is it open, is the origin right, is the visitor within their
- * rate limit, is email configured at all), so nothing is read for a request that cannot succeed. Then the
- * body is read with a hard size limit, then the checks that screen out scripts (the honeypot, the time taken,
- * the human check), then the answers and files are validated again from scratch, because everything the
- * browser checked can be bypassed. Only then is anything sent.
+ * rate limit, are storage and email configured at all), so nothing is read for a request that cannot succeed.
+ * Then the body is read with a hard size limit, then the checks that screen out scripts (the honeypot, the time
+ * taken, the human check), then the answers and files are validated again from scratch, because everything the
+ * browser checked can be bypassed. Only then is anything stored.
  *
- * The internal email goes first. If it fails the visitor is told, and no confirmation is sent, so nobody
- * is told their application arrived when it did not. If the confirmation then fails, the application still
- * counts as received. Logs carry the reference, the outcome and sizes only: never a name, an address, an
- * answer or file content.
+ * The files are stored first, then the record (one statement: the application, its file rows and its history
+ * together). If either fails, the files already stored are removed and the visitor is told nothing was sent, so
+ * nobody is told their application arrived when it did not and no file is left without a record. The two emails
+ * come after: if they fail, the application is still received, because it is stored. Logs carry the reference,
+ * the outcome and sizes only: never a name, an address, an answer, a file name or file content.
  */
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -94,10 +99,13 @@ export async function POST(request: Request) {
     }
 
     // In production this fails closed: no key or no verified sender is a friendly "email us", never a send
-    // from a shared address. Checked before the body is read so a large upload is never accepted for nothing.
+    // from a shared address; nor is an application taken with nowhere to keep it. Checked before the body is
+    // read so a large upload is never accepted for nothing.
     const mail = readEmailConfig();
-    if (!mail.ok || !humanCheckAvailable()) {
-      logOutcome("careers", "unavailable", { reason: mail.ok ? "no-human-check" : mail.reason });
+    const store = careersStore();
+    const files = careersFiles();
+    if (!mail.ok || !humanCheckAvailable() || !store || !files) {
+      logOutcome("careers", "unavailable", { reason: !mail.ok ? mail.reason : !humanCheckAvailable() ? "no-human-check" : "no-storage" });
       return jsonResponse(503, { code: "unavailable", error: `Applications are not being accepted right now. ${EMAIL_FALLBACK}` });
     }
 
@@ -162,34 +170,54 @@ export async function POST(request: Request) {
       return jsonResponse(422, { error: upload.message, fileErrors: upload.fileErrors });
     }
 
-    // Send.
+    // Store.
     const now = new Date();
     const reference = newReference("LT-APP", now);
+    const applicationId = randomUUID();
     const record = buildAgreementRecord(currentAgreement, {
       typedName: fields.typedName,
       confirmedParts: fields.agreedParts,
       understandingPassed: careersConfig.understandingCheck.applications ? true : null,
       receivedAt: now,
     });
-    const documents: DocumentSummary[] = upload.items.map((item) => ({ label: item.label, filename: item.filename, size: item.content.length, sensitive: item.sensitive }));
-    const attachments: EmailAttachment[] = upload.items.map((item) => ({ filename: item.filename, content: item.content }));
-
-    const mailer = createMailer(mail.config);
-    const internal = buildInternalEmail({ reference, fields, documents, record });
-    const sent = await sendEmail(mailer, {
-      from: mail.config.fromAddress,
-      to: destinationFor("careers"),
-      replyTo: fields.email,
-      subject: internal.subject,
-      html: internal.html,
-      text: internal.text,
-      attachments,
+    const stored: NewApplicationFile[] = upload.items.map((item) => {
+      const fileId = randomUUID();
+      return {
+        id: fileId, kind: item.kind, label: item.label, documentType: item.documentType, sensitive: item.sensitive, filename: item.filename,
+        contentType: item.contentType, sizeBytes: item.content.length, storagePath: `${applicationId}/${fileId}.${item.storedExtension}`,
+      };
     });
-    if (!sent.ok) {
-      logOutcome("careers", "send_failed", { reference, reason: sent.reason, files: attachments.length });
-      return jsonResponse(502, { error: `We could not send your application just now. Nothing has been sent. Please try again shortly, or email ${siteConfig.email}.` });
+    const bytes = upload.items.reduce((sum, item) => sum + item.content.length, 0);
+
+    const written: string[] = [];
+    try {
+      for (const [index, file] of stored.entries()) {
+        await files.put(file.storagePath, upload.items[index]!.content, file.contentType);
+        written.push(file.storagePath);
+      }
+      // The quiz answers are not kept: the agreement record already says the check was passed.
+      const answers: Record<string, unknown> = { ...fields };
+      delete answers.understanding;
+      await store.create({
+        id: applicationId, reference, roleSlug: role.slug, firstName: fields.firstName, lastName: fields.lastName, email: fields.email, talentPool: fields.talentPool,
+        answers, agreement: record as unknown as Record<string, unknown>, files: stored,
+      });
+    } catch {
+      for (const path of written) await files.remove(path).catch(() => undefined);
+      logOutcome("careers", "store_failed", { reference, files: stored.length, stored: written.length });
+      return jsonResponse(502, { error: `We could not save your application just now. Nothing has been sent. Please try again shortly, or email ${siteConfig.email}.` });
     }
 
+    // Tell. The application is already safe, so a failed email is logged, not reported as a failure.
+    const mailer = createMailer(mail.config);
+    const notice = buildNewApplicationNotice({ reference, roleSlug: role.slug, applicationId });
+    const noticed = await sendEmail(mailer, {
+      from: mail.config.fromAddress,
+      to: destinationFor("careers"),
+      subject: notice.subject,
+      html: notice.html,
+      text: notice.text,
+    });
     const confirmation = buildConfirmationEmail({ reference, firstName: fields.firstName, roleSlug: role.slug, record });
     const confirmed = await sendEmail(mailer, {
       from: mail.config.fromAddress,
@@ -199,10 +227,11 @@ export async function POST(request: Request) {
       html: confirmation.html,
       text: confirmation.text,
     });
-    logOutcome("careers", "sent", {
+    logOutcome("careers", "stored", {
       reference,
-      files: attachments.length,
-      bytes: attachments.reduce((sum, item) => sum + item.content.length, 0),
+      files: stored.length,
+      bytes,
+      notice: noticed.ok ? "sent" : "failed",
       confirmation: confirmed.ok ? "sent" : "failed",
     });
 
@@ -224,11 +253,28 @@ interface FileErrors {
 }
 
 interface Upload {
+  kind: ApplicationFileKind;
   label: string;
+  /** The form's value for a supporting document ("identity", "qualification"...), else null. */
+  documentType: string | null;
+  /** The cleaned name the reviewer sees. Never part of the storage path. */
   filename: string;
   content: Buffer;
+  contentType: string;
+  /** The extension the stored object gets: pdf, docx, jpg or png. */
+  storedExtension: "pdf" | "docx" | "jpg" | "png";
   sensitive: boolean;
 }
+
+const STORED: Record<string, { contentType: string; storedExtension: Upload["storedExtension"] }> = {
+  pdf: { contentType: "application/pdf", storedExtension: "pdf" },
+  docx: { contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", storedExtension: "docx" },
+  jpg: { contentType: "image/jpeg", storedExtension: "jpg" },
+  jpeg: { contentType: "image/jpeg", storedExtension: "jpg" },
+  png: { contentType: "image/png", storedExtension: "png" },
+};
+
+const KIND: Record<FileSlot, ApplicationFileKind> = { cv: "CV", coverLetterFile: "COVER_LETTER", supporting: "SUPPORTING" };
 
 type UploadResult = { ok: true; items: Upload[] } | { ok: false; message: string; fileErrors: FileErrors };
 
@@ -253,10 +299,12 @@ async function readUploads(form: FormData, documentTypes: string[]): Promise<Upl
 
   const types = documentTypes as SupportingDocumentType[];
   const typeLabel = (type: SupportingDocumentType) => SUPPORTING_DOCUMENT_TYPES.find((entry) => entry.value === type)?.label ?? "Document";
-  const slots: Array<{ slot: FileSlot; file: File; label: string; sensitive: boolean; position: number }> = [
-    { slot: "cv", file: cv, label: "CV", sensitive: false, position: -1 },
-    ...(coverLetter ? [{ slot: "coverLetterFile" as const, file: coverLetter, label: "Cover letter", sensitive: false, position: -1 }] : []),
-    ...supporting.map((file, position) => ({ slot: "supporting" as const, file, label: typeLabel(types[position]), sensitive: isSensitiveDocumentType(types[position]), position })),
+  const slots: Array<{ slot: FileSlot; file: File; label: string; documentType: string | null; sensitive: boolean; position: number }> = [
+    { slot: "cv", file: cv, label: "CV", documentType: null, sensitive: false, position: -1 },
+    ...(coverLetter ? [{ slot: "coverLetterFile" as const, file: coverLetter, label: "Cover letter", documentType: null, sensitive: false, position: -1 }] : []),
+    ...supporting.map((file, position) => ({
+      slot: "supporting" as const, file, label: typeLabel(types[position]!), documentType: types[position]! as string, sensitive: isSensitiveDocumentType(types[position]!), position,
+    })),
   ];
 
   const fileErrors: FileErrors = {};
@@ -289,10 +337,17 @@ async function readUploads(form: FormData, documentTypes: string[]): Promise<Upl
       continue;
     }
     const clean = sanitiseFileName(entry.file.name);
-    let filename = `${entry.label} - ${clean.base}.${extensionOf(entry.file.name)}`;
-    for (let n = 2; taken.has(filename.toLowerCase()); n += 1) filename = `${entry.label} - ${clean.base} (${n}).${extensionOf(entry.file.name)}`;
+    const extension = extensionOf(entry.file.name);
+    const stored = STORED[extension];
+    if (!stored) {
+      // inspectFile has already refused any other extension; this is the belt to its braces.
+      note(entry, "This file type is not accepted.");
+      continue;
+    }
+    let filename = `${entry.label} - ${clean.base}.${extension}`;
+    for (let n = 2; taken.has(filename.toLowerCase()); n += 1) filename = `${entry.label} - ${clean.base} (${n}).${extension}`;
     taken.add(filename.toLowerCase());
-    items.push({ label: entry.label, filename, content, sensitive: entry.sensitive });
+    items.push({ kind: KIND[entry.slot], label: entry.label, documentType: entry.documentType, filename, content, ...stored, sensitive: entry.sensitive });
   }
   if (Object.keys(fileErrors).length > 0) return { ok: false, message: "One of your files could not be accepted.", fileErrors };
   return { ok: true, items };
