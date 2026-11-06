@@ -116,14 +116,17 @@ None of these can be defaulted by an engineer. For each, write the answer and th
 - **Why.** Production is deployed only from a clean, pushed `main`. At the time of writing there are uncommitted changes (assistant thinking and essay-prompt edits among them) and untracked brief files at the repo root.
 - **Do.** Review `git status`; commit work in sensible commits (stage paths, never `git add -A`); leave the root briefs (`*_Prompt.md`, `plan*.md`, `CAREERS_*.md`) untracked or move them as decided in 0.8; make sure no `.env*` is staged.
 - **Done when.** `git status` is clean and the branch is pushed.
+- **Done (6 November 2026).** Everything up to pull request 12 is merged to `main`, and `git status` is clean: the root drafts of pull-request descriptions (`PR-*.md`) and downloaded CI job logs are now gitignored rather than deleted.
 
 ### 1.2 Decide the remote and branch rules
 - The repo has two remotes (`origin` on GitHub, `gitlab`). Pick the one Render deploys from, protect `main`, require CI to pass, and merge by pull request.
+- **Open (owner, in GitHub's settings).** `git remote -v` shows only `origin` (GitHub, `LearnThrive/LearnThriveSoftware`); there is no `gitlab` remote in this checkout any more. Protecting `main` and requiring the `verify` job is a repository setting, done on GitHub's web page (there is no `gh` CLI here).
 
 ### 1.3 Run the whole quality gate on a clean checkout
 - **Do.** `npm ci`, then from the repo root `npm run typecheck`, `npm run lint`, `npm test`, `npm run build` (the build also builds `apps/classroom` and typechecks `apps/realtime`). For the web app: `npm run check:bundle --workspace=apps/web` against the production build, which also confirms no seed data or secret reaches the browser bundle. The ledger notes this was never run against a production build.
 - **Done when.** All pass; paste the counts into the release notes.
 - **Mostly evidenced (4 November 2026), on an existing checkout rather than a clean one.** From the repo root: typecheck clean, lint 0 errors (9 old warnings), `npm test` 1020 web and 322 data (1 skipped) with classroom and realtime green, `apps/classroom` and `apps/web` production builds both fine. **`check:bundle` ran against a production build for the first time**: 1371 browser-reachable files searched against 19 sentinel secrets, none present. **Still to do: the `npm ci` clean-checkout part**, which is the point of the task - CI does it on every run, which is some assurance, but it has not been done here. (Note that `check:bundle` builds into `.next-bundle-check` and Next appends that directory to `tsconfig.json`; do not commit that.)
+- **Done on a clean checkout (6 November 2026)**, a fresh worktree of `main` at pull request 12: `npm ci`, typecheck, lint (0 errors, 9 old warnings), both production builds and `check:bundle` (1371 browser files, 19 sentinel secrets, none present) all passed. `npm test` passed 1057 of 1058 web tests: `classroomSfu.test.mjs` "several joiners at once" waited a fixed 150 ms for three queued joiners, which a heavily loaded Windows machine missed (it passed 15 of 15 alone). It now waits until the third joiner lands (up to 3 s) with the same assertions, and passed 10 of 10 with four copies of the suite running beside it. Repeated after the Next 16.4.5 upgrade (1.5): typecheck, lint, 1058 web and 330 data tests, both builds, and `check:bundle` (1364 files, none present).
 
 ### 1.4 Prove the CI workflow on GitHub - DONE (4 November 2026)
 - **Done.** `.github/workflows/ci.yml` has executed on GitHub. The blocking `verify` job (lint, typecheck, unit tests, both builds, then the production smoke suite in Chromium, Firefox and WebKit against `serve.mjs`) went green on **pull requests 8 and 9**, and the main-only `e2e` job - the full dev-server Playwright suite, about 70 minutes - went green on **both merges to `main`**. Nothing environment-specific had to be fixed.
@@ -135,6 +138,10 @@ None of these can be defaulted by an engineer. For each, write the answer and th
 - Run `npm run env:docs --workspace=apps/web` so `docs/ENVIRONMENT.md` matches the registry.
 - Update the footer test and legal wording in the marketing site if that repo is retired by this launch (see 9.1).
 - Run `npm audit --omit=dev` and re-read the known exception: the findings are all through Excalidraw, which **is** reachable once the portal opens (the classroom whiteboard). Decide fix or accept, and record it.
+- **Done (6 November 2026), except the marketing-repo item (9.1).**
+  - **Mail host:** the domain's MX records point at Google (`aspmx.l.google.com`, SPF `include:_spf.google.com`) and its nameservers are IONOS's. So the mailbox is **Google Workspace**, and the premise above was the wrong way round: `legal-faqs.tsx`, `/privacy` and `/careers/privacy` said IONOS. They, `LEGAL_REVIEW.md`, `RENDER.md`, `RETENTION_AND_DELETION.md` and `LAWFUL_BASES.md` now say Google Workspace; `DEPLOYMENT.md` never named a host. The tests still keep Google Meet, Drive, Docs and Sheets off every page. **The legal reviewer should see the privacy-notice change.**
+  - **`.env.example`** regenerated (about forty dead assistant names gone; the Cloudflare SFU pair and `CLASSROOM_JOIN_SECRET` added). **`ENVIRONMENT.md`** was already current.
+  - **`npm audit`** was no longer just the Excalidraw exception: 21 findings, two of them **critical** in Next 16.3.8 (remote code execution). Branch `fix/audit-next-16.4.5` moves to Next 16.4.5 and applies the non-breaking fixes; the 12 left are all the Excalidraw chain, accepted and recorded in `DEPLOYMENT_READINESS.md`. CI's audit job is report-only (`continue-on-error`), which is why a critical went unnoticed: consider failing it at `--audit-level=critical`.
 
 ---
 
@@ -306,6 +313,7 @@ the SQL function did not do it.
 
 ### 3.9 Reset-demo-data safety check (required)
 - Confirm the admin "Reset demo data" button and `/api/dev/reset` cannot appear in production (they are `NODE_ENV`-guarded and the proxy 404s `/api/dev`); the production smoke suite must assert it.
+- **Done.** `tests-prod/smoke.spec.ts` asserts that `POST /api/dev/reset` answers 404 on the production server, and CI runs it on every pull request.
 
 ### 3.10 Tuition payments with Stripe (required; the largest build item)
 
@@ -603,7 +611,7 @@ Launch in two steps so the riskier part opens last.
 | Phase | What it proves | Status |
 | --- | --- | --- |
 | 0 Decisions | Everything only the owners can answer | open |
-| 1 Repo | Clean `main`, CI green on GitHub, bundle check | **1.4 done** (CI green on GitHub, 4 Nov 2026) and the bundle check run; 1.1, 1.2 and 1.5 open, and 1.3 still wants a clean `npm ci` checkout |
+| 1 Repo | Clean `main`, CI green on GitHub, bundle check | **1.1, 1.3, 1.4 and 1.5 done** (6 Nov 2026; the Next 16.4.5 security upgrade is its own pull request). **1.2 open**: protect `main` in GitHub's settings |
 | 2 Real stack | Tuition tables and identity work on real Supabase | **done locally (4 Nov 2026)**: 307 real-stack tests and 12 real-stack browser tests pass; scoping audit in `docs/SCOPING_AUDIT.md`. The reset email's Resend hop and the hosted project remain |
 | 3 Build gaps | Classroom served, onboarding path, backfill tool | open |
 | 3.10 Tuition payments | Stripe sandbox flow, refunds, tamper and cross-family tests | open (product rules unanswered) |
