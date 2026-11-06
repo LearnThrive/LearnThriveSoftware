@@ -109,6 +109,11 @@ export interface IdentityRepository {
   /** The learner a profile is, or null. Whatever the status: the caller decides what a suspended or revoked learner may do. */
   getLearner(profileId: string): Promise<LearnerContext | null>;
   getLearnerByStudent(studentId: string): Promise<LearnerContext | null>;
+  /**
+   * The student's own login and its status, whatever the status: for an administrator's screen, which must still find a login a guardian
+   * suspended. Everything that decides access reads `getLearner` and the active-only views instead. null if the student has never had one.
+   */
+  learnerLogin(studentId: string): Promise<{ profileId: string; status: LinkStatus } | null>;
 
   /** Replaces any open invitation for the student with this one. Checks the student is the family's, has no login yet, and the daily limit. */
   createInvitation(input: CreateInvitationInput): Promise<{ ok: true; invitation: InvitationRecord } | { ok: false; reason: InviteFailure }>;

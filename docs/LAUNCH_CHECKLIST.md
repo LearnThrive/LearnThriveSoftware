@@ -263,8 +263,11 @@ order the load happens in.
 ### 3.4 Lesson reminders and invitation emails (optional for launch)
 - Reminders are derived when a page renders and nothing is sent; there is no scheduler. Invitation links are shown once to the guardian rather than emailed. If you want emailed reminders or invitations, build a scheduled job and a delivery path through Resend, with approved wording and an unsubscribe/preferences rule. Otherwise state clearly in the onboarding guide that notifications are in-app only.
 
-### 3.5 Staff-side learner suspension screen (optional)
+### 3.5 Staff-side learner suspension screen (optional) - BUILT (6 November 2026)
 - Store support exists; add an admin screen to suspend or revoke a learner login if you want staff, not only guardians, to do it.
+- **Built.** The Login card on `/dashboard/admin/students/<id>` shows the child's access and offers *Suspend login* / *Restore login* and *Remove login* (a required tick box). Suspending is the parent's own switch, so the parent sees it and can restore it; *Disable login* is still there for a stop only staff can undo. Removing revokes the login and disables it in Auth, and the page then offers *Create login* again. Written up in `docs/IDENTITY.md`.
+- **A bug it fixed.** The page used the student record's login link, which names only an **active** login, so a login the parent had suspended looked like no login at all, and the page offered a *Create login* that could only fail. It now asks for the login whatever its status (`learnerLogin`).
+- **Tests.** The identity contract (memory, PGlite and the real stack) for `learnerLogin`; `usernameAccounts.test.mjs` for suspend, restore, remove, a new login afterwards and the audit rows; `tests-e2e/accounts.spec.ts` for the screen, with a tutor and a parent replaying the forms' action ids and refused.
 
 ### 3.6 Staff MFA (required or accepted risk per 0.5)
 - The Supabase organisation members must use MFA (set in the dashboard, Phase 4). For the site's own admins MFA is not built; either build it or record the accepted risk and keep to few admins.

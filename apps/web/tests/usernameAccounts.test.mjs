@@ -8,7 +8,7 @@ import { environment, jsonRequest, quiet } from "./_routeHelpers.mjs";
 
 const username = loadTsFrom(import.meta.url, "../src/lib/account/username.ts");
 const credentials = loadTsFrom(import.meta.url, "../src/lib/account/credentials.ts");
-const { createLogin, issueTemporaryPassword, setLoginDisabled, changeLinkedEmail } = loadTsFrom(import.meta.url, "../src/lib/account/provision.ts");
+const { createLogin, issueTemporaryPassword, setLoginDisabled, changeLinkedEmail, changeLearnerLogin } = loadTsFrom(import.meta.url, "../src/lib/account/provision.ts");
 const h = loadTsFrom(import.meta.url, "../src/lib/account/handlers.ts");
 const learnerHandlers = loadTsFrom(import.meta.url, "../src/lib/learner/handlers.ts");
 const { MemoryAccountAuth } = loadTsFrom(import.meta.url, "../src/lib/account/memoryAuth.ts");
@@ -316,6 +316,42 @@ test("disabling a login: it cannot sign in, a session already open ends at once,
   assert.equal((await signIn(rt, jar(), "sarah.ahmed", "their usual password")).status, 200);
   const actions = rt.store.auditEntries().map((row) => row.action);
   assert.ok(actions.includes("login_disabled") && actions.includes("login_enabled"));
+});
+
+test("a child's login, from the staff side: suspend and restore as the parent would, then remove it for good and make a new one", async (t) => {
+  quiet(t);
+  const rt = runtime();
+  const parent = await createLogin(rt, family);
+  const kid = await child(rt, parent);
+  const { clientId } = await rt.store.accounts.getAccount(parent.profileId);
+  const parentSees = async () => (await rt.store.identity.listFamilyStudents(clientId)).find((s) => s.id === kid.studentId)?.learnerStatus;
+
+  assert.equal(await changeLearnerLogin(rt, kid.studentId, "suspend", ADMIN), true);
+  assert.deepEqual(await rt.store.identity.learnerLogin(kid.studentId), { profileId: kid.profileId, status: "suspended" });
+  assert.equal(await parentSees(), "suspended", "the parent sees what staff did: it is the same switch");
+  assert.equal((await rt.store.accounts.getAccount(kid.profileId)).loginDisabled, false, "suspended is not disabled: the parent can undo it");
+
+  assert.equal(await changeLearnerLogin(rt, kid.studentId, "restore", ADMIN), true);
+  assert.equal(await parentSees(), "active");
+
+  const cookies = jar();
+  assert.equal((await signIn(rt, cookies, "kit-4821", kid.temporaryPassword)).status, 200);
+  assert.equal(await changeLearnerLogin(rt, kid.studentId, "remove", ADMIN), true);
+  assert.equal((await rt.store.identity.learnerLogin(kid.studentId)).status, "revoked");
+  assert.equal((await rt.store.accounts.getAccount(kid.profileId)).loginDisabled, true, "a removed login cannot sign in at all");
+  session.resetSessionCache();
+  assert.notEqual((await session.readSession(cookies, rt)).status, "ok", "and a session already open ends");
+  assert.equal((await signIn(rt, jar(), "kit-4821", kid.temporaryPassword)).status, 403);
+  for (const change of ["restore", "suspend", "remove"]) assert.equal(await changeLearnerLogin(rt, kid.studentId, change, ADMIN), false, `a removed login is never ${change}d`);
+
+  const again = await createLogin(rt, { username: "kit-9000", linkedEmail: "sarah@example.test", displayName: "Ayaan", role: "STUDENT", studentId: kid.studentId, actor: ADMIN });
+  assert.equal(again.status, "created", "the student can be given a new login");
+  assert.deepEqual(await rt.store.identity.learnerLogin(kid.studentId), { profileId: again.profileId, status: "active" });
+
+  const actions = rt.store.auditEntries().filter((row) => row.actorProfileId === ADMIN).map((row) => row.action);
+  for (const action of ["learner_suspended", "learner_restored", "learner_revoked", "login_disabled"]) assert.ok(actions.includes(action), action);
+  assert.equal(await changeLearnerLogin(rt, "00000000-0000-4000-8000-000000000000", "suspend", ADMIN), false, "no such student");
+  assert.equal(await changeLearnerLogin(rt, parent.profileId, "suspend", ADMIN), false, "a parent is not a learner");
 });
 
 test("a change of linked email is audited, follows to the children, and a bad address changes nothing", async () => {
