@@ -1458,6 +1458,9 @@ describe('signalling through real Socket.IO clients', () => {
       }
       expect(statuses[20]).toBe(429);
       expect(statuses.slice(0, 20).every((status) => status === 502)).toBe(true);
+      // A different visitor behind the same proxy has their own allowance: the limit is not keyed on the proxy's address.
+      const otherVisitor = await fetch(`${url}/api/turn-credentials`, { headers: { 'X-Forwarded-For': '198.51.100.9, 10.1.1.1' } });
+      expect(otherVisitor.status).toBe(502);
     } finally {
       if (previousKeyId !== undefined) process.env.CLOUDFLARE_TURN_KEY_ID = previousKeyId; else delete process.env.CLOUDFLARE_TURN_KEY_ID;
       if (previousApiToken !== undefined) process.env.CLOUDFLARE_TURN_API_TOKEN = previousApiToken; else delete process.env.CLOUDFLARE_TURN_API_TOKEN;

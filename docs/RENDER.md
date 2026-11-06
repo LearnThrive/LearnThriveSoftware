@@ -61,7 +61,7 @@ Render's documentation does not state a maximum request size, and one community 
 
 ## The visitor's address (rate limiting)
 
-The routes limit each visitor and the route as a whole (`careersConfig.rateLimits`). The visitor is identified by address, and Render does not document which header carries it or how many proxies sit in front of a service; community reports disagree, and some say a visitor's own `X-Forwarded-For` is kept and appended to. So the code never trusts the left-hand entry. It reads `X-Forwarded-For` from the right, skipping `TRUSTED_PROXY_HOPS` entries (default 1), or uses `CLIENT_IP_HEADER` if you name one. Test it once on the deployed service. The challenge endpoint allows 40 requests per visitor per 15 minutes, which makes a safe probe:
+The routes limit each visitor and the route as a whole (`careersConfig.rateLimits`). The visitor is identified by address, and Render does not document which header carries it or how many proxies sit in front of a service; community reports disagree, and some say a visitor's own `X-Forwarded-For` is kept and appended to. So the code never trusts the left-hand entry. It reads `X-Forwarded-For` from the right, skipping `TRUSTED_PROXY_HOPS` entries (default 1), or uses `CLIENT_IP_HEADER` if you name one. The classroom's TURN credential endpoint (20 requests a minute per visitor) follows the same rule and the same two settings (`apps/realtime/server/clientAddress.ts`); before 6 November 2026 it keyed on the proxy's address, so every visitor shared one allowance. Test it once on the deployed service. The challenge endpoint allows 40 requests per visitor per 15 minutes, which makes a safe probe:
 
 ```bash
 # Forged left-hand entries must NOT earn a fresh allowance: expect 200s and then 429s.
