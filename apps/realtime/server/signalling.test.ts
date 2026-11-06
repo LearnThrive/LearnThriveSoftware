@@ -83,6 +83,21 @@ describe('signalling through real Socket.IO clients', () => {
     return joined;
   }
 
+  it('counts rooms, participants, waiting students and sockets for the heartbeat, and names none of them', async () => {
+    expect(server.stats()).toEqual({ rooms: 0, participants: 0, waiting: 0, sockets: 0 });
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const admitted = await connect();
+    await admit(tutor, admitted, 'Bob');
+    const waiting = await connect();
+    await joinStudent(waiting, 'Cara');
+    const other = await connect();
+    await joinTutor(other, 'Dev', 'room-two');
+    const stats = server.stats();
+    expect(stats).toEqual({ rooms: 2, participants: 3, waiting: 1, sockets: 4 });
+    expect(Object.values(stats).every((value) => typeof value === 'number')).toBe(true);
+  });
+
   it('admits the tutor immediately; a student waits until the tutor admits them', async () => {
     const tutor = await connect();
     const tutorEvents: JoinedRoom[] = [];
@@ -1443,6 +1458,9 @@ describe('signalling through real Socket.IO clients', () => {
       }
       expect(statuses[20]).toBe(429);
       expect(statuses.slice(0, 20).every((status) => status === 502)).toBe(true);
+      // A different visitor behind the same proxy has their own allowance: the limit is not keyed on the proxy's address.
+      const otherVisitor = await fetch(`${url}/api/turn-credentials`, { headers: { 'X-Forwarded-For': '198.51.100.9, 10.1.1.1' } });
+      expect(otherVisitor.status).toBe(502);
     } finally {
       if (previousKeyId !== undefined) process.env.CLOUDFLARE_TURN_KEY_ID = previousKeyId; else delete process.env.CLOUDFLARE_TURN_KEY_ID;
       if (previousApiToken !== undefined) process.env.CLOUDFLARE_TURN_API_TOKEN = previousApiToken; else delete process.env.CLOUDFLARE_TURN_API_TOKEN;

@@ -100,20 +100,5 @@ export function newReference(prefix: "LT-APP" | "LT-RECONF", now: Date = new Dat
   return `${prefix}-${date}-${suffix}`;
 }
 
-type LogValue = string | number | boolean;
-
-/**
- * One structured line per outcome, for the host's log search. It carries NO personal data: only an event
- * name, an outcome, and short machine-readable values (counts, sizes, reasons). Anything else is dropped, so
- * a careless caller cannot put a name, an address or an answer in the logs.
- */
-export function logOutcome(event: string, outcome: string, details: Record<string, LogValue> = {}): void {
-  const safe: Record<string, LogValue> = {};
-  for (const [key, value] of Object.entries(details)) {
-    if (typeof value === "number" || typeof value === "boolean") safe[key] = value;
-    else if (typeof value === "string" && /^[a-z0-9_.:-]{1,40}$/i.test(value)) safe[key] = value;
-  }
-  const line = JSON.stringify({ event, outcome, ...safe });
-  if (outcome === "sent" || outcome === "received" || outcome === "dropped") console.info(line);
-  else console.warn(line);
-}
+// Moved to lib/log.ts (no imports, so the instrumentation hook can use it too); re-exported for the routes that import it from here.
+export { logOutcome } from "@/lib/log";
