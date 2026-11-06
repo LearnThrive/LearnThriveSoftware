@@ -10,6 +10,11 @@ const EXPECTED_TABLES = [
   "admin_grants",
   "assignment_students",
   "billing_customers",
+  "careers_application_events",
+  "careers_application_files",
+  "careers_application_notes",
+  "careers_applications",
+  "careers_deletions",
   "chat_file_chunks",
   "chat_files",
   "chat_messages",
@@ -49,6 +54,11 @@ const EXPECTED_TABLES = [
 const FORCED_TABLES = [
   "admin_grants",
   "billing_customers",
+  "careers_application_events",
+  "careers_application_files",
+  "careers_application_notes",
+  "careers_applications",
+  "careers_deletions",
   "chat_file_chunks",
   "chat_files",
   "chat_messages",
@@ -147,6 +157,7 @@ describe("migrations", () => {
       "0017_username_accounts.sql",
       "0018_purges.sql",
       "0019_leaving.sql",
+      "0020_careers.sql",
     ]);
     assert.deepEqual(
       applied.map((f) => Number(f.slice(0, 4))),
@@ -204,9 +215,10 @@ describe("migrations", () => {
     assert.equal(tables.length, 0);
   });
 
-  test("the two storage buckets are private, limited, and no API role can touch their objects (0007)", async () => {
+  test("the three storage buckets are private, limited, and no API role can touch their objects (0007, 0020)", async () => {
     const buckets = await db.asOwner((q) => q.query(`select id, public, file_size_limit::int as limit, allowed_mime_types as mime from storage.buckets order by id`));
     assert.deepEqual(buckets, [
+      { id: "careers", public: false, limit: 3 * 1024 * 1024, mime: ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "image/jpeg", "image/png"] },
       { id: "chat-uploads", public: false, limit: 15 * 1024 * 1024, mime: ["image/jpeg", "image/png", "application/pdf"] },
       { id: "library", public: false, limit: 25 * 1024 * 1024, mime: ["application/pdf"] },
     ]);
@@ -214,7 +226,7 @@ describe("migrations", () => {
     await db.asOwner((q) => q.exec(`update storage.buckets set public = true, file_size_limit = null`));
     await db.migrate();
     const after = await db.asOwner((q) => q.query(`select id, public from storage.buckets order by id`));
-    assert.deepEqual(after, [{ id: "chat-uploads", public: false }, { id: "library", public: false }]);
+    assert.deepEqual(after, [{ id: "careers", public: false }, { id: "chat-uploads", public: false }, { id: "library", public: false }]);
     // Row level security stays on for the objects, and no policy exists for any role: only the service role reaches them.
     const rls = await db.asOwner((q) => q.query(`select relrowsecurity from pg_class where oid = 'storage.objects'::regclass`));
     assert.equal(rls[0]!.relrowsecurity, true);

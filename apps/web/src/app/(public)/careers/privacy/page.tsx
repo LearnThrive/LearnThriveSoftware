@@ -36,8 +36,11 @@ export default function CareersPrivacyPage() {
             safeguarding agreement. Our <Link href="/privacy">general privacy notice</Link> covers the rest of the website.
           </p>
           <p>
-            The website itself stores nothing about your application. Your answers and files are sent to us by email and handled by hand, as
-            described below.
+            An application made online is stored in our own system: your answers in a private database and your files in a private file
+            store, both run for us by Supabase in its London (UK) region. Only our administrators can read them, after signing in, and each
+            time one of them opens one of your files it is recorded. Our mailbox is told only that an application has arrived, with its
+            reference: not your name, your answers or your files. An application you email to us instead is handled by hand from our
+            mailbox.
           </p>
         </>
       }
@@ -90,7 +93,8 @@ export default function CareersPrivacyPage() {
                 process in place. This is optional: you can provide them later, when we ask.
               </p>
               <p>
-                We use them to verify your identity and your right to work. They are handled by the hiring team. If you work with LearnThrive
+                We use them to verify your identity and your right to work. They are handled by the hiring team. Once we have checked them we
+                record that we saw them, and when, and we may then delete the copies you uploaded. If you work with LearnThrive
                 as a self-employed tutor they are kept while you do and for 12 months after, so you do not have to start again if you return,
                 and then deleted; a returning tutor must always show current, valid documents, because documents expire. If your application is
                 unsuccessful they are deleted {unsuccessfulRetentionMonths} months after the decision.
@@ -108,7 +112,11 @@ export default function CareersPrivacyPage() {
                 process. LearnThrive pays for it, unless you already hold a suitable certificate or choose to pay for your own check.
               </p>
               <p>{suitableCertificateText}</p>
-              <p>DBS certificate information is not collected through this website. Please do not upload a certificate.</p>
+              <p>
+                DBS certificate information is not collected through this website. Please do not upload a certificate. When we have seen your
+                certificate, or checked the Update Service, we record only that we did, how and on what date: never a copy and never the
+                certificate number.
+              </p>
             </>
           ),
         },
@@ -133,9 +141,10 @@ export default function CareersPrivacyPage() {
           content: (
             <>
               <p>
-                <strong>Resend</strong> delivers the emails the website sends. <strong>Render</strong> hosts the website. <strong>Google Workspace</strong> hosts our
-                company mailbox, where your application arrives. The hiring team, led by Tahasin Hasan and Abdurrahman Mustafa, reads it. We
-                do not sell your information, and we do not use it for automated decisions or profiling.
+                <strong>Supabase</strong> stores an online application (the database and the files, in its London region). <strong>Resend</strong> delivers
+                the emails the website sends. <strong>Render</strong> hosts the website. <strong>Google Workspace</strong> hosts our company mailbox, which
+                receives applications sent by email. The hiring team, led by Tahasin Hasan and Abdurrahman Mustafa, reads your application.
+                We do not sell your information, and we do not use it for automated decisions or profiling.
               </p>
               <p>
                 Some of these providers may handle information outside the UK. We will explain the safeguards that apply as soon as they are
@@ -183,8 +192,9 @@ export default function CareersPrivacyPage() {
                 </table>
               </div>
               <p>
-                Your application arrives as an email in our company mailbox and is also held briefly by our email delivery provider. We delete
-                both on the schedule above.
+                An online application, with its files, our notes on it and the record of who opened it, is deleted from our system on the
+                schedule above. A database backup keeps a copy until the backup itself ages out. An application sent by email is deleted from
+                our mailbox on the same schedule.
               </p>
             </>
           ),

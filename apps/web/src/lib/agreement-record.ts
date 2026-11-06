@@ -49,6 +49,26 @@ export function buildAgreementRecord(
 }
 
 /** The record as labelled lines, for the plain-text email and (escaped) the HTML one. */
+/**
+ * A record read back from storage (careers_applications.agreement), made safe to show: a field that is missing or of the wrong type,
+ * as in a record written under an older agreement, reads as empty rather than breaking the administrator's screen.
+ */
+export function readAgreementRecord(raw: unknown): AgreementRecord {
+  const r = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const text = (value: unknown) => (typeof value === "string" ? value : "");
+  const list = (value: unknown) => (Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : []);
+  return {
+    version: text(r.version),
+    dateLabel: text(r.dateLabel),
+    typedName: text(r.typedName),
+    confirmedParts: list(r.confirmedParts),
+    confirmedClauseIds: list(r.confirmedClauseIds),
+    understandingPassed: typeof r.understandingPassed === "boolean" ? r.understandingPassed : null,
+    receivedAt: text(r.receivedAt),
+    sha256: text(r.sha256),
+  };
+}
+
 export function agreementRecordLines(record: AgreementRecord): Array<[label: string, value: string]> {
   return [
     ["Agreement version", `${record.version} (dated ${record.dateLabel})`],

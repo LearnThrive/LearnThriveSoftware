@@ -26,7 +26,7 @@ const LIBRARY_OPENED = [
 const ALWAYS_PUBLIC = ["/library", "/library/", "/pricing"];
 // Closed whatever LIBRARY_ENABLED says (portal closed): pages redirect, APIs are a 404.
 const STILL_CLOSED_PAGES = ["/403", "/dashboard", "/dashboard/lessons", "/dashboard/admin/people/students", "/classroom", "/classroom/abc"];
-const STILL_CLOSED_API = ["/api/auth/session", "/api/auth/login", "/api/auth/logout", "/api/lessons/x/ics"];
+const STILL_CLOSED_API = ["/api/auth/session", "/api/auth/login", "/api/auth/logout", "/api/lessons/x/ics", "/api/admin/careers/x/files/y", "/api/admin/careers/x/export"];
 // Neighbours that merely share a prefix with an opened path must not open.
 const LOOKALIKES = ["/accounts", "/account-settings", "/library-waitlist", "/libraryx", "/api/accounts", "/api/library-waitlist-x", "/api/billing-x", "/api/assistants", "/login/other", "/login-dev", "/logins"];
 const DEV = ["/dev", "/dev/motion", "/dev/classroom", "/api/dev/reset", "/api/dev"];
