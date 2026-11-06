@@ -81,7 +81,7 @@ None of these can be defaulted by an engineer. For each, write the answer and th
 | Retention | **Purge**: when a student or tutor leaves, their records are purged, apart from the legal exceptions in `LAWFUL_BASES.md` (financial records, safeguarding records, unsuccessful applications) | Build the purge tool (3.7); update `RETENTION_AND_DELETION.md` to match |
 | Terms | **Tahasin will provide them** | Blocks publishing the terms page and any payment wording (3.10.13b) until received |
 | Stripe | **Tahasin will provide the account access and the product rules** (0.1) | Blocks all of 3.10 |
-| Suppliers | Render, Supabase, Resend, Stripe, Cloudflare; IONOS is the **domain registrar and DNS only**; company email is hosted elsewhere (probably Google Workspace, as `legal-faqs.tsx` says: confirm) | Final list with transfer safeguards for the privacy page |
+| Suppliers | Render, Supabase, Resend, Stripe, Cloudflare; IONOS is the **domain registrar and DNS only**; company email is **Google Workspace** (the domain's MX records point at `aspmx.l.google.com`; checked 6 Nov 2026) | Final list with transfer safeguards for the privacy page |
 
 - **Note on the DPIA.** You decided one is not needed, and that is recorded. I would still have Tahasin and Abdurrahman check it against the ICO's own DPIA screening checklist first. UK GDPR requires one before processing that is likely to be high risk, and the ICO lists children's data and online services aimed at children among the things that point that way. A short DPIA is cheap insurance and also answers the questions the first school, parent or regulator will ask. Treat it as recommended, not blocking.
 - **Careers.** The safeguarding agreement approval flag (`agreementApprovedByOwner`) is separate and stays closed until the clauses are approved (see 3.12).
@@ -101,7 +101,7 @@ None of these can be defaulted by an engineer. For each, write the answer and th
 
 ### 0.7 Accounts and access to hand over
 - **Render: Brian holds the account.** He creates the web service, or invites a teammate to; secrets are passed through a password manager, never chat or email.
-- Supabase organisation (exists: Pro plan, project `learnthrive-prod`, ref `vwsjvdpkgjhwmqmufmrh`, London), a Resend account, a **Stripe** account (from Tahasin, 3.10.2), a **Cloudflare** account (TURN key and the SFU app id and secret), **IONOS** for the domain and DNS, the company email provider's admin (to add SPF/DKIM), GitHub/GitLab repo access, Google Search Console, an uptime monitor.
+- Supabase organisation (exists: Pro plan, project `learnthrive-prod`, ref `vwsjvdpkgjhwmqmufmrh`, London), a Resend account, a **Stripe** account (from Tahasin, 3.10.2), a **Cloudflare** account (TURN key and the SFU app id and secret), **IONOS** for the domain and DNS, the Google Workspace admin (company mail), GitHub/GitLab repo access, Google Search Console, an uptime monitor.
 
 ### 0.8 Content
 - **Images: decided, keep the current photos.** The founders section on the About page has been restyled (portrait and name as a header, the bio full width underneath, equal cards, a brand-coloured ring on the portrait, side by side on phones). No new photography is needed.
@@ -396,17 +396,17 @@ the SQL function did not do it.
 
 ## Phase 4: Hosted Supabase (`learnthrive-prod`)
 
-Every step here needs the owner present or approving. Nothing has ever been pushed to this project.
+Every step here needs the owner present or approving. **Not empty of migrations:** when checked read-only on 2 November 2026 the project already had `0001`–`0009` applied (by someone outside this checkout) and held no data. Re-check with `supabase migration list` before 4.2.
 
 ### 4.1 Choose staging vs production order
 - If you chose a staging project (0.6), do all of Phase 4 and 5–8 on **staging first** (with `ALLOWED_ORIGINS` and Redirect URLs for the staging host only), then repeat on production.
 
 ### 4.2 Link and dry run
 - `npx supabase link --project-ref vwsjvdpkgjhwmqmufmrh`; the CLI asks for the database password, which the owner types (or sets `SUPABASE_DB_PASSWORD` for that shell only).
-- `npx supabase db push --dry-run`. It must list **all sixteen migrations** (`0001`–`0016`; older docs say nine). **Stop and show the owner.**
+- `npx supabase db push --dry-run`. It must list exactly the migrations the project does not have yet: `0010`–`0019` if it still holds `0001`–`0009` (nineteen in the repo as of 6 Nov 2026). **Stop and show the owner.**
 
 ### 4.3 Push
-- On approval: `npx supabase db push`. Confirm the migration history lists all sixteen and the buckets `library` and `chat-uploads` exist and are private.
+- On approval: `npx supabase db push`. Confirm the migration history lists all nineteen (`0001`–`0019`) and the buckets `library` and `chat-uploads` exist and are private.
 
 ### 4.4 Advisors
 - Run the Security and Performance advisors (dashboard → Database → Advisors). Resolve **every security warning** in a new migration (not in the dashboard). Record the result.
@@ -450,7 +450,7 @@ Every step here needs the owner present or approving. Nothing has ever been push
 - Verify the sending domain; copy the SPF/DKIM records; set `RESEND_FROM_EMAIL` to an address on it (the shared `onboarding@resend.dev` sender is never used in production). Create two API keys: one for the site (`RESEND_API_KEY`), one for Supabase Auth SMTP.
 
 ### 5.2 DNS records
-- IONOS holds the domain and its DNS. **Keep every existing mail record** (the MX records and SPF/DKIM of whoever hosts your company mailboxes: confirm who, probably Google Workspace). A domain may have only **one SPF record**, so merge Resend's `include:` into the existing one rather than adding a second. Add Resend's DKIM records as given. Add DMARC at `p=none` with a report address; tighten later. Because the same domain sends mail from two providers, test both after the change.
+- IONOS holds the domain and its DNS. **Keep every existing mail record** (Google Workspace's MX records at `aspmx.l.google.com` and the SPF `include:_spf.google.com`). A domain may have only **one SPF record**, so merge Resend's `include:` into the existing one rather than adding a second. Add Resend's DKIM records as given. Add DMARC at `p=none` with a report address; tighten later. Because the same domain sends mail from two providers, test both after the change.
 - Point `www` and the apex at Render (apex redirects to `www`, 308). Lower the TTL a day or more before the cutover.
 
 ### 5.3 Test deliverability on staging
