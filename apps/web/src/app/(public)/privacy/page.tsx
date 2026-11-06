@@ -236,7 +236,7 @@ export default function PrivacyPage() {
               <p>
                 Information may be handled by the service providers needed to
                 run the website and communications. Render hosts the website,
-                Resend delivers the emails the website sends, and IONOS hosts
+                Resend delivers the emails the website sends, and Google Workspace hosts
                 LearnThrive’s company mailbox, where enquiries and requests
                 arrive. We share only what is needed for the relevant purpose.
               </p>

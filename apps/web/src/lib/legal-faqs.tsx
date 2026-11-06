@@ -25,14 +25,14 @@ export const legalFaqs: readonly FaqItem[] = [
     question: "Where does LearnThrive store information and who can access it?",
     answer: (
       <>
-        <p>{"LearnThrive's company email is hosted with "}<strong>{"IONOS"}</strong>{". Enquiries, tutor applications and other messages sent through this website arrive in that company mailbox, which is a company-controlled communication channel."}</p>
+        <p>{"LearnThrive's company email is hosted with "}<strong>{"Google Workspace"}</strong>{". Enquiries, tutor applications and other messages sent through this website arrive in that company mailbox, which is a company-controlled communication channel."}</p>
         <p>{"Business, parent and learner records should be stored within company-controlled systems rather than personal accounts."}</p>
         <p>{"Routine administrative access to central LearnThrive records is currently restricted to "}<strong>{"Abdurrahman Mustafa and Tahasin Hasan"}</strong>{", except where information needs to be shared with another authorised person for a legitimate business or safeguarding purpose."}</p>
         <p>{"Tutors should only receive the information reasonably required to support the students they teach."}</p>
         <p>{"LearnThrive should maintain a record of the external providers it relies upon and review this whenever a new service is introduced."}</p>
         <p>{"Current key providers include:"}</p>
         <ul>
-          <li><strong>{"IONOS"}</strong>{" — company email and mailboxes"}</li>
+          <li><strong>{"Google Workspace"}</strong>{" — company email and mailboxes"}</li>
           <li><strong>{"Resend"}</strong>{" — delivery of the emails this website sends, such as enquiries, applications and confirmations"}</li>
           <li><strong>{"Render"}</strong>{" — hosting of this website"}</li>
         </ul>
