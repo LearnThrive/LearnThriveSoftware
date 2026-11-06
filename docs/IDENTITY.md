@@ -92,7 +92,12 @@ Page: `/learner/accept?token=…`.
   safeguarding lead. The deployment stays closed to children until `ASSISTANT_MINORS_APPROVED` is recorded.
 - Invitation emails are not sent by the app (the link is shown once to the guardian). Sending through Resend is a small addition once
   the owner approves the wording.
-- Staff-side suspension/revocation exists in the store (`setLearnerStatus` with no family) but has no admin screen yet.
+- Staff-side suspension and removal: **done** (launch checklist 3.5). The Login card on an administrator's student page shows the
+  login's access and offers *Suspend login* / *Restore login* and *Remove login* (`setLearnerLoginAction`, `changeLearnerLogin` in
+  `lib/account/provision.ts`). Suspending is the parent's own switch (`setLearnerStatus` with no family), so each side sees and can undo
+  what the other did; to stop a login in a way only staff can undo, *Disable login* bans it in Auth. Removing is final: the login is
+  revoked and disabled, and the student can be given a new one. The page finds the login through `learnerLogin`, whatever its status,
+  because the student record names only an active login.
 - Orphans: deleting a student removes the login row and invitations but not the learner's `auth.users` / `profiles` row. A retention
   step that reports and removes those orphans, and the learner's stored chat files, is listed in `docs/RETENTION_AND_DELETION.md` work.
 - Real Supabase Auth runs (invitation e-mail confirmation, refresh, the narrow server role) have not been executed yet.
