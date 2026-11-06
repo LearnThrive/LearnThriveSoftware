@@ -83,6 +83,21 @@ describe('signalling through real Socket.IO clients', () => {
     return joined;
   }
 
+  it('counts rooms, participants, waiting students and sockets for the heartbeat, and names none of them', async () => {
+    expect(server.stats()).toEqual({ rooms: 0, participants: 0, waiting: 0, sockets: 0 });
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const admitted = await connect();
+    await admit(tutor, admitted, 'Bob');
+    const waiting = await connect();
+    await joinStudent(waiting, 'Cara');
+    const other = await connect();
+    await joinTutor(other, 'Dev', 'room-two');
+    const stats = server.stats();
+    expect(stats).toEqual({ rooms: 2, participants: 3, waiting: 1, sockets: 4 });
+    expect(Object.values(stats).every((value) => typeof value === 'number')).toBe(true);
+  });
+
   it('admits the tutor immediately; a student waits until the tutor admits them', async () => {
     const tutor = await connect();
     const tutorEvents: JoinedRoom[] = [];
