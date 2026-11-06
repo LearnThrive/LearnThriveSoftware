@@ -13,7 +13,8 @@
     "./repositories": "./src/repositories.ts",
     "./inMemoryProvider": "./src/inMemoryProvider.ts",
     "./sqlProvider": "./src/sqlProvider.ts",
-    "./library": "./src/library/index.ts"
+    "./library": "./src/library/index.ts",
+    "./careers": "./src/careers.ts"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.10",
