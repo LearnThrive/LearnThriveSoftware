@@ -363,7 +363,29 @@ the SQL function did not do it.
 - **Launch accounts that need this:** **Alvi Hossain, Tahasin Hasan and Abdurrahman Mustafa** are each admin and tutor. **Brian** is admin only (he must not see tutor tools such as availability, and must not appear in tutor lists).
 - **Done when.** The above tests pass, and real accounts of both kinds (admin and tutor, admin only) are exercised in staging (7.5).
 
-### 3.12 Careers applications in the database, viewed by admins (required if you want them open at launch)
+### 3.12 Careers applications in the database, viewed by admins (required if you want them open at launch) — BUILT (6 November 2026); the forms stay closed until 3.12.7
+
+**Built:** migration `0020_careers.sql` (five server-only tables and the private `careers` bucket), the store in `packages/data/src/careers.ts`
+(memory and Postgres, one contract: `testing/careersContract.ts`), the apply route storing instead of emailing, the admin screens at
+`/dashboard/admin/careers`, the file and export routes under `/api/admin/careers/`, and `docs/RETENTION_AND_DELETION.md` ("Tutor
+applications in the app").
+
+| Sub-item | State |
+| --- | --- |
+| 3.12.1 Data model | **done**: `careers_applications`, `_files`, `_notes`, `_events` (append-only history, including each file opened) and `careers_deletions` (date, administrator, reason, file count: no reference, name or email). RLS enabled and forced, no grants to API roles; added to `schema.test.ts` and `supabase-verify.mjs`. **Re-run `create-server-role.mjs` after `0020` is applied** (4.5) |
+| 3.12.2 Submission | **done**: every existing check kept; files go to the bucket under `<application id>/<file id>.<ext>` (no name in the path), then one statement writes the application, its files and its first history row. If either step fails the stored files are removed and the applicant is told nothing was sent. The mailbox gets a notice with the reference, the role and a link, and **no personal content**; the applicant's confirmation is unchanged |
+| 3.12.3 Admin screens | **done**: a list by status, the answers, files downloaded through `/api/admin/careers/<id>/files/<file>` (ADMIN checked there; the server signs a 60-second link to the private bucket for that request and sends the bytes as an attachment with `nosniff` and a sandbox, so the link never reaches the browser), internal notes, status, and identity and DBS recorded as **seen**: how, the date and who, never a copy or a number. Each download is written to the history before the bytes are sent. `/api/admin/**` is closed with the portal (proxy matcher) |
+| 3.12.4 DBS and identity wording | **open (owner)**: the careers pages still say LearnThrive pays for the DBS check; 0.4 decided tutors pay. Needs Tahasin's wording |
+| 3.12.5 Retention and deletion | **done**: the status sets the deletion dates (`retentionFor` in `careers.ts`, the periods in `CAREERS_RETENTION`); the list shows what is due in the next 31 days; deleting an application or only its identity documents removes the stored files first, then the rows; *Export (subject access)* downloads everything held as JSON |
+| 3.12.6 Privacy | **done in words, for review**: `/careers/privacy` now says applications are stored with Supabase in London, administrators only, downloads recorded, the mailbox gets a notice only, and checks are recorded as seen. **The legal reviewer should see this change** |
+| 3.12.7 Agreement gate | **open (owner)**: unchanged; the forms stay closed until every clause is approved |
+| 3.12.8 Tests | **done locally**: the store contract (memory, PGlite; real stack wired in `realstack.careers.test.ts`, three ways including the narrow role), `careersApply.test.mjs` (what is stored, the notice carries nothing personal, failures leave nothing behind, production with no storage refuses), `tests-e2e/careers-review.spec.ts` (an admin's full review; a tutor, parent, learner and stranger refused the list, both file routes, the export and the forms' own action ids), the portal and production smoke checks. Renamed file types were already refused (`inspectFile`). **Real stack, 6 Nov 2026:** `npm run test:realstack` 342 of 342 (data, including the careers contract three ways, 39 tests, and a real upload of each content type to the `careers` bucket with the 415 and 413 refusals) and 25 of 25 (web); `npm run test:e2e:realstack` 16 of 16; `npm run build` and `check:bundle` (1388 files, 19 sentinels, none present) pass. The real stack found one bug PGlite could not: JSON sent as `$n::jsonb` is stored as a string by the `postgres` driver; it is now `$n::text::jsonb`, the rule `library/sql.ts` already states |
+
+**Two things to know.** An *Accepted* application has no automatic deletion date: it becomes a tutor's record, and is deleted from its
+page when they stop (their identity documents 12 months after). There is no in-app notification for a new application, only the email
+notice; the notification types are a database check constraint and were left alone.
+
+**The original description, for reference:**
 
 **Decision (2 Nov 2026):** careers becomes a **fully fledged application page** stored in Supabase, with admins reviewing applications after signing in. The page already exists as one scrolling form in eight numbered sections with a section list, a review panel and file uploads (`apps/web/src/components/careers/apply`); keep it and finish it. Applicants are not account holders, so they do **not** use usernames; they give a contact email. **Today** the form emails the application and its attachments (CV, cover letter, identity documents) to a mailbox and stores nothing (`docs/RETENTION_AND_DELETION.md`). The forms also stay closed until `agreementApprovedByOwner` is set.
 
@@ -411,10 +433,10 @@ Every step here needs the owner present or approving. **Not empty of migrations:
 
 ### 4.2 Link and dry run
 - `npx supabase link --project-ref vwsjvdpkgjhwmqmufmrh`; the CLI asks for the database password, which the owner types (or sets `SUPABASE_DB_PASSWORD` for that shell only).
-- `npx supabase db push --dry-run`. It must list exactly the migrations the project does not have yet: `0010`–`0019` if it still holds `0001`–`0009` (nineteen in the repo as of 6 Nov 2026). **Stop and show the owner.**
+- `npx supabase db push --dry-run`. It must list exactly the migrations the project does not have yet: `0010`–`0020` if it still holds `0001`–`0009` (twenty in the repo as of 6 Nov 2026, with `0020_careers.sql`). **Stop and show the owner.**
 
 ### 4.3 Push
-- On approval: `npx supabase db push`. Confirm the migration history lists all nineteen (`0001`–`0019`) and the buckets `library` and `chat-uploads` exist and are private.
+- On approval: `npx supabase db push`. Confirm the migration history lists all twenty (`0001`–`0020`) and the buckets `library`, `chat-uploads` and `careers` exist and are private.
 
 ### 4.4 Advisors
 - Run the Security and Performance advisors (dashboard → Database → Advisors). Resolve **every security warning** in a new migration (not in the dashboard). Record the result.
@@ -618,7 +640,7 @@ Launch in two steps so the riskier part opens last.
 | 3.1 Classroom server | `serve.mjs` runs site, signalling and TURN endpoint on one origin | built and proven locally; not yet on Render |
 | 3.2 Username sign-in and admin-created accounts | Create parent, children and tutor; sign in by username; sign-up closed end to end | built; real Auth, the operator script and **the admin screen** proven locally (`realstack.accounts`, `tests-e2e-realstack`); the reset link is proven but its **delivery through Resend** is not, nor are the hosted accounts |
 | 3.11 Tutor-admin | A tutor who is also an admin can teach and admin | built; **its guards are now tested on real data** (4 Nov 2026, `tests-e2e-realstack/scoping.spec.ts`): tutor tools scoped to their own teaching, no way into another tutor's lesson as its tutor |
-| 3.12 Careers in Supabase | Applications stored, admins review, files via expiring links | open |
+| 3.12 Careers in Supabase | Applications stored, admins review, files via expiring links | **built and tested locally** (6 Nov 2026): migration `0020`, store contract on memory, PGlite and the real stack, the route, the admin screens, the production build. Waiting on the hosted project (4.3, then re-run `create-server-role.mjs` in 4.5), the DBS wording (3.12.4) and the agreement approval (3.12.7) |
 | 3.13 Cloudflare SFU, 10 students | An hour-long lesson with 11 people on real devices | built and tested against fakes; needs the keys and a real-device test |
 | 3.7 Purge tool | A purged person leaves only the documented exceptions | **built and proven locally** (4 Nov 2026): the pause, the purge, the counts-only log, and the sweep that finds nothing. The staging rehearsal waits for Phase 4 |
 | 4 Hosted Supabase | Project migrated, configured, smoke-tested, first admin | open |
