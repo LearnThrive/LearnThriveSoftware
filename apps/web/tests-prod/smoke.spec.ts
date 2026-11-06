@@ -184,6 +184,18 @@ test.describe('crawlers and operations', () => {
     expect((await request.get('/manifest.webmanifest')).status()).toBe(200);
   });
 
+  test('the readiness check names each dependency as ok, failing or off, and nothing more', async ({ request }) => {
+    // Launch checklist 3.8. A smoke run has no database, so with the portal closed every check is "ok" or "off" and the answer is 200.
+    const ready = await request.get('/api/health/ready');
+    expect(ready.status()).toBe(200);
+    expect(ready.headers()['cache-control']).toContain('no-store');
+    const body = await ready.json();
+    expect(Object.keys(body).sort()).toEqual(['checks', 'status']);
+    expect(body.status).toBe('ok');
+    expect(Object.keys(body.checks).sort()).toEqual(['auth', 'classroom', 'database']);
+    for (const state of Object.values(body.checks)) expect(['ok', 'failing', 'off']).toContain(state);
+  });
+
   test('every route has a canonical URL on the production host', async ({ page }) => {
     for (const route of PUBLIC_ROUTES) {
       await page.goto(route);

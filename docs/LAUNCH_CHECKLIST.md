@@ -311,8 +311,17 @@ the SQL function did not do it.
 - **3.7.6 Tests.** After a purge, a database query for the person's id and name finds nothing in any table or bucket except the listed exceptions; the person cannot sign in; a sibling and the family are untouched; the audit row exists; and a purge cannot be run by a non-admin.
 - **Done when.** The tests pass and a rehearsal purge on staging leaves only the documented exceptions.
 
-### 3.8 Observability (required to run it safely)
+### 3.8 Observability (required to run it safely) - CODE BUILT (6 November 2026); the monitor and log retention wait for Render (Phase 6)
 - Today: structured logs for the enquiry route and `/api/health`, nothing else. Add at least: uptime monitoring on `/api/health`, log retention and alerting on Render, and a decision on error reporting (0.6). The realtime service has no health monitoring either.
+- **Built, written up in `docs/OBSERVABILITY.md`.** The premise was out of date: the account, careers, subject-request, reconfirmation, waitlist and assistant routes already wrote structured lines. What was missing, now added:
+  - **`GET /api/health/ready`** for the uptime monitor: the database (`select 1` on the site's own role), Supabase Auth (`/auth/v1/health`) and the classroom (signalling running in this process, so a `next start` without the classroom fails it), each `ok`, `failing` or `off`, 503 when not ready, worked out at most every 10 s. All three are required once the portal is open; with it closed, only what is configured must answer. `/api/health` stays the bare liveness check Render restarts on.
+  - **Server errors:** `src/instrumentation.ts` (`onRequestError`) writes a `server-error` line for anything a page, route, action or the proxy throws: the route's file pattern, the kind and the digest, never the message, URL or a header. Both error pages now show the digest as a reference a person can quote.
+  - **The process:** `server.ts` writes `started`, a five-minute `heartbeat` (memory, event-loop delay, and the classroom's rooms, participants, waiting and sockets as counts) and `stopping` (how many people a restart cut off).
+  - **The classroom:** Cloudflare TURN and SFU failures are structured lines with Cloudflare's status and code (they were free-text `console.error`); the TURN credential call now times out after 10 s instead of never.
+  - **Log levels:** routine outcomes (`ok`, `stored`, `served`…) go to stdout and the rest to stderr; before this a successful sign-in was written as a warning. A sign-in that fails because Auth is down is now logged (it was silent).
+- **Error reporting:** none, as decided in 0.6; the log line is the record.
+- **Tests.** `tests/observability.test.mjs` (12: the readiness rules, timeouts, nothing leaking from an error, the error line's fields, the heartbeat, the log filter), `apps/realtime/server/log.test.ts` (5) and a stats test in `signalling.test.ts`; the production smoke suite checks `/api/health/ready`'s shape and that the unified server reports the classroom running. Run 6 Nov 2026 against a production build served by `serve.mjs`: 65 of 65.
+- **Still to do (ops, Phase 6 and 8.1):** create the uptime monitor on `/api/health/ready`, decide log retention (a Render log stream to a store is a new supplier for the privacy page), and set the alerts in the table in `docs/OBSERVABILITY.md`.
 
 ### 3.9 Reset-demo-data safety check (required)
 - Confirm the admin "Reset demo data" button and `/api/dev/reset` cannot appear in production (they are `NODE_ENV`-guarded and the proxy 404s `/api/dev`); the production smoke suite must assert it.
@@ -645,6 +654,7 @@ Launch in two steps so the riskier part opens last.
 | 3.11 Tutor-admin | A tutor who is also an admin can teach and admin | built; **its guards are now tested on real data** (4 Nov 2026, `tests-e2e-realstack/scoping.spec.ts`): tutor tools scoped to their own teaching, no way into another tutor's lesson as its tutor |
 | 3.12 Careers in Supabase | Applications stored, admins review, files via expiring links | **built and tested locally** (6 Nov 2026): migration `0020`, store contract on memory, PGlite and the real stack, the route, the admin screens, the production build. Waiting on the hosted project (4.3, then re-run `create-server-role.mjs` in 4.5), the DBS wording (3.12.4) and the agreement approval (3.12.7) |
 | 3.13 Cloudflare SFU, 10 students | An hour-long lesson with 11 people on real devices | built and tested against fakes; needs the keys and a real-device test |
+| 3.8 Observability | Readiness check, error and process logs, a runbook | **code built** (6 Nov 2026): `/api/health/ready`, `server-error` lines, heartbeat, structured classroom failures, `docs/OBSERVABILITY.md`. The uptime monitor, log retention and alerts wait for the Render service |
 | 3.7 Purge tool | A purged person leaves only the documented exceptions | **built and proven locally** (4 Nov 2026): the pause, the purge, the counts-only log, and the sweep that finds nothing. The staging rehearsal waits for Phase 4 |
 | 4 Hosted Supabase | Project migrated, configured, smoke-tested, first admin | open |
 | 5 Domain and email | Deliverable mail, DNS ready | open |

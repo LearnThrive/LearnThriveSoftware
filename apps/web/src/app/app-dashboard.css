@@ -163,6 +163,7 @@
 .status-page__code { margin: 0; font-size: var(--text-label); font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--app-muted); }
 .status-page__title { margin: 0; font-family: var(--font-heading); font-size: var(--text-h1); font-weight: 700; color: var(--app-ink); }
 .status-page__description { margin: 0; max-width: 42ch; color: var(--app-muted); }
+.status-page__reference { margin: 0; font-size: var(--text-label); color: var(--app-muted); }
 .status-page__actions { display: flex; gap: var(--space-2); flex-wrap: wrap; justify-content: center; margin-top: var(--space-2); }
 
 /* ============================================================ Skeletons (section 69) */

@@ -200,7 +200,11 @@ export async function handleSignIn(request: Request, deps: Deps): Promise<Respon
   }
   const result = await gate.rt.auth.signIn(address, password);
   if (!result.ok) {
-    if (result.reason === "unavailable") return UNAVAILABLE();
+    if (result.reason === "unavailable") {
+      // Auth did not answer: without this line an Auth outage would look like a quiet day in the log (checklist 3.8).
+      logOutcome("account-signin", "unavailable", { reason: "auth" });
+      return UNAVAILABLE();
+    }
     lockout.recordFailure(username, gate.address);
     logOutcome("account-signin", result.reason);
     await pause(startedAt + answerFloor(deps) - Date.now());
