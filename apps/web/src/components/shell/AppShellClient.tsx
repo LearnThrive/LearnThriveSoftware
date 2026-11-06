@@ -189,14 +189,17 @@ export function AppShellClient({
       <a className="skip-link" href="#main-content">Skip to main content</a>
 
       <aside className="app-sidebar" aria-label="Product navigation">
-        <div className="app-sidebar__brand">
-          <Link href={homeHref} className="app-brand">
-            <BrandMark className="app-brand__mark" />
-            <span className="app-brand__word">Learn<strong>Thrive</strong></span>
-          </Link>
+        {/* Everything but the toggle scrolls here, so a long menu passes behind nothing: the toggle is a footer beneath it, not over it. */}
+        <div className="app-sidebar__scroll">
+          <div className="app-sidebar__brand">
+            <Link href={homeHref} className="app-brand">
+              <BrandMark className="app-brand__mark" />
+              <span className="app-brand__word">Learn<strong>Thrive</strong></span>
+            </Link>
+          </div>
+          {navigation}
+          <div ref={asideHost} className="app-slot-host" hidden={collapsed || undefined} />
         </div>
-        {navigation}
-        <div ref={asideHost} className="app-slot-host" hidden={collapsed || undefined} />
         <button type="button" className="app-sidebar__collapse" onClick={() => setSidebarCollapsed(!collapsed)} aria-pressed={collapsed}>
           {collapsed ? <ChevronsRight size={16} aria-hidden="true" /> : <ChevronsLeft size={16} aria-hidden="true" />}
           <span className="app-nav__label">{collapsed ? "Expand" : "Collapse"}</span>

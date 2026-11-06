@@ -213,3 +213,42 @@ test('Student navigation journey: next lesson, schedule, classroom reachability,
 
   await logout(page);
 });
+
+/**
+ * Every sidebar link can be reached and clicked: scrolled into view, the link itself is what lies under its top, middle and bottom, and
+ * the collapse toggle stays inside the window. A sticky toggle over the scrolling menu once covered the admin's last links (WCAG 2.2
+ * target size, 2.5.8). Expanded and collapsed, on a usual window and a short one, for the longest menus.
+ */
+for (const [role, account] of [['admin', ADMIN], ['tutor', TUTOR], ['client', CLIENT]] as const) {
+  test(`${role}: no sidebar link is covered by the collapse toggle, expanded or collapsed, on a short window too`, async ({ page }) => {
+    await login(page, account.username, account.password);
+    const toggle = page.locator('.app-sidebar__collapse');
+    for (const collapsed of [false, true]) {
+      if (collapsed) {
+        await toggle.click();
+        await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+      }
+      for (const height of [720, 480]) {
+        await page.setViewportSize({ width: 1280, height });
+        const problems = await page.evaluate(() => {
+          const found: string[] = [];
+          const links = [...document.querySelectorAll<HTMLElement>('.app-sidebar .app-nav__link')];
+          if (links.length === 0) found.push('no sidebar links');
+          for (const link of links) {
+            link.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+            const r = link.getBoundingClientRect();
+            const name = link.getAttribute('href') ?? link.textContent ?? '?';
+            for (const y of [r.top + 2, r.top + r.height / 2, r.bottom - 2]) {
+              const hit = document.elementFromPoint(r.left + r.width / 2, y);
+              if (!hit || !link.contains(hit)) found.push(`${name} at y=${Math.round(y)} is under ${hit?.className || hit?.tagName || 'nothing'}`);
+            }
+          }
+          const t = document.querySelector('.app-sidebar__collapse')!.getBoundingClientRect();
+          if (t.top < 0 || t.bottom > window.innerHeight) found.push(`the toggle is outside the window (${Math.round(t.top)}-${Math.round(t.bottom)})`);
+          return found;
+        });
+        expect(problems, `${role}, ${collapsed ? 'collapsed' : 'expanded'}, ${height}px high`).toEqual([]);
+      }
+    }
+  });
+}

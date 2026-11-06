@@ -185,8 +185,7 @@ test("a child's login from the staff side: suspended and restored, nobody else c
   await expect(login).toContainText(username);
   await expect(login).toContainText('Suspended: they can sign in, but nothing opens');
   await expect(page.getByRole('button', { name: 'Create login' })).toHaveCount(0);
-  // The Login card only: on the admin dashboard the sidebar's collapse button overlaps its last link, a target-size failure of the shell's own.
-  await expectAxeClean(page, 'the Login card of a suspended login', '.card:has(#remove-login-' + url.split('/').pop() + ')');
+  await expectAxeClean(page, 'a student with a suspended login');
 
   // The forms' own action ids, replayed by a tutor and a parent: refused by the action itself, and nothing changes.
   const restore = await replayOf(page, url, 'Restore login');
