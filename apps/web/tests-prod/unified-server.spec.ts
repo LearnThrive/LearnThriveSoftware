@@ -30,6 +30,12 @@ test.describe('the unified production server', () => {
     }
   });
 
+  test('the readiness check sees the classroom running in the same process as the site', async ({ request }) => {
+    // server.ts records the signalling server where the route can find it (launch checklist 3.8); a plain `next start` would say "off".
+    const ready = await request.get('/api/health/ready');
+    expect((await ready.json()).checks.classroom).toBe('ok');
+  });
+
   test('the pages are still served by Next, with the production headers and a closed portal', async ({ request }) => {
     const home = await request.get('/');
     expect(home.status()).toBe(200);

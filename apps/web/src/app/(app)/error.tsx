@@ -22,6 +22,8 @@ export default function AppError({ error, reset }: { error: Error & { digest?: s
       <p className="status-page__description">
         This is usually temporary. Try again, and if it keeps happening let a LearnThrive admin know.
       </p>
+      {/* The digest is a hash, not the error: an admin matches it to the "server-error" log line (docs/OBSERVABILITY.md). */}
+      {error.digest ? <p className="status-page__reference">Reference: <code>{error.digest}</code></p> : null}
       <div className="status-page__actions">
         <button type="button" className="btn btn--primary" onClick={reset}>Try again</button>
         <Link href="/dashboard" className="btn btn--secondary">Back to dashboard</Link>

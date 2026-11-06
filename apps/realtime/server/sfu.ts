@@ -1,4 +1,5 @@
 import type { SfuReply } from '@learnthrive/shared/protocol';
+import { logOutcome } from './log';
 
 /**
  * Cloudflare Realtime SFU, server side. The browser never sees the app secret: it asks THIS server to make each SFU call for it
@@ -49,6 +50,34 @@ export interface SfuApi {
   tracks(sessionId: string, body: TracksBody): Promise<SfuResult>;
   renegotiate(sessionId: string, description: SessionDescription): Promise<SfuResult>;
   close(sessionId: string, body: CloseBody): Promise<SfuResult>;
+}
+
+/** Cloudflare answered with an error: its HTTP status and its own error code, and nothing from the request. */
+export class SfuCallError extends Error {
+  readonly status: number;
+  readonly code: string | undefined;
+  constructor(status: number, code?: string) {
+    super(`Cloudflare SFU answered ${status}${code ? ` ${code}` : ''}`);
+    this.name = 'SfuCallError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+/** What a failed SFU request may log: the operation, Cloudflare's status and code, or that it timed out or could not connect. */
+export function sfuFailureDetails(op: unknown, error: unknown): Record<string, string | number> {
+  const details: Record<string, string | number> = { op: typeof op === 'string' ? op : 'unknown' };
+  if (error instanceof SfuCallError) {
+    details.status = error.status;
+    if (error.code) details.code = error.code;
+  } else if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
+    details.reason = 'timeout';
+  } else if (error instanceof TypeError) {
+    details.reason = 'network'; // what fetch throws when it cannot connect
+  } else {
+    details.reason = 'unexpected'; // for example an answer with no session id
+  }
+  return details;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -158,8 +187,8 @@ export function createCloudflareSfu(config: CloudflareSfuConfig): SfuApi {
     const json: unknown = await response.json().catch(() => null);
     if (!response.ok) {
       // Status and Cloudflare's error code only: never the request, the SDP or a header.
-      const code = isRecord(json) && typeof json.errorCode === 'string' ? ` ${json.errorCode}` : '';
-      throw new Error(`Cloudflare SFU answered ${response.status}${code}`);
+      const code = isRecord(json) && typeof json.errorCode === 'string' ? json.errorCode : undefined;
+      throw new SfuCallError(response.status, code);
     }
     return json;
   }
@@ -273,8 +302,8 @@ export function createSfuService(api: SfuApi) {
         }
         return fail('Unknown request.');
       } catch (error) {
-        // The message names Cloudflare's status, never a secret, an SDP or a header; the browser is told only that it failed.
-        console.error('SFU request failed:', request.op, error instanceof Error ? error.message : 'unknown error');
+        // Cloudflare's status and error code, never a secret, an SDP or a header; the browser is told only that it failed.
+        logOutcome('classroom-sfu', 'failed', sfuFailureDetails(request.op, error));
         return fail('The media service could not complete that request.');
       }
     },

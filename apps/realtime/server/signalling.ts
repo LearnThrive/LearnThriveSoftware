@@ -15,6 +15,7 @@ import type {
   JoinedRoom, MediaState, Participant, ParticipantRole, PollState, PollVisibility, RoomSettings, RoomTimerState,
   ServerToClientEvents, SfuPublication, SfuTrackInfo, SignalCandidate, SignalDescription, TimerMode, UnderstandingCheckState, UnderstandingStatus,
 } from '@learnthrive/shared/protocol';
+import { logOutcome } from './log';
 import { createSfuService, sfuFromEnv, type SfuApi } from './sfu';
 
 const CHAT_RATE_WINDOW_MS = 4000;
@@ -232,15 +233,27 @@ function parsePollCreate(value: unknown): { question: string; options: string[];
 const TURN_CREDENTIAL_TTL_SECONDS = 4 * 60 * 60;
 const TURN_RATE_WINDOW_MS = 60_000;
 const TURN_RATE_MAX = 20;
+const TURN_REQUEST_TIMEOUT_MS = 10_000;
 
 async function fetchCloudflareTurnCredentials(keyId: string, apiToken: string): Promise<unknown> {
   const response = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${keyId}/credentials/generate-ice-servers`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ ttl: TURN_CREDENTIAL_TTL_SECONDS }),
+    // Without a limit a stalled Cloudflare call would hold the browser's request open indefinitely.
+    signal: AbortSignal.timeout(TURN_REQUEST_TIMEOUT_MS),
   });
-  if (!response.ok) throw new Error(`Cloudflare TURN credential request failed with status ${response.status}`);
+  if (!response.ok) throw Object.assign(new Error(`Cloudflare TURN credential request failed with status ${response.status}`), { status: response.status });
   return response.json();
+}
+
+/** What a failed TURN credential request may log: Cloudflare's status, or that it timed out or could not connect. Never the key. */
+export function turnFailureDetails(error: unknown): Record<string, string | number> {
+  const status = typeof error === 'object' && error !== null && 'status' in error ? (error as { status: unknown }).status : undefined;
+  if (typeof status === 'number') return { status };
+  if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) return { reason: 'timeout' };
+  if (error instanceof TypeError) return { reason: 'network' };
+  return { reason: 'unexpected' };
 }
 
 export function createSignallingServer(options?: {
@@ -270,11 +283,15 @@ export function createSignallingServer(options?: {
     const keyId = process.env.CLOUDFLARE_TURN_KEY_ID?.trim();
     const apiToken = process.env.CLOUDFLARE_TURN_API_TOKEN?.trim();
     if (!keyId || !apiToken) { response.status(503).json({ error: 'TURN is not configured on this server.' }); return; }
-    if (!turnRateLimiter.allow(request.ip ?? 'unknown')) { response.status(429).json({ error: 'Too many TURN credential requests. Please slow down.' }); return; }
+    if (!turnRateLimiter.allow(request.ip ?? 'unknown')) {
+      logOutcome('classroom-turn', 'rate_limited');
+      response.status(429).json({ error: 'Too many TURN credential requests. Please slow down.' });
+      return;
+    }
     fetchCloudflareTurnCredentials(keyId, apiToken)
       .then((data) => { response.json({ ...(isRecord(data) ? data : {}), ttlSeconds: TURN_CREDENTIAL_TTL_SECONDS }); })
       .catch((error: unknown) => {
-        console.error('Cloudflare TURN credential request failed:', error);
+        logOutcome('classroom-turn', 'failed', turnFailureDetails(error));
         response.status(502).json({ error: 'Could not generate temporary TURN credentials.' });
       });
   });
@@ -1271,5 +1288,16 @@ export function createSignallingServer(options?: {
     });
   });
 
-  return { httpServer, io, rooms, app, media: roomMedia };
+  // Counts only, for the host's heartbeat log line (apps/web/server.ts, launch checklist 3.8): no room id, name or socket id.
+  function stats() {
+    let participants = 0;
+    let waiting = 0;
+    for (const room of rooms.values()) {
+      participants += room.participants.size;
+      waiting += room.waiting.size;
+    }
+    return { rooms: rooms.size, participants, waiting, sockets: io.engine.clientsCount };
+  }
+
+  return { httpServer, io, rooms, app, media: roomMedia, stats };
 }
