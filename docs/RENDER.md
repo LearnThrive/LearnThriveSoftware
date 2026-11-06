@@ -90,9 +90,9 @@ The counts live in the server's memory: they reset on a restart or deploy and ar
 
 ## Email
 
-Resend sends through its own verified sending domain, while the company mailboxes stay with IONOS.
+Resend sends through its own verified sending domain, while the company mailboxes stay with Google Workspace. IONOS is the domain registrar and holds the DNS records, nothing more.
 
-- **Leave the existing IONOS mail records untouched** when adding Resend's. A domain may have only ONE SPF record, so merge Resend's `include:` into the existing SPF text rather than adding a second record, and use the exact values each provider shows. Add Resend's DKIM records as given. Add a DMARC record starting in monitoring mode (`p=none` with a report address), and tighten it later.
+- **Leave the existing Google Workspace mail records untouched** (the MX records at `aspmx.l.google.com` and the SPF `include:_spf.google.com`, edited in IONOS's DNS panel) when adding Resend's. A domain may have only ONE SPF record, so merge Resend's `include:` into the existing SPF text rather than adding a second record, and use the exact values each provider shows. Add Resend's DKIM records as given. Add a DMARC record starting in monitoring mode (`p=none` with a report address), and tighten it later.
 - After deploying, send **a test application, a test reconfirmation and a test subject request end to end** to an address you control (see "Before the form can go live" for the application), and check that both emails of each arrive, are not in spam, and read well in a webmail client and on a phone. The applicant's confirmation must not carry attachments or a copy of the answers.
 - The destination is the main `info@` mailbox for now. Applications with attachments add up (identity scans especially): decide a mailbox size, a filter or folder for careers and subject-request messages, and a deletion routine ([RETENTION_AND_DELETION.md](RETENTION_AND_DELETION.md)). The emails that hold the signed agreement records and the yearly reconfirmations are evidence: keep them for the agreed period and do not delete them early.
 

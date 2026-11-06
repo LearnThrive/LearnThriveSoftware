@@ -122,6 +122,13 @@ function world(options = {}) {
 const real = () => ({ audio: { kind: "audio", real: true }, video: { kind: "video", real: true } });
 const pub = (participantId, sessionId) => ({ participantId, sessionId, tracks: [{ trackName: "audio", kind: "audio" }, { trackName: "video", kind: "video" }] });
 const settle = (ms = 40) => new Promise((resolve) => setTimeout(resolve, ms));
+// Waits until `done()` is true or `ms` passes, then returns either way, so the assertions after it judge the result. A fixed wait
+// was not enough on a loaded Windows machine (timers tick at about 15 ms there), where three joiners queued one call at a time
+// had not all landed after 150 ms (clean-checkout gate, 6 Nov 2026).
+const settleUntil = async (done, ms = 3000) => {
+  const deadline = Date.now() + ms;
+  while (!done() && Date.now() < deadline) await settle(10);
+};
 
 test("start: one send-only audio and one send-only video, offered with the browser's mids, then announced to the room", async () => {
   const w = world(real());
@@ -182,7 +189,8 @@ test("several joiners at once are pulled one call at a time on the one session",
   w.media.subscribe(pub("a", "sess-a1234567"));
   w.media.subscribe(pub("b", "sess-b1234567"));
   w.media.subscribe(pub("c", "sess-c1234567"));
-  await settle(150);
+  await settleUntil(() => w.streams.size >= 3);
+  await settle(); // the last joiner's renegotiation follows its stream; let it land so the overlap check sees it
   assert.equal(w.maxInFlight(), 1, "never two overlapping changes to one session");
   assert.deepEqual([...w.streams.keys()].sort(), ["a", "b", "c"]);
   assert.equal(w.log.filter((line) => line === "session.new").length, 2, "one publish session, one receive session, however many people");

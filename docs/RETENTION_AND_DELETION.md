@@ -6,7 +6,7 @@ For the owners. The website stores **nothing** about applications, reconfirmatio
 
 | Place | What is in it |
 | --- | --- |
-| The **info@ mailbox on IONOS** (or the careers address, when there is one) | Every application with its attachments, every reconfirmation, every subject request, Library waitlist sign-up and enquiry. This is the main place. (Waitlist sign-ups go to `LIBRARY_WAITLIST_EMAIL`, then `ENQUIRY_EMAIL`, then the site address. Someone who uses the page's "email us" link instead of the form writes to the site address, so check that mailbox too.) |
+| The **info@ mailbox on Google Workspace** (or the careers address, when there is one) | Every application with its attachments, every reconfirmation, every subject request, Library waitlist sign-up and enquiry. This is the main place. (Waitlist sign-ups go to `LIBRARY_WAITLIST_EMAIL`, then `ENQUIRY_EMAIL`, then the site address. Someone who uses the page's "email us" link instead of the form writes to the site address, so check that mailbox too.) |
 | **Resend's sending log** | A copy of each email the website sent through Resend, including the applicant's files attached to the message to you. Check Resend's own retention setting and what you can delete from its dashboard: it was not verified here. |
 | Your **spreadsheets and devices** | The tutor list, the reconfirmation tracker, the subject-request tally, anything downloaded or forwarded. |
 | **Render's logs** | Only outcomes: a reference, a status, counts and sizes. No names, addresses, answers or file content. |

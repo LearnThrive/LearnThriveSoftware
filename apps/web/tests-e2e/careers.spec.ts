@@ -204,7 +204,7 @@ test.describe('the safeguarding agreement page and the applicant privacy notice'
       'LearnThrive Tuition Ltd',
       'Resend',
       'Render',
-      'IONOS',
+      'Google Workspace',
       'Enhanced DBS check including the Children’s Barred List',
       'DBS certificate information is not collected through this website.',
       'Up to 6 months after the decision',
@@ -216,7 +216,7 @@ test.describe('the safeguarding agreement page and the applicant privacy notice'
     ]) {
       expect(text, expected).toContain(expected);
     }
-    expect(text).not.toMatch(/Google/);
+    expect(text).not.toMatch(/Google (?:Meet|Drive|Docs|Sheets)/);
   });
 });
 
@@ -297,9 +297,9 @@ test.describe('the rest of the site', () => {
     await page.goto('/privacy');
     await expect(page.getByRole('link', { name: 'applicant privacy notice' }).first()).toHaveAttribute('href', '/careers/privacy');
     const privacy = (await page.locator('main').innerText()).replace(/\s+/g, ' ');
-    expect(privacy).toContain('Render hosts the website, Resend delivers the emails the website sends, and IONOS hosts');
+    expect(privacy).toContain('Render hosts the website, Resend delivers the emails the website sends, and Google Workspace hosts');
     expect(privacy).toContain('A subject request is kept until that subject is added, or for 12 months');
-    expect(privacy).not.toMatch(/Google/);
+    expect(privacy).not.toMatch(/Google (?:Meet|Drive|Docs|Sheets)/);
     await page.goto('/cookies');
     const cookies = (await page.locator('main').innerText()).replace(/\s+/g, ' ');
     expect(cookies).toContain('the tutor application form and the subject request form');
