@@ -133,7 +133,7 @@ export default function CareersPrivacyPage() {
           content: (
             <>
               <p>
-                <strong>Resend</strong> delivers the emails the website sends. <strong>Render</strong> hosts the website. <strong>IONOS</strong> hosts our
+                <strong>Resend</strong> delivers the emails the website sends. <strong>Render</strong> hosts the website. <strong>Google Workspace</strong> hosts our
                 company mailbox, where your application arrives. The hiring team, led by Tahasin Hasan and Abdurrahman Mustafa, reads it. We
                 do not sell your information, and we do not use it for automated decisions or profiling.
               </p>

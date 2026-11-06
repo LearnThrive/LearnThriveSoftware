@@ -7,7 +7,7 @@ Scope: the tuition side only. LearnThrive AI and the Library have their own base
 ## Who we are to the data
 
 - **Controller:** LearnThrive Tuition Ltd (company number 16680738, England and Wales), through Tahasin Hasan and Abdurrahman Mustafa, who handle privacy requests, complaints and breaches.
-- **Processors (they act on our instructions):** Render (hosting), Supabase (database, sign-in and file storage, London region), Resend (sending email), Stripe (payments), Cloudflare (relays classroom video and audio when needed), the company email provider. Each needs a data processing agreement on file and a line in the privacy notice. IONOS is the domain registrar and DNS only and does not see personal data.
+- **Processors (they act on our instructions):** Render (hosting), Supabase (database, sign-in and file storage, London region), Resend (sending email), Stripe (payments), Cloudflare (relays classroom video and audio when needed), Google Workspace (the company mailboxes). Each needs a data processing agreement on file and a line in the privacy notice. IONOS is the domain registrar and DNS only and does not see personal data.
 - **Everyone we teach is under 18.** The ICO's Children's code (Age Appropriate Design Code) is relevant to an online service used by children. The contracting party is the parent or guardian (the client), who also controls the child's account.
 
 ## The table
