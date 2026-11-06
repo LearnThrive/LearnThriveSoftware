@@ -4,8 +4,9 @@ import test from "node:test";
 import { loadTsFrom } from "./_tsLoader.mjs";
 import { docx, JPEG, MACRO_CONTENT_TYPES, pdf, validApplication } from "./_fixtures.mjs";
 
-// POST /api/careers/apply with email mocked at the network layer (the Resend SDK's fetch), covering the whole
-// path: the gate, origin, rate limit, configuration, body limit, screening, validation, files, both emails.
+// POST /api/careers/apply with email mocked at the network layer (the Resend SDK's fetch) and the careers store and
+// bucket in memory, covering the whole path: the gate, origin, rate limit, configuration, body limit, screening,
+// validation, files, what is stored (launch checklist 3.12), and both emails.
 
 const { careersConfig } = loadTsFrom(import.meta.url, "../src/lib/careers-config.ts");
 // The route-wide ceiling is covered in rateLimit.test.mjs; raise it so this file's many requests do not meet it.
@@ -15,24 +16,38 @@ const core = loadTsFrom(import.meta.url, "../src/lib/human-check-core.ts");
 const { currentAgreement } = loadTsFrom(import.meta.url, "../src/lib/safeguarding-agreement.ts");
 const { agreementHash } = loadTsFrom(import.meta.url, "../src/lib/agreement-record.ts");
 const { POST } = loadTsFrom(import.meta.url, "../src/app/api/careers/apply/route.ts");
+const careers = loadTsFrom(import.meta.url, "../src/lib/careers/store.ts");
 
 const SECRET = "a-test-secret-that-is-at-least-thirty-two-characters-long";
 const ENV_KEYS = ["NODE_ENV", "CAREERS_OPEN_FOR_TESTING", "CAPTCHA_SECRET", "RESEND_API_KEY", "RESEND_FROM_EMAIL", "CAREERS_EMAIL", "ENQUIRY_EMAIL", "ALLOWED_ORIGINS", "TRUSTED_PROXY_HOPS", "CLIENT_IP_HEADER"];
 
-/** Sets the environment for one test and puts it back afterwards. `undefined` removes a variable. */
+/**
+ * Sets the environment for one test and puts it back afterwards. `undefined` removes a variable. Gives the route a
+ * fresh in-memory store and bucket (whatever the environment says), returned so the test can look inside.
+ */
 function environment(t, values) {
   const before = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
   const gate = careersConfig.agreementApprovedByOwner;
   for (const key of ENV_KEYS) delete process.env[key];
   for (const [key, value] of Object.entries(values)) if (value !== undefined) process.env[key] = value;
   check.resetHumanCheckState();
+  const kept = careers.useMemoryCareers();
   t.after(() => {
     for (const key of ENV_KEYS) {
       if (before[key] === undefined) delete process.env[key];
       else process.env[key] = before[key];
     }
     careersConfig.agreementApprovedByOwner = gate;
+    careers.resetCareers();
   });
+  return kept;
+}
+
+/** The one application the store holds, in full. */
+async function onlyApplication(store) {
+  const all = await store.list();
+  assert.equal(all.length, 1, "exactly one application is stored");
+  return store.get(all[0].id);
 }
 
 const OPEN = { CAREERS_OPEN_FOR_TESTING: "1", CAPTCHA_SECRET: SECRET, RESEND_API_KEY: "re_test_key" };
@@ -75,7 +90,6 @@ function mockEmail(t, outcomes = []) {
   return sent;
 }
 
-const decode = (attachment) => Buffer.from(attachment.content, "base64");
 const quiet = (t) => {
   const lines = [];
   t.mock.method(console, "info", (line) => lines.push(String(line)));
@@ -84,8 +98,8 @@ const quiet = (t) => {
   return lines;
 };
 
-test("a good application sends the hiring team's email with the files, then the applicant's confirmation", async (t) => {
-  environment(t, { ...OPEN, RESEND_FROM_EMAIL: "careers@mail.learnthrivetuition.co.uk" });
+test("a good application is stored with its files, the hiring team is told without any personal content, and the applicant is confirmed", async (t) => {
+  const { store, files } = environment(t, { ...OPEN, RESEND_FROM_EMAIL: "careers@mail.learnthrivetuition.co.uk" });
   const sent = mockEmail(t);
   const lines = quiet(t);
   const request = applyRequest({
@@ -101,29 +115,48 @@ test("a good application sends the hiring team's email with the files, then the 
   assert.equal(result.role, "Maths Tutor");
   assert.equal(response.headers.get("cache-control"), "no-store");
 
-  assert.equal(sent.length, 2);
-  const [internal, confirmation] = sent.map((entry) => entry.body);
-  assert.deepEqual(internal.to, ["info@learnthrivetuition.co.uk"]);
-  assert.equal(internal.from, "LearnThrive Tuition <careers@mail.learnthrivetuition.co.uk>");
-  assert.equal(internal.reply_to, "jane@example.com");
-  assert.equal(internal.subject, `Careers application: Maths Tutor - Jane Smith - ${result.reference}`);
-  assert.deepEqual(internal.attachments.map((a) => a.filename), ["CV - Jane CV.pdf", "Cover letter - letter.docx", "Qualification or certificate - degree.jpg"]);
-  assert.equal(decode(internal.attachments[0]).subarray(0, 5).toString(), "%PDF-");
-  assert.deepEqual(decode(internal.attachments[2]), JPEG);
-  assert.match(internal.html, /untrusted/);
-  assert.match(internal.text, /untrusted/);
-  assert.match(internal.html, /Mathematics/);
-  assert.match(internal.text, /Why they want to tutor/);
+  // Stored: the record, every answer, and the files under the application's id with no name in the path.
+  const app = await onlyApplication(store);
+  assert.equal(app.reference, result.reference);
+  assert.equal(app.status, "NEW");
+  assert.equal(app.roleSlug, "maths-tutor");
+  assert.deepEqual([app.firstName, app.lastName, app.email], ["Jane", "Smith", "jane@example.com"]);
+  assert.deepEqual(app.answers.subjects, validApplication().subjects);
+  assert.equal(app.answers.understanding, undefined, "the quiz answers are not kept; the record says it was passed");
+  assert.deepEqual(app.files.map((f) => [f.kind, f.filename, f.contentType]), [
+    ["CV", "CV - Jane CV.pdf", "application/pdf"],
+    ["COVER_LETTER", "Cover letter - letter.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+    ["SUPPORTING", "Qualification or certificate - degree.jpg", "image/jpeg"],
+  ]);
+  assert.equal(app.files[2].documentType, "qualification");
+  for (const file of app.files) {
+    assert.match(file.storagePath, new RegExp(`^${app.id}/[0-9a-f-]{36}\\.(pdf|docx|jpg)$`), "the stored path carries no name");
+    assert.equal((await files.read(file.storagePath)).length, file.sizeBytes);
+  }
+  assert.equal(Buffer.from(await files.read(app.files[0].storagePath)).subarray(0, 5).toString(), "%PDF-");
+  assert.deepEqual(Buffer.from(await files.read(app.files[2].storagePath)), JPEG);
+  assert.deepEqual(app.events.map((e) => e.kind), ["RECEIVED"]);
 
   // The agreement record: version, the name typed, parts and clauses, the check, time, and the hash of the text.
-  assert.match(internal.text, new RegExp(`Agreement version: ${currentAgreement.version}`));
-  assert.match(internal.text, /Typed name: Jane Smith/);
-  assert.match(internal.text, /Parts confirmed: A, B, C, D, E, F, G/);
-  assert.match(internal.text, /Clauses confirmed: A1, A2/);
-  assert.match(internal.text, /Understanding check: Passed/);
-  assert.match(internal.text, /Received \(server time, UTC\): 20\d\d-\d\d-\d\dT/);
-  assert.ok(internal.text.includes(`Agreement text SHA-256: ${agreementHash(currentAgreement)}`));
-  assert.doesNotMatch(internal.text, /203\.0\.113/, "the visitor's address is never recorded");
+  assert.equal(app.agreement.version, currentAgreement.version);
+  assert.equal(app.agreement.typedName, "Jane Smith");
+  assert.equal(app.agreement.understandingPassed, true);
+  assert.deepEqual(app.agreement.confirmedParts, ["A", "B", "C", "D", "E", "F", "G"]);
+  assert.equal(app.agreement.sha256, agreementHash(currentAgreement));
+  assert.match(app.agreement.receivedAt, /^20\d\d-\d\d-\d\dT/);
+  assert.doesNotMatch(JSON.stringify(app), /203\.0\.113/, "the visitor's address is never recorded");
+
+  assert.equal(sent.length, 2);
+  const [notice, confirmation] = sent.map((entry) => entry.body);
+  assert.deepEqual(notice.to, ["info@learnthrivetuition.co.uk"]);
+  assert.equal(notice.from, "LearnThrive Tuition <careers@mail.learnthrivetuition.co.uk>");
+  assert.equal(notice.reply_to, undefined, "replying to the notice does not reach the applicant: reply from the dashboard's address");
+  assert.equal(notice.subject, `New tutor application - Maths Tutor - ${result.reference}`);
+  assert.equal(notice.attachments, undefined, "no files in a mailbox");
+  assert.match(notice.text, new RegExp(`/dashboard/admin/careers/${app.id}`));
+  for (const personal of ["Jane", "Smith", "jane@example.com", "Leeds", "Mathematics", "degree.jpg", "letter.docx", "7700"]) {
+    assert.ok(!notice.text.includes(personal) && !notice.html.includes(personal), `the notice must not contain ${personal}`);
+  }
 
   assert.deepEqual(confirmation.to, ["jane@example.com"]);
   assert.equal(confirmation.reply_to, "info@learnthrivetuition.co.uk");
@@ -139,47 +172,99 @@ test("a good application sends the hiring team's email with the files, then the 
 
   // Logs carry the reference, outcome and sizes, and nothing personal.
   const log = lines.join("\n");
-  assert.match(log, /"event":"careers","outcome":"sent"/);
+  assert.match(log, /"event":"careers","outcome":"stored"/);
+  assert.match(log, /"notice":"sent"/);
   assert.match(log, new RegExp(result.reference));
-  for (const secret of ["Jane", "Smith", "jane@example.com", "Leeds", "Mathematics", "Jane CV"]) assert.ok(!log.includes(secret), `the log must not contain ${secret}`);
+  for (const secret of ["Jane", "Smith", "jane@example.com", "Leeds", "Mathematics", "Jane CV", app.id]) assert.ok(!log.includes(secret), `the log must not contain ${secret}`);
 });
 
-test("identity and right-to-work files are flagged in the subject and the body", async (t) => {
-  environment(t, OPEN);
+test("identity and right-to-work files are stored marked as sensitive, and the notice still says nothing about them", async (t) => {
+  const { store } = environment(t, OPEN);
   const sent = mockEmail(t);
-  const response = await POST(applyRequest({ files: { cv: ["cv.pdf", pdf()], "support-0": ["passport.png", JPEG.length ? Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(40)]) : JPEG] }, documentTypes: ["identity"] }));
+  const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(40)]);
+  const response = await POST(applyRequest({ files: { cv: ["cv.pdf", pdf()], "support-0": ["passport.png", png] }, documentTypes: ["identity"] }));
   assert.equal(response.status, 200);
-  const { body } = sent[0];
-  assert.match(body.subject, /\[ID documents attached\]$/);
-  assert.match(body.html, /Identity or right-to-work documents are attached/);
-  assert.match(body.text, /SENSITIVE/);
-  assert.equal(body.attachments[1].filename, "Identity document - passport.png");
+  const app = await onlyApplication(store);
+  assert.equal(app.sensitiveFileCount, 1);
+  const id = app.files.find((f) => f.sensitive);
+  assert.equal(id.filename, "Identity document - passport.png");
+  assert.equal(id.documentType, "identity");
+  assert.match(id.storagePath, /\.png$/);
+  assert.doesNotMatch(sent[0].body.text + sent[0].body.subject, /passport|identity|ID/i);
 });
 
 test("duplicate file names are made distinct, and odd names are cleaned", async (t) => {
-  environment(t, OPEN);
-  const sent = mockEmail(t);
+  const { store } = environment(t, OPEN);
+  mockEmail(t);
   const response = await POST(applyRequest({
     files: { cv: ["../../cv.exe.pdf", pdf()], "support-0": ["a.jpg", JPEG], "support-1": ["a.jpg", JPEG] },
     documentTypes: ["other", "other"],
   }));
   assert.equal(response.status, 200);
-  assert.deepEqual(sent[0].body.attachments.map((a) => a.filename), ["CV - cv-exe.pdf", "Other - a.jpg", "Other - a (2).jpg"]);
+  assert.deepEqual((await onlyApplication(store)).files.map((f) => f.filename), ["CV - cv-exe.pdf", "Other - a.jpg", "Other - a (2).jpg"]);
 });
 
-test("everything the applicant typed is escaped in the HTML email and cannot add a header to the subject", async (t) => {
-  environment(t, OPEN);
+test("what the applicant typed is escaped in their confirmation, cannot add a header, and never reaches the notice", async (t) => {
+  const { store } = environment(t, OPEN);
   const sent = mockEmail(t);
   const response = await POST(applyRequest({
     payload: { firstName: "<img src=x onerror=alert(1)>", lastName: "Smith\r\nBcc: evil@example.com", typedName: "<img src=x onerror=alert(1)> Smith Bcc: evil@example.com", town: "<b>Leeds</b>", whyTutor: `<script>alert("x")</script> ${"I like teaching. ".repeat(8)}` },
   }));
   assert.equal(response.status, 200);
-  const { subject, html } = sent[0].body;
-  assert.ok(!/[\r\n]/.test(subject));
-  assert.ok(!html.includes("<img src=x"));
-  assert.ok(!html.includes("<script>"));
-  assert.ok(!html.includes("<b>Leeds"));
-  assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/);
+  const [notice, confirmation] = sent.map((entry) => entry.body);
+  for (const message of [notice, confirmation]) {
+    assert.ok(!/[\r\n]/.test(message.subject));
+    assert.ok(!message.html.includes("<img src=x"));
+    assert.ok(!message.html.includes("<script>"));
+  }
+  assert.match(confirmation.html, /&lt;img src=x onerror=alert\(1\)&gt;/);
+  assert.doesNotMatch(notice.html + notice.text, /img src|Leeds|evil@example\.com/);
+  // Stored exactly as typed: the screen that shows it is what escapes it (React does).
+  assert.equal((await onlyApplication(store)).firstName, "<img src=x onerror=alert(1)>");
+});
+
+test("if a file cannot be stored, nothing is kept: the files already stored are removed and there is no record", async (t) => {
+  const { store, files } = environment(t, OPEN);
+  const sent = mockEmail(t);
+  const lines = quiet(t);
+  let puts = 0;
+  const put = files.put.bind(files);
+  files.put = async (...args) => {
+    puts += 1;
+    if (puts === 2) throw new Error("storage upload failed (500)");
+    return put(...args);
+  };
+  const response = await POST(applyRequest({ files: { cv: ["cv.pdf", pdf()], coverLetterFile: ["letter.docx", docx()] } }));
+  assert.equal(response.status, 502);
+  assert.match((await response.json()).error, /Nothing has been sent/);
+  assert.equal(files.objects.size, 0, "the CV that was stored first is gone again");
+  assert.equal((await store.list()).length, 0);
+  assert.equal(sent.length, 0, "no notice and no confirmation for an application that was not kept");
+  assert.match(lines.join("\n"), /"outcome":"store_failed"/);
+});
+
+test("if the record cannot be written, the stored files are removed too", async (t) => {
+  const { store, files } = environment(t, OPEN);
+  const sent = mockEmail(t);
+  quiet(t);
+  store.create = async () => { throw new Error("connection lost"); };
+  const response = await POST(applyRequest());
+  assert.equal(response.status, 502);
+  assert.equal(files.objects.size, 0);
+  assert.equal(sent.length, 0);
+});
+
+test("in production with nowhere to store an application it is a friendly 503 and nothing is read or sent", async (t) => {
+  environment(t, { NODE_ENV: "production", CAPTCHA_SECRET: SECRET, RESEND_API_KEY: "re_live", RESEND_FROM_EMAIL: "careers@mail.learnthrivetuition.co.uk" });
+  careersConfig.agreementApprovedByOwner = true;
+  careers.resetCareers(); // production with no SUPABASE_* settings: no store and no bucket
+  const sent = mockEmail(t);
+  const lines = quiet(t);
+  const response = await POST(applyRequest({ headers: { origin: "https://www.learnthrivetuition.co.uk" } }));
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).code, "unavailable");
+  assert.equal(sent.length, 0);
+  assert.match(lines.join("\n"), /"reason":"no-storage"/);
 });
 
 test("while the agreement is still a draft the route is closed, in development and in production", async (t) => {
@@ -453,14 +538,15 @@ test("the total across all files is enforced on the server", async (t) => {
   assert.equal(sent.length, 0);
 });
 
-test("if the hiring team's email fails, the visitor is told and no confirmation is sent", async (t) => {
-  environment(t, OPEN);
+test("if the hiring team's notice fails, the application is still received and the applicant still confirmed", async (t) => {
+  const { store } = environment(t, OPEN);
   const sent = mockEmail(t, [500]);
-  quiet(t);
+  const lines = quiet(t);
   const response = await POST(applyRequest());
-  assert.equal(response.status, 502);
-  assert.match((await response.json()).error, /Nothing has been sent/);
-  assert.equal(sent.length, 1);
+  assert.equal(response.status, 200);
+  assert.equal(sent.length, 2);
+  assert.equal((await store.list()).length, 1, "it is stored, which is what counts");
+  assert.match(lines.join("\n"), /"notice":"failed"/);
 });
 
 test("if only the confirmation fails, the application still counts as received", async (t) => {
@@ -474,12 +560,13 @@ test("if only the confirmation fails, the application still counts as received",
   assert.match(lines.join("\n"), /"confirmation":"failed"/);
 });
 
-test("a thrown network error is handled, not leaked", async (t) => {
-  environment(t, OPEN);
+test("a thrown network error while emailing is handled, not leaked", async (t) => {
+  const { store } = environment(t, OPEN);
   t.mock.method(globalThis, "fetch", async () => { throw new TypeError("fetch failed to someone@example.com"); });
   const lines = quiet(t);
   const response = await POST(applyRequest());
-  assert.equal(response.status, 502);
+  assert.equal(response.status, 200, "the application was stored before any email was tried");
+  assert.equal((await store.list()).length, 1);
   assert.ok(!JSON.stringify(await response.json()).includes("someone@example.com"));
   assert.ok(!lines.join("\n").includes("someone@example.com"));
 });

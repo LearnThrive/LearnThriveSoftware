@@ -53,6 +53,8 @@ function notFound(pathname: string) {
 export const config = {
   matcher: [
     "/login", "/403", "/dashboard/:path*", "/api/auth/:path*", "/api/lessons/:path*", "/api/dev/:path*", "/dev/:path*",
+    // Administrators' file and export routes for tutor applications (launch checklist 3.12): closed with the portal.
+    "/api/admin/:path*",
     // plan19 phase C. ":path+" on /library so the public /library page itself never reaches the proxy.
     "/account/:path*", "/library/:path+", "/api/account/:path*", "/api/library/:path*", "/api/billing/:path*", "/api/assistant/:path*",
   ],

@@ -13,7 +13,7 @@ import type { Role } from "@/lib/auth/types";
 export type AppNavIcon =
   | "home" | "calendar" | "lessons" | "students" | "clients" | "tutors"
   | "assignments" | "reports" | "notifications" | "activity" | "settings" | "availability"
-  | "study-buddy" | "library" | "search" | "account";
+  | "study-buddy" | "library" | "search" | "account" | "applications";
 
 export interface AppNavItem {
   label: string;
@@ -44,6 +44,7 @@ const ADMIN_NAV: AppNavSection[] = [
       { label: "Students", href: "/dashboard/admin/people/students", icon: "students", matchPrefix: "/dashboard/admin/students" },
       { label: "Clients", href: "/dashboard/admin/people/clients", icon: "clients", matchPrefix: "/dashboard/admin/clients" },
       { label: "Tutors", href: "/dashboard/admin/people/tutors", icon: "tutors", matchPrefix: "/dashboard/admin/tutors" },
+      { label: "Applications", href: "/dashboard/admin/careers", icon: "applications", matchPrefix: "/dashboard/admin/careers" },
     ],
   },
   {

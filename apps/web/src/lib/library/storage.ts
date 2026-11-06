@@ -15,6 +15,8 @@ import { supabaseKeyHeaders } from "../supabaseKeys";
 export const LIBRARY_BUCKET = "library";
 /** LearnThrive AI uploads live in their own private bucket, with the same rules. */
 export const CHAT_UPLOADS_BUCKET = "chat-uploads";
+/** Tutor applications' files (launch checklist 3.12, migration 0020): private, read by administrators only, through the site. */
+export const CAREERS_BUCKET = "careers";
 export const SIGNED_URL_SECONDS = 60;
 
 export interface LibraryStorage {
