@@ -13,7 +13,7 @@ import type { Role } from "@/lib/auth/types";
 export type AppNavIcon =
   | "home" | "calendar" | "lessons" | "students" | "clients" | "tutors"
   | "assignments" | "reports" | "notifications" | "activity" | "settings" | "availability"
-  | "study-buddy" | "library" | "search" | "account";
+  | "study-buddy" | "library" | "search" | "account" | "applications";
 
 export interface AppNavItem {
   label: string;
@@ -44,6 +44,7 @@ const ADMIN_NAV: AppNavSection[] = [
       { label: "Students", href: "/dashboard/admin/people/students", icon: "students", matchPrefix: "/dashboard/admin/students" },
       { label: "Clients", href: "/dashboard/admin/people/clients", icon: "clients", matchPrefix: "/dashboard/admin/clients" },
       { label: "Tutors", href: "/dashboard/admin/people/tutors", icon: "tutors", matchPrefix: "/dashboard/admin/tutors" },
+      { label: "Applications", href: "/dashboard/admin/careers", icon: "applications", matchPrefix: "/dashboard/admin/careers" },
     ],
   },
   {
@@ -88,6 +89,15 @@ const TUTOR_NAV: AppNavSection[] = [
   },
 ];
 
+/** What teaching adds to an administrator's menu: a tutor's own tools, which their administrator screens do not replace. */
+const ADMIN_TEACHING: AppNavSection = {
+  title: "Teaching",
+  items: [
+    { label: "My students", href: "/dashboard/students", icon: "students" },
+    { label: "Availability", href: "/dashboard/tutor/availability", icon: "availability" },
+  ],
+};
+
 const CLIENT_NAV: AppNavSection[] = [
   {
     items: [
@@ -129,13 +139,21 @@ const NAV_BY_ROLE: Record<Role, AppNavSection[]> = {
 export interface NavExtras {
   studyBuddy?: boolean;
   library?: boolean;
+  /** This person teaches (lib/auth/teaching.ts). Only an administrator's menu changes: a tutor's already holds these. */
+  teaches?: boolean;
+}
+
+function tuitionSections(role: Role, teaches: boolean | undefined): AppNavSection[] {
+  const sections = NAV_BY_ROLE[role];
+  return role === "ADMIN" && teaches ? [sections[0], ADMIN_TEACHING, ...sections.slice(1)] : sections;
 }
 
 export function navigationFor(role: Role, extras: NavExtras = {}): AppNavSection[] {
   const learning: AppNavItem[] = [];
   if (extras.studyBuddy) learning.push({ label: "LearnThrive AI", href: "/library/ai", icon: "study-buddy" });
   if (extras.library) learning.push({ label: "Library", href: "/library", icon: "library" });
-  return learning.length > 0 ? [...NAV_BY_ROLE[role], { title: "Learning", items: learning }] : NAV_BY_ROLE[role];
+  const sections = tuitionSections(role, extras.teaches);
+  return learning.length > 0 ? [...sections, { title: "Learning", items: learning }] : sections;
 }
 
 /**
@@ -154,10 +172,11 @@ export interface PlatformNavInput {
   studyBuddy: boolean;
   library: boolean;
   account: boolean;
+  teaches?: boolean;
 }
 
 export function platformNavigation(input: PlatformNavInput): AppNavSection[] {
-  const sections: AppNavSection[] = input.tuition ? [...NAV_BY_ROLE[input.role]] : [];
+  const sections: AppNavSection[] = input.tuition ? [...tuitionSections(input.role, input.teaches)] : [];
   const learning: AppNavItem[] = [];
   if (input.studyBuddy) learning.push({ label: "LearnThrive AI", href: "/library/ai", icon: "study-buddy" });
   if (input.library) learning.push({ label: "Library", href: "/library", icon: "library", matchPrefix: "/library/search" });

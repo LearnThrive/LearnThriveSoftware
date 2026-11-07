@@ -1,19 +1,30 @@
 import type { DataProvider } from "@learnthrive/data/repositories";
 import type { NotificationType } from "@learnthrive/data/domain";
 import type { Role } from "@/lib/auth/types";
+import { accountBackend } from "@/lib/account/runtime";
 import { findUserIdByProfileId, findUserIdsByRole } from "@/lib/auth/devProvider";
 
-// Plan section 54: "Implement in-app notifications for meaningful events... Keep them in-memory
-// for current development provider." Every notification is addressed to an AuthenticatedUser.id,
-// resolved here from a domain profileId (via devProvider.ts's reverse lookup) or a role — a
-// domain record with no matching login account (most Admin-created Tutors/Clients/Students,
-// which only the four seed accounts have) simply gets no notification, silently, rather than an
-// error. See docs/NOTIFICATIONS.md.
+// Plan section 54: every notification is addressed to a real login, resolved here by the data
+// provider from a domain record or a role — a record with no login simply gets no notification,
+// silently, rather than an error. On the production database a recipient that is not a real
+// login is not merely unread: notifications.user_id is a foreign key, so the insert would fail
+// and take the report or lesson that raised it with it. See docs/NOTIFICATIONS.md.
+//
+// Only the in-memory backend looks at the development accounts: its seeded records belong to them.
+
+async function loginFor(data: DataProvider, recordId: string): Promise<string | null> {
+  const found = await data.notifications.recipientFor(recordId);
+  return found ?? (accountBackend() === "memory" ? findUserIdByProfileId(recordId) : null);
+}
+
+function loginsWithRole(data: DataProvider, role: Role): Promise<string[]> {
+  return accountBackend() === "memory" ? findUserIdsByRole(role) : data.notifications.recipientsWithRole(role);
+}
 
 export async function notifyProfile(
   data: DataProvider, profileId: string, type: NotificationType, message: string, link?: string,
 ): Promise<void> {
-  const userId = await findUserIdByProfileId(profileId);
+  const userId = await loginFor(data, profileId);
   if (!userId) return;
   await data.notifications.create({ userId, type, message, ...(link ? { link } : {}) });
 }
@@ -27,6 +38,6 @@ export async function notifyProfiles(
 export async function notifyRole(
   data: DataProvider, role: Role, type: NotificationType, message: string, link?: string,
 ): Promise<void> {
-  const userIds = await findUserIdsByRole(role);
+  const userIds = await loginsWithRole(data, role);
   for (const userId of userIds) await data.notifications.create({ userId, type, message, ...(link ? { link } : {}) });
 }

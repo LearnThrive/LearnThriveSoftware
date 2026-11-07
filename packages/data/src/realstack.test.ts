@@ -123,7 +123,8 @@ describe("the real local Supabase stack", { skip: ENABLED ? false : "set SUPABAS
       await own("insert into public.download_events (client_id, resource_id) values ($1,$2)", [who.clientId, res.members]);
       await own("insert into public.usage_counters (client_id, kind, window_start, count) values ($1,'assistant_message_day', date_trunc('day', now()), 3)", [who.clientId]);
       await own("insert into public.consents (profile_id, kind, version, text_sha256) values ($1,'terms','1',$2)", [who.id, SHA]);
-      d.session = (await own("insert into public.chat_sessions (client_id, student_id, title) values ($1,$2,'Help') returning id", [who.clientId, who.studentIds[0]]))[0]!.id;
+      // The adult's own chat: a learner's is the server's alone since 0010, tested on its own below.
+      d.session = (await own("insert into public.chat_sessions (client_id, title) values ($1,'Help') returning id", [who.clientId]))[0]!.id;
       d.message = (await own("insert into public.chat_messages (session_id, role, content) values ($1,'user','a secret question') returning id", [d.session]))[0]!.id;
       await own("insert into public.chat_files (session_id, message_id, storage_path, bytes, content_type) values ($1,$2,$3,10,'image/png')", [d.session, d.message, `rs-${runId}/${tag}.png`]);
     }
@@ -343,6 +344,22 @@ describe("the real local Supabase stack", { skip: ENABLED ? false : "set SUPABAS
       for (const t of ["clients", "students", "client_students", "subscriptions", "entitlements", "chat_sessions", "consents", "usage_counters"]) assert.deepEqual(rows(await get("tom", `/${t}?select=*`)), [], t);
     });
 
+    test("a guardian cannot read a learner's conversations, even in their own family (0010); only the server can", async () => {
+      const ava = me.alice.studentIds[0]!;
+      const learnerChat = (await own("insert into public.chat_sessions (client_id, student_id, title) values ($1,$2,'Ava only') returning id", [me.alice.clientId, ava]))[0]!.id as string;
+      const message = (await own("insert into public.chat_messages (session_id, role, content) values ($1,'user','private to the learner') returning id", [learnerChat]))[0]!.id as string;
+      await own("insert into public.chat_files (session_id, message_id, storage_path, bytes, content_type) values ($1,$2,$3,10,'image/png')", [learnerChat, message, `rs-${runId}/learner-only.png`]);
+      try {
+        assert.deepEqual(ids(rows(await get("alice", "/chat_sessions?select=id"))), [seeded.A.session!], "only the adult's own chat");
+        assert.deepEqual(rows(await get("alice", `/chat_messages?select=id&id=eq.${message}`)), []);
+        assert.deepEqual(rows(await get("alice", `/chat_files?select=id&session_id=eq.${learnerChat}`)), []);
+        assert.equal((await rpc(s, as("alice"), "request_chat_deletion", { p_session_id: learnerChat })).body, false, "nor delete it through the API");
+        assert.deepEqual(rows(await rest(s, as("alice"), "PATCH", `/chat_sessions?id=eq.${learnerChat}`, { body: { title: "x" } })), []);
+      } finally {
+        await own("delete from public.chat_sessions where id = $1", [learnerChat]);
+      }
+    });
+
     test("a second guardian linked by the server can read the student but not change or delete it, and sees no chats of that family", async () => {
       const ava = me.alice.studentIds[0]!;
       await own("insert into public.client_students (client_id, student_id) values ($1,$2)", [me.bob.clientId, ava]);
@@ -436,7 +453,9 @@ describe("the real local Supabase stack", { skip: ENABLED ? false : "set SUPABAS
       const post = (client: string | undefined, student: string | null, extra: Record<string, unknown> = {}) => rest(s, as("alice"), "POST", "/chat_sessions", { body: { client_id: client, student_id: student, title: "t", ...extra } });
       refused(await post(me.bob.clientId, null), RLS, "for Bob's family");
       refused(await post(me.alice.clientId, me.bob.studentIds[0]!), RLS, "about Bob's child");
-      assert.equal((await post(me.alice.clientId, me.alice.studentIds[0]!)).status, 201);
+      // A chat that belongs to a learner is the server's to create (0010): not even their own guardian can write one through the API.
+      refused(await post(me.alice.clientId, me.alice.studentIds[0]!), RLS, "a learner's chat is server-only");
+      assert.equal((await post(me.alice.clientId, null)).status, 201);
       refused(await post(me.alice.clientId, null, { delete_after: "2099-01-01T00:00:00Z" }), PERMISSION, "own the deadline");
       const bobSession = seeded.B.session!;
       assert.deepEqual(rows(await rest(s, as("alice"), "PATCH", `/chat_sessions?id=eq.${bobSession}`, { body: { title: "x" } })), []);
@@ -640,9 +659,10 @@ describe("the real local Supabase stack", { skip: ENABLED ? false : "set SUPABAS
       for (const [bucket, name] of [["library", "a.pdf"], ["library", "b.pdf"], ["chat-uploads", "a.png"]]) await call("DELETE", `/object/${bucket}/${folder}/${name}`, { key: s.secret });
     });
 
-    test("both buckets exist, are private, carry their limits, and storage.objects has row level security with NO policy for anyone", async () => {
-      const buckets = await own("select id, public, file_size_limit::int as lim, allowed_mime_types as mime from storage.buckets where id in ('library','chat-uploads') order by id");
+    test("the buckets exist, are private, carry their limits, and storage.objects has row level security with NO policy for anyone", async () => {
+      const buckets = await own("select id, public, file_size_limit::int as lim, allowed_mime_types as mime from storage.buckets where id in ('library','chat-uploads','careers') order by id");
       assert.deepEqual(buckets, [
+        { id: "careers", public: false, lim: 3 * 1024 * 1024, mime: ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "image/jpeg", "image/png"] },
         { id: "chat-uploads", public: false, lim: 15 * 1024 * 1024, mime: ["image/jpeg", "image/png", "application/pdf"] },
         { id: "library", public: false, lim: 25 * 1024 * 1024, mime: ["application/pdf"] },
       ]);
@@ -660,6 +680,26 @@ describe("the real local Supabase stack", { skip: ENABLED ? false : "set SUPABAS
       assert.equal((await put("chat-uploads", `${folder}/a.gif`, new Uint8Array([71, 73, 70, 56]), "image/gif")).body.statusCode, "415", "chat-uploads takes JPEG, PNG and PDF only");
     });
 
+    test("careers takes exactly what the apply route stores: PDF, Word, JPEG and PNG up to 3 MB, and nothing else", async () => {
+      // The content types the route sends (apps/web/src/app/api/careers/apply/route.ts, STORED). A mismatch here would turn real
+      // applications away, so each is put for real and then removed.
+      const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+      const accepted: Array<[string, string]> = [["a.pdf", "application/pdf"], ["a.docx", DOCX], ["a.jpg", "image/jpeg"], ["a.png", "image/png"]];
+      for (const [name, type] of accepted) {
+        const r = await put("careers", `${folder}/${name}`, PDF, type);
+        assert.equal(r.status, 200, `${type}: ${JSON.stringify(r.body).slice(0, 120)}`);
+      }
+      assert.equal((await put("careers", `${folder}/x.txt`, PDF, "text/plain")).body.statusCode, "415", "careers refuses other types");
+      const big = new Uint8Array(3 * 1024 * 1024 + 1024);
+      big.set(PDF);
+      assert.equal((await put("careers", `${folder}/big.pdf`, big, "application/pdf")).body.statusCode, "413", "and anything over 3 MB");
+      // The server reads it back the way the file route does: a signed link made for the request.
+      const made = await sign("careers", `${folder}/a.pdf`, 60);
+      assert.equal(made.status, 200);
+      assert.equal((await fetch(`${s.api}/storage/v1${made.body.signedURL}`)).status, 200);
+      for (const [name] of accepted) await call("DELETE", `/object/careers/${folder}/${name}`, { key: s.secret });
+    });
+
     test("the bucket enforces its size limit: just over 25 MB is refused for the library", async () => {
       const big = new Uint8Array(25 * 1024 * 1024 + 1024);
       big.set(PDF);
@@ -669,7 +709,7 @@ describe("the real local Supabase stack", { skip: ENABLED ? false : "set SUPABAS
 
     test("anonymous callers and signed-in people can neither list, read, write, delete, move nor sign: the bucket looks empty and closed", async () => {
       for (const [who, token] of [["anon", null], ["alice", as("alice")], ["admin", as("admin")]] as const) {
-        for (const bucket of ["library", "chat-uploads"]) {
+        for (const bucket of ["library", "chat-uploads", "careers"]) {
           const list = await call("POST", `/object/list/${bucket}`, { token, json: { prefix: folder, limit: 100 } });
           assert.ok(list.status === 200 && Array.isArray(list.body) && list.body.length === 0, `${who} listing ${bucket}: ${list.status} ${JSON.stringify(list.body).slice(0, 100)}`);
         }

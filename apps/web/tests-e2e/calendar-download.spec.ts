@@ -1,15 +1,15 @@
 import { test, expect, type Page } from '@playwright/test';
-import { uniqueLabel } from './support';
+import { dayInWeeks, lessonSlot, uniqueLabel } from './support';
 
 // plan15 feature A4: "Add to calendar". The download is an authenticated route that can return only lessons
 // the person can already see (a lesson they cannot see is the same 404 as one that does not exist), and the
 // file holds the minimum. The RFC 5545 details and DST behaviour are unit tests (tests/ics.test.mjs).
 
 const ACCOUNTS = {
-  admin: { email: 'admin@learnthrive.dev', password: 'dev-admin-pass' },
-  tutor: { email: 'tutor@learnthrive.dev', password: 'dev-tutor-pass' },
-  client: { email: 'client@learnthrive.dev', password: 'dev-client-pass' },
-  student: { email: 'student@learnthrive.dev', password: 'dev-student-pass' },
+  admin: { username: 'dev.admin', password: 'dev-admin-pass' },
+  tutor: { username: 'dev.tutor', password: 'dev-tutor-pass' },
+  client: { username: 'dev.client', password: 'dev-client-pass' },
+  student: { username: 'dev.student', password: 'dev-student-pass' },
 } as const;
 
 const SEED_UPCOMING = 'lesson-gcse-maths-upcoming';
@@ -17,7 +17,7 @@ const SEED_UPCOMING = 'lesson-gcse-maths-upcoming';
 async function login(page: Page, who: keyof typeof ACCOUNTS) {
   await page.request.post('/api/auth/logout');
   await page.goto('/login');
-  await page.getByLabel('Email').fill(ACCOUNTS[who].email);
+  await page.getByLabel('Username').fill(ACCOUNTS[who].username);
   await page.locator('input[name="password"]').fill(ACCOUNTS[who].password);
   await Promise.all([page.waitForURL(/\/dashboard$/), page.getByRole('button', { name: 'Sign in' }).click()]);
 }
@@ -83,9 +83,10 @@ test('a lesson the person cannot see is a 404 (no existence oracle), and the Adm
 
   await page.goto('/dashboard/admin/lessons/new');
   await page.getByLabel('Tuition Assignment').selectOption({ label: assignmentTitle });
+  const slot = lessonSlot(dayInWeeks(3, 'Tuesday'), '11:00');
   await page.locator('#lesson-title').fill(lessonTitle);
-  await page.locator('#lesson-date').fill('2026-11-24');
-  await page.locator('#lesson-time').fill('11:00');
+  await page.locator('#lesson-date').fill(slot.date);
+  await page.locator('#lesson-time').fill(slot.time);
   await page.getByRole('button', { name: 'Schedule lesson' }).click();
   await expect(page).toHaveURL(/\/dashboard\/calendar$/);
 

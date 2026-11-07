@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { LearnersPanel } from "@/components/learner/LearnersPanel";
+import { selfServiceAccounts } from "@/lib/account/selfService";
 import { requireAccountPage } from "@/lib/account/pages";
 import { nextJar } from "@/lib/account/next";
 import { inSupervisedView } from "@/lib/learner/resolve";
@@ -18,7 +19,7 @@ export default async function LearnersPage() {
   return (
     <div className={styles.page} style={{ maxWidth: "52rem" }}>
       <h1>Your learners</h1>
-      <LearnersPanel />
+      <LearnersPanel canInvite={selfServiceAccounts()} />
       <p>
         <Link className="text-link" href="/account">
           Back to your account

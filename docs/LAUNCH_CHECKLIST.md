@@ -84,7 +84,7 @@ None of these can be defaulted by an engineer. For each, write the answer and th
 | Retention | **Purge**: when a student or tutor leaves, their records are purged, apart from the legal exceptions in `LAWFUL_BASES.md` (financial records, safeguarding records, unsuccessful applications) | Build the purge tool (3.7); update `RETENTION_AND_DELETION.md` to match |
 | Terms | **Tahasin will provide them** | Blocks publishing the terms page and any payment wording (3.10.13b) until received |
 | Stripe | **Tahasin will provide the account access and the product rules** (0.1) | Blocks all of 3.10 |
-| Suppliers | Render, Supabase, Resend, Stripe, Cloudflare; IONOS is the **domain registrar and DNS only**; company email is hosted elsewhere (probably Google Workspace, as `legal-faqs.tsx` says: confirm) | Final list with transfer safeguards for the privacy page |
+| Suppliers | Render, Supabase, Resend, Stripe, Cloudflare; IONOS is the **domain registrar and DNS only**; company email is **Google Workspace** (the domain's MX records point at `aspmx.l.google.com`; checked 6 Nov 2026) | Final list with transfer safeguards for the privacy page |
 
 - **Note on the DPIA.** You decided one is not needed, and that is recorded. I would still have Tahasin and Abdurrahman check it against the ICO's own DPIA screening checklist first. UK GDPR requires one before processing that is likely to be high risk, and the ICO lists children's data and online services aimed at children among the things that point that way. A short DPIA is cheap insurance and also answers the questions the first school, parent or regulator will ask. Treat it as recommended, not blocking.
 - **Careers.** The safeguarding agreement approval flag (`agreementApprovedByOwner`) is separate and stays closed until the clauses are approved (see 3.12).
@@ -104,7 +104,7 @@ None of these can be defaulted by an engineer. For each, write the answer and th
 
 ### 0.7 Accounts and access to hand over
 - **Render: Brian holds the account.** He creates the web service, or invites a teammate to; secrets are passed through a password manager, never chat or email.
-- Supabase organisation (exists: Pro plan, project `learnthrive-prod`, ref `vwsjvdpkgjhwmqmufmrh`, London), a Resend account, a **Stripe** account (from Tahasin, 3.10.2), a **Cloudflare** account (TURN key and the SFU app id and secret), **IONOS** for the domain and DNS, the company email provider's admin (to add SPF/DKIM), GitHub/GitLab repo access, Google Search Console, an uptime monitor.
+- Supabase organisation (exists: Pro plan, project `learnthrive-prod`, ref `vwsjvdpkgjhwmqmufmrh`, London), a Resend account, a **Stripe** account (from Tahasin, 3.10.2), a **Cloudflare** account (TURN key and the SFU app id and secret), **IONOS** for the domain and DNS, the Google Workspace admin (company mail), GitHub/GitLab repo access, Google Search Console, an uptime monitor.
 
 ### 0.8 Content
 - **Images: decided, keep the current photos.** The founders section on the About page has been restyled (portrait and name as a header, the bio full width underneath, equal cards, a brand-coloured ring on the portrait, side by side on phones). No new photography is needed.
@@ -119,16 +119,21 @@ None of these can be defaulted by an engineer. For each, write the answer and th
 - **Why.** Production is deployed only from a clean, pushed `main`. At the time of writing there are uncommitted changes (assistant thinking and essay-prompt edits among them) and untracked brief files at the repo root.
 - **Do.** Review `git status`; commit work in sensible commits (stage paths, never `git add -A`); leave the root briefs (`*_Prompt.md`, `plan*.md`, `CAREERS_*.md`) untracked or move them as decided in 0.8; make sure no `.env*` is staged.
 - **Done when.** `git status` is clean and the branch is pushed.
+- **Done (6 November 2026).** Everything up to pull request 12 is merged to `main`, and `git status` is clean: the root drafts of pull-request descriptions (`PR-*.md`) and downloaded CI job logs are now gitignored rather than deleted.
 
 ### 1.2 Decide the remote and branch rules
 - The repo has two remotes (`origin` on GitHub, `gitlab`). Pick the one Render deploys from, protect `main`, require CI to pass, and merge by pull request.
+- **Open (owner, in GitHub's settings).** `git remote -v` shows only `origin` (GitHub, `LearnThrive/LearnThriveSoftware`); there is no `gitlab` remote in this checkout any more. Protecting `main` and requiring the `verify` job is a repository setting, done on GitHub's web page (there is no `gh` CLI here).
 
 ### 1.3 Run the whole quality gate on a clean checkout
 - **Do.** `npm ci`, then from the repo root `npm run typecheck`, `npm run lint`, `npm test`, `npm run build` (the build also builds `apps/classroom` and typechecks `apps/realtime`). For the web app: `npm run check:bundle --workspace=apps/web` against the production build, which also confirms no seed data or secret reaches the browser bundle. The ledger notes this was never run against a production build.
 - **Done when.** All pass; paste the counts into the release notes.
+- **Mostly evidenced (4 November 2026), on an existing checkout rather than a clean one.** From the repo root: typecheck clean, lint 0 errors (9 old warnings), `npm test` 1020 web and 322 data (1 skipped) with classroom and realtime green, `apps/classroom` and `apps/web` production builds both fine. **`check:bundle` ran against a production build for the first time**: 1371 browser-reachable files searched against 19 sentinel secrets, none present. **Still to do: the `npm ci` clean-checkout part**, which is the point of the task - CI does it on every run, which is some assurance, but it has not been done here. (Note that `check:bundle` builds into `.next-bundle-check` and Next appends that directory to `tsconfig.json`; do not commit that.)
+- **Done on a clean checkout (6 November 2026)**, a fresh worktree of `main` at pull request 12: `npm ci`, typecheck, lint (0 errors, 9 old warnings), both production builds and `check:bundle` (1371 browser files, 19 sentinel secrets, none present) all passed. `npm test` passed 1057 of 1058 web tests: `classroomSfu.test.mjs` "several joiners at once" waited a fixed 150 ms for three queued joiners, which a heavily loaded Windows machine missed (it passed 15 of 15 alone). It now waits until the third joiner lands (up to 3 s) with the same assertions, and passed 10 of 10 with four copies of the suite running beside it. Repeated after the Next 16.4.5 upgrade (1.5): typecheck, lint, 1058 web and 330 data tests, both builds, and `check:bundle` (1364 files, none present).
 
-### 1.4 Prove the CI workflow on GitHub
-- `.github/workflows/ci.yml` has never executed on GitHub (`DEPLOYMENT_READINESS.md` 16.6). Open a pull request, watch lint, typecheck, tests, build and the production smoke suite (Chromium, Firefox, WebKit) pass, then merge. Fix anything environment-specific that fails.
+### 1.4 Prove the CI workflow on GitHub - DONE (4 November 2026)
+- **Done.** `.github/workflows/ci.yml` has executed on GitHub. The blocking `verify` job (lint, typecheck, unit tests, both builds, then the production smoke suite in Chromium, Firefox and WebKit against `serve.mjs`) went green on **pull requests 8 and 9**, and the main-only `e2e` job - the full dev-server Playwright suite, about 70 minutes - went green on **both merges to `main`**. Nothing environment-specific had to be fixed.
+- The same `verify` steps were reproduced locally on PR 9 before it was opened, and agreed: lint 0 errors, typecheck clean, 1020 web and 322 data unit tests, both builds, 248 passed and 44 skipped across the three browsers.
 
 ### 1.5 Fix the stale pieces
 - Correct the claim that company mailboxes are on IONOS. IONOS is the domain registrar and DNS only (0.4). It appears in `docs/DEPLOYMENT.md`, `docs/RENDER.md`, `docs/RETENTION_AND_DELETION.md`, the marketing repo's `DEPLOYMENT_PLAN.md` and possibly the privacy page; `legal-faqs.tsx` currently says Google Workspace/Gmail, which is probably right: confirm and make everything agree.
@@ -136,33 +141,45 @@ None of these can be defaulted by an engineer. For each, write the answer and th
 - Run `npm run env:docs --workspace=apps/web` so `docs/ENVIRONMENT.md` matches the registry.
 - Update the footer test and legal wording in the marketing site if that repo is retired by this launch (see 9.1).
 - Run `npm audit --omit=dev` and re-read the known exception: the findings are all through Excalidraw, which **is** reachable once the portal opens (the classroom whiteboard). Decide fix or accept, and record it.
+- **Done (6 November 2026), except the marketing-repo item (9.1).**
+  - **Mail host:** the domain's MX records point at Google (`aspmx.l.google.com`, SPF `include:_spf.google.com`) and its nameservers are IONOS's. So the mailbox is **Google Workspace**, and the premise above was the wrong way round: `legal-faqs.tsx`, `/privacy` and `/careers/privacy` said IONOS. They, `LEGAL_REVIEW.md`, `RENDER.md`, `RETENTION_AND_DELETION.md` and `LAWFUL_BASES.md` now say Google Workspace; `DEPLOYMENT.md` never named a host. The tests still keep Google Meet, Drive, Docs and Sheets off every page. **The legal reviewer should see the privacy-notice change.**
+  - **`.env.example`** regenerated (about forty dead assistant names gone; the Cloudflare SFU pair and `CLASSROOM_JOIN_SECRET` added). **`ENVIRONMENT.md`** was already current.
+  - **`npm audit`** was no longer just the Excalidraw exception: 21 findings, two of them **critical** in Next 16.3.8 (remote code execution). Branch `fix/audit-next-16.4.5` moves to Next 16.4.5 and applies the non-breaking fixes; the 12 left are all the Excalidraw chain, accepted and recorded in `DEPLOYMENT_READINESS.md`. CI's audit job is report-only (`continue-on-error`), which is why a critical went unnoticed: consider failing it at `--audit-level=critical`.
 
 ---
 
 ## Phase 2: Prove the tuition database on a real Supabase stack
 
-Why: the tuition tables (migrations `0010`, `0011`) and the learner-identity functions have only ever run on PGlite (in-process Postgres). Docker would not start on the dev machine, so the real service has never run them.
+Why: the tuition tables (migrations `0010`, `0011`) and the learner-identity functions had only ever run on PGlite (in-process Postgres), because Docker would not start on the dev machine. **This whole phase is now done locally (4 November 2026); only the hosted project is left, in Phase 4.**
 
-### 2.1 Get Docker running
+### 2.1 Get Docker running - DONE
 - Open Docker Desktop once and finish any first-run or WSL prompt until `docker ps` works. If the engine will not start, use another machine; this blocks everything in this phase.
 
-### 2.2 Start the local stack and run the real-stack suite
+### 2.2 Start the local stack and run the real-stack suite - DONE
 - **Do.** `npm run supabase:start`, then `npm run test:realstack` (runs the data and web real-stack tests).
-- **Expect.** The 174 existing tests pass; the suite proves migrations apply from nothing, row-level security through the real API, and the narrow server role.
+- **Expect.** All 307 tests pass (291 data, 16 web, including `realstack.accounts` for 3.2 and 3.11); the suite proves migrations apply from nothing, row-level security through the real API, the narrow server role, and that real Auth takes the username accounts.
+- **Last run.** 4 November 2026, migrations `0001` to `0017`: **307 of 307**, on a database reset from nothing. It was 220 on 3 November, before 2.3 added the identity and domain-provider contracts; that run found one bug, now fixed (the Paper Tutor's JSON was encoded twice; `docs/SUPABASE_REAL_STACK.md`, finding 14).
 - **Care.** The local stack publishes ports on all interfaces and serves an unauthenticated `/pg/query`; run `npm run supabase:stop` when finished.
 
-### 2.3 Wire the unproven contracts into the real-stack files
-- The ledger lists these as undone: add the **identity**, **data provider** (lessons, attendance, reports, notifications, availability, settings) and **paper jobs** contracts (`identityContract.ts`, `dataProviderContract.ts`) to the `realstack.*.test.ts` files the way the Library contract is, so they run against real Postgres directly, through the pooler, and as the `learnthrive_server` role.
-- Update `create-server-role.mjs` grants if any new table or function is unreachable by the role (a test pins this on purpose).
+### 2.3 Wire the unproven contracts into the real-stack files - DONE (4 November 2026)
+- **Done.** `packages/data/src/realstack.identity.test.ts` (19 tests) and `realstack.data.test.ts` (10 tests) run the identity and domain-provider contracts the way `realstack.store.test.ts` runs the Library one: **directly, through the transaction pooler, and as the narrow `learnthrive_server` role** - 87 new tests, so the suite is 307. Both are in `packages/data/scripts/realstack.mjs`, one file at a time.
+- **Paper jobs were already there.** The Paper Tutor's durable-job contract is part of `libraryContract` ("papers: durable jobs", 8 tests), which `realstack.store.test.ts` has run all three ways since 3 November; it is what found finding 14.
+- **No grant change was needed.** `create-server-role.mjs` already grants data access on every table in `public` and execute on exactly the six project functions the repositories call, so nothing was unreachable; `realstack.role.test.ts` still pins that list unchanged.
+- **One contract bug fixed, not weakened.** `dataProviderContract.ts` hard-coded a recurrence id, so a second run against the same database saw the first run's series. It now generates one (`randomUUID`), which keeps the assertion exactly as strong. `resetPublicData` also puts back the seeded `platform_settings` singleton that truncation removes.
 
-### 2.4 Test the real flows against real Auth
-- With the local stack and `npm run dev:supabase`, walk through today's flow: guardian sign-up, email confirm (read the email in the local mail catcher), sign-in, create a learner invitation, learner sign-up, accept; refresh; password reset; sign-out. Repeat with the admin-created flow once 3.2 is built (sign-ups off, set-password email, sign-in).
-- Run the migration upgrade path: `supabase db reset`, and apply the later migrations to a populated copy (the ledger lists "upgrade-from-populated-copy" as undone).
+### 2.4 Test the real flows against real Auth - DONE for the admin-created flow (4 November 2026)
+- **Done.** `npm run test:e2e:realstack --workspace=apps/web` (`apps/web/playwright.realstack.config.ts`) runs a dev server on the local stack (`LEARNTHRIVE_SUPABASE_USE=1`, the same switch `npm run dev:supabase` sets) and walks the admin-created flow in a browser on real GoTrue and real Postgres: the first administrator, made by the real operator script, signs in on its temporary password and is held on `/account/reset` with the dashboard, the account pages and `/api/account/me` all shut until it chooses one; that administrator then creates a parent, a child (generated username), a tutor and the assignment that joins them through the admin screens; each of the three signs in on their temporary password, must change it, reaches their own dashboard, and finds the temporary password no longer works; a forgotten password is reset by the real one-time link, which works once; signing out closes the dashboard again. 5 tests, all passing.
+- **It found a real bug, now fixed:** "Create login" threw the temporary password away before it could be read (`docs/SUPABASE_REAL_STACK.md`, finding 15).
+- **The one gap.** The site sends its reset link through **Resend's HTTP API**, not SMTP, so on a machine with no Resend key nothing is posted and the **local mail catcher never sees it** (finding 17). The link itself is real - asked of real Auth and spent end to end - but the delivery hop belongs to Phase 5. GoTrue's own mail to the catcher is still proved by `apps/web/tests/realstack.app.test.mjs`.
+- **The email sign-up flow** (guardian sign-up, confirm by the emailed link, learner invitation and accept) is not what launch uses: public sign-up is closed (3.2.5). It is proved against real Auth and the real mail catcher by `realstack.app.test.mjs`, and the invitation and acceptance rules by the identity contract on the real stack (2.3), rather than by a browser walk.
+- **Migration paths.** `supabase db reset` applied all seventeen migrations from nothing on real Postgres again on 4 November. Applying the later migrations to a populated copy was done on 3 November (`0017` onto a populated `0016`; `docs/SUPABASE_REAL_STACK.md`).
 
-### 2.5 Re-audit tuition scoping on the SQL provider
-- The ledger says the staff dashboards' per-role scoping was not re-audited page by page on the SQL provider. For each dashboard page, confirm with two families and two tutors that nobody sees another's students, lessons, reports, attendance or notifications, including by guessing ids in the URL. Add Playwright/real-stack tests for any gap found.
+### 2.5 Re-audit tuition scoping on the SQL provider - DONE (4 November 2026)
+- **Done, and written down in `docs/SCOPING_AUDIT.md`.** `apps/web/tests-e2e-realstack/scoping.spec.ts` (7 tests) audits every dashboard page as an administrator, an administrator who teaches, two tutors, two families' parents and a learner, on the SQL provider on the real stack, with two families of two children each and a tutor apiece. It covers the overview, calendar, lessons and lesson detail, reports, notifications, settings, children, progress, my students, availability, activity and every admin screen, plus `/api/reports/pdf`, `/api/lessons/<id>/ics` and `/api/learners/<id>/*` - each tried with the **other** family's and the other tutor's real ids in the URL, and a control with the person's own.
+- **Result: no cross-family or cross-tutor leak.** Nothing had to be added for a scoping gap, because none was found. A tutor's private notes reach no family and no learner; the tutor-admin guards of 3.11 hold on real data (the tutor tools are scoped to their own teaching, and another tutor's lesson offers them no way in as its tutor); an administrator who does not teach has both tutor pages shut as well as hidden.
+- **Note for whoever reads the tests:** a page a person may not see answers with the not-found page but an HTTP **200**, because the dashboard streams its loading shell before `notFound()` runs. The audit checks what the page says.
 
-**Phase 2 done when:** the real-stack suite (with the new contracts) passes, a full guardian→learner flow works on real Auth, and the scoping audit is written down.
+**Phase 2 done when:** the real-stack suite (with the new contracts) passes, a full guardian→learner flow works on real Auth, and the scoping audit is written down. **MET, 4 November 2026:** 307 of 307 on `npm run test:realstack` with the identity, domain-provider and paper-job contracts in it; the admin-created flow (the one launch uses) walked end to end in a browser on real Auth, 12 of 12 on `npm run test:e2e:realstack`; the audit is `docs/SCOPING_AUDIT.md`. Two things stay unproved locally and are named above: the Resend delivery hop for the reset email (Phase 5), and anything at all about the hosted project (Phase 4).
 
 ---
 
@@ -217,20 +234,76 @@ Each task says whether it is **required** for launch or **optional**.
 - **3.2.9 Tests.** Playwright: admin creates a family with two children and a tutor; each signs in with the temporary password, is forced to change it, and sees exactly the right things; a second family sees nothing of the first. Real-stack tests (Docker): the Admin API call works with the narrow server role and the secret key; a non-admin, a tutor and a parent cannot call the action; a duplicate username, a reserved name and an `ADMIN` role request are refused; Supabase's public sign-up endpoint fails; wrong-username and wrong-password responses are indistinguishable; the lockout works on the username.
 - **Done when.** An admin can create a parent, two children and a tutor in the dashboard; each can sign in with a username and a temporary password and must change it; a forgotten password can be reset by a link sent to the linked email (a child's to the parent); public sign-up and the Supabase email flows are closed end to end; the cross-family tests pass; and the four staff accounts exist on the hosted project.
 
-### 3.3 Backfill and migration tooling for real data (required before loading families)
-- Write the dry-run tool the ledger says is missing: detect duplicate and missing guardian-student links in whatever source you are importing from (spreadsheet or TutorCruncher export), report them, and only then load. Never match people by name.
-- Define the source of truth for current tutors, families, students, assignments and upcoming lessons, and who checks the loaded data.
+### 3.3 Backfill and migration tooling for real data — BUILT (5 November 2026); the source of truth is still the owners' answer
+
+**Built:** `apps/web/src/lib/backfill/source.ts` (the checker, pure), `apps/web/scripts/backfill-check.mjs`
+(`npm run backfill:check`), and `apps/web/tests/backfill.test.mjs`. Written up in `docs/BACKFILL.md`, with the source shape and the
+order the load happens in.
+
+- **The dry run exists and is read-only by construction.** It reads one JSON file and writes nothing — no database, no connection string,
+  no host — so it cannot leave a project half loaded. It refuses a file inside the repository, because the file holds real people.
+- **Guardian links follow the schema.** Every student must name its one owning family (`students.client_id`); the database's trigger
+  writes that link, so a student with no family, or an unknown one, stops the load (`MISSING_FAMILY`, `UNKNOWN_FAMILY`). `links` holds
+  second guardians only: one naming an unknown student or family (`ORPHAN_LINK`) or repeated (`DUPLICATE_LINK`) stops the load, and each
+  valid one is a `SECOND_GUARDIAN` warning for the owning family to confirm. There is no admin screen for adding a second guardian yet,
+  so they are recorded at sign-off rather than loaded.
+- **"LOADABLE" means the rows would go in as written:** the checker applies the database's own limits (name lengths, a lesson's 5–600
+  minutes, `locationType`), requires a valid email for tutors and parents (password resets go there, a child's to the parent), and
+  requires a lesson time with its offset.
+- **People are matched by `externalId` only.** A row without one, or one that is an email address, is an error; a student whose surname
+  matches a family is reported as `LOOKS_LIKE_FAMILY` and **not linked**; two people with the same name stay two people
+  (`DUPLICATE_NAME`, a warning). A student's surname is flagged (`FULL_NAME`): only a first name or nickname is stored.
+- **The report carries no name or address:** every finding names a record as `students/S-31`, so it can be filed or pasted safely.
+- **No bulk loader, on purpose.** `public.provision_account` creates the `clients` row for a parent and refuses if one exists, so a family
+  exists only once its account is made: staff through `create-account.mjs` (3.2.8), then one family at a time in the admin screens, with
+  each step audited. A re-runnable `--apply` would need externalId bookkeeping, and the real export has not been seen yet.
+- **Still open (the owners' answer):** which system is authoritative for current tutors, families, students, assignments and upcoming
+  lessons, on what date the export is taken, and who signs off each loaded family. `file.source` is a warning until an export names
+  itself, and 9.3's "verify with them on a call" is the check that remains a person's job.
+
+**Done when:** this is ticked on a real export, with every warning read and a named person recorded against each loaded family.
 
 ### 3.4 Lesson reminders and invitation emails (optional for launch)
 - Reminders are derived when a page renders and nothing is sent; there is no scheduler. Invitation links are shown once to the guardian rather than emailed. If you want emailed reminders or invitations, build a scheduled job and a delivery path through Resend, with approved wording and an unsubscribe/preferences rule. Otherwise state clearly in the onboarding guide that notifications are in-app only.
 
-### 3.5 Staff-side learner suspension screen (optional)
+### 3.5 Staff-side learner suspension screen (optional) - BUILT (6 November 2026)
 - Store support exists; add an admin screen to suspend or revoke a learner login if you want staff, not only guardians, to do it.
+- **Built.** The Login card on `/dashboard/admin/students/<id>` shows the child's access and offers *Suspend login* / *Restore login* and *Remove login* (a required tick box). Suspending is the parent's own switch, so the parent sees it and can restore it; *Disable login* is still there for a stop only staff can undo. Removing revokes the login and disables it in Auth, and the page then offers *Create login* again. Written up in `docs/IDENTITY.md`.
+- **A bug it fixed.** The page used the student record's login link, which names only an **active** login, so a login the parent had suspended looked like no login at all, and the page offered a *Create login* that could only fail. It now asks for the login whatever its status (`learnerLogin`).
+- **Tests.** The identity contract (memory, PGlite and the real stack) for `learnerLogin`; `usernameAccounts.test.mjs` for suspend, restore, remove, a new login afterwards and the audit rows; `tests-e2e/accounts.spec.ts` for the screen, with a tutor and a parent replaying the forms' action ids and refused.
 
 ### 3.6 Staff MFA (required or accepted risk per 0.5)
 - The Supabase organisation members must use MFA (set in the dashboard, Phase 4). For the site's own admins MFA is not built; either build it or record the accepted risk and keep to few admins.
 
-### 3.7 Purge tool for people who have left (required)
+### 3.7 Purge tool for people who have left — BUILT AND PROVEN LOCALLY (4 November 2026)
+
+**Built:** migrations `0018_purges.sql` (the log and the three operations) and `0019_leaving.sql` (the pause), the `PurgeRepository` on
+both providers, `lib/actions/purge.ts`, `components/people/PurgePanel.tsx`, and the panel on the student, tutor and client pages.
+Written up in `docs/RETENTION_AND_DELETION.md` ("When a student or a tutor leaves"), with the privacy notice and the runbook updated.
+
+| Sub-item | State |
+| --- | --- |
+| 3.7.1 Student purge | **done**, including the family offer only once no child is left |
+| 3.7.2 Tutor purge | **done**, history moved to one archived "Former tutor" row |
+| 3.7.3 Preview, and a delay the admin can shorten | **done**: marked as left, then 30 days, brought forward but never pushed back, refused in the database as well as the screen |
+| 3.7.4 Backups | **done in words**: the privacy notice says a backup keeps a copy until it ages out, and the runbook's restore step re-runs the purges since the backup |
+| 3.7.5 A log without personal data | **done**: `public.data_purges` holds the date, the administrator, the kind and counts, and nothing else |
+| 3.7.6 Tests | **done**: the sweep, the sign-in, the non-admin and the untouched sibling, all on the real stack (below) |
+| Rehearsal purge on staging | **NOT DONE**: there is no staging project yet (Phase 4) |
+
+**What the tests prove** (`npm run test:realstack` and `npm run test:e2e:realstack`): the contract runs on the in-memory provider,
+PGlite and real Postgres three ways; after a purge a sweep of **every column of every table** (walked from `information_schema`, so a
+table added later is included) finds neither the person's id nor their name, and neither does the storage bucket or `auth.users`; the
+learner could sign in before and cannot after; the log row holds no id, name, username or domain; the sibling, their shared lesson, its
+scrubbed report, the family and the family next door are untouched; a second purge writes no second log row; the database refuses a
+purge that was never marked as left or is still inside its pause; and a tutor, a parent, a learner and a stranger are each refused all
+three of the panel's endpoints, replayed with the form's own action id.
+
+**Two defects the real stack found, both fixed:** an assignment kept the purged child's name in its title (the admin screen asks for a
+title like "GCSE Mathematics — Brian", so that is the normal case), and the preview promised that an emptied assignment is ended while
+the SQL function did not do it.
+
+**The original description, for reference:**
 
 **Decision (0.4):** when a student or a tutor leaves, LearnThrive **purges their records**, apart from the exceptions confirmed in `LAWFUL_BASES.md`: financial records (kept for the period the accountant sets, usually 6 years), safeguarding records (kept separately, as Tahasin and the safeguarding policy require), and unsuccessful applications (6 or 12 months). Nothing like this exists: deleting a student today leaves the learner's `auth.users`/`profiles` row and any stored files behind.
 - **3.7.1 Student purge.** An admin action that, after a typed confirmation, removes in one audited step: the student record and its links, the learner login (the profile and the Supabase Auth user), attendance, lesson reports and progress, notifications, any stored files, and their name from lesson records (or anonymises lesson rows that must remain for scheduling history). Keep the exceptions above, with the minimum identifying data they need. If the family has no other children, offer to purge the family record and the parent's login too.
@@ -241,17 +314,27 @@ Each task says whether it is **required** for launch or **optional**.
 - **3.7.6 Tests.** After a purge, a database query for the person's id and name finds nothing in any table or bucket except the listed exceptions; the person cannot sign in; a sibling and the family are untouched; the audit row exists; and a purge cannot be run by a non-admin.
 - **Done when.** The tests pass and a rehearsal purge on staging leaves only the documented exceptions.
 
-### 3.8 Observability (required to run it safely)
+### 3.8 Observability (required to run it safely) - CODE BUILT (6 November 2026); the monitor and log retention wait for Render (Phase 6)
 - Today: structured logs for the enquiry route and `/api/health`, nothing else. Add at least: uptime monitoring on `/api/health`, log retention and alerting on Render, and a decision on error reporting (0.6). The realtime service has no health monitoring either.
+- **Built, written up in `docs/OBSERVABILITY.md`.** The premise was out of date: the account, careers, subject-request, reconfirmation, waitlist and assistant routes already wrote structured lines. What was missing, now added:
+  - **`GET /api/health/ready`** for the uptime monitor: the database (`select 1` on the site's own role), Supabase Auth (`/auth/v1/health`) and the classroom (signalling running in this process, so a `next start` without the classroom fails it), each `ok`, `failing` or `off`, 503 when not ready, worked out at most every 10 s. All three are required once the portal is open; with it closed, only what is configured must answer. `/api/health` stays the bare liveness check Render restarts on.
+  - **Server errors:** `src/instrumentation.ts` (`onRequestError`) writes a `server-error` line for anything a page, route, action or the proxy throws: the route's file pattern, the kind and the digest, never the message, URL or a header. Both error pages now show the digest as a reference a person can quote.
+  - **The process:** `server.ts` writes `started`, a five-minute `heartbeat` (memory, event-loop delay, and the classroom's rooms, participants, waiting and sockets as counts) and `stopping` (how many people a restart cut off).
+  - **The classroom:** Cloudflare TURN and SFU failures are structured lines with Cloudflare's status and code (they were free-text `console.error`); the TURN credential call now times out after 10 s instead of never.
+  - **Log levels:** routine outcomes (`ok`, `stored`, `served`…) go to stdout and the rest to stderr; before this a successful sign-in was written as a warning. A sign-in that fails because Auth is down is now logged (it was silent).
+- **Error reporting:** none, as decided in 0.6; the log line is the record.
+- **Tests.** `tests/observability.test.mjs` (12: the readiness rules, timeouts, nothing leaking from an error, the error line's fields, the heartbeat, the log filter), `apps/realtime/server/log.test.ts` (5) and a stats test in `signalling.test.ts`; the production smoke suite checks `/api/health/ready`'s shape and that the unified server reports the classroom running. Run 6 Nov 2026 against a production build served by `serve.mjs`: 65 of 65.
+- **Still to do (ops, Phase 6 and 8.1):** create the uptime monitor on `/api/health/ready`, decide log retention (a Render log stream to a store is a new supplier for the privacy page), and set the alerts in the table in `docs/OBSERVABILITY.md`.
 
 ### 3.9 Reset-demo-data safety check (required)
 - Confirm the admin "Reset demo data" button and `/api/dev/reset` cannot appear in production (they are `NODE_ENV`-guarded and the proxy 404s `/api/dev`); the production smoke suite must assert it.
+- **Done.** `tests-prod/smoke.spec.ts` asserts that `POST /api/dev/reset` answers 404 on the production server, and CI runs it on every pull request.
 
 ### 3.10 Tuition payments with Stripe (required; the largest build item)
 
 > **7 Nov 2026:** the charging model is now **monthly statements in arrears** (see 0.1 and [OWNER_ANSWERS_2026-11-07.md](OWNER_ANSWERS_2026-11-07.md) section 3), and the family payment method is **not confirmed**, so Stripe checkout, prepaid Checkout and subscriptions below may not be the right design. Build the decided parts first (rates, chargeable-lesson rules with per-child waivers, the sibling line, the statement, hiding amounts from tutors, overdue as a flag) and add collection when the method is chosen.
 >
-> **Built (7 Nov 2026, uncommitted):** all of those decided parts, as admin-only pages and a recorded-by-hand payment ledger, plus the named-approver refund action. See [TUITION_BILLING.md](TUITION_BILLING.md). Still to do: migration `0021` on the hosted database (owner), set `TUITION_REFUND_APPROVER_EMAILS`, the owners' open rules (repeat fee, allowance reset, second approver), collection once the payment method is chosen.
+> **Built (7 Nov 2026):** all of those decided parts, as admin-only pages and a recorded-by-hand payment ledger, plus the named-approver refund action. See [TUITION_BILLING.md](TUITION_BILLING.md). Still to do: migration `0021` on the hosted database (owner), set `TUITION_REFUND_APPROVER_EMAILS`, the owners' open rules (repeat fee, allowance reset, second approver), collection once the payment method is chosen.
 
 **Decision (0.1):** parents pay for lessons through Stripe. **What exists:** only the Library's subscription billing: a REST-over-`fetch` Stripe client (`apps/web/src/lib/billing/stripe.ts`), a webhook signature check (`signature.ts`), hosted Checkout in subscription mode, the hosted Customer Portal, mirroring of Stripe state into the database (`reconcile.ts`, migrations `0003` and `0006`), a fake Stripe for tests (`devStripe.ts`) and a test-mode/live-mode guard. The family `clients` row already owns the Stripe customer (`billing_customers`), and billing is already refused to learners and inside a supervised view. **What does not exist:** anything that prices, charges, invoices, refunds or reports a tuition lesson. Reuse the plumbing; the tuition rules are new.
 
@@ -299,7 +382,29 @@ Each task says whether it is **required** for launch or **optional**.
 - **Launch accounts that need this:** **Alvi Hossain, Tahasin Hasan and Abdurrahman Mustafa** are each admin and tutor. **Brian** is admin only (he must not see tutor tools such as availability, and must not appear in tutor lists).
 - **Done when.** The above tests pass, and real accounts of both kinds (admin and tutor, admin only) are exercised in staging (7.5).
 
-### 3.12 Careers applications in the database, viewed by admins (required if you want them open at launch)
+### 3.12 Careers applications in the database, viewed by admins (required if you want them open at launch) — BUILT (6 November 2026); the forms stay closed until 3.12.7
+
+**Built:** migration `0020_careers.sql` (five server-only tables and the private `careers` bucket), the store in `packages/data/src/careers.ts`
+(memory and Postgres, one contract: `testing/careersContract.ts`), the apply route storing instead of emailing, the admin screens at
+`/dashboard/admin/careers`, the file and export routes under `/api/admin/careers/`, and `docs/RETENTION_AND_DELETION.md` ("Tutor
+applications in the app").
+
+| Sub-item | State |
+| --- | --- |
+| 3.12.1 Data model | **done**: `careers_applications`, `_files`, `_notes`, `_events` (append-only history, including each file opened) and `careers_deletions` (date, administrator, reason, file count: no reference, name or email). RLS enabled and forced, no grants to API roles; added to `schema.test.ts` and `supabase-verify.mjs`. **Re-run `create-server-role.mjs` after `0020` is applied** (4.5) |
+| 3.12.2 Submission | **done**: every existing check kept; files go to the bucket under `<application id>/<file id>.<ext>` (no name in the path), then one statement writes the application, its files and its first history row. If either step fails the stored files are removed and the applicant is told nothing was sent. The mailbox gets a notice with the reference, the role and a link, and **no personal content**; the applicant's confirmation is unchanged |
+| 3.12.3 Admin screens | **done**: a list by status, the answers, files downloaded through `/api/admin/careers/<id>/files/<file>` (ADMIN checked there; the server signs a 60-second link to the private bucket for that request and sends the bytes as an attachment with `nosniff` and a sandbox, so the link never reaches the browser), internal notes, status, and identity and DBS recorded as **seen**: how, the date and who, never a copy or a number. Each download is written to the history before the bytes are sent. `/api/admin/**` is closed with the portal (proxy matcher) |
+| 3.12.4 DBS and identity wording | **open (owner)**: the careers pages still say LearnThrive pays for the DBS check; 0.4 decided tutors pay. Needs Tahasin's wording |
+| 3.12.5 Retention and deletion | **done**: the status sets the deletion dates (`retentionFor` in `careers.ts`, the periods in `CAREERS_RETENTION`); the list shows what is due in the next 31 days; deleting an application or only its identity documents removes the stored files first, then the rows; *Export (subject access)* downloads everything held as JSON |
+| 3.12.6 Privacy | **done in words, for review**: `/careers/privacy` now says applications are stored with Supabase in London, administrators only, downloads recorded, the mailbox gets a notice only, and checks are recorded as seen. **The legal reviewer should see this change** |
+| 3.12.7 Agreement gate | **open (owner)**: unchanged; the forms stay closed until every clause is approved |
+| 3.12.8 Tests | **done locally**: the store contract (memory, PGlite; real stack wired in `realstack.careers.test.ts`, three ways including the narrow role), `careersApply.test.mjs` (what is stored, the notice carries nothing personal, failures leave nothing behind, production with no storage refuses), `tests-e2e/careers-review.spec.ts` (an admin's full review; a tutor, parent, learner and stranger refused the list, both file routes, the export and the forms' own action ids), the portal and production smoke checks. Renamed file types were already refused (`inspectFile`). **Real stack, 6 Nov 2026:** `npm run test:realstack` 342 of 342 (data, including the careers contract three ways, 39 tests, and a real upload of each content type to the `careers` bucket with the 415 and 413 refusals) and 25 of 25 (web); `npm run test:e2e:realstack` 16 of 16; `npm run build` and `check:bundle` (1388 files, 19 sentinels, none present) pass. The real stack found one bug PGlite could not: JSON sent as `$n::jsonb` is stored as a string by the `postgres` driver; it is now `$n::text::jsonb`, the rule `library/sql.ts` already states |
+
+**Two things to know.** An *Accepted* application has no automatic deletion date: it becomes a tutor's record, and is deleted from its
+page when they stop (their identity documents 12 months after). There is no in-app notification for a new application, only the email
+notice; the notification types are a database check constraint and were left alone.
+
+**The original description, for reference:**
 
 **Decision (2 Nov 2026):** careers becomes a **fully fledged application page** stored in Supabase, with admins reviewing applications after signing in. The page already exists as one scrolling form in eight numbered sections with a section list, a review panel and file uploads (`apps/web/src/components/careers/apply`); keep it and finish it. Applicants are not account holders, so they do **not** use usernames; they give a contact email. **Today** the form emails the application and its attachments (CV, cover letter, identity documents) to a mailbox and stores nothing (`docs/RETENTION_AND_DELETION.md`). The forms also stay closed until `agreementApprovedByOwner` is set.
 
@@ -340,17 +445,17 @@ Each task says whether it is **required** for launch or **optional**.
 
 ## Phase 4: Hosted Supabase (`learnthrive-prod`)
 
-Every step here needs the owner present or approving. Nothing has ever been pushed to this project.
+Every step here needs the owner present or approving. **Not empty of migrations:** when checked read-only on 2 November 2026 the project already had `0001`–`0009` applied (by someone outside this checkout) and held no data. Re-check with `supabase migration list` before 4.2.
 
 ### 4.1 Choose staging vs production order
 - If you chose a staging project (0.6), do all of Phase 4 and 5–8 on **staging first** (with `ALLOWED_ORIGINS` and Redirect URLs for the staging host only), then repeat on production.
 
 ### 4.2 Link and dry run
 - `npx supabase link --project-ref vwsjvdpkgjhwmqmufmrh`; the CLI asks for the database password, which the owner types (or sets `SUPABASE_DB_PASSWORD` for that shell only).
-- `npx supabase db push --dry-run`. It must list **all sixteen migrations** (`0001`–`0016`; older docs say nine). **Stop and show the owner.**
+- `npx supabase db push --dry-run`. It must list exactly the migrations the project does not have yet: `0010`–`0020` if it still holds `0001`–`0009` (twenty in the repo as of 6 Nov 2026, with `0020_careers.sql`). **Stop and show the owner.**
 
 ### 4.3 Push
-- On approval: `npx supabase db push`. Confirm the migration history lists all sixteen and the buckets `library` and `chat-uploads` exist and are private.
+- On approval: `npx supabase db push`. Confirm the migration history lists all twenty (`0001`–`0020`) and the buckets `library`, `chat-uploads` and `careers` exist and are private.
 
 ### 4.4 Advisors
 - Run the Security and Performance advisors (dashboard → Database → Advisors). Resolve **every security warning** in a new migration (not in the dashboard). Record the result.
@@ -394,7 +499,7 @@ Every step here needs the owner present or approving. Nothing has ever been push
 - Verify the sending domain; copy the SPF/DKIM records; set `RESEND_FROM_EMAIL` to an address on it (the shared `onboarding@resend.dev` sender is never used in production). Create two API keys: one for the site (`RESEND_API_KEY`), one for Supabase Auth SMTP.
 
 ### 5.2 DNS records
-- IONOS holds the domain and its DNS. **Keep every existing mail record** (the MX records and SPF/DKIM of whoever hosts your company mailboxes: confirm who, probably Google Workspace). A domain may have only **one SPF record**, so merge Resend's `include:` into the existing one rather than adding a second. Add Resend's DKIM records as given. Add DMARC at `p=none` with a report address; tighten later. Because the same domain sends mail from two providers, test both after the change.
+- IONOS holds the domain and its DNS. **Keep every existing mail record** (Google Workspace's MX records at `aspmx.l.google.com` and the SPF `include:_spf.google.com`). A domain may have only **one SPF record**, so merge Resend's `include:` into the existing one rather than adding a second. Add Resend's DKIM records as given. Add DMARC at `p=none` with a report address; tighten later. Because the same domain sends mail from two providers, test both after the change.
 - Point `www` and the apex at Render (apex redirects to `www`, 308). Lower the TTL a day or more before the cutover.
 
 ### 5.3 Test deliverability on staging
@@ -547,16 +652,17 @@ Launch in two steps so the riskier part opens last.
 | Phase | What it proves | Status |
 | --- | --- | --- |
 | 0 Decisions | Everything only the owners can answer | open |
-| 1 Repo | Clean `main`, CI green on GitHub, bundle check | open |
-| 2 Real stack | Tuition tables and identity work on real Supabase | open (Docker blocked) |
+| 1 Repo | Clean `main`, CI green on GitHub, bundle check | **1.1, 1.3, 1.4 and 1.5 done** (6 Nov 2026; the Next 16.4.5 security upgrade is its own pull request). **1.2 open**: protect `main` in GitHub's settings |
+| 2 Real stack | Tuition tables and identity work on real Supabase | **done locally (4 Nov 2026)**: 307 real-stack tests and 12 real-stack browser tests pass; scoping audit in `docs/SCOPING_AUDIT.md`. The reset email's Resend hop and the hosted project remain |
 | 3 Build gaps | Classroom served, onboarding path, backfill tool | open |
 | 3.10 Tuition payments | Stripe sandbox flow, refunds, tamper and cross-family tests | open (product rules unanswered) |
 | 3.1 Classroom server | `serve.mjs` runs site, signalling and TURN endpoint on one origin | built and proven locally; not yet on Render |
-| 3.2 Username sign-in and admin-created accounts | Create parent, children and tutor; sign in by username; sign-up closed end to end | open |
-| 3.11 Tutor-admin | A tutor who is also an admin can teach and admin | open |
-| 3.12 Careers in Supabase | Applications stored, admins review, files via expiring links | open |
+| 3.2 Username sign-in and admin-created accounts | Create parent, children and tutor; sign in by username; sign-up closed end to end | built; real Auth, the operator script and **the admin screen** proven locally (`realstack.accounts`, `tests-e2e-realstack`); the reset link is proven but its **delivery through Resend** is not, nor are the hosted accounts |
+| 3.11 Tutor-admin | A tutor who is also an admin can teach and admin | built; **its guards are now tested on real data** (4 Nov 2026, `tests-e2e-realstack/scoping.spec.ts`): tutor tools scoped to their own teaching, no way into another tutor's lesson as its tutor |
+| 3.12 Careers in Supabase | Applications stored, admins review, files via expiring links | **built and tested locally** (6 Nov 2026): migration `0020`, store contract on memory, PGlite and the real stack, the route, the admin screens, the production build. Waiting on the hosted project (4.3, then re-run `create-server-role.mjs` in 4.5), the DBS wording (3.12.4) and the agreement approval (3.12.7) |
 | 3.13 Cloudflare SFU, 10 students | An hour-long lesson with 11 people on real devices | built and tested against fakes; needs the keys and a real-device test |
-| 3.7 Purge tool | A purged person leaves only the documented exceptions | open |
+| 3.8 Observability | Readiness check, error and process logs, a runbook | **code built** (6 Nov 2026): `/api/health/ready`, `server-error` lines, heartbeat, structured classroom failures, `docs/OBSERVABILITY.md`. The uptime monitor, log retention and alerts wait for the Render service |
+| 3.7 Purge tool | A purged person leaves only the documented exceptions | **built and proven locally** (4 Nov 2026): the pause, the purge, the counts-only log, and the sweep that finds nothing. The staging rehearsal waits for Phase 4 |
 | 4 Hosted Supabase | Project migrated, configured, smoke-tested, first admin | open |
 | 5 Domain and email | Deliverable mail, DNS ready | open |
 | 6 Render | Service running with a validated environment | open |

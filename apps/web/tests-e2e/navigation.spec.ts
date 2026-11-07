@@ -6,15 +6,15 @@ import { uniqueLabel } from './support';
 // nav is also checked against what plan6 sections 17-20 / lib/navigation/appNavigation.ts say it
 // should and shouldn't be able to reach.
 
-const ADMIN = { email: 'admin@learnthrive.dev', password: 'dev-admin-pass' };
-const TUTOR = { email: 'tutor@learnthrive.dev', password: 'dev-tutor-pass' };
-const CLIENT = { email: 'client@learnthrive.dev', password: 'dev-client-pass' };
-const STUDENT = { email: 'student@learnthrive.dev', password: 'dev-student-pass' };
+const ADMIN = { username: 'dev.admin', password: 'dev-admin-pass' };
+const TUTOR = { username: 'dev.tutor', password: 'dev-tutor-pass' };
+const CLIENT = { username: 'dev.client', password: 'dev-client-pass' };
+const STUDENT = { username: 'dev.student', password: 'dev-student-pass' };
 
-async function login(page: Page, email: string, password: string) {
+async function login(page: Page, username: string, password: string) {
   await page.request.post('/api/auth/logout');
   await page.goto('/login');
-  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Username').fill(username);
   await page.locator('input[name="password"]').fill(password);
   await Promise.all([
     page.waitForURL(/\/dashboard$/),
@@ -41,7 +41,7 @@ function londonDateTimeFieldsIn(minutesFromNow: number): { date: string; time: s
 }
 
 test('Admin navigation journey: Dashboard, People (Tutor/Student profiles), Calendar, a Lesson, Reports, Notifications, Logout', async ({ page }) => {
-  await login(page, ADMIN.email, ADMIN.password);
+  await login(page, ADMIN.username, ADMIN.password);
   const nav = page.locator('.app-nav');
 
   await nav.getByRole('link', { name: 'Tutors' }).click();
@@ -87,7 +87,7 @@ test('Tutor navigation journey: nav is teaching-scoped, no Admin sections, Overv
 
   // Setup as Admin: a lesson inside the Tutor's join window, so this journey can reach the real
   // classroom rather than only its disabled state (already covered by lessons.spec.ts).
-  await login(page, ADMIN.email, ADMIN.password);
+  await login(page, ADMIN.username, ADMIN.password);
   // single-server.spec.ts schedules its own "now + a bit" lesson on this identical seeded
   // Tutor/Student pair — conflict detection is tutor/student-based, not assignment-based, and
   // both tests need to land inside the Tutor's 30-minute join window, so no fixed offset is
@@ -117,7 +117,7 @@ test('Tutor navigation journey: nav is teaching-scoped, no Admin sections, Overv
   if (await scheduleAnyway.isVisible()) await scheduleAnyway.click();
   await expect(page).toHaveURL(/\/dashboard\/calendar$/, { timeout: 10_000 });
 
-  await login(page, TUTOR.email, TUTOR.password);
+  await login(page, TUTOR.username, TUTOR.password);
   const nav = page.locator('.app-nav');
 
   // Verify available nav (plan6 section 18's teaching-scoped set).
@@ -157,7 +157,7 @@ test('Tutor navigation journey: nav is teaching-scoped, no Admin sections, Overv
 });
 
 test('Client navigation journey: children, schedule, reports, notifications, logout — no Admin/Tutor navigation', async ({ page }) => {
-  await login(page, CLIENT.email, CLIENT.password);
+  await login(page, CLIENT.username, CLIENT.password);
   const nav = page.locator('.app-nav');
 
   for (const label of ['Home', 'Children', 'Calendar', 'Lesson reports', 'Notifications', 'Settings']) {
@@ -183,7 +183,7 @@ test('Client navigation journey: children, schedule, reports, notifications, log
 });
 
 test('Student navigation journey: next lesson, schedule, classroom reachability, feedback, logout', async ({ page }) => {
-  await login(page, STUDENT.email, STUDENT.password);
+  await login(page, STUDENT.username, STUDENT.password);
   const nav = page.locator('.app-nav');
 
   for (const label of ['Home', 'Calendar', 'Lessons', 'Feedback', 'Notifications', 'Settings']) {
@@ -213,3 +213,42 @@ test('Student navigation journey: next lesson, schedule, classroom reachability,
 
   await logout(page);
 });
+
+/**
+ * Every sidebar link can be reached and clicked: scrolled into view, the link itself is what lies under its top, middle and bottom, and
+ * the collapse toggle stays inside the window. A sticky toggle over the scrolling menu once covered the admin's last links (WCAG 2.2
+ * target size, 2.5.8). Expanded and collapsed, on a usual window and a short one, for the longest menus.
+ */
+for (const [role, account] of [['admin', ADMIN], ['tutor', TUTOR], ['client', CLIENT]] as const) {
+  test(`${role}: no sidebar link is covered by the collapse toggle, expanded or collapsed, on a short window too`, async ({ page }) => {
+    await login(page, account.username, account.password);
+    const toggle = page.locator('.app-sidebar__collapse');
+    for (const collapsed of [false, true]) {
+      if (collapsed) {
+        await toggle.click();
+        await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+      }
+      for (const height of [720, 480]) {
+        await page.setViewportSize({ width: 1280, height });
+        const problems = await page.evaluate(() => {
+          const found: string[] = [];
+          const links = [...document.querySelectorAll<HTMLElement>('.app-sidebar .app-nav__link')];
+          if (links.length === 0) found.push('no sidebar links');
+          for (const link of links) {
+            link.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+            const r = link.getBoundingClientRect();
+            const name = link.getAttribute('href') ?? link.textContent ?? '?';
+            for (const y of [r.top + 2, r.top + r.height / 2, r.bottom - 2]) {
+              const hit = document.elementFromPoint(r.left + r.width / 2, y);
+              if (!hit || !link.contains(hit)) found.push(`${name} at y=${Math.round(y)} is under ${hit?.className || hit?.tagName || 'nothing'}`);
+            }
+          }
+          const t = document.querySelector('.app-sidebar__collapse')!.getBoundingClientRect();
+          if (t.top < 0 || t.bottom > window.innerHeight) found.push(`the toggle is outside the window (${Math.round(t.top)}-${Math.round(t.bottom)})`);
+          return found;
+        });
+        expect(problems, `${role}, ${collapsed ? 'collapsed' : 'expanded'}, ${height}px high`).toEqual([]);
+      }
+    }
+  });
+}

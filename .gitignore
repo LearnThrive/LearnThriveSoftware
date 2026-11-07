@@ -75,3 +75,11 @@ experiments/nemotron-voicechat/.env.example
 docs/screenshots/website-review/
 docs/screenshots.zip
 apps/web/scripts/website-review.mjs
+
+# Supabase CLI local state (branch name, cached project ref and versions): per machine, never source.
+supabase/.branches/
+supabase/.temp/
+
+# Local drafts of pull-request descriptions and downloaded CI job logs written at the repo root: scratch, not source.
+/PR-*.md
+/*job-logs*.txt

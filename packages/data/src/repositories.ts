@@ -15,11 +15,12 @@ export interface TutorRepository {
   create(input: Omit<Tutor, "id" | "createdAt">): Promise<Tutor>;
   update(id: string, patch: Partial<Omit<Tutor, "id" | "createdAt">>): Promise<Tutor>;
   /**
-   * Gives a tutor record a login: the person who already has a CONFIRMED account with this email address becomes that tutor (role TUTOR).
-   * Refused for an account that owns a family, is a learner, is already staff, or whose address is not confirmed, and for a tutor who
-   * already has a login: nobody is ever converted by guessing. Audited. 'unsupported' where the provider has no real accounts (development).
+   * Gives a tutor record a login: the person with this username becomes that tutor. A CLIENT becomes a TUTOR; an ADMIN stays an ADMIN and
+   * gains the tutor tools (docs/ROLE_PERMISSIONS.md), so nobody is ever demoted. Refused for an account that owns a family, is a learner or
+   * already teaches, and for a tutor who already has a login: nobody is ever converted by guessing. Audited. 'unsupported' where the
+   * provider has no real accounts (development).
    */
-  linkLogin(tutorId: string, email: string, actor: string): Promise<"ok" | "no_tutor" | "no_account" | "not_eligible" | "unsupported">;
+  linkLogin(tutorId: string, username: string, actor: string): Promise<"ok" | "no_tutor" | "no_account" | "not_eligible" | "unsupported">;
 }
 
 export interface ClientRepository {
@@ -97,6 +98,10 @@ export interface NotificationRepository {
   unreadCountForUser(userId: string): Promise<number>;
   create(input: Omit<Notification, "id" | "createdAt" | "read">): Promise<Notification>;
   markRead(id: string): Promise<void>;
+  /** The login behind a tutor, family or student record, or null: many records have none, and they simply get no notification. */
+  recipientFor(recordId: string): Promise<string | null>;
+  /** Every login with this role, except one that has been disabled. */
+  recipientsWithRole(role: "ADMIN" | "TUTOR" | "CLIENT" | "STUDENT"): Promise<string[]>;
 }
 
 export interface ReportRepository {
@@ -112,8 +117,116 @@ export interface SettingsRepository {
   update(patch: Partial<PlatformSettings>): Promise<PlatformSettings>;
 }
 
+/**
+ * The purge tool (launch checklist 3.7, docs/LAWFUL_BASES.md): when a student or a tutor leaves, their records are removed in one audited
+ * step, apart from the exceptions the owners confirmed. A purge is final, so it is always previewed first.
+ *
+ * Nothing here stores a name, an email or the id of the person purged: the log row holds the date, the administrator, what kind and
+ * numbers (3.7.5), so the log cannot become the record the purge removed. `profileIds` and `files` in a preview are for the action to
+ * act on, never for the log.
+ */
+export type PurgeKind = "STUDENT" | "TUTOR" | "FAMILY";
+
+/**
+ * Lessons and reports must always name a tutor (NOT NULL, ON DELETE RESTRICT), so a purged tutor's history hangs on this archived row
+ * instead of a real person. It is never purged itself, and it appears in tutor lists as an inactive "Former tutor".
+ */
+export const ARCHIVED_TUTOR_ID = "00000000-0000-4000-8000-0000000000fe";
+
+/**
+ * How long a record waits between being marked as left and becoming purgeable (launch checklist 3.7.3). Held here, not in the
+ * database, so the screen and the date written on the row can never disagree; an administrator may bring the date forward, which is
+ * the whole point of the pause, and the database enforces only "not before the date on the row" (migration 0019).
+ */
+export const PURGE_DELAY_DAYS = 30;
+
+/** The lawful-bases position every purge preview states (docs/LAWFUL_BASES.md). */
+export const PURGE_NOTES = [
+  "A purge is final. The records listed above are deleted, not archived.",
+  "Financial records (invoices and Stripe references) are kept for the period the accountant sets, usually 6 years. None are held in this app yet.",
+  "Safeguarding records are kept separately by the safeguarding lead, who is not part of this app.",
+  "A database backup keeps a copy until it ages out; a restore must not undo a purge (docs/SUPABASE_RUNBOOK.md).",
+];
+
+export interface PurgeItem {
+  /** What it is, in plain words: "Lessons that exist only for this student". */
+  what: string;
+  count: number;
+}
+
+export interface PurgeKept extends PurgeItem {
+  /** Why it stays: another child is on it, the law requires it, and so on. */
+  reason: string;
+}
+
+/** Why a purge may not go ahead yet. `due` means nothing is in the way. */
+export type PurgeReadiness = "due" | "not_left" | "not_due";
+
+export interface PurgeLeaving {
+  /** When they were marked as left, or null while they are still with us. */
+  leftAt: string | null;
+  /** The earliest they may be purged. Null until they are marked as left. */
+  purgeAfter: string | null;
+  readiness: PurgeReadiness;
+}
+
+export interface PurgePreview extends PurgeLeaving {
+  kind: PurgeKind;
+  /** What will be deleted, by what it is. */
+  removes: PurgeItem[];
+  /** What stays, and why. */
+  keeps: PurgeKept[];
+  /** Logins that will be deleted from Auth by the action, after their database rows. */
+  profileIds: string[];
+  /** Stored objects to delete BEFORE any row (empty at launch: tuition has no uploads of its own). */
+  files: string[];
+  /** The lawful-bases position, in the words the administrator sees before confirming. */
+  notes: string[];
+}
+
+export interface PurgeRecord {
+  id: string;
+  kind: PurgeKind;
+  actorId: string | null;
+  /** Row counts by what was removed. Numbers only, never the person's id or name. */
+  counts: Record<string, number>;
+  at: string;
+}
+
+export interface PurgeRepository {
+  /** null when there is no such record (or it is the archived tutor, which is never a person). */
+  previewStudent(studentId: string): Promise<PurgePreview | null>;
+  previewTutor(tutorId: string): Promise<PurgePreview | null>;
+  previewFamily(clientId: string): Promise<PurgePreview | null>;
+  /**
+   * Removes the records and writes the log row, in one transaction. null when there was nothing to purge **or when the record is not
+   * ready** (not marked as left, or still inside its delay): a purge is never a surprise.
+   */
+  purgeStudent(studentId: string, actor: string): Promise<PurgeRecord | null>;
+  purgeTutor(tutorId: string, actor: string): Promise<PurgeRecord | null>;
+  purgeFamily(clientId: string, actor: string): Promise<PurgeRecord | null>;
+
+  /**
+   * Marks a record as left: it records who said so and when, and sets the earliest purge date `PURGE_DELAY_DAYS` ahead. Marking again
+   * changes nothing (the first date stands, so the clock cannot be restarted to buy time). null when there is no such record.
+   */
+  markLeft(kind: PurgeKind, id: string, actor: string): Promise<PurgeLeaving | null>;
+  /** They came back, or it was a mistake: the leaving date and the purge date go, and nothing was deleted. false when it was not marked. */
+  cancelLeft(kind: PurgeKind, id: string): Promise<boolean>;
+  /**
+   * Brings the purge date forward, which is the administrator's to do (3.7.3). Refuses a date LATER than the one on the record, so the
+   * pause can be shortened but never extended into an excuse to keep the data. null when there is no such record or it is not marked as left.
+   */
+  bringForward(kind: PurgeKind, id: string, when: Date): Promise<PurgeLeaving | null>;
+
+  /** Newest first. Counts only, so this is safe to show an administrator. */
+  recent(limit: number): Promise<PurgeRecord[]>;
+}
+
 export interface DataProvider {
   tutors: TutorRepository;
+  /** The purge tool (3.7): every later removal path goes through this, never a bare delete. */
+  purges: PurgeRepository;
   clients: ClientRepository;
   students: StudentRepository;
   assignments: AssignmentRepository;

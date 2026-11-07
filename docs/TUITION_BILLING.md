@@ -2,7 +2,7 @@
 
 What was built for the owners' answers of 7 Nov 2026 ([OWNER_ANSWERS_2026-11-07.md](OWNER_ANSWERS_2026-11-07.md), items B1 to B19). It records what families owe. **It does not collect money**: the family payment method is not confirmed (B1, B13, B19), so an admin records payments by hand. Nothing here is visible to a tutor (B17).
 
-Status of this work: built and tested; **not committed**, **not applied to the hosted database** (migration `0021` waits for the owner like the others), and **not yet seen by the owners**.
+Status of this work: built and tested; **not applied to the hosted database** (migration `0021` waits for the owner like the others), and **not yet seen by the owners**.
 
 ## Where things are
 

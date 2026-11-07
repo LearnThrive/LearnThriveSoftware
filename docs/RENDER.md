@@ -10,7 +10,7 @@ How to put `apps/web` (the public site, including the careers section, the safeg
 | Root directory | the repository root (it is an npm workspace) |
 | Build command | `npm ci --include=dev && npm run build --workspace=apps/web` (Render sets `NODE_ENV=production`, which would otherwise skip the build tools) |
 | Start command | `npm run serve --workspace=apps/web` (the unified server: site, classroom signalling and TURN credentials on one origin; it sets `NODE_ENV=production` itself and reads Render's `PORT`). Use `npm run start --workspace=apps/web` only for a site with no classroom. **Run one instance** |
-| Health check path | `/api/health` |
+| Health check path | `/api/health` (liveness only: it calls nothing, so a database outage cannot make Render restart the service). Point the **uptime monitor** at `/api/health/ready` instead, which checks the database, Supabase Auth and the classroom (`docs/OBSERVABILITY.md`) |
 | Node | 22 (`^22.13`), or any version in the `engines` field |
 | Instance | **A paid instance.** Free instances spin down after about fifteen minutes without traffic and answer the next request slowly. A visitor who has spent ten minutes on the application form must not meet a cold start when they press send. |
 
@@ -61,7 +61,7 @@ Render's documentation does not state a maximum request size, and one community 
 
 ## The visitor's address (rate limiting)
 
-The routes limit each visitor and the route as a whole (`careersConfig.rateLimits`). The visitor is identified by address, and Render does not document which header carries it or how many proxies sit in front of a service; community reports disagree, and some say a visitor's own `X-Forwarded-For` is kept and appended to. So the code never trusts the left-hand entry. It reads `X-Forwarded-For` from the right, skipping `TRUSTED_PROXY_HOPS` entries (default 1), or uses `CLIENT_IP_HEADER` if you name one. Test it once on the deployed service. The challenge endpoint allows 40 requests per visitor per 15 minutes, which makes a safe probe:
+The routes limit each visitor and the route as a whole (`careersConfig.rateLimits`). The visitor is identified by address, and Render does not document which header carries it or how many proxies sit in front of a service; community reports disagree, and some say a visitor's own `X-Forwarded-For` is kept and appended to. So the code never trusts the left-hand entry. It reads `X-Forwarded-For` from the right, skipping `TRUSTED_PROXY_HOPS` entries (default 1), or uses `CLIENT_IP_HEADER` if you name one. The classroom's TURN credential endpoint (20 requests a minute per visitor) follows the same rule and the same two settings (`apps/realtime/server/clientAddress.ts`); before 6 November 2026 it keyed on the proxy's address, so every visitor shared one allowance. Test it once on the deployed service. The challenge endpoint allows 40 requests per visitor per 15 minutes, which makes a safe probe:
 
 ```bash
 # Forged left-hand entries must NOT earn a fresh allowance: expect 200s and then 429s.
@@ -90,9 +90,9 @@ The counts live in the server's memory: they reset on a restart or deploy and ar
 
 ## Email
 
-Resend sends through its own verified sending domain, while the company mailboxes stay with IONOS.
+Resend sends through its own verified sending domain, while the company mailboxes stay with Google Workspace. IONOS is the domain registrar and holds the DNS records, nothing more.
 
-- **Leave the existing IONOS mail records untouched** when adding Resend's. A domain may have only ONE SPF record, so merge Resend's `include:` into the existing SPF text rather than adding a second record, and use the exact values each provider shows. Add Resend's DKIM records as given. Add a DMARC record starting in monitoring mode (`p=none` with a report address), and tighten it later.
+- **Leave the existing Google Workspace mail records untouched** (the MX records at `aspmx.l.google.com` and the SPF `include:_spf.google.com`, edited in IONOS's DNS panel) when adding Resend's. A domain may have only ONE SPF record, so merge Resend's `include:` into the existing SPF text rather than adding a second record, and use the exact values each provider shows. Add Resend's DKIM records as given. Add a DMARC record starting in monitoring mode (`p=none` with a report address), and tighten it later.
 - After deploying, send **a test application, a test reconfirmation and a test subject request end to end** to an address you control (see "Before the form can go live" for the application), and check that both emails of each arrive, are not in spam, and read well in a webmail client and on a phone. The applicant's confirmation must not carry attachments or a copy of the answers.
 - The destination is the main `info@` mailbox for now. Applications with attachments add up (identity scans especially): decide a mailbox size, a filter or folder for careers and subject-request messages, and a deletion routine ([RETENTION_AND_DELETION.md](RETENTION_AND_DELETION.md)). The emails that hold the signed agreement records and the yearly reconfirmations are evidence: keep them for the agreed period and do not delete them early.
 

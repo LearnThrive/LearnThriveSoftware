@@ -43,6 +43,8 @@
     ".next-3102/dev/types/**/*.ts",
     ".next-3103/types/**/*.ts",
     ".next-3103/dev/types/**/*.ts",
+    ".next-3105/types/**/*.ts",
+    ".next-3105/dev/types/**/*.ts",
     ".next-3110/types/**/*.ts",
     ".next-3110/dev/types/**/*.ts",
     ".next-3111/types/**/*.ts",

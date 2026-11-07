@@ -3,7 +3,7 @@ import type { ChatExport, ChatFileChunkRecord, ChatFileRecord, ChatMessageRecord
 import type { AccessMode, IdentityAuditEntry, InvitationPeek, IdentityRepository, InvitationRecord, LearnerContext, LinkStatus, StudentRecord } from "./identity";
 import { PAPER_JOB_DAYS, PAPER_JOB_MAX_ATTEMPTS, type AssessmentVersion, type PaperJobKind, type PaperJobRecord, type PaperJobRepository, type PaperJobState } from "./papers";
 import type { AccessRepository, AccountRepository, BillingRepository, ChatRepository, DownloadRepository, LibraryStore, ResourceRepository, SqlExecutor } from "./ports";
-import type { AccessFacts, Account, Facet, FacetScope, Level, Resource, ResourceFacets, ResourceFile, ResourcePage, ResourceQuery, ResourceType } from "./types";
+import type { AccessFacts, Account, Facet, FacetScope, Level, ProvisionResult, Resource, ResourceFacets, ResourceFile, ResourcePage, ResourceQuery, ResourceType } from "./types";
 
 const DEFAULT_LIMIT = 24;
 const MAX_LIMIT = 100;
@@ -34,6 +34,9 @@ function toFile(row: Row): ResourceFile {
   return { id: row.id, resourceId: row.resource_id, storagePath: row.storage_path, bytes: Number(row.bytes), contentType: row.content_type, checksumSha256: row.checksum_sha256 };
 }
 
+// JSON is written as text and cast in the SQL (`$n::text::jsonb`), never as `$n::jsonb`: the postgres driver JSON-encodes any parameter
+// the server types as jsonb, so already-encoded text was stored as a JSON string and the paper tables' checks refused it. PGlite passes
+// text through, which hid this until the real stack ran it.
 const json = <T>(value: unknown, fallback: T): T => (value === null || value === undefined ? fallback : typeof value === "string" ? (JSON.parse(value) as T) : (value as T));
 
 function toPaperJob(row: Row): PaperJobRecord {
@@ -143,20 +146,36 @@ const PUBLISHED = "published_at is not null and published_at <= $1";
 export class SqlLibraryStore implements LibraryStore {
   constructor(private readonly db: SqlExecutor) {}
 
+  /** `condition` is one of two fixed strings in this file, never anything from a request. */
+  private async accountWhere(condition: string, value: string): Promise<Account | null> {
+    const rows = await this.db.query<Row>(
+      `select p.id, p.role, p.display_name, p.adult_confirmed_at, p.username, p.linked_email, p.must_change_password, p.login_disabled_at, c.id as client_id
+         from public.profiles p left join public.clients c on c.owner_profile_id = p.id
+        where ${condition}`,
+      [value],
+    );
+    const row = rows[0];
+    if (!row) return null;
+    const learner = row.role === "STUDENT" ? ((await this.db.query<Row>(`${LEARNER_SELECT} where l.profile_id = $1`, [row.id]))[0] ?? null) : null;
+    return {
+      profileId: row.id,
+      role: row.role,
+      displayName: row.display_name,
+      adultConfirmed: row.adult_confirmed_at !== null,
+      clientId: row.client_id,
+      learner: learner ? toLearner(learner) : null,
+      username: row.username,
+      linkedEmail: row.linked_email,
+      mustChangePassword: row.must_change_password,
+      loginDisabled: row.login_disabled_at !== null,
+    };
+  }
+
   accounts: AccountRepository = {
     getAccount: async (profileId) => {
-      const rows = await this.db.query<Row>(
-        `select p.id, p.role, p.display_name, p.adult_confirmed_at, c.id as client_id
-           from public.profiles p left join public.clients c on c.owner_profile_id = p.id
-          where p.id = $1`,
-        [profileId],
-      );
-      const row = rows[0];
-      if (!row) return null;
-      const learner = row.role === "STUDENT" ? ((await this.db.query<Row>(`${LEARNER_SELECT} where l.profile_id = $1`, [profileId]))[0] ?? null) : null;
-      const account: Account = { profileId: row.id, role: row.role, displayName: row.display_name, adultConfirmed: row.adult_confirmed_at !== null, clientId: row.client_id, learner: learner ? toLearner(learner) : null };
-      return account;
+      return this.accountWhere("p.id = $1", profileId);
     },
+    findByUsername: async (username) => this.accountWhere("p.username = $1", username),
     ensureClient: async (profileId) => {
       const rows = await this.db.query<Row>(
         `with ins as (
@@ -180,8 +199,12 @@ export class SqlLibraryStore implements LibraryStore {
       );
       return rows[0]?.id ?? null;
     },
+    tutorRef: async (profileId) => {
+      const rows = await this.db.query<Row>(`select id from public.tutors where profile_id = $1 and active`, [profileId]);
+      return rows[0]?.id ?? null;
+    },
     getEmail: async (profileId) => {
-      // Through a function: the site's database role has no access to the auth schema (migration 0009).
+      // Through a function: the site's database role has no access to the auth schema (migration 0009). It answers the linked address first (0017).
       const rows = await this.db.query<Row>(`select public.auth_email($1) as email`, [profileId]);
       return rows[0]?.email ?? null;
     },
@@ -192,6 +215,32 @@ export class SqlLibraryStore implements LibraryStore {
     updateDisplayName: async (profileId, displayName) => {
       const rows = await this.db.query<Row>(`update public.profiles set display_name = $2 where id = $1 returning id`, [profileId, displayName]);
       if (!rows[0]) throw new Error("no such profile");
+    },
+    provision: async (input) => {
+      const rows = await this.db.query<Row>(
+        `select public.provision_account($1, $2, $3, $4, $5, $6, $7, $8, $9) as result`,
+        [input.profileId, input.username, input.linkedEmail, input.displayName, input.role, input.tutorId ?? null, input.studentId ?? null, input.actor, input.now ?? new Date()],
+      );
+      return rows[0]!.result as ProvisionResult;
+    },
+    setMustChangePassword: async (profileId, required) => {
+      await this.db.query(`update public.profiles set must_change_password = $2 where id = $1`, [profileId, required]);
+    },
+    setLinkedEmail: async (profileId, email) => {
+      // A child's address is their parent's, so it follows a parent's change.
+      await this.db.query(
+        `update public.profiles set linked_email = $2
+          where id = $1
+             or id in (select l.profile_id
+                         from public.learner_identities l
+                         join public.students s on s.id = l.student_id
+                         join public.clients c on c.id = s.client_id
+                        where c.owner_profile_id = $1)`,
+        [profileId, email],
+      );
+    },
+    setLoginDisabled: async (profileId, at) => {
+      await this.db.query(`update public.profiles set login_disabled_at = $2 where id = $1`, [profileId, at]);
     },
   };
 
@@ -376,6 +425,10 @@ export class SqlLibraryStore implements LibraryStore {
     getLearnerByStudent: async (studentId) => {
       const rows = await this.db.query<Row>(`${LEARNER_SELECT} where l.student_id = $1`, [studentId]);
       return rows[0] ? toLearner(rows[0]) : null;
+    },
+    learnerLogin: async (studentId) => {
+      const rows = await this.db.query<Row>(`select l.profile_id, l.status from public.learner_identities l where l.student_id = $1`, [studentId]);
+      return rows[0] ? { profileId: rows[0].profile_id, status: rows[0].status as LinkStatus } : null;
     },
     createInvitation: async (input) => {
       const rows = await this.db.query<Row>(`select * from public.create_learner_invitation($1, $2, $3, $4, $5, $6, $7, $8)`, [
@@ -904,9 +957,9 @@ export class SqlLibraryStore implements LibraryStore {
              select $1, $5, 1, 'ai', 'system', j.checkpoints -> $5, j.updated_at from j, cur where cur.v = 0 returning version),
            nxt as (
              insert into public.paper_assessment_versions (job_id, question_id, version, kind, actor_kind, actor_id, value, note, created_at)
-             select $1, $5, greatest(cur.v, 1) + 1, $6, $7, $8::uuid, $9::jsonb, $10, $11 from j, cur returning version),
+             select $1, $5, greatest(cur.v, 1) + 1, $6, $7, $8::uuid, $9::text::jsonb, $10, $11 from j, cur returning version),
            upd as (
-             update public.paper_jobs set checkpoints = checkpoints || jsonb_build_object($5::text, $9::jsonb), updated_at = $11
+             update public.paper_jobs set checkpoints = checkpoints || jsonb_build_object($5::text, $9::text::jsonb), updated_at = $11
               where id = $1 and exists (select 1 from nxt) returning id)
            select (select version from nxt) as version`,
           [jobId, staff, owner.clientId, owner.studentId, questionId, change.kind, change.actorKind, change.actorId, JSON.stringify(change.value), change.note, now],
@@ -957,7 +1010,7 @@ export class SqlLibraryStore implements LibraryStore {
       let rows: Row[];
       try {
         rows = await this.db.query<Row>(
-          `update public.paper_jobs set state = 'solving', mode = $4, selected_ids = $5::jsonb, lease_owner = $6, lease_expires_at = $7, attempts = 1, progress = '[]'::jsonb, updated_at = $8
+          `update public.paper_jobs set state = 'solving', mode = $4, selected_ids = $5::text::jsonb, lease_owner = $6, lease_expires_at = $7, attempts = 1, progress = '[]'::jsonb, updated_at = $8
             where id = $3 and client_id = $1 and student_id is not distinct from $2::uuid and state = 'ready' returning *`,
           [owner.clientId, owner.studentId, id, input.mode, input.selectedIds === null ? null : JSON.stringify(input.selectedIds), worker.id, new Date(now.getTime() + worker.leaseMs), now],
         );
@@ -974,10 +1027,10 @@ export class SqlLibraryStore implements LibraryStore {
       const json = (value: unknown) => (value === undefined ? null : JSON.stringify(value));
       const rows = await this.db.query<Row>(
         `update public.paper_jobs set
-           questions = coalesce($3::jsonb, questions),
-           progress = coalesce($4::jsonb, progress),
+           questions = coalesce($3::text::jsonb, questions),
+           progress = coalesce($4::text::jsonb, progress),
            message = case when $5::boolean then $6 else message end,
-           checkpoints = case when $7::text is null then checkpoints else checkpoints || jsonb_build_object($7::text, $8::jsonb) end,
+           checkpoints = case when $7::text is null then checkpoints else checkpoints || jsonb_build_object($7::text, $8::text::jsonb) end,
            lease_expires_at = $9, updated_at = $10
           where id = $1 and lease_owner = $2 and state in ('extracting', 'solving') returning *`,
         [id, workerId, json(patch.questions), json(patch.progress), patch.message !== undefined, patch.message ?? null, patch.checkpoint?.questionId ?? null, json(patch.checkpoint?.value), new Date(now.getTime() + worker.leaseMs), now],

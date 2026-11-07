@@ -236,7 +236,7 @@ export default function PrivacyPage() {
               <p>
                 Information may be handled by the service providers needed to
                 run the website and communications. Render hosts the website,
-                Resend delivers the emails the website sends, and IONOS hosts
+                Resend delivers the emails the website sends, and Google Workspace hosts
                 LearnThrive’s company mailbox, where enquiries and requests
                 arrive. We share only what is needed for the relevant purpose.
               </p>
@@ -273,6 +273,22 @@ export default function PrivacyPage() {
                 you ask us to delete it. How long tutor application information is kept is
                 set out in the{" "}
                 <Link href="/careers/privacy">applicant privacy notice</Link>.
+              </p>
+              <p>
+                When a student or a tutor leaves us, we delete their records.
+                We keep only what we have to: financial records, for the period
+                required for tax; safeguarding records, which are held
+                separately for as long as child protection requires; and
+                unsuccessful applications, as set out in the{" "}
+                <Link href="/careers/privacy">applicant privacy notice</Link>.
+                A deletion is not reversible, so we confirm it first and wait
+                before it happens.
+              </p>
+              <p>
+                Our database is backed up. A record we have deleted stays in a
+                backup until that backup ages out, after which it is gone from
+                there too. If we ever had to restore from a backup, we would
+                re-apply the deletions made since it was taken.
               </p>
               <p>
                 We use reasonable organisational and technical measures suited

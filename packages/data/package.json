@@ -14,6 +14,7 @@
     "./inMemoryProvider": "./src/inMemoryProvider.ts",
     "./sqlProvider": "./src/sqlProvider.ts",
     "./library": "./src/library/index.ts",
+    "./careers": "./src/careers.ts",
     "./tuitionBilling": "./src/tuitionBilling/index.ts"
   },
   "devDependencies": {

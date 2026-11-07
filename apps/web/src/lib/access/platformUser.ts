@@ -9,18 +9,24 @@ import { devDomainIdFor } from "@/lib/dev/accounts";
  * record (tutor, parent or student) the dashboard looks the person up by: in development the seeded record of the development accounts;
  * everywhere else the person's real record from the database (`domainRef`: their tutor, client or learner id). Someone with no record
  * (an administrator) keeps their account id, which matches nothing, so a lookup finds nothing rather than someone else's data.
+ * `tutorRef` is the tutor record of an administrator who teaches: the capability lib/auth/teaching.ts reads. The email is the linked one,
+ * never the internal address Auth holds.
  */
 export function toPlatformUser(
   user: Pick<AuthUser, "email" | "displayName">,
-  account: Pick<Account, "profileId" | "role" | "displayName">,
+  account: Pick<Account, "profileId" | "role" | "displayName"> & Partial<Pick<Account, "username" | "linkedEmail">>,
   domainId: string | null = null,
   env: Record<string, string | undefined> = process.env,
+  tutorRef: string | null = null,
 ): AuthenticatedUser {
+  const developmentRecord = devDomainIdFor(account.profileId, env);
+  const tutorId = account.role === "ADMIN" ? (developmentRecord ?? tutorRef) : null;
   return {
     id: account.profileId,
-    email: user.email,
+    email: account.linkedEmail ?? user.email,
     role: account.role,
-    name: account.displayName || user.displayName || user.email,
-    profileId: devDomainIdFor(account.profileId, env) ?? domainId ?? account.profileId,
+    name: account.displayName || user.displayName || account.username || user.email,
+    profileId: developmentRecord ?? domainId ?? account.profileId,
+    ...(tutorId ? { tutorId } : {}),
   };
 }

@@ -21,11 +21,11 @@ export interface AppCommandActions {
   signOut: () => void;
 }
 
-export function buildAppCommands(role: Role, actions: AppCommandActions): PaletteCommand[] {
+export function buildAppCommands(role: Role, actions: AppCommandActions, teaches = false): PaletteCommand[] {
   const commands: PaletteCommand[] = [];
-  const shortcutByHref = new Map(goToTargetsFor(role).map((t) => [t.href, `G ${t.key.toUpperCase()}`]));
+  const shortcutByHref = new Map(goToTargetsFor(role, teaches).map((t) => [t.href, `G ${t.key.toUpperCase()}`]));
 
-  for (const section of navigationFor(role)) {
+  for (const section of navigationFor(role, { teaches })) {
     for (const item of section.items) {
       commands.push({
         id: `nav:${item.href}`,

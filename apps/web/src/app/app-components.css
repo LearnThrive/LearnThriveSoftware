@@ -301,7 +301,8 @@
 .form-actions { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-1); }
 
 .checkbox-field { display: flex; align-items: flex-start; gap: var(--space-3); }
-.checkbox-field input { margin-top: 0.2rem; width: 1rem; height: 1rem; accent-color: var(--app-accent); }
+/* 24px: the WCAG 2.2 minimum target size (2.5.8), which a 16px box beside a button fails. */
+.checkbox-field input { flex: none; margin: 0; width: 1.5rem; height: 1.5rem; accent-color: var(--app-accent); }
 .checkbox-field span { font-size: var(--text-small); color: var(--app-text); }
 .checkbox-field__label { display: block; font-weight: 650; color: var(--app-ink); }
 .checkbox-field__hint { display: block; margin-top: 0.15rem; color: var(--app-muted); }

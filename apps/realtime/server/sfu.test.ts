@@ -171,10 +171,10 @@ describe('the SFU service', () => {
     await service.handle('s', { op: 'session.new' }, noTrack);
     expect((await service.handle('s', 'nonsense', noTrack)).ok).toBe(false);
     expect((await service.handle('s', { op: 'tracks.new', sessionId: 'session-00000001', body: {} }, noTrack)).ok).toBe(false);
-    const quiet = console.error;
-    console.error = () => undefined;
+    const quiet = console.warn;
+    console.warn = () => undefined;
     const reply = await service.handle('s', { op: 'tracks.new', sessionId: 'session-00000001', body: { sessionDescription: OFFER, tracks: [{ location: 'local', mid: '0', trackName: 'audio' }] } }, noTrack);
-    console.error = quiet;
+    console.warn = quiet;
     expect(reply).toEqual({ ok: false, error: 'The media service could not complete that request.' });
     expect(calls).toEqual(['session']);
   });

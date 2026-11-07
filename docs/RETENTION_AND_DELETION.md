@@ -1,17 +1,18 @@
 # Retention and deletion: what is kept, where, and who deletes it
 
-For the owners. The website stores **nothing** about applications, reconfirmations, subject requests, Library waitlist sign-ups or enquiries: each is sent by email and then handled by hand. So deleting means deleting emails and copies. This page sets out the rules you chose, where each kind of data actually lives, and a log to keep. It is a draft for the owners and their adviser to approve, not legal advice.
+For the owners. **Online tutor applications are stored in the app** (launch checklist 3.12, see "Tutor applications in the app" below) and are deleted from its admin screen. The website stores **nothing** about reconfirmations, subject requests, Library waitlist sign-ups or enquiries, or about an application someone emails in: each is sent by email and then handled by hand, so deleting those means deleting emails and copies. This page sets out the rules you chose, where each kind of data actually lives, and a log to keep. It is a draft for the owners and their adviser to approve, not legal advice.
 
 ## Where the data is
 
 | Place | What is in it |
 | --- | --- |
-| The **info@ mailbox on IONOS** (or the careers address, when there is one) | Every application with its attachments, every reconfirmation, every subject request, Library waitlist sign-up and enquiry. This is the main place. (Waitlist sign-ups go to `LIBRARY_WAITLIST_EMAIL`, then `ENQUIRY_EMAIL`, then the site address. Someone who uses the page's "email us" link instead of the form writes to the site address, so check that mailbox too.) |
-| **Resend's sending log** | A copy of each email the website sent through Resend, including the applicant's files attached to the message to you. Check Resend's own retention setting and what you can delete from its dashboard: it was not verified here. |
+| **The app: Supabase (London)** | Every online tutor application: the answers, the agreement record, the files (private `careers` bucket), internal notes, and the history of who changed or opened what. Administrators only, at `/dashboard/admin/careers`. |
+| The **info@ mailbox on Google Workspace** (or the careers address, when there is one) | A short notice that an online application arrived (reference and role only, no personal content); any application emailed in with its attachments, and applications from before the app stored them; every reconfirmation, every subject request, Library waitlist sign-up and enquiry. This is the main place. (Waitlist sign-ups go to `LIBRARY_WAITLIST_EMAIL`, then `ENQUIRY_EMAIL`, then the site address. Someone who uses the page's "email us" link instead of the form writes to the site address, so check that mailbox too.) |
+| **Resend's sending log** | A copy of each email the website sent through Resend: the applicant's confirmation and the notice to you (neither carries files), and, for applications from before the app stored them, the applicant's files attached to the message to you. Check Resend's own retention setting and what you can delete from its dashboard: it was not verified here. |
 | Your **spreadsheets and devices** | The tutor list, the reconfirmation tracker, the subject-request tally, anything downloaded or forwarded. |
 | **Render's logs** | Only outcomes: a reference, a status, counts and sizes. No names, addresses, answers or file content. |
 
-Holding identity scans in a shared mailbox is a real security risk. Limit who can open it, use a strong password and two-step verification on every account that can, do not forward identity documents, and end the practice when a proper secure store exists.
+Holding identity scans in a shared mailbox is a real security risk. Online applications no longer put them there. For anything still in the mailbox from before, limit who can open it, use a strong password and two-step verification on every account that can, do not forward identity documents, and delete them on the schedule below.
 
 ## The rules
 
@@ -42,6 +43,18 @@ Keep a spreadsheet with one row per person or batch: who, what kind of data, the
 
 For tutors with identity documents on file, add a row when they start and **a due date of 12 months after they stop working with LearnThrive** the day they stop. For unsuccessful applicants the due date is 6 months after the decision, and 12 months for an application kept for future roles. When someone asks you to delete their information, or withdraws, do it promptly and say so; keep only what the law or a safeguarding duty requires you to keep.
 
+## Tutor applications in the app (launch checklist 3.12)
+
+An online application is stored, not emailed: migration `0020_careers.sql`, the private `careers` bucket, and the screens at `/dashboard/admin/careers` (administrators only). The rules above apply unchanged; what changes is where you do it.
+
+- **The clock starts from the status.** Setting an application to *Unsuccessful* or *Withdrawn* records the decision date and works out the deletion dates from it (6 months; 12 if they asked to be kept for future roles; identity documents at 6 months either way). Reopening it clears them. An *Accepted* applicant becomes a tutor, so their application has no automatic date: when they stop working with LearnThrive, delete it from its page (their identity documents 12 months after they stop).
+- **Monthly.** The top of the Applications page lists what is due within the next 31 days: whole applications, and applications whose identity documents are due. Delete each from its page, choosing *Its retention period has ended*. Nothing is deleted automatically.
+- **Identity documents.** Once you have checked them, use *Record identity as seen* and then *Delete identity documents*: the app keeps who saw them and when, never a copy.
+- **DBS.** *Record DBS as seen* keeps only how (certificate or Update Service), the date and who. Never note a certificate number.
+- **A request to see or delete.** *Export (subject access)* downloads everything held about the applicant as one file (their files are downloaded separately from the same page). *Delete for good* with the reason *The applicant asked us to delete it* removes the answers, the files, the notes and the history together.
+- **What deletion leaves behind.** A log row in `careers_deletions`: the date, the administrator, the reason and how many files. Never the reference, the name or the email. A database backup keeps a copy until it ages out; a restore must be followed by deleting again whatever had been deleted since (`docs/SUPABASE_RUNBOOK.md`).
+- **Every file opened is recorded** against the application, with who opened it, and shown in its History.
+
 ## A note on DBS information
 
 The website does not collect DBS certificate information. The application only asks whether an applicant already holds a suitable certificate and uses the Update Service, and tells them not to upload a certificate. The check itself is arranged through the DBS process. Do not store certificates in the mailbox either.
@@ -61,6 +74,36 @@ These live in the database and in a private storage bucket, not in the mailbox, 
 | Voice audio | never stored (it is processed in memory and discarded) | n/a |
 | Safeguarding flags | the lead's own record, outside the app; the app keeps an opaque reference only | the safeguarding lead, under the school's safeguarding policy, not this job |
 
-**Backups (plan20).** The deadlines above apply to the **live** database and to Storage. A database backup keeps what the job removed until the backup ages out (the plan's backup retention in days, and point-in-time recovery if it is on: the owner confirms both in the dashboard and states them on the privacy page, `apps/web/LEGAL_REVIEW.md`). Uploaded **files are not in database backups** (confirm on the day), so a file removed by the job is gone for good. **A restore must not undo a deletion:** after any restore, before reopening the site, run the retention job and re-apply every deletion request since the backup's date (`docs/SUPABASE_RUNBOOK.md`, section 2). The retention job's order, storage objects first and then rows, is proved on a real Supabase stack, including that a storage failure purges nothing.
+## When a student or a tutor leaves: the purge tool
+
+The table above is about data that ages out on a clock. This is about a person who has gone. The decision (`docs/LAWFUL_BASES.md`, 2
+November 2026) is that **their records are purged**, and the tool for it is launch checklist 3.7, built in migrations `0018` and `0019`.
+
+**The pause comes first.** Nothing can be purged until an administrator marks the record as left, which deletes nothing and can be
+undone. The purge becomes possible **30 days** later (`PURGE_DELAY_DAYS` in `packages/data/src/repositories.ts`), so a mistake has time
+to be noticed. An administrator may bring that date forward — to today, if the person has asked — but **never push it back**: the
+database refuses a later date, and refuses the purge itself until the date has passed, so no caller can skip the wait.
+
+**Then the purge, in one transaction.** A typed phrase confirms it after the screen has listed exactly what goes and what stays:
+
+| | Goes | Stays, and why |
+| --- | --- | --- |
+| A student | the record, its guardian links, the learner login (profile and Auth user), attendance, invitations, audit rows, notifications, their AI conversations and uploads, and any lesson that was only theirs | a lesson a sibling is still on, with this child's link and attendance removed and **their name taken out** of its title, notes, timeline and report; the assignment, likewise scrubbed, and ended if nobody is left on it |
+| A tutor | the record, the login, availability, notifications | the lessons they taught, the assignments and the reports they wrote, all moved to one archived "Former tutor" row so the history survives without naming them. A report stays with the student's record until that student is purged |
+| A family | each child as above, then the family account and the parent's login, their conversations and notifications | nothing of the family itself |
+
+**What is kept on purpose**, as `LAWFUL_BASES.md` confirms: financial records (the period the accountant sets, usually 6 years — none
+are held in this app yet), safeguarding records (separately, by the safeguarding lead), and unsuccessful applications. The preview says
+all of this on screen before anything is deleted.
+
+**The log holds no personal data.** `public.data_purges` records the date, the administrator, the kind (`STUDENT`, `TUTOR`, `FAMILY`)
+and row **counts**. Deliberately no student, client or tutor id, no name, no email — so the log cannot become the record the purge was
+meant to remove. That means it cannot tell you *who* was purged: work that out from your own offboarding notes.
+
+**Order, and why.** Stored files go **before** any row (a file whose row is gone can never be found again, the same rule as the
+retention job), then the login is disabled, then the rows and the log row in one transaction, then the Auth user. If the last step
+fails the purge still stands and the login stays disabled.
+
+**Backups (plan20).** The deadlines above apply to the **live** database and to Storage. A database backup keeps what the job removed until the backup ages out (the plan's backup retention in days, and point-in-time recovery if it is on: the owner confirms both in the dashboard and states them on the privacy page, `apps/web/LEGAL_REVIEW.md`). Uploaded **files are not in database backups** (confirm on the day), so a file removed by the job is gone for good. **A restore must not undo a deletion:** after any restore, before reopening the site, run the retention job, re-apply every deletion request since the backup's date, **and re-run every purge** in `public.data_purges` from after that date (`docs/SUPABASE_RUNBOOK.md`, section 2). The privacy notice says both things: that a backup keeps a copy of a deleted record until it ages out, and that a restore is followed by re-applying the deletions. The retention job's order, storage objects first and then rows, is proved on a real Supabase stack, including that a storage failure purges nothing.
 
 A family can delete one chat or all chats and export everything from the LearnThrive AI screen. **Erasing a whole family record:** the chat rows cascade with the record, but uploaded files in storage do not, so first use "Delete all my chats" for that family (or call the delete-all route as them), run the retention job once, and only then erase the record; otherwise files whose rows are gone will not be found by the job. The monthly check should also confirm the job ran: its output is counters only (files removed, chats purged), never content.

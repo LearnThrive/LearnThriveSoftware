@@ -3580,6 +3580,13 @@ img[src*="%2Fimages%2F"] {
   font-size: 1.1rem;
 }
 
+/* The error page's reference (a digest an admin can find in the log, docs/OBSERVABILITY.md): quieter than the message above it. */
+.not-found__inner p.error-reference {
+  margin-block: -1rem 2rem;
+  font-size: 0.95rem;
+  color: var(--fg-muted);
+}
+
 /* Footer */
 .site-footer {
   position: relative;

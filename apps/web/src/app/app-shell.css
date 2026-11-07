@@ -132,12 +132,23 @@
   padding: var(--space-4) var(--space-3);
   background: var(--app-sidebar);
   color: var(--app-on-dark);
+  overflow: hidden;
+}
+
+/* The brand, the menu and a page's own section. When they are taller than the window (a long menu, or a higher browser zoom) they scroll
+   here, above the collapse toggle, never under it: a sticky toggle over a scrolling menu covered its last links. A classic scrollbar would
+   take about 15px of the 68px icon rail and squeeze every icon to nothing, so the bar is hidden (the menu still scrolls by wheel, touch
+   and keyboard focus). */
+.app-sidebar__scroll {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  /* At a higher browser zoom the menu is taller than the window and scrolls. A classic scrollbar would take about 15px of the 68px icon
-     rail and squeeze every icon to nothing, so the bar is hidden (the menu still scrolls by wheel, touch and keyboard focus). */
   scrollbar-width: none;
 }
-.app-sidebar::-webkit-scrollbar { display: none; }
+.app-sidebar__scroll::-webkit-scrollbar { display: none; }
 
 .app-sidebar__brand { padding: var(--space-2) var(--space-2) var(--space-1); }
 
@@ -208,9 +219,8 @@
 
 .app-sidebar__collapse {
   display: flex; align-items: center; gap: var(--space-3);
-  margin-top: auto; padding: 0.5rem var(--space-2);
-  /* Pinned to the bottom of the window: at a higher zoom the menu scrolls, and the toggle must not be lost below the fold. */
-  position: sticky; bottom: calc(var(--space-4) * -1); z-index: 1;
+  /* Always at the bottom of the window, beneath the scrolling menu (.app-sidebar__scroll), so it is never lost below the fold. */
+  flex: none; padding: 0.5rem var(--space-2);
   border: 0; border-radius: var(--app-radius-sm);
   background: var(--app-sidebar); color: var(--app-on-dark-muted);
   font: inherit; font-size: var(--text-small); cursor: pointer;

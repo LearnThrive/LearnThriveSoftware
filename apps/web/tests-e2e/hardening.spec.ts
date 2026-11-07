@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { uniqueLabel } from './support';
+import { dayInWeeks, lessonSlot, showMonthOf, uniqueLabel } from './support';
 
 // Plan section 85's IDOR/access-control adversarial test list. Several of its named attacks
 // (Parent accesses unrelated Student URL, Tutor accesses unassigned Student, Student accesses
@@ -11,10 +11,10 @@ import { uniqueLabel } from './support';
 // layer — an unrelated Tutor viewing a Lesson (mirroring lessons.spec.ts's Student IDOR test for
 // the Tutor role), and a Tutor attempting to approve their own report. See docs/HARDENING.md.
 
-async function login(page: Page, email: string, password: string) {
+async function login(page: Page, username: string, password: string) {
   await page.request.post('/api/auth/logout');
   await page.goto('/login');
-  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Username').fill(username);
   await page.locator('input[name="password"]').fill(password);
   await Promise.all([
     page.waitForURL(/\/dashboard$/),
@@ -34,8 +34,8 @@ async function openLessonFromCalendar(page: Page, eventText: string) {
   ]);
 }
 
-const ADMIN = { email: 'admin@learnthrive.dev', password: 'dev-admin-pass' };
-const TUTOR = { email: 'tutor@learnthrive.dev', password: 'dev-tutor-pass' };
+const ADMIN = { username: 'dev.admin', password: 'dev-admin-pass' };
+const TUTOR = { username: 'dev.tutor', password: 'dev-tutor-pass' };
 
 test('lesson detail IDOR: a Tutor cannot view a lesson they are not assigned to', async ({ page }) => {
   const studentName = uniqueLabel('Hardening Test Student');
@@ -43,7 +43,7 @@ test('lesson detail IDOR: a Tutor cannot view a lesson they are not assigned to'
   const assignmentTitle = uniqueLabel('Hardening Test Assignment');
   const lessonTitle = uniqueLabel('Hardening test lesson');
 
-  await login(page, ADMIN.email, ADMIN.password);
+  await login(page, ADMIN.username, ADMIN.password);
   await page.goto('/dashboard/admin/people/students');
   await page.getByRole('button', { name: 'Add student' }).click();
   await page.locator('#student-name').fill(studentName);
@@ -66,25 +66,22 @@ test('lesson detail IDOR: a Tutor cannot view a lesson they are not assigned to'
 
   await page.goto('/dashboard/admin/lessons/new');
   await page.getByLabel('Tuition Assignment').selectOption({ label: assignmentTitle });
+  const slot = lessonSlot(dayInWeeks(2, 'Saturday'), '11:00');
   await page.locator('#lesson-title').fill(lessonTitle);
-  await page.locator('#lesson-date').fill('2026-11-21');
-  await page.locator('#lesson-time').fill('11:00');
+  await page.locator('#lesson-date').fill(slot.date);
+  await page.locator('#lesson-time').fill(slot.time);
   await page.getByRole('button', { name: 'Schedule lesson' }).click();
   await expect(page).toHaveURL(/\/dashboard\/calendar$/);
 
   await page.goto('/dashboard/calendar');
-  for (let i = 0; i < 12; i += 1) {
-    const title = await page.locator('.fc-toolbar-title').innerText();
-    if (title.includes('November 2026')) break;
-    await page.locator('.fc-next-button').click();
-  }
+  await showMonthOf(page, slot.date);
   await openLessonFromCalendar(page, lessonTitle);
   await expect(page).toHaveURL(/\/dashboard\/lessons\/(.+)/);
   const lessonUrl = page.url();
 
   // The seeded Tutor (Tahasin Hasan) has a real login but is NOT on this lesson — a different
   // Tutor entirely ("Hardening Test Tutor", who has no login at all) is.
-  await login(page, TUTOR.email, TUTOR.password);
+  await login(page, TUTOR.username, TUTOR.password);
   await page.goto(lessonUrl);
   await expect(page).toHaveURL(/\/403$/);
 });
@@ -94,32 +91,29 @@ test('a Tutor cannot reach the Admin-only reschedule/cancel actions for any less
   // page itself never renders a Cancel button for a Tutor (canCancel is Admin-only), so there is
   // no UI path to even attempt this. Proven here by checking the control is genuinely absent for
   // a Tutor viewing their own seeded, cancellable lesson — not just untested.
-  await login(page, TUTOR.email, TUTOR.password);
+  await login(page, TUTOR.username, TUTOR.password);
   await page.goto('/dashboard/lessons/lesson-gcse-maths-upcoming');
   await expect(page.getByRole('button', { name: 'Cancel lesson' })).toHaveCount(0);
 });
 
 test('report approval IDOR: a Tutor never sees an Approve report control, even on their own submitted report', async ({ page }) => {
-  await login(page, ADMIN.email, ADMIN.password);
+  await login(page, ADMIN.username, ADMIN.password);
   await page.goto('/dashboard/admin/lessons/new');
   await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Brian' });
   const lessonTitle = uniqueLabel('Hardening report lesson');
+  const slot = lessonSlot(dayInWeeks(2, 'Sunday'), '12:00');
   await page.locator('#lesson-title').fill(lessonTitle);
-  await page.locator('#lesson-date').fill('2026-11-22');
-  await page.locator('#lesson-time').fill('12:00');
+  await page.locator('#lesson-date').fill(slot.date);
+  await page.locator('#lesson-time').fill(slot.time);
   await page.getByRole('button', { name: 'Schedule lesson' }).click();
   await expect(page).toHaveURL(/\/dashboard\/calendar$/);
 
-  for (let i = 0; i < 12; i += 1) {
-    const title = await page.locator('.fc-toolbar-title').innerText();
-    if (title.includes('November 2026')) break;
-    await page.locator('.fc-next-button').click();
-  }
+  await showMonthOf(page, slot.date);
   await openLessonFromCalendar(page, lessonTitle);
   await expect(page).toHaveURL(/\/dashboard\/lessons\/(.+)/);
   const lessonUrl = page.url();
 
-  await login(page, TUTOR.email, TUTOR.password);
+  await login(page, TUTOR.username, TUTOR.password);
   await page.goto(lessonUrl);
   await page.getByRole('button', { name: 'Start a report' }).click();
   await expect(page.locator('#report-summary')).toBeVisible();
@@ -140,7 +134,7 @@ test('the development data reset endpoint refuses a non-Admin caller', async ({ 
   // reset would wipe data other tests are concurrently relying on. The reset behavior itself
   // (seed scenario restored, session clutter discarded) is proven in isolation by
   // packages/data/src/inMemoryProvider.test.ts, which has no such shared-state risk.
-  await login(page, TUTOR.email, TUTOR.password);
+  await login(page, TUTOR.username, TUTOR.password);
   const response = await page.request.post('/api/dev/reset');
   expect(response.status()).toBe(403);
 });
