@@ -50,6 +50,7 @@ regardless of what a higher layer already decided:
 | `saveReportDraftAction`/`submitReportAction` | `TUTOR`/`ADMIN` | same |
 | `approveReportAction` | `ADMIN` only | — |
 | `markNotificationReadAction` | any authenticated user | only their own notifications |
+| Every action in `lib/actions/tuitionBilling.ts` (rates, sibling flag, charge decisions, issue statement, payments, refunds, billing rules) | `ADMIN` only | none. Tutors never see money (B17); `decideRefundAction` additionally needs the signer to be a named refund approver (`TUITION_REFUND_APPROVER_EMAILS`). See `docs/TUITION_BILLING.md` |
 
 ## What each role actually sees
 

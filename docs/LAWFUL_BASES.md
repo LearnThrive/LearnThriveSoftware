@@ -2,6 +2,8 @@
 
 Drafted 2 November 2026 from what LearnThrive does according to the code and docs, and **confirmed by Alvi Hossain on 2 November 2026** (with the decision that records are purged when people leave, below). It is not legal advice; Tahasin Hasan and Abdurrahman Mustafa, who control and handle the data, keep it under review, ideally with a solicitor. The privacy and careers notices must say the same thing before anything is published.
 
+**Update 7 Nov 2026: this draft is out of date on two points** ([OWNER_ANSWERS_2026-11-07.md](OWNER_ANSWERS_2026-11-07.md), F1 and F5). It was written when lessons were not recorded; they are now to be recorded for safeguarding, so it must add the recording (including any sensitive data it captures, the lawful basis and the special-category condition) and the separate learner accounts before Tahasin and Abdurrahman approve it. Until the impact assessment is done nothing is recorded, and the privacy and careers notices must keep saying what is true.
+
 Scope: the tuition side only. LearnThrive AI and the Library have their own bases and are not covered.
 
 ## Who we are to the data
