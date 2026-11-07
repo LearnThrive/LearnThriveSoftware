@@ -105,6 +105,7 @@ Set these in Render's environment, as secrets where the table says so, and nowhe
 | Variable | What it does | Local | Render production | Secret | Where you get it | If unset |
 | --- | --- | --- | --- | --- | --- | --- |
 | `STRIPE_SECRET_KEY` | sk_test_... , sk_live_... or a restricted rk_... key. A test key puts the server in test mode. Server only. | optional | only to take payment | **yes** | Stripe dashboard > Developers > API keys | unset |
+| `TUITION_REFUND_APPROVER_EMAILS` | Comma-separated sign-in emails of the people who may approve a tuition refund (owner answer B11). Empty = nobody can approve one: refunds stay requested. Tuition statements and refunds are admin-only and separate from Stripe. | optional | optional | no | the owners: who decides refunds | unset (no approver) |
 | `STRIPE_WEBHOOK_SECRET` | whsec_... for /api/billing/webhook (two, comma separated, while rotating). | optional | only to take payment | **yes** | Stripe dashboard > Developers > Webhooks | unset |
 | `STRIPE_PRICE_MONTHLY` | The price_... ID of the monthly recurring GBP price (an amount is rejected). | optional | only to take payment | no | Stripe dashboard > Product catalogue | unset |
 | `STRIPE_PRICE_ANNUAL` | The price_... ID of the annual price. | optional | only to take payment | no | Stripe dashboard > Product catalogue | unset |

@@ -71,6 +71,7 @@ export const REGISTRY = [
 
   // ---- Billing ---------------------------------------------------------------------------------------------------------
   e("STRIPE_SECRET_KEY", "billing", "sk_test_... , sk_live_... or a restricted rk_... key. A test key puts the server in test mode. Server only.", { secret: true, production: "only to take payment", source: "Stripe dashboard > Developers > API keys", check: "stripe-secret" }),
+  e("TUITION_REFUND_APPROVER_EMAILS", "billing", "Comma-separated sign-in emails of the people who may approve a tuition refund (owner answer B11). Empty = nobody can approve one: refunds stay requested. Tuition statements and refunds are admin-only and separate from Stripe.", { source: "the owners: who decides refunds", fallback: "unset (no approver)", check: "text" }),
   e("STRIPE_WEBHOOK_SECRET", "billing", "whsec_... for /api/billing/webhook (two, comma separated, while rotating).", { secret: true, production: "only to take payment", source: "Stripe dashboard > Developers > Webhooks", check: "stripe-webhook" }),
   e("STRIPE_PRICE_MONTHLY", "billing", "The price_... ID of the monthly recurring GBP price (an amount is rejected).", { production: "only to take payment", source: "Stripe dashboard > Product catalogue", check: "prefix:price_" }),
   e("STRIPE_PRICE_ANNUAL", "billing", "The price_... ID of the annual price.", { production: "only to take payment", source: "Stripe dashboard > Product catalogue", check: "prefix:price_" }),

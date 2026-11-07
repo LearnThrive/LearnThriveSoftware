@@ -51,6 +51,7 @@ const ADMIN_NAV: AppNavSection[] = [
     items: [
       { label: "Assignments", href: "/dashboard/admin/assignments", icon: "assignments" },
       { label: "Reports", href: "/dashboard/reports", icon: "reports" },
+      { label: "Billing", href: "/dashboard/admin/billing", icon: "clients", matchPrefix: "/dashboard/admin/billing" },
     ],
   },
   {
