@@ -96,7 +96,32 @@ export interface Account {
   clientId: string | null;
   /** Set when this profile is a learner (a student's own login). The family they belong to is `learner.familyClientId`. */
   learner: LearnerContext | null;
+  /** What the person signs in with. null only for an account from before usernames, which production never has. */
+  username: string | null;
+  /** Where resets, notices and invoices go: their own address, or their parent's for a learner. Never the internal Auth address. */
+  linkedEmail: string | null;
+  /** A temporary password is in use: nothing but choosing a new one works until this clears. */
+  mustChangePassword: boolean;
+  /** An administrator has disabled this login. */
+  loginDisabled: boolean;
 }
+
+/** Binding a brand new login to its username, linked email, role and record. One transaction; on any refusal nothing changes. */
+export interface ProvisionInput {
+  profileId: string;
+  username: string;
+  linkedEmail: string;
+  displayName: string;
+  role: AccountRole;
+  /** The tutor record this login teaches as: required for a TUTOR, optional for an ADMIN who teaches. */
+  tutorId?: string | null;
+  /** The student this login belongs to: required for a STUDENT. */
+  studentId?: string | null;
+  actor: string | null;
+  now?: Date;
+}
+
+export type ProvisionResult = "ok" | "no_profile" | "username_taken" | "not_eligible";
 
 /** What the server knows about a family account's rights at one moment. Input to canAccess. */
 export interface AccessFacts {

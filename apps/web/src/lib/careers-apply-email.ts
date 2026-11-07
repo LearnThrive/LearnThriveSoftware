@@ -7,42 +7,30 @@ import { DBS_STATUS_CHOICES, RIGHT_TO_WORK_CHOICES } from "@/lib/careers-validat
 import {
   emailWrapper,
   escapeHtml,
-  htmlBanner,
   htmlHeading,
   htmlParagraph,
-  htmlSubheading,
   htmlTable,
   SITE_URL,
   subjectSafe,
-  textTable,
 } from "@/lib/email";
-import { formatBytes } from "@/lib/careers-files";
 import { siteConfig } from "@/lib/site";
 
 /**
- * The two emails an application produces: the one to the hiring team (with the files attached) and the
- * confirmation to the applicant (no attachments, no copy of their answers). Pure: no sending, no I/O.
- * Every applicant-supplied value goes through the escaping helpers in lib/email.ts, and the subject line is
- * built only from values cleaned of line breaks.
+ * What an application produces besides the stored record (launch checklist 3.12):
+ *
+ *   - a short notice to the hiring team that one has arrived, with NO personal content: the reference, the role and a link to the
+ *     admin screen. The answers and the files are read there, after signing in, never in a mailbox.
+ *   - the confirmation to the applicant (no attachments, no copy of their answers).
+ *   - the sections the admin screen shows the answers in (the layout the old internal email used).
+ *
+ * Pure: no sending, no I/O. Every applicant-supplied value goes through the escaping helpers in lib/email.ts when it is put in HTML.
  */
-export interface DocumentSummary {
-  /** "CV", "Cover letter", "Qualification or certificate"... */
-  label: string;
-  /** The cleaned attachment name. */
-  filename: string;
-  size: number;
-  /** An identity or right-to-work document. */
-  sensitive: boolean;
-}
-
 export interface ApplicationEmailInput {
-  reference: string;
   fields: ApplicationFields;
-  documents: readonly DocumentSummary[];
   record: AgreementRecord;
 }
 
-type Section = { heading: string; rows: Array<[string, string]> };
+export type Section = { heading: string; rows: Array<[string, string]> };
 
 const yes = (value: boolean) => (value ? "Yes" : "No");
 const list = (values: readonly string[]) => values.join(", ");
@@ -57,12 +45,8 @@ function fullName(fields: ApplicationFields): string {
   return `${fields.firstName} ${fields.lastName}`.trim();
 }
 
-export function internalSubject(input: ApplicationEmailInput): string {
-  const marker = input.documents.some((doc) => doc.sensitive) ? " [ID documents attached]" : "";
-  return subjectSafe(`Careers application: ${roleTitle(input.fields.role)} - ${fullName(input.fields)} - ${input.reference}${marker}`, 200);
-}
-
-function sectionsFor(input: ApplicationEmailInput): Section[] {
+/** The answers in the order and wording the admin screen shows them. */
+export function applicationSections(input: ApplicationEmailInput): Section[] {
   const f = input.fields;
   return [
     {
@@ -121,12 +105,6 @@ function sectionsFor(input: ApplicationEmailInput): Section[] {
         ["How they would help a learner still stuck after two explanations", f.stuckLearner],
       ],
     },
-    {
-      heading: "Documents attached",
-      rows: input.documents.length
-        ? input.documents.map((doc): [string, string] => [doc.label, `${doc.filename} (${formatBytes(doc.size)})${doc.sensitive ? " - SENSITIVE" : ""}`])
-        : [["Documents", "None attached"]],
-    },
     { heading: "Safeguarding agreement record", rows: agreementRecordLines(input.record).map(([label, value]): [string, string] => [label, value]) },
     {
       heading: "Declarations",
@@ -144,53 +122,26 @@ function sectionsFor(input: ApplicationEmailInput): Section[] {
   ];
 }
 
-const UNTRUSTED =
-  "The attachments on this message came from a public web form and are untrusted. Open them with care: do not enable macros or editing, and do not run anything inside them. The website cannot scan for viruses; your mailbox’s own filtering is the second layer.";
-const SENSITIVE =
-  "Identity or right-to-work documents are attached. Use them only to verify identity and right to work, keep them private and do not forward them. Delete this message, and the copy in the sending log, as set out in docs/RETENTION_AND_DELETION.md: for an unsuccessful applicant when the application is deleted, otherwise 12 months after they stop working with LearnThrive.";
-
-function retentionReminder(input: ApplicationEmailInput): string {
-  const { talentPool, unsuccessfulRetentionMonths } = careersConfig;
-  const base = `If the application is unsuccessful, delete this message and its attachments ${unsuccessfulRetentionMonths} months after the decision`;
-  return input.fields.talentPool
-    ? `${base} (${talentPool.retentionMonths} months for the application alone, because the applicant asked to be kept for future roles; identity documents are always deleted at ${unsuccessfulRetentionMonths} months).`
-    : `${base}.`;
-}
-
-export function buildInternalEmail(input: ApplicationEmailInput): { subject: string; html: string; text: string } {
-  const sections = sectionsFor(input);
-  const hasSensitive = input.documents.some((doc) => doc.sensitive);
-  const title = `New tutor application: ${roleTitle(input.fields.role)}`;
-
+/**
+ * The hiring team's notice. Deliberately says nothing about the person: a mailbox is the wrong place for an applicant's answers and
+ * identity documents (docs/RETENTION_AND_DELETION.md), so the email only says where to look.
+ */
+export function buildNewApplicationNotice(input: { reference: string; roleSlug: string; applicationId: string }): { subject: string; html: string; text: string } {
+  const role = roleTitle(input.roleSlug);
+  const url = `${SITE_URL}/dashboard/admin/careers/${encodeURIComponent(input.applicationId)}`;
+  const intro = `A new application for ${role} has arrived (reference ${input.reference}).`;
+  const how = "Sign in to the dashboard to read it. The answers and files are kept there, not in this email; please do not forward them.";
   const html = emailWrapper(
     [
-      htmlBanner(UNTRUSTED),
-      hasSensitive ? htmlBanner(SENSITIVE, "critical") : "",
-      htmlHeading(title),
-      htmlParagraph(`Reference ${input.reference}. Reply to this message to reach the applicant.`),
-      ...sections.map((section) => htmlSubheading(section.heading) + htmlTable(section.rows)),
-      htmlSubheading("Retention"),
-      htmlParagraph(retentionReminder(input)),
+      htmlHeading("New tutor application"),
+      htmlParagraph(intro),
+      htmlParagraph(how),
+      `<p style="margin:0 0 14px;color:#435466;font-size:15px;line-height:1.65;"><a href="${escapeHtml(url)}" style="color:#075f52;">Open the application</a></p>`,
     ].join("\n"),
-    `${fullName(input.fields)} has applied for ${roleTitle(input.fields.role)}.`,
+    intro,
   );
-
-  const text = [
-    UNTRUSTED,
-    hasSensitive ? `\n${SENSITIVE}` : "",
-    "",
-    title,
-    `Reference ${input.reference}. Reply to this message to reach the applicant.`,
-    ...sections.flatMap((section) => ["", section.heading.toUpperCase(), textTable(section.rows)]),
-    "",
-    "RETENTION",
-    retentionReminder(input),
-    "",
-    "-- LearnThrive Tuition",
-    SITE_URL,
-  ].join("\n");
-
-  return { subject: internalSubject(input), html, text };
+  const text = ["New tutor application", "", intro, how, "", `Open the application: ${url}`, "", "-- LearnThrive Tuition", SITE_URL].join("\n");
+  return { subject: subjectSafe(`New tutor application - ${role} - ${input.reference}`, 200), html, text };
 }
 
 export function buildConfirmationEmail(input: { reference: string; firstName: string; roleSlug: string; record: AgreementRecord }): {

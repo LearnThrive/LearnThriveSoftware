@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { AccountShell } from "@/components/account/AccountShell";
 import { AcceptPanel } from "@/components/learner/AcceptPanel";
 import { accountRuntime } from "@/lib/account/runtime";
 import { currentSession } from "@/lib/account/pages";
+import { selfServiceAccounts } from "@/lib/account/selfService";
 import { hashToken } from "@/lib/learner/resolve";
 
 // The invitation token is in this page's address, so no Referer may leave it and it is never indexed.
@@ -15,6 +17,8 @@ export default async function AcceptPage({ searchParams }: { searchParams: Promi
   const token = typeof raw === "string" && raw.length > 0 && raw.length <= 200 ? raw : "";
   const rt = await accountRuntime();
   const peek = token && rt ? await rt.store.identity.peekInvitation(hashToken(token), new Date()) : ({ state: "invalid" } as const);
+  // A learner's login is made by LearnThrive, not by an invitation, in production.
+  if (!selfServiceAccounts()) redirect("/login");
   const { state } = await currentSession();
   return (
     <AccountShell title="Your invitation" intro="A parent or guardian has set up a learner profile for you.">

@@ -19,7 +19,7 @@ const AppPalette = dynamic(() => import("./AppPalette"), { ssr: false });
  * It owns the palette's and the help overlay's open state and the keyboard: Ctrl/Cmd+K (and `/`) for the
  * palette, `?` for the help, and `g` then a letter to go to a page (role-scoped; see appShortcuts.ts).
  */
-export function AppPaletteHost({ role, onSignOut }: { role: Role; onSignOut: () => void }) {
+export function AppPaletteHost({ role, teaches = false, onSignOut }: { role: Role; teaches?: boolean; onSignOut: () => void }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -33,7 +33,7 @@ export function AppPaletteHost({ role, onSignOut }: { role: Role; onSignOut: () 
   useEffect(() => {
     const isMac = isMacPlatform(navigator.platform, navigator.userAgent);
     setMac(isMac); // eslint-disable-line react-hooks/set-state-in-effect
-    const tracker = createGoToTracker(goToTargetsFor(role));
+    const tracker = createGoToTracker(goToTargetsFor(role, teaches));
 
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
@@ -81,7 +81,7 @@ export function AppPaletteHost({ role, onSignOut }: { role: Role; onSignOut: () 
       if (idleWindow.cancelIdleCallback) idleWindow.cancelIdleCallback(handle);
       else window.clearTimeout(handle);
     };
-  }, [role, router]);
+  }, [role, teaches, router]);
 
   return (
     <>
@@ -91,11 +91,12 @@ export function AppPaletteHost({ role, onSignOut }: { role: Role; onSignOut: () 
           onClose={closePalette}
           shortcutLabel={mac ? "⌘K" : "Ctrl K"}
           role={role}
+          teaches={teaches}
           onShowShortcuts={showShortcuts}
           onSignOut={onSignOut}
         />
       ) : null}
-      <ShortcutsOverlay open={helpOpen} onClose={closeHelp} role={role} mac={mac} />
+      <ShortcutsOverlay open={helpOpen} onClose={closeHelp} role={role} teaches={teaches} mac={mac} />
     </>
   );
 }

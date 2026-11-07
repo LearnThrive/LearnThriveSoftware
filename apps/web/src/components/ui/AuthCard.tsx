@@ -11,9 +11,11 @@ import styles from "./AuthCard.module.css";
  * The sign-in / sign-up card for /login and sign-up (plan19.md section 7, the Login bullet, and the Phase C auth bullet).
  *
  * Controlled and presentational: it holds only what is being typed, calls `onSubmit` / `onModeChange` / `onProvider`,
- * and shows the `errors` it is given. No network, no storage, no tracking. Email and password only: there is no
- * "remember me" (persistent login is out of scope), and the Google and Apple buttons render only when `providers`
- * enables them (they are off unless the owner has configured them and updated the privacy and cookie pages).
+ * and shows the `errors` it is given. No network, no storage, no tracking. A username and password to sign in, and
+ * the username alone to ask for a reset: an email address is asked for only by the sign-up form, which production
+ * does not offer (`canSignUp`). There is no "remember me" (persistent login is out of scope), and the Google and Apple
+ * buttons render only when `providers` enables them (they are off unless the owner has configured them and updated the
+ * privacy and cookie pages).
  *
  * The checks in `validateAuthValues` only save a round trip. They are not the validation: the server repeats and
  * owns every one of them, and `errors` is how its answers come back.
@@ -23,6 +25,7 @@ export type AuthMode = "sign-in" | "sign-up" | "reset" | "verify-sent";
 export type AuthProvider = "google" | "apple";
 
 export interface AuthValues {
+  /** The one text box: the email address on the sign-up form, the username everywhere else. */
   email: string;
   password: string;
   /** Sign-up only: the person confirmed they are 18 or over and are the account holder. */
@@ -30,8 +33,9 @@ export interface AuthValues {
 }
 
 export interface AuthErrors {
-  /** Not tied to one field (for example "Email or password is not right."). */
+  /** Not tied to one field (for example "Username or password is not right."). */
   form?: string;
+  /** About the one text box, whichever it is asking for. */
   email?: string;
   password?: string;
   confirmAdult?: string;
@@ -59,6 +63,8 @@ export interface AuthCardProps {
   sentKind?: "verify" | "reset";
   /** When given, the `verify-sent` state offers "Send it again". */
   onResend?: () => void;
+  /** Whether the sign-in form offers "Create an account". LearnThrive makes every account, so production passes false. */
+  canSignUp?: boolean;
 }
 
 /** Shortest password the client check accepts; the server's rule is the real one. */
@@ -69,7 +75,9 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export function validateAuthValues(mode: Exclude<AuthMode, "verify-sent">, values: AuthValues): AuthErrors {
   const errors: AuthErrors = {};
   const email = values.email.trim();
-  if (!email) errors.email = "Enter your email address.";
+  if (mode !== "sign-up") {
+    if (!email) errors.email = "Enter your username.";
+  } else if (!email) errors.email = "Enter your email address.";
   else if (!EMAIL_PATTERN.test(email)) errors.email = "Enter an email address in the form name@example.com.";
   if (mode === "sign-in" && !values.password) errors.password = "Enter your password.";
   if (mode === "sign-up") {
@@ -102,6 +110,7 @@ export function AuthCard({
   links,
   sentKind = "verify",
   onResend,
+  canSignUp = true,
 }: AuthCardProps) {
   const uid = useId();
   const headingId = `${uid}-heading`;
@@ -134,11 +143,12 @@ export function AuthCard({
               <>
                 {sentTo ? (
                   <>
-                    If there is an account for <strong className={styles.address}>{sentTo}</strong>, we have sent a link to choose a new password.
+                    If there is an account called <strong className={styles.address}>{sentTo}</strong>, we have sent a link to choose a new password to the email address linked to it.
                   </>
                 ) : (
-                  "If there is an account for that address, we have sent a link to choose a new password."
-                )}
+                  "If there is an account with that username, we have sent a link to choose a new password to the email address linked to it."
+                )}{" "}
+                A child&apos;s link goes to their parent.
               </>
             ) : (
               <>
@@ -182,6 +192,7 @@ export function AuthCard({
           providers={providers}
           onProvider={onProvider}
           links={resolved}
+          canSignUp={canSignUp}
         />
       )}
     </div>
@@ -200,6 +211,7 @@ function AuthForm({
   providers,
   onProvider,
   links,
+  canSignUp,
 }: Pick<AuthCardProps, "onSubmit" | "onModeChange" | "errors" | "providers" | "onProvider"> & {
   mode: Exclude<AuthMode, "verify-sent">;
   headingId: string;
@@ -207,6 +219,7 @@ function AuthForm({
   onEmailChange: (email: string) => void;
   busy: boolean;
   links: Required<AuthLinks>;
+  canSignUp: boolean;
 }) {
   const uid = useId();
   const [password, setPassword] = useState("");
@@ -289,7 +302,7 @@ function AuthForm({
   return (
     <>
     <form className={styles.form} noValidate onSubmit={submit} aria-labelledby={headingId} aria-busy={busy || undefined}>
-      {isReset ? <p className={styles.lead}>Enter your email address. If there is an account for it, we will send a link to choose a new password.</p> : null}
+      {isReset ? <p className={styles.lead}>Enter your username. If there is an account with it, we will send a link to choose a new password to the email address linked to it.</p> : null}
       {isSignUp ? <p className={styles.lead}>For parents, guardians and adult learners.</p> : null}
 
       {hasProblems ? (
@@ -312,7 +325,7 @@ function AuthForm({
 
       <div className={styles.field}>
         <label className={styles.label} htmlFor={id("email")}>
-          Email
+          {isSignUp ? "Email" : "Username"}
         </label>
         <div className={`${styles.control} ${fieldErrors.email ? styles.invalid : ""}`}>
           <svg className={styles.icon} xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
@@ -322,11 +335,11 @@ function AuthForm({
             ref={emailRef}
             className={styles.input}
             id={id("email")}
-            name="email"
-            type="email"
+            name={isSignUp ? "email" : "username"}
+            type={isSignUp ? "email" : "text"}
             // "username" is what password managers key on for the sign-in identifier; it is also an input-purpose token (WCAG 1.3.5).
-            autoComplete={mode === "sign-in" ? "username" : "email"}
-            inputMode="email"
+            autoComplete={isSignUp ? "email" : "username"}
+            inputMode={isSignUp ? "email" : "text"}
             autoCapitalize="none"
             spellCheck={false}
             required
@@ -469,14 +482,14 @@ function AuthForm({
             Back to sign in
           </button>
         </p>
-      ) : (
+      ) : isSignUp || canSignUp ? (
         <p className={styles.switch}>
           {isSignUp ? "Already have an account? " : "New here? "}
           <button type="button" className={styles.linkButton} onClick={() => onModeChange?.(isSignUp ? "sign-in" : "sign-up")}>
             {isSignUp ? "Sign in" : "Create an account"}
           </button>
         </p>
-      )}
+      ) : null}
     </form>
     {/* Outside the form on purpose: aria-busy on an ancestor can make a screen reader hold back this announcement. */}
     <p className="sr-only" role="status">

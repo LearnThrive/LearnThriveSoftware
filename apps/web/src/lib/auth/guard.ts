@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { accountSessionExpired } from "@/lib/access/current";
 import { safeNextPath } from "@/lib/account/session";
 import { getSession } from "./session";
+import { asTutor } from "./teaching";
 import type { AuthenticatedUser, Role } from "./types";
 
 /** The header the proxy (src/proxy.ts) stamps on every request it matches: the path and query being asked for. Re-validated on use. */
@@ -38,10 +39,23 @@ export async function requireRole(allowed: Role[]): Promise<AuthenticatedUser> {
   return user;
 }
 
+/** For the tutor tools: anyone who teaches, whatever their role (lib/auth/teaching.ts). Returns the person scoped to their own teaching. */
+export async function requireTutor(): Promise<AuthenticatedUser> {
+  const tutor = asTutor(await requireSession());
+  if (!tutor) redirect("/403");
+  return tutor;
+}
+
 /** For API route handlers, where redirect() doesn't apply — returns null instead of throwing/
  * redirecting so the caller can shape its own JSON error response. */
 export async function requireRoleForApi(allowed: Role[]): Promise<AuthenticatedUser | null> {
   const user = await getSession();
   if (!user || !allowed.includes(user.role)) return null;
   return user;
+}
+
+/** requireTutor() for a route handler. */
+export async function requireTutorForApi(): Promise<AuthenticatedUser | null> {
+  const user = await getSession();
+  return user ? asTutor(user) : null;
 }

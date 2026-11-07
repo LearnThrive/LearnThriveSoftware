@@ -150,6 +150,12 @@ test.describe('development surfaces do not exist in production', () => {
   test('the dev reset endpoint is a 404', async ({ request }) => {
     expect((await request.post('/api/dev/reset')).status()).toBe(404);
   });
+  test('the dev careers seed and the admin application routes are a 404 to a visitor', async ({ request }) => {
+    expect((await request.post('/api/dev/careers-seed')).status()).toBe(404);
+    const id = '00000000-0000-4000-8000-000000000001';
+    expect((await request.get(`/api/admin/careers/${id}/export`)).status()).toBe(404);
+    expect((await request.get(`/api/admin/careers/${id}/files/${id}`)).status()).toBe(404);
+  });
 });
 
 test.describe('crawlers and operations', () => {
@@ -176,6 +182,18 @@ test.describe('crawlers and operations', () => {
     expect(await health.json()).toEqual({ status: 'ok' });
     expect(health.headers()['cache-control']).toContain('no-store');
     expect((await request.get('/manifest.webmanifest')).status()).toBe(200);
+  });
+
+  test('the readiness check names each dependency as ok, failing or off, and nothing more', async ({ request }) => {
+    // Launch checklist 3.8. A smoke run has no database, so with the portal closed every check is "ok" or "off" and the answer is 200.
+    const ready = await request.get('/api/health/ready');
+    expect(ready.status()).toBe(200);
+    expect(ready.headers()['cache-control']).toContain('no-store');
+    const body = await ready.json();
+    expect(Object.keys(body).sort()).toEqual(['checks', 'status']);
+    expect(body.status).toBe('ok');
+    expect(Object.keys(body.checks).sort()).toEqual(['auth', 'classroom', 'database']);
+    for (const state of Object.values(body.checks)) expect(['ok', 'failing', 'off']).toContain(state);
   });
 
   test('every route has a canonical URL on the production host', async ({ page }) => {

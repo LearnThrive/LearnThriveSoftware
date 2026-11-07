@@ -67,11 +67,13 @@ export async function confirm(page: Page, email: string) {
   await expect(page).toHaveURL(/\/account$/);
 }
 
+export { hydrated };
+
 export async function signIn(page: Page, email: string, password = PASSWORD) {
   await page.goto('/login');
   await hydrated(page);
   const card = page.locator('[data-auth-mode]');
-  await card.getByLabel('Email', { exact: true }).fill(email);
+  await card.getByLabel('Username', { exact: true }).fill(email);
   await card.getByLabel('Password', { exact: true }).fill(password);
   await card.getByRole('button', { name: 'Sign in', exact: true }).click();
 }

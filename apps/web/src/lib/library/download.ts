@@ -116,7 +116,7 @@ export async function handleDownload(request: Request, slug: string, deps: Downl
 
   let stamped: Uint8Array;
   try {
-    stamped = await watermarkPdf(original, { holder: account.displayName || session.user.email, at: now });
+    stamped = await watermarkPdf(original, { holder: account.displayName || account.username || session.user.email, at: now });
   } catch {
     logOutcome("library-download", "watermark_failed");
     return fail(request, slug, "unavailable");

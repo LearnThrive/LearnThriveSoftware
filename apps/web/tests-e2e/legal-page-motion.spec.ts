@@ -12,6 +12,31 @@ const ROUTES = ['/privacy', '/cookies', '/terms', '/tuition-terms', '/complaints
 for (const route of ROUTES) {
   test(`${route}: the contents nav highlights a section as it scrolls into view`, async ({ page }) => {
     await page.goto(route);
+
+    // Wait for the client to have taken over before touching the page. Everything below depends on
+    // LegalContentsNav's IntersectionObserver existing, and that observer is created in an effect —
+    // but nothing above it here can tell whether it has been: the server already renders
+    // aria-current="true" on the first link (LegalContentsNav's useState initialiser), so the
+    // "first section is active" assertion passes against static HTML, and the scroll runs whether
+    // or not any of this page's JavaScript has executed.
+    //
+    // On a 2-vCPU CI runner, under this suite's own parallel load and with `next dev`'s unminified
+    // per-route bundles, hydration can take longer than the 5 s the last assertion allows. Then the
+    // observer is created after the test has given up, and the nav is still showing the server's
+    // first-link default — exactly the failure seen on /cookies, /complaints and /tuition-terms in
+    // both main runs of 2026-11-03: "13 × locator resolved to <a href="#changes">… unexpected value
+    // null". Measured by replaying this test's steps under CDP Emulation.setCPUThrottlingRate at
+    // 20x with navigator.hardwareConcurrency pinned to 2 (CI's "light" motion tier): 6 of 6 routes
+    // failed without this wait and 0 of 6 failed with it, with the observer's own callback log
+    // showing it receives the correct state — the one intersecting section — as soon as it exists.
+    //
+    // html[data-motion-tier] is MotionRuntime's post-hydration marker (see that file: "written from
+    // an effect, after hydration, so React never sees an attribute on <html> that the server did
+    // not render"). The legal routes render inside (public)/layout.tsx's MotionRuntime, so this
+    // nav's own effect runs in the same commit and, being a descendant, before MotionRuntime's.
+    // No assertion below is relaxed; this only stops the test racing hydration it never meant to.
+    await page.waitForSelector('html[data-motion-tier]');
+
     const nav = page.locator('.legal-contents nav');
     const links = nav.locator('a');
     const linkCount = await links.count();

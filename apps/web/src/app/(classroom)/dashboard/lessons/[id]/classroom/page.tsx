@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth/guard";
+import { joinRoleFor } from "@/lib/auth/teaching";
 import { getDataProvider } from "@/lib/data/provider";
 import { signClassroomJoinToken } from "@learnthrive/shared/classroomToken";
 import { isWithinJoinWindow } from "@/lib/scheduling/joinWindow";
@@ -26,13 +27,10 @@ export default async function LessonClassroomPage({
   const lesson = await data.lessons.get(id);
   if (!lesson) notFound();
 
-  // IDOR & assignment check
-  const isAssigned = user.profileId != null && (
-    (user.role === "TUTOR" && lesson.tutorId === user.profileId) ||
-    (user.role === "STUDENT" && lesson.studentIds.includes(user.profileId))
-  );
+  // IDOR & assignment check. An administrator who is not this lesson's tutor has no join role: they never enter as its tutor.
+  const joinRole = joinRoleFor(user, lesson);
 
-  if (user.role !== "ADMIN" && !isAssigned) {
+  if (user.role !== "ADMIN" && !joinRole) {
     redirect("/403");
   }
 
@@ -45,8 +43,8 @@ export default async function LessonClassroomPage({
   }
 
   // Join window check
-  if (user.role === "TUTOR" || user.role === "STUDENT") {
-    if (!isWithinJoinWindow(lesson, user.role)) {
+  if (joinRole) {
+    if (!isWithinJoinWindow(lesson, joinRole)) {
       redirect(`/dashboard/lessons/${id}?joinError=${encodeURIComponent("The classroom is not open yet. Please check back closer to the start time.")}`);
     }
   }
@@ -55,7 +53,7 @@ export default async function LessonClassroomPage({
     roomId: lesson.classroomRoomId,
     lessonId: lesson.id,
     name: user.name,
-    role: user.role === "TUTOR" ? "tutor" : "student",
+    role: joinRole === "TUTOR" ? "tutor" : "student",
     // A Server Component renders once per request on the server, with no client
     // reconciliation/memoization to destabilize; a short-lived token expiry genuinely needs the
     // real current time, same as lib/actions/classroom.ts's identical exp calculation (not

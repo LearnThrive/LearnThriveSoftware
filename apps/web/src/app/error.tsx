@@ -29,6 +29,8 @@ export default function PublicError({ error, reset }: { error: Error & { digest?
               Sorry — something went wrong on our side. Trying again usually fixes it. If it does
               not, you can still reach us directly.
             </p>
+            {/* A hash, not the error: quoting it lets us find the "server-error" log line (docs/OBSERVABILITY.md). */}
+            {error.digest ? <p className="error-reference">If you contact us, please quote reference <code>{error.digest}</code>.</p> : null}
             <div className="button-group">
               <button type="button" className="button button--primary" onClick={reset}>
                 <span>Try again</span>

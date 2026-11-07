@@ -4,8 +4,10 @@ import type {
 } from "./domain";
 import type {
   ActivityRepository, AssignmentRepository, AttendanceRepository, AvailabilityRepository, ClientRepository, DataProvider, LessonRepository,
-  NotificationRepository, ReportRepository, SettingsRepository, StudentRepository, TutorRepository,
+  NotificationRepository, PurgeItem, PurgeKept, PurgeKind, PurgeLeaving, PurgePreview, PurgeReadiness, PurgeRecord, PurgeRepository, ReportRepository,
+  SettingsRepository, StudentRepository, TutorRepository,
 } from "./repositories";
+import { ARCHIVED_TUTOR_ID, PURGE_DELAY_DAYS, PURGE_NOTES } from "./repositories";
 import type { SqlExecutor } from "./library/ports";
 
 /**
@@ -118,31 +120,30 @@ export function createSqlDataProvider(db: SqlExecutor): DataProvider {
       );
       return toTutor((await db.query<Row>(`${TUTOR_SELECT} where t.id = $1`, [rows[0]!.id]))[0]!);
     },
-    linkLogin: async (tutorId, email, actor) => {
+    linkLogin: async (tutorId, username, actor) => {
       if (!isId(tutorId)) return "no_tutor";
       const done = await db.query<Row>(
-        `with target as (select u.id from public.auth_user_by_email($2) u where u.email_confirmed),
+        `with target as (select p.id, p.role from public.profiles p where p.username = $2),
               ok as (
                 select t.id as tutor_id, tg.id as profile_id
                   from public.tutors t, target tg
                  where t.id = $1 and t.profile_id is null
-                   and (select p.role from public.profiles p where p.id = tg.id) = 'CLIENT'
+                   and tg.role in ('CLIENT', 'ADMIN')
                    and not exists (select 1 from public.clients c where c.owner_profile_id = tg.id)
                    and not exists (select 1 from public.learner_identities l where l.profile_id = tg.id)
                    and not exists (select 1 from public.tutors o where o.profile_id = tg.id))
             , upd as (update public.tutors t set profile_id = ok.profile_id from ok where t.id = ok.tutor_id returning t.id)
-            , role as (update public.profiles p set role = 'TUTOR' from ok where p.id = ok.profile_id returning 1)
+            , role as (update public.profiles p set role = 'TUTOR' from ok where p.id = ok.profile_id and p.role = 'CLIENT' returning 1)
             , audit as (insert into public.identity_audit (actor_profile_id, action) select $3, 'tutor_login_linked' from ok returning 1)
             select count(*)::int as n from upd`,
-        [tutorId, email.trim(), isId(actor) ? actor : null],
+        [tutorId, username.trim().toLowerCase(), isId(actor) ? actor : null],
       );
       if ((done[0]?.n ?? 0) > 0) return "ok";
       // Why not: told apart only so the admin can be told, never to guess.
       const tutor = (await db.query<Row>(`select profile_id from public.tutors where id = $1`, [tutorId]))[0];
       if (!tutor) return "no_tutor";
-      const account = (await db.query<Row>(`select id, email_confirmed from public.auth_user_by_email($1)`, [email.trim()]))[0];
-      if (!account || !account.email_confirmed) return "no_account";
-      return "not_eligible";
+      const account = (await db.query<Row>(`select id from public.profiles where username = $1`, [username.trim().toLowerCase()]))[0];
+      return account ? "not_eligible" : "no_account";
     },
     update: async (id, patch) => {
       const row = isId(id) ? await patchRow(db, "tutors", id, { display_name: patch.name?.trim(), subjects: patch.subjects, active: patch.active, contact_email: patch.email?.trim(), profile_id: patch.userId }) : null;
@@ -405,7 +406,246 @@ export function createSqlDataProvider(db: SqlExecutor): DataProvider {
     unreadCountForUser: async (userId) => (isId(userId) ? ((await db.query<Row>(`select count(*)::int as n from public.notifications where user_id = $1 and not read`, [userId]))[0]?.n ?? 0) : 0),
     create: async (input) => toNotification((await db.query<Row>(`insert into public.notifications (user_id, type, message, link) values ($1, $2, $3, $4) returning *`, [input.userId, input.type, input.message, input.link ?? null]))[0]!),
     markRead: async (id) => void (isId(id) ? await db.query(`update public.notifications set read = true where id = $1`, [id]) : undefined),
+    recipientFor: async (recordId) => {
+      if (!isId(recordId)) return null;
+      const rows = await db.query<Row>(
+        `select coalesce(
+           (select t.profile_id from public.tutors t where t.id = $1),
+           (select c.owner_profile_id from public.clients c where c.id = $1),
+           (select l.profile_id from public.learner_identities l where l.student_id = $1 and l.status = 'active')
+         ) as id`,
+        [recordId],
+      );
+      return rows[0]?.id ?? null;
+    },
+    recipientsWithRole: async (role) =>
+      (await db.query<Row>(`select id from public.profiles where role = $1 and login_disabled_at is null`, [role])).map((row) => row.id as string),
   };
 
-  return { tutors, clients, students, assignments, lessons, availability, attendance, activity, reports, settings, notifications };
+  /**
+   * The purge tool (3.7). The deletions themselves are migration 0018's functions, so each purge is one transaction: this reads what a
+   * purge would touch (the preview), calls the function, and returns the log row it wrote. The id of the person purged is never stored.
+   */
+  const counts = (raw: unknown): Record<string, number> => {
+    const out: Record<string, number> = {};
+    for (const [key, value] of Object.entries((raw ?? {}) as Record<string, unknown>)) out[key] = Number(value ?? 0);
+    return out;
+  };
+  const toPurge = (r: Row): PurgeRecord => ({ id: r.id, kind: r.kind, actorId: r.actor_profile_id ?? null, counts: counts(r.counts), at: iso(r.at) });
+  const items = (pairs: Array<[string, number]>): PurgeItem[] => pairs.filter(([, n]) => n > 0).map(([what, n]) => ({ what, count: n }));
+  /** Kept records are grouped by what they are, and a reason always survives: the preview must say why something stays. */
+  const kept = (list: PurgeKept[]): PurgeKept[] => {
+    const totals = new Map<string, { count: number; reason: string }>();
+    for (const item of list) {
+      const seen = totals.get(item.what);
+      totals.set(item.what, { count: (seen?.count ?? 0) + item.count, reason: seen?.reason ?? item.reason });
+    }
+    return [...totals.entries()].filter(([, value]) => value.count > 0).map(([what, value]) => ({ what, count: value.count, reason: value.reason }));
+  };
+  const actorId = (actor: string) => (isId(actor) ? actor : null);
+
+  const studentFacts = async (studentId: string) => {
+    const rows = await db.query<Row>(
+      `select
+         (select count(*) from public.lesson_students x where x.student_id = $1)::int as lesson_links,
+         (select count(*) from public.lesson_students x where x.student_id = $1
+            and (select count(*) from public.lesson_students y where y.lesson_id = x.lesson_id) = 1)::int as sole_lessons,
+         (select count(*) from public.lesson_attendance a where a.student_id = $1)::int as attendance,
+         (select count(*) from public.lesson_reports r join public.lesson_students x on x.lesson_id = r.lesson_id
+           where x.student_id = $1 and (select count(*) from public.lesson_students y where y.lesson_id = r.lesson_id) = 1)::int as reports_removed,
+         (select count(*) from public.lesson_reports r join public.lesson_students x on x.lesson_id = r.lesson_id
+           where x.student_id = $1 and (select count(*) from public.lesson_students y where y.lesson_id = r.lesson_id) > 1)::int as reports_kept,
+         (select count(*) from public.assignment_students x where x.student_id = $1)::int as assignment_links,
+         (select count(*) from public.client_students c where c.student_id = $1)::int as guardian_links,
+         (select count(*) from public.learner_identities l where l.student_id = $1)::int as logins,
+         (select count(*) from public.notifications n where n.user_id in (select l.profile_id from public.learner_identities l where l.student_id = $1))::int as notifications,
+         (select count(*) from public.chat_sessions c where c.student_id = $1)::int as chats,
+         (select count(*) from public.chat_files f join public.chat_sessions c on c.id = f.session_id where c.student_id = $1)::int as chat_files`,
+      [studentId],
+    );
+    return rows[0]!;
+  };
+
+  /** Which table holds a kind's leaving date. Never built from a caller's string: PurgeKind is a closed union. */
+  const LEAVING_TABLE: Record<PurgeKind, string> = { STUDENT: "students", TUTOR: "tutors", FAMILY: "clients" };
+
+  const readiness = (leftAt: unknown, purgeAfter: unknown, now = Date.now()): PurgeReadiness => {
+    if (!leftAt || !purgeAfter) return "not_left";
+    return new Date(purgeAfter as string).getTime() > now ? "not_due" : "due";
+  };
+
+  /**
+   * The archived "Former tutor" row is a place to hang history, not a person, so it can never be marked as left and therefore never
+   * purged. `previewTutor` and the database's own `private.purge_tutor` refuse it too; this is the third door.
+   */
+  const isPerson = (kind: PurgeKind, id: string) => isId(id) && !(kind === "TUTOR" && id === ARCHIVED_TUTOR_ID);
+
+  /** The leaving state of one record, as the preview reports it. */
+  const leavingOf = async (kind: PurgeKind, id: string): Promise<PurgeLeaving> => {
+    const rows = await db.query<Row>(`select left_at, purge_after from public.${LEAVING_TABLE[kind]} where id = $1`, [id]);
+    const row = rows[0];
+    return { leftAt: row?.left_at ? iso(row.left_at) : null, purgeAfter: row?.purge_after ? iso(row.purge_after) : null, readiness: readiness(row?.left_at, row?.purge_after) };
+  };
+
+  const purges: PurgeRepository = {
+    previewStudent: async (studentId) => {
+      if (!isId(studentId)) return null;
+      const found = await db.query<Row>(`select id from public.students where id = $1`, [studentId]);
+      if (!found[0]) return null;
+      const f = await studentFacts(studentId);
+      const profiles = await db.query<Row>(`select profile_id from public.learner_identities where student_id = $1`, [studentId]);
+      const files = await db.query<Row>(`select f.storage_path from public.chat_files f join public.chat_sessions c on c.id = f.session_id where c.student_id = $1`, [studentId]);
+      const shared = Math.max(Number(f.lesson_links) - Number(f.sole_lessons), 0);
+      return {
+        kind: "STUDENT",
+        removes: items([
+          ["Lessons that exist only for this student (with their attendance, report and timeline)", Number(f.sole_lessons)],
+          ["Their attendance on lessons another student is still on", Number(f.attendance)],
+          ["Reports on lessons only this student attended", Number(f.reports_removed)],
+          ["Assignments they are on (removed from the assignment; an empty one is ended)", Number(f.assignment_links)],
+          ["Guardian links", Number(f.guardian_links)],
+          ["Their learner login and its linked email", Number(f.logins)],
+          ["Notifications", Number(f.notifications)],
+          ["LearnThrive AI conversations and their uploads", Number(f.chats)],
+          ["The student record", 1],
+        ]),
+        keeps: [
+          ...(shared ? [{ what: "Lessons another student is still on (their name is taken out of the title and notes)", count: shared, reason: "Another child's record needs the lesson." }] : []),
+          ...(Number(f.reports_kept) ? [{ what: "Reports on lessons another student is still on", count: Number(f.reports_kept), reason: "The report covers a lesson another child still attends." }] : []),
+        ] as PurgeKept[],
+        profileIds: profiles.map((r) => r.profile_id as string),
+        files: files.map((r) => r.storage_path as string),
+        notes: PURGE_NOTES,
+        ...(await leavingOf("STUDENT", studentId)),
+      };
+    },
+    previewTutor: async (tutorId) => {
+      if (!isId(tutorId) || tutorId === ARCHIVED_TUTOR_ID) return null;
+      const rows = await db.query<Row>(
+        `select
+           (select count(*) from public.tuition_assignments a where a.tutor_id = t.id)::int as assignments,
+           (select count(*) from public.lessons l where l.tutor_id = t.id)::int as lessons,
+           (select count(*) from public.lesson_reports r where r.tutor_id = t.id)::int as reports,
+           (select count(*) from public.tutor_availability_blocks b where b.tutor_id = t.id)::int as blocks,
+           (select count(*) from public.notifications n where n.user_id = t.profile_id)::int as notifications,
+           case when t.profile_id is null then 0 else 1 end as logins
+         from public.tutors t where t.id = $1`,
+        [tutorId],
+      );
+      const f = rows[0];
+      if (!f) return null;
+      const profiles = await db.query<Row>(`select profile_id from public.tutors where id = $1 and profile_id is not null`, [tutorId]);
+      return {
+        kind: "TUTOR",
+        removes: items([
+          ["Tutor record", 1],
+          ["Their login and its linked email", Number(f.logins)],
+          ["Availability blocks", Number(f.blocks)],
+          ["Notifications", Number(f.notifications)],
+        ]),
+        keeps: [
+          ...(Number(f.assignments) ? [{ what: "Assignments they taught (moved to the archived tutor and ended)", count: Number(f.assignments), reason: "A family's lesson history has to stay; the assignment is ended so nothing new is booked." }] : []),
+          ...(Number(f.lessons) ? [{ what: "Lessons they taught (moved to the archived tutor so their name is gone)", count: Number(f.lessons), reason: "Scheduling history for the students who attended." }] : []),
+          ...(Number(f.reports) ? [{ what: "Reports they wrote (moved to the archived tutor)", count: Number(f.reports), reason: "The report belongs to the student's record until that student is purged." }] : []),
+        ] as PurgeKept[],
+        profileIds: profiles.map((r) => r.profile_id as string),
+        files: [],
+        notes: PURGE_NOTES,
+        ...(await leavingOf("TUTOR", tutorId)),
+      };
+    },
+    previewFamily: async (clientId) => {
+      if (!isId(clientId)) return null;
+      const owner = await db.query<Row>(`select owner_profile_id from public.clients where id = $1`, [clientId]);
+      if (!owner[0]) return null;
+      const students = await db.query<Row>(`select id from public.students where client_id = $1`, [clientId]);
+      const children = (await Promise.all(students.map((s) => purges.previewStudent(s.id as string)))).filter((p): p is PurgePreview => Boolean(p));
+      const total = (list: Array<{ what: string; count: number }>) => {
+        const sums = new Map<string, number>();
+        for (const item of list) sums.set(item.what, (sums.get(item.what) ?? 0) + item.count);
+        return items([...sums.entries()]);
+      };
+      const parent = await db.query<Row>(
+        `select (select count(*) from public.notifications where user_id = $1)::int as notifications,
+                (select count(*) from public.chat_sessions where client_id = $2)::int as chats`,
+        [owner[0].owner_profile_id, clientId],
+      );
+      const files = await db.query<Row>(
+        `select f.storage_path from public.chat_files f join public.chat_sessions c on c.id = f.session_id
+          where c.client_id = $1 or c.student_id in (select id from public.students where client_id = $1)`,
+        [clientId],
+      );
+      return {
+        kind: "FAMILY",
+        removes: [
+          ...total(children.flatMap((c) => c.removes)),
+          ...items([
+            ["The family account", 1],
+            ["The parent's login and its linked email", 1],
+            ["Notifications", Number(parent[0]?.notifications) + 0],
+            ["LearnThrive AI conversations of the parent", Number(parent[0]?.chats) + 0],
+          ]),
+        ],
+        keeps: kept(children.flatMap((c) => c.keeps)),
+        profileIds: [...new Set([...children.flatMap((c) => c.profileIds), owner[0].owner_profile_id as string])],
+        files: files.map((r) => r.storage_path as string),
+        notes: PURGE_NOTES,
+        ...(await leavingOf("FAMILY", clientId)),
+      };
+    },
+    purgeStudent: async (studentId, actor) => {
+      if (!isId(studentId)) return null;
+      const rows = await db.query<Row>(`select result, log_id from public.purge_student($1, $2)`, [studentId, actorId(actor)]);
+      if (rows[0]?.result !== "ok" || !rows[0]?.log_id) return null;
+      const logged = await db.query<Row>(`select * from public.data_purges where id = $1`, [rows[0].log_id]);
+      return logged[0] ? toPurge(logged[0]) : null;
+    },
+    purgeTutor: async (tutorId, actor) => {
+      if (!isId(tutorId)) return null;
+      const rows = await db.query<Row>(`select result, log_id from public.purge_tutor($1, $2)`, [tutorId, actorId(actor)]);
+      if (rows[0]?.result !== "ok" || !rows[0]?.log_id) return null;
+      const logged = await db.query<Row>(`select * from public.data_purges where id = $1`, [rows[0].log_id]);
+      return logged[0] ? toPurge(logged[0]) : null;
+    },
+    purgeFamily: async (clientId, actor) => {
+      if (!isId(clientId)) return null;
+      const rows = await db.query<Row>(`select result, log_id from public.purge_family($1, $2)`, [clientId, actorId(actor)]);
+      if (rows[0]?.result !== "ok" || !rows[0]?.log_id) return null;
+      const logged = await db.query<Row>(`select * from public.data_purges where id = $1`, [rows[0].log_id]);
+      return logged[0] ? toPurge(logged[0]) : null;
+    },
+    markLeft: async (kind, id, actor) => {
+      if (!isPerson(kind, id)) return null;
+      const table = LEAVING_TABLE[kind];
+      // `where left_at is null` so marking twice keeps the first date: the clock cannot be restarted to put a purge off.
+      await db.query(
+        `update public.${table} set left_at = now(), left_by = $2, purge_after = now() + ($3 || ' days')::interval where id = $1 and left_at is null`,
+        [id, actorId(actor), String(PURGE_DELAY_DAYS)],
+      );
+      const state = await leavingOf(kind, id);
+      return state.leftAt ? state : null;
+    },
+    cancelLeft: async (kind, id) => {
+      if (!isPerson(kind, id)) return false;
+      const rows = await db.query<Row>(
+        `update public.${LEAVING_TABLE[kind]} set left_at = null, left_by = null, purge_after = null where id = $1 and left_at is not null returning id`,
+        [id],
+      );
+      return rows.length > 0;
+    },
+    bringForward: async (kind, id, when) => {
+      if (!isPerson(kind, id)) return null;
+      // Only ever earlier: `purge_after > $2` is the whole rule, and it also refuses a record that was never marked as left.
+      await db.query(
+        `update public.${LEAVING_TABLE[kind]} set purge_after = $2 where id = $1 and left_at is not null and purge_after > $2`,
+        [id, when.toISOString()],
+      );
+      const state = await leavingOf(kind, id);
+      return state.leftAt ? state : null;
+    },
+    recent: async (limit) =>
+      (await db.query<Row>(`select * from public.data_purges order by at desc, id desc limit $1`, [Math.min(Math.max(Math.trunc(limit), 0), 500)])).map(toPurge),
+  };
+
+  return { tutors, clients, students, assignments, lessons, availability, attendance, activity, reports, settings, notifications, purges };
 }

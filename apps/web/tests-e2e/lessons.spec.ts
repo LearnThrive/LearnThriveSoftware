@@ -1,13 +1,13 @@
 import { test, expect, type Page } from '@playwright/test';
-import { uniqueLabel } from './support';
+import { dayInWeeks, firstOfNextMonth, lessonSlot, showMonthOf, uniqueLabel } from './support';
 
-async function login(page: Page, email: string, password: string) {
+async function login(page: Page, username: string, password: string) {
   // /login redirects an already-authenticated visitor straight to /dashboard (deliberate,
   // tested behaviour — see auth.spec.ts) — so a test that logs in as a second identity without
   // logging out first would never even see the login form. Always start from a clean session.
   await page.request.post('/api/auth/logout');
   await page.goto('/login');
-  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Username').fill(username);
   await page.locator('input[name="password"]').fill(password);
   await Promise.all([
     page.waitForURL(/\/dashboard$/),
@@ -30,19 +30,22 @@ async function openLessonFromCalendar(page: Page, eventText?: string) {
   ]);
 }
 
-const ADMIN = { email: 'admin@learnthrive.dev', password: 'dev-admin-pass' };
-const TUTOR = { email: 'tutor@learnthrive.dev', password: 'dev-tutor-pass' };
-const CLIENT = { email: 'client@learnthrive.dev', password: 'dev-client-pass' };
-const STUDENT = { email: 'student@learnthrive.dev', password: 'dev-student-pass' };
+const ADMIN = { username: 'dev.admin', password: 'dev-admin-pass' };
+const TUTOR = { username: 'dev.tutor', password: 'dev-tutor-pass' };
+const CLIENT = { username: 'dev.client', password: 'dev-client-pass' };
+const STUDENT = { username: 'dev.student', password: 'dev-student-pass' };
+
+// The "Unrelated lesson" day: the Client test near the end looks at that month to prove it never sees it.
+const UNRELATED_LESSON_DAY = dayInWeeks(2, 'Friday');
 
 test('the calendar shows the seeded demo lessons to Admin', async ({ page }) => {
-  await login(page, ADMIN.email, ADMIN.password);
+  await login(page, ADMIN.username, ADMIN.password);
   await page.goto('/dashboard/calendar');
   await expect(page.locator('.fc-event')).not.toHaveCount(0);
 });
 
 test('clicking a calendar lesson opens the peek panel with its summary, and "View full details" reaches the full page', async ({ page }) => {
-  await login(page, ADMIN.email, ADMIN.password);
+  await login(page, ADMIN.username, ADMIN.password);
   await page.goto('/dashboard/calendar');
   await page.locator('.fc-event').first().click();
   await expect(page.locator('.lesson-peek__panel')).toBeVisible();
@@ -52,35 +55,42 @@ test('clicking a calendar lesson opens the peek panel with its summary, and "Vie
 });
 
 test('Admin can schedule a single (non-recurring) lesson, which appears on the calendar', async ({ page }) => {
-  await login(page, ADMIN.email, ADMIN.password);
+  await login(page, ADMIN.username, ADMIN.password);
   await page.goto('/dashboard/admin/lessons/new');
   await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Brian' });
   const lessonTitle = uniqueLabel('Algebra revision');
+  const slot = lessonSlot(dayInWeeks(2, 'Tuesday'), '15:00'); // a Tuesday, well clear of the seed lessons
   await page.locator('#lesson-title').fill(lessonTitle);
-  await page.locator('#lesson-date').fill('2026-11-03'); // a Tuesday, well clear of the seed lessons
-  await page.locator('#lesson-time').fill('15:00');
+  await page.locator('#lesson-date').fill(slot.date);
+  await page.locator('#lesson-time').fill(slot.time);
   await page.getByRole('button', { name: 'Schedule lesson' }).click();
 
   await expect(page).toHaveURL(/\/dashboard\/calendar$/);
   await page.locator('.fc-prev-button').click(); // no-op safe guard in case view drifted; ensures button exists
   await page.goto('/dashboard/calendar'); // ensure fresh month view (today)
-  // Navigate to November 2026 where the lesson was scheduled.
-  for (let i = 0; i < 12; i += 1) {
-    const title = await page.locator('.fc-toolbar-title').innerText();
-    if (title.includes('November 2026')) break;
-    await page.locator('.fc-next-button').click();
-  }
+  await showMonthOf(page, slot.date);
   await expect(page.locator('.fc-event', { hasText: lessonTitle })).toBeVisible();
 });
 
 test('scheduling an overlapping lesson warns about the conflict, and "Schedule anyway" proceeds', async ({ page }) => {
-  await login(page, ADMIN.email, ADMIN.password);
+  // Books the lesson it clashes with itself, rather than reusing the "Algebra revision" slot above: that slot moves an
+  // hour on a retry, so this test could not know where to find it.
+  const slot = lessonSlot(dayInWeeks(2, 'Monday'), '15:00');
+  await login(page, ADMIN.username, ADMIN.password);
+  await page.goto('/dashboard/admin/lessons/new');
+  await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Brian' });
+  await page.locator('#lesson-title').fill(uniqueLabel('Lesson to double-book'));
+  await page.locator('#lesson-date').fill(slot.date);
+  await page.locator('#lesson-time').fill(slot.time);
+  await page.getByRole('button', { name: 'Schedule lesson' }).click();
+  await expect(page).toHaveURL(/\/dashboard\/calendar$/);
+
   await page.goto('/dashboard/admin/lessons/new');
   await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Brian' });
   await page.locator('#lesson-title').fill(uniqueLabel('Double-booked test lesson'));
-  // Same day/time as the "Algebra revision" lesson scheduled above — deliberately overlapping.
-  await page.locator('#lesson-date').fill('2026-11-03');
-  await page.locator('#lesson-time').fill('15:00');
+  // Same day/time as the lesson just scheduled — deliberately overlapping.
+  await page.locator('#lesson-date').fill(slot.date);
+  await page.locator('#lesson-time').fill(slot.time);
   await page.getByRole('button', { name: 'Schedule lesson' }).click();
 
   await expect(page.locator('.form-message--warning')).toContainText('Scheduling clash');
@@ -90,24 +100,22 @@ test('scheduling an overlapping lesson warns about the conflict, and "Schedule a
 });
 
 test('Admin can schedule a recurring lesson, producing multiple independent occurrences', async ({ page }) => {
-  await login(page, ADMIN.email, ADMIN.password);
+  await login(page, ADMIN.username, ADMIN.password);
   await page.goto('/dashboard/admin/lessons/new');
   await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Brian' });
   const lessonTitle = uniqueLabel('Weekly recurring practice');
+  // All three weekly lessons fall in one month, so they are on screen together.
+  const slot = lessonSlot(firstOfNextMonth(2, 'Tuesday'), '10:00');
   await page.locator('#lesson-title').fill(lessonTitle);
-  await page.locator('#lesson-date').fill('2026-12-01');
-  await page.locator('#lesson-time').fill('10:00');
+  await page.locator('#lesson-date').fill(slot.date);
+  await page.locator('#lesson-time').fill(slot.time);
   await page.getByLabel('Repeats').selectOption('WEEKLY');
   await page.locator('#lesson-end-after').fill('3');
   await page.getByRole('button', { name: 'Schedule lesson' }).click();
   await expect(page).toHaveURL(/\/dashboard\/calendar$/);
 
   await page.goto('/dashboard/calendar');
-  for (let i = 0; i < 12; i += 1) {
-    const title = await page.locator('.fc-toolbar-title').innerText();
-    if (title.includes('December 2026')) break;
-    await page.locator('.fc-next-button').click();
-  }
+  await showMonthOf(page, slot.date);
   const occurrences = page.locator('.fc-event', { hasText: lessonTitle });
   await expect(occurrences).toHaveCount(3);
 });
@@ -116,7 +124,7 @@ test('lesson detail: Admin sees admin-only controls that a Tutor does not', asyn
   // Complements hardening.spec.ts's "a Tutor cannot reach the Admin-only reschedule/cancel
   // actions" test, which proves the same button is absent for a Tutor on this identical lesson —
   // together they show the control is genuinely gated on role, not just untested either way.
-  await login(page, ADMIN.email, ADMIN.password);
+  await login(page, ADMIN.username, ADMIN.password);
   await page.goto('/dashboard/lessons/lesson-gcse-maths-upcoming');
   await expect(page.getByRole('button', { name: 'Cancel lesson' })).toBeVisible();
 });
@@ -130,7 +138,7 @@ test('lesson detail IDOR: a Student cannot view a lesson they are not on', async
   const assignmentTitle = uniqueLabel('Unrelated Assignment');
   const lessonTitle = uniqueLabel('Unrelated lesson');
 
-  await login(page, ADMIN.email, ADMIN.password);
+  await login(page, ADMIN.username, ADMIN.password);
   await page.goto('/dashboard/admin/people/students');
   await page.getByRole('button', { name: 'Add student' }).click();
   await page.locator('#student-name').fill(studentName);
@@ -153,31 +161,28 @@ test('lesson detail IDOR: a Student cannot view a lesson they are not on', async
 
   await page.goto('/dashboard/admin/lessons/new');
   await page.getByLabel('Tuition Assignment').selectOption({ label: assignmentTitle });
+  const slot = lessonSlot(UNRELATED_LESSON_DAY, '13:00');
   await page.locator('#lesson-title').fill(lessonTitle);
-  await page.locator('#lesson-date').fill('2026-11-20');
-  await page.locator('#lesson-time').fill('13:00');
+  await page.locator('#lesson-date').fill(slot.date);
+  await page.locator('#lesson-time').fill(slot.time);
   await page.getByRole('button', { name: 'Schedule lesson' }).click();
   await expect(page).toHaveURL(/\/dashboard\/calendar$/);
 
   // Find the unrelated lesson's id via the calendar (Admin can see it).
   await page.goto('/dashboard/calendar');
-  for (let i = 0; i < 12; i += 1) {
-    const title = await page.locator('.fc-toolbar-title').innerText();
-    if (title.includes('November 2026')) break;
-    await page.locator('.fc-next-button').click();
-  }
+  await showMonthOf(page, slot.date);
   await openLessonFromCalendar(page, lessonTitle);
   await expect(page).toHaveURL(/\/dashboard\/lessons\/(.+)/);
   const lessonUrl = page.url();
 
   // Now log in as the *seeded* Student (unrelated to this new lesson) and try to view it directly.
-  await login(page, STUDENT.email, STUDENT.password);
+  await login(page, STUDENT.username, STUDENT.password);
   await page.goto(lessonUrl);
   await expect(page).toHaveURL(/\/403$/);
 });
 
 test('Tutor sees only their own lessons on the calendar', async ({ page }) => {
-  await login(page, TUTOR.email, TUTOR.password);
+  await login(page, TUTOR.username, TUTOR.password);
   await page.goto('/dashboard/calendar');
   // The seeded Tutor (Tahasin Hasan) has the seeded GCSE Maths lessons — at least one should show.
   await expect(page.locator('.fc-event').first()).toBeVisible();
@@ -188,21 +193,18 @@ test('Tutor sees only their own lessons on the calendar', async ({ page }) => {
 });
 
 test('Admin can cancel a planned lesson, which then shows as cancelled', async ({ page }) => {
-  await login(page, ADMIN.email, ADMIN.password);
+  await login(page, ADMIN.username, ADMIN.password);
   await page.goto('/dashboard/admin/lessons/new');
   await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Brian' });
   const lessonTitle = uniqueLabel('Lesson to cancel');
+  const slot = lessonSlot(dayInWeeks(3, 'Wednesday'), '14:00');
   await page.locator('#lesson-title').fill(lessonTitle);
-  await page.locator('#lesson-date').fill('2026-11-25');
-  await page.locator('#lesson-time').fill('14:00');
+  await page.locator('#lesson-date').fill(slot.date);
+  await page.locator('#lesson-time').fill(slot.time);
   await page.getByRole('button', { name: 'Schedule lesson' }).click();
   await expect(page).toHaveURL(/\/dashboard\/calendar$/);
 
-  for (let i = 0; i < 12; i += 1) {
-    const title = await page.locator('.fc-toolbar-title').innerText();
-    if (title.includes('November 2026')) break;
-    await page.locator('.fc-next-button').click();
-  }
+  await showMonthOf(page, slot.date);
   await openLessonFromCalendar(page, lessonTitle);
   await page.getByRole('button', { name: 'Cancel lesson' }).click(); // opens the confirm Dialog
   await page.locator('#cancel-reason').fill('Testing cancellation');
@@ -212,7 +214,7 @@ test('Admin can cancel a planned lesson, which then shows as cancelled', async (
 });
 
 test('a Tutor can add and remove their own availability', async ({ page }) => {
-  await login(page, TUTOR.email, TUTOR.password);
+  await login(page, TUTOR.username, TUTOR.password);
   await page.goto('/dashboard/tutor/availability');
   await page.getByRole('button', { name: 'Add hours' }).click();
   await page.getByLabel('Day of week').selectOption('5'); // Friday
@@ -226,15 +228,17 @@ test('a Tutor can add and remove their own availability', async ({ page }) => {
 });
 
 test('a Client only sees lessons belonging to their own Students on the calendar', async ({ page }) => {
-  await login(page, CLIENT.email, CLIENT.password);
+  await login(page, CLIENT.username, CLIENT.password);
   await page.goto('/dashboard/calendar');
   // The seeded Client (Abdurrahman Mustafa) should see the seeded GCSE Maths lessons but not the
-  // "Unrelated lesson" created for a different family earlier in this suite.
+  // "Unrelated lesson" created for a different family earlier in this suite — looked for in its own month, which the
+  // calendar need not open on.
+  await showMonthOf(page, UNRELATED_LESSON_DAY);
   await expect(page.locator('.fc-event', { hasText: 'Unrelated lesson' })).toHaveCount(0);
 });
 
 test('a Tutor sees a disabled Join Classroom indicator outside the join window, for the seeded upcoming online lesson', async ({ page }) => {
-  await login(page, TUTOR.email, TUTOR.password);
+  await login(page, TUTOR.username, TUTOR.password);
   await page.goto('/dashboard/lessons/lesson-gcse-maths-upcoming');
   // Outside the join window this renders as inert text, not a live link — there is deliberately
   // no clickable "Join classroom" control to find in this state (plan6 section 59).
@@ -243,42 +247,39 @@ test('a Tutor sees a disabled Join Classroom indicator outside the join window, 
 });
 
 test('a Client never sees a Join Classroom control (only the assigned Tutor or Student can join)', async ({ page }) => {
-  await login(page, CLIENT.email, CLIENT.password);
+  await login(page, CLIENT.username, CLIENT.password);
   await page.goto('/dashboard/lessons/lesson-gcse-maths-upcoming');
   await expect(page.getByRole('link', { name: 'Join classroom' })).toHaveCount(0);
   await expect(page.locator('[aria-disabled="true"]', { hasText: 'Classroom opens' })).toHaveCount(0);
 });
 
 test('lesson detail surfaces a joinError message from the query string', async ({ page }) => {
-  await login(page, TUTOR.email, TUTOR.password);
+  await login(page, TUTOR.username, TUTOR.password);
   await page.goto('/dashboard/lessons/lesson-gcse-maths-upcoming?joinError=This%20lesson%20has%20been%20cancelled.');
   await expect(page.locator('[role="alert"]')).toContainText('This lesson has been cancelled.');
 });
 
 test('a Tutor cannot complete a lesson until every Student has an attendance record, then can once marked, with the event on the activity timeline', async ({ page }) => {
-  await login(page, ADMIN.email, ADMIN.password);
+  await login(page, ADMIN.username, ADMIN.password);
   await page.goto('/dashboard/admin/lessons/new');
   await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Brian' });
   const lessonTitle = uniqueLabel('Lesson to complete');
+  const slot = lessonSlot(dayInWeeks(3, 'Thursday'), '14:00');
   await page.locator('#lesson-title').fill(lessonTitle);
-  await page.locator('#lesson-date').fill('2026-11-26');
-  await page.locator('#lesson-time').fill('14:00');
+  await page.locator('#lesson-date').fill(slot.date);
+  await page.locator('#lesson-time').fill(slot.time);
   // No report required for this lesson — this test is about the attendance gate specifically;
   // the report-required completion gate has its own dedicated test below.
   await page.getByLabel('Require a lesson report').uncheck();
   await page.getByRole('button', { name: 'Schedule lesson' }).click();
   await expect(page).toHaveURL(/\/dashboard\/calendar$/);
 
-  for (let i = 0; i < 12; i += 1) {
-    const title = await page.locator('.fc-toolbar-title').innerText();
-    if (title.includes('November 2026')) break;
-    await page.locator('.fc-next-button').click();
-  }
+  await showMonthOf(page, slot.date);
   await openLessonFromCalendar(page, lessonTitle);
   await expect(page).toHaveURL(/\/dashboard\/lessons\/(.+)/);
   const lessonUrl = page.url();
 
-  await login(page, TUTOR.email, TUTOR.password);
+  await login(page, TUTOR.username, TUTOR.password);
   await page.goto(lessonUrl);
   // The button's own label never changes; the reason it's disabled is a separate hint tied to it
   // via aria-describedby (plan6 section 88) rather than crammed into the accessible name.
@@ -298,27 +299,24 @@ test('a Tutor cannot complete a lesson until every Student has an attendance rec
 });
 
 test('a required lesson report blocks completion until submitted, and internal Tutor notes never reach the Client view even after approval', async ({ page }) => {
-  await login(page, ADMIN.email, ADMIN.password);
+  await login(page, ADMIN.username, ADMIN.password);
   await page.goto('/dashboard/admin/lessons/new');
   await page.getByLabel('Tuition Assignment').selectOption({ label: 'GCSE Mathematics — Brian' });
   const lessonTitle = uniqueLabel('Lesson needing a report');
+  const slot = lessonSlot(dayInWeeks(3, 'Friday'), '15:00');
   await page.locator('#lesson-title').fill(lessonTitle);
-  await page.locator('#lesson-date').fill('2026-11-27');
-  await page.locator('#lesson-time').fill('15:00');
+  await page.locator('#lesson-date').fill(slot.date);
+  await page.locator('#lesson-time').fill(slot.time);
   // "Require a lesson report" is checked by default — deliberately left on for this test.
   await page.getByRole('button', { name: 'Schedule lesson' }).click();
   await expect(page).toHaveURL(/\/dashboard\/calendar$/);
 
-  for (let i = 0; i < 12; i += 1) {
-    const title = await page.locator('.fc-toolbar-title').innerText();
-    if (title.includes('November 2026')) break;
-    await page.locator('.fc-next-button').click();
-  }
+  await showMonthOf(page, slot.date);
   await openLessonFromCalendar(page, lessonTitle);
   await expect(page).toHaveURL(/\/dashboard\/lessons\/(.+)/);
   const lessonUrl = page.url();
 
-  await login(page, TUTOR.email, TUTOR.password);
+  await login(page, TUTOR.username, TUTOR.password);
   await page.goto(lessonUrl);
   await page.locator('select[aria-label="Attendance status for Brian James Khalawon"]').selectOption('ATTENDED');
   await page.getByRole('button', { name: 'Mark', exact: true }).click();
@@ -339,7 +337,7 @@ test('a required lesson report blocks completion until submitted, and internal T
   await completeButton.click();
   await expect(page.locator('#main-content')).toContainText(/completed/i);
 
-  await login(page, ADMIN.email, ADMIN.password);
+  await login(page, ADMIN.username, ADMIN.password);
   await page.goto('/dashboard/notifications');
   await expect(page.locator('.notification-list')).toContainText('is awaiting approval');
   await page.goto(lessonUrl);
@@ -347,7 +345,7 @@ test('a required lesson report blocks completion until submitted, and internal T
   await page.getByRole('button', { name: 'Approve report' }).click();
   await expect(page.locator('#main-content')).toContainText(/approved/i);
 
-  await login(page, CLIENT.email, CLIENT.password);
+  await login(page, CLIENT.username, CLIENT.password);
   await expect(page.locator('.app-topbar__badge')).toBeVisible();
   await page.goto('/dashboard/notifications');
   await expect(page.locator('.notification-list')).toContainText('A new report is available');

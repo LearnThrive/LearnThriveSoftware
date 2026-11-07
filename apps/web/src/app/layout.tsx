@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import type { ReactNode } from "react";
-import { Bricolage_Grotesque, Public_Sans, IBM_Plex_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import { siteConfig } from "@/lib/site";
 import { THEME_COLOURS, THEME_INIT_SCRIPT, THEMES_ENABLED } from "@/lib/theme";
 import { JsonLd } from "@/components/seo/JsonLd";
@@ -13,25 +13,77 @@ import "./app-components.css";
 import "./app-dashboard.css";
 import "./app-auth.css";
 
-const bricolage = Bricolage_Grotesque({
-  subsets: ["latin"],
-  weight: ["600", "700", "800"],
+// ── Fonts: served from this repo, never from Google ──────────────────────────────────────────
+// These were `next/font/google` until a main e2e run (2026-11-03) died before the first test:
+// `next dev` could not compile this file at all, reporting "next/font/google queries have
+// exactly one entry" and "Can't resolve '@vercel/turbopack-next/internal/font/google/font'".
+// next/font/google self-hosts the files it serves to the browser, but it *downloads* them from
+// fonts.googleapis.com/fonts.gstatic.com on every dev compile and every `next build` (see
+// node_modules/next/dist/compiled/@next/font/dist/google/fetch-resource.js), so a Google blip or
+// a slow DNS answer is a build failure. The nine .woff2 files in ./fonts remove that dependency:
+// no network call at build time or at runtime.
+//
+// Each file is a complete face, fetched from Google's css2 API with a pre-unicode-range user
+// agent, so one file per weight carries every glyph instead of being split into per-subset
+// slices. Checked with fontTools against the per-subset files Google serves a modern browser:
+// nothing is lost (Bricolage/Public Sans gain 52-71 codepoints, Plex Mono 254), and Plex Mono
+// keeps its Cyrillic.
+//
+// One `src` entry per weight, matching the discrete weights the old setup declared. That keeps
+// rendering identical: Google returned ONE variable file for a multi-weight query but still
+// declared discrete `font-weight: 600/700/800` faces, so a CSS `font-weight: 650` (this codebase
+// uses 650, 750, 620, 730, 720, 560, 550, 450) snapped to a declared step then and snaps now.
+// Shipping the variable fonts instead would be fewer bytes but would silently restyle every one
+// of those intermediate weights, so it is left as a separate, visually-reviewed change.
+//
+// What is preloaded, and why. `preload` on next/font/local is one boolean per loader call, applied
+// to every file in that call (next/dist/compiled/@next/font/dist/local/loader.js passes the single
+// `preload` flag to emitFontFile for each src entry), so the choice is per family, not per weight.
+// Measured, with every face declared and nothing preloaded, on /, /about, /contact, /faq, /privacy
+// and /subjects: all four Public Sans weights are used by every one of those routes; Bricolage uses
+// 700 and 800 but never 600; Plex Mono uses 400 everywhere and 500 only where a palette-style label
+// appears. The old next/font/google setup preloaded 85.9 KB (its four latin files). So:
+//   Public Sans  preload -> 89.7 KB, 4 files, all four used on every route measured: no waste, and
+//                           the critical path stays the size it already was. It is the body text,
+//                           so it covers the most pixels on the page.
+//   Bricolage    lazy    -> preloading it would cost 100.4 KB for 2 files of 3 actually used.
+//   Plex Mono    lazy    -> 75.3 KB for 1 file of 2 actually used, for small eyebrow/label text.
+// Preloading all nine would be 263.6 KB, triple the old budget, ~73 KB of it never used on a
+// typical route. The two lazy families still paint immediately: `display: swap` plus the
+// size-adjust fallback face next/font generates (the `-s` files in the build) means text shows at
+// corrected metrics straight away and swaps with little shift, never invisible.
+
+const bricolage = localFont({
+  src: [
+    { path: "./fonts/BricolageGrotesque-SemiBold.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/BricolageGrotesque-Bold.woff2", weight: "700", style: "normal" },
+    { path: "./fonts/BricolageGrotesque-ExtraBold.woff2", weight: "800", style: "normal" },
+  ],
   variable: "--font-bricolage",
   display: "swap",
+  preload: false,
 });
 
-const publicSans = Public_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+const publicSans = localFont({
+  src: [
+    { path: "./fonts/PublicSans-Regular.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/PublicSans-Medium.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/PublicSans-SemiBold.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/PublicSans-Bold.woff2", weight: "700", style: "normal" },
+  ],
   variable: "--font-public-sans",
   display: "swap",
+  preload: true,
 });
 
-const ibmPlexMono = IBM_Plex_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500"],
+const ibmPlexMono = localFont({
+  src: [
+    { path: "./fonts/IBMPlexMono-Regular.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/IBMPlexMono-Medium.woff2", weight: "500", style: "normal" },
+  ],
   variable: "--font-ibm-plex-mono",
   display: "swap",
+  preload: false,
 });
 
 export const metadata: Metadata = {

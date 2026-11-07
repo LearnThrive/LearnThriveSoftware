@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AlertCircle, CheckCircle2, Lock, Video, CalendarPlus, Download } from "lucide-react";
 import { requireSession } from "@/lib/auth/guard";
+import { joinRoleFor, teachesLesson } from "@/lib/auth/teaching";
 import { createMetadata } from "@/lib/metadata";
 import { getDataProvider } from "@/lib/data/provider";
 import { cancelLessonAction } from "@/lib/actions/lessons";
@@ -66,11 +67,12 @@ export default async function LessonDetailPage({
   const namedStudents = students.filter((student): student is NonNullable<typeof student> => student !== null);
 
   const isAdmin = user.role === "ADMIN";
-  const isOwningTutor = user.role === "TUTOR" && user.profileId === lesson.tutorId;
+  const isOwningTutor = teachesLesson(user, lesson);
   const canManage = isAdmin || isOwningTutor;
   const canCancel = isAdmin && lesson.status === "PLANNED";
-  const canJoin = lesson.locationType === "ONLINE" && lesson.status !== "CANCELLED" && (user.role === "TUTOR" || user.role === "STUDENT");
-  const joinWindowOpen = canJoin && isWithinJoinWindow(lesson, user.role as "TUTOR" | "STUDENT");
+  const joinRole = joinRoleFor(user, lesson);
+  const canJoin = lesson.locationType === "ONLINE" && lesson.status !== "CANCELLED" && joinRole !== null;
+  const joinWindowOpen = canJoin && isWithinJoinWindow(lesson, joinRole);
   const allAttendanceMarked = lesson.studentIds.every((studentId) => attendanceByStudent.has(studentId));
   const reportBlocksCompletion = lesson.reportRequired && (!report || report.status === "DRAFT");
   const canComplete = canManage && lesson.status !== "CANCELLED" && lesson.status !== "COMPLETED";
@@ -81,7 +83,7 @@ export default async function LessonDetailPage({
 
   // When the join window hasn't opened yet, say how long the wait is rather than just hiding the
   // button (plan6 section 59).
-  const minutesBefore = user.role === "TUTOR" ? 30 : 10;
+  const minutesBefore = joinRole === "TUTOR" ? 30 : 10;
   const opensAt = new Date(new Date(lesson.startAt).getTime() - minutesBefore * 60_000);
 
   return (

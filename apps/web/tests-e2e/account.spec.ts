@@ -73,10 +73,10 @@ test('sign-in refuses an unconfirmed address, a wrong password and an unknown ad
 
   await signIn(page, email, 'a wrong password here');
   const alert = page.locator('main').getByRole('alert');
-  await expect(alert).toContainText('Email or password is not right.');
+  await expect(alert).toContainText('Username or password is not right.');
   const wrong = await alert.innerText();
   await signIn(page, address());
-  await expect(alert).toContainText('Email or password is not right.');
+  await expect(alert).toContainText('Username or password is not right.');
   expect(await alert.innerText()).toBe(wrong);
   expect((await page.context().cookies()).find((c) => c.name === ACCESS)).toBeUndefined();
 });
@@ -91,7 +91,7 @@ test('forgot password: a reset link, a new password, the old one stops working',
   await hydrated(page);
   await expectAxeClean(page, 'forgot');
   const card = page.locator('[data-auth-mode]');
-  await card.getByLabel('Email', { exact: true }).fill(email);
+  await card.getByLabel('Username', { exact: true }).fill(email);
   await humanCheckDone(page);
   await card.getByRole('button', { name: 'Send reset link' }).click();
   await expect(page.getByRole('heading', { name: 'Check your email' })).toBeVisible();
@@ -107,7 +107,7 @@ test('forgot password: a reset link, a new password, the old one stops working',
 
   await page.request.post('/api/account/logout', { data: {} });
   await signIn(page, email, PASSWORD);
-  await expect(page.locator('main').getByRole('alert')).toContainText('Email or password is not right.');
+  await expect(page.locator('main').getByRole('alert')).toContainText('Username or password is not right.');
   await signIn(page, email, 'a brand new long password');
   await expect(page).toHaveURL(/\/account$/);
 });
@@ -149,7 +149,7 @@ test('a signed-in page sends a signed-out visitor to sign-in and back, and an op
   await page.request.post('/api/account/logout', { data: {} });
   await page.goto('/login?next=https://evil.example');
   const card = page.locator('[data-auth-mode]');
-  await card.getByLabel('Email', { exact: true }).fill(email);
+  await card.getByLabel('Username', { exact: true }).fill(email);
   await card.getByLabel('Password', { exact: true }).fill(PASSWORD);
   await card.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page).toHaveURL(/localhost:3100\/account$/);

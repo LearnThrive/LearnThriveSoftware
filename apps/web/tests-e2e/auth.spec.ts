@@ -1,16 +1,16 @@
 import { test, expect, type Page } from '@playwright/test';
 
 const ACCOUNTS = {
-  admin: { email: 'admin@learnthrive.dev', password: 'dev-admin-pass' },
-  tutor: { email: 'tutor@learnthrive.dev', password: 'dev-tutor-pass' },
-  client: { email: 'client@learnthrive.dev', password: 'dev-client-pass' },
-  student: { email: 'student@learnthrive.dev', password: 'dev-student-pass' },
-  disabled: { email: 'disabled@learnthrive.dev', password: 'dev-disabled-pass' },
+  admin: { username: 'dev.admin', password: 'dev-admin-pass' },
+  tutor: { username: 'dev.tutor', password: 'dev-tutor-pass' },
+  client: { username: 'dev.client', password: 'dev-client-pass' },
+  student: { username: 'dev.student', password: 'dev-student-pass' },
+  disabled: { username: 'dev.disabled', password: 'dev-disabled-pass' },
 };
 
-async function login(page: Page, email: string, password: string) {
+async function login(page: Page, username: string, password: string) {
   await page.goto('/login');
-  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Username').fill(username);
   // Not getByLabel('Password') — it substring-matches the "Show password" toggle button too.
   await page.locator('input[name="password"]').fill(password);
   // The click handler does an async fetch() then a client-side router.push() — click() itself
@@ -24,16 +24,16 @@ async function login(page: Page, email: string, password: string) {
   ]);
 }
 
-async function attemptLogin(page: Page, email: string, password: string) {
+async function attemptLogin(page: Page, username: string, password: string) {
   await page.goto('/login');
-  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Username').fill(username);
   await page.locator('input[name="password"]').fill(password);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.locator('form [role="alert"]')).toBeVisible();
 }
 
 test('a valid login reaches the dashboard with role-appropriate content', async ({ page }) => {
-  await login(page, ACCOUNTS.tutor.email, ACCOUNTS.tutor.password);
+  await login(page, ACCOUNTS.tutor.username, ACCOUNTS.tutor.password);
   await expect(page).toHaveURL(/\/dashboard$/);
   // The greeting on TutorDashboard is "Good morning/afternoon/evening, {first name}." — the seeded
   // Tutor account's profile name is Tahasin Hasan. The topbar's account trigger (always rendered,
@@ -44,18 +44,18 @@ test('a valid login reaches the dashboard with role-appropriate content', async 
 });
 
 test('an incorrect password is rejected with a generic message and no session is created', async ({ page }) => {
-  await attemptLogin(page, ACCOUNTS.tutor.email, 'wrong-password');
+  await attemptLogin(page, ACCOUNTS.tutor.username, 'wrong-password');
   await expect(page).toHaveURL(/\/login$/);
-  await expect(page.locator('form [role="alert"]')).toContainText('Email or password is not right.');
+  await expect(page.locator('form [role="alert"]')).toContainText('Username or password is not right.');
 });
 
 test('an unknown account gets the same generic message as a wrong password (no account enumeration)', async ({ page }) => {
   await attemptLogin(page, 'nobody@learnthrive.dev', 'whatever');
-  await expect(page.locator('form [role="alert"]')).toContainText('Email or password is not right.');
+  await expect(page.locator('form [role="alert"]')).toContainText('Username or password is not right.');
 });
 
 test('a disabled account gets a distinct message, not the generic invalid-credentials one', async ({ page }) => {
-  await attemptLogin(page, ACCOUNTS.disabled.email, ACCOUNTS.disabled.password);
+  await attemptLogin(page, ACCOUNTS.disabled.username, ACCOUNTS.disabled.password);
   await expect(page.locator('form [role="alert"]')).toContainText('disabled');
 });
 
@@ -67,13 +67,13 @@ test('an unauthenticated visitor is redirected from /dashboard to /login, which 
 test('signing in after being turned away from a deep link returns to that page', async ({ page }) => {
   await page.goto('/dashboard/calendar');
   await expect(page).toHaveURL(/\/login\?next=%2Fdashboard%2Fcalendar$/);
-  await page.getByLabel('Email').fill(ACCOUNTS.tutor.email);
+  await page.getByLabel('Username').fill(ACCOUNTS.tutor.username);
   await page.locator('input[name="password"]').fill(ACCOUNTS.tutor.password);
   await Promise.all([page.waitForURL(/\/dashboard\/calendar$/), page.getByRole('button', { name: 'Sign in' }).click()]);
 });
 
 test('the session persists across a reload, and logout ends it', async ({ page }) => {
-  await login(page, ACCOUNTS.student.email, ACCOUNTS.student.password);
+  await login(page, ACCOUNTS.student.username, ACCOUNTS.student.password);
   await expect(page).toHaveURL(/\/dashboard$/);
 
   await page.reload();
@@ -96,27 +96,27 @@ test('the session persists across a reload, and logout ends it', async ({ page }
 const ADMIN_ONLY_ROUTE = '/dashboard/admin/people/students';
 
 test('a Tutor cannot reach an Admin-only route — redirected to /403, not silently shown a blank page', async ({ page }) => {
-  await login(page, ACCOUNTS.tutor.email, ACCOUNTS.tutor.password);
+  await login(page, ACCOUNTS.tutor.username, ACCOUNTS.tutor.password);
   await page.goto(ADMIN_ONLY_ROUTE);
   await expect(page).toHaveURL(/\/403$/);
   await expect(page.locator('h1')).toContainText("don't have access");
 });
 
 test('a Client is likewise blocked from an Admin-only route', async ({ page }) => {
-  await login(page, ACCOUNTS.client.email, ACCOUNTS.client.password);
+  await login(page, ACCOUNTS.client.username, ACCOUNTS.client.password);
   await page.goto(ADMIN_ONLY_ROUTE);
   await expect(page).toHaveURL(/\/403$/);
 });
 
 test('an Admin can reach an Admin-only route', async ({ page }) => {
-  await login(page, ACCOUNTS.admin.email, ACCOUNTS.admin.password);
+  await login(page, ACCOUNTS.admin.username, ACCOUNTS.admin.password);
   await page.goto(ADMIN_ONLY_ROUTE);
   await expect(page).toHaveURL(new RegExp(`${ADMIN_ONLY_ROUTE}$`));
   await expect(page.locator('h1')).toContainText('Students');
 });
 
 test('an already-authenticated visitor to /login is redirected straight to /dashboard', async ({ page }) => {
-  await login(page, ACCOUNTS.admin.email, ACCOUNTS.admin.password);
+  await login(page, ACCOUNTS.admin.username, ACCOUNTS.admin.password);
   await page.goto('/login');
   await expect(page).toHaveURL(/\/dashboard$/);
 });
@@ -139,7 +139,7 @@ test('empty submission shows a validation message without hitting the server', a
   await page.goto('/login');
   await page.getByRole('button', { name: 'Sign in' }).click();
   const summary = page.locator('form [role="alert"]');
-  await expect(summary).toContainText('Enter your email address.');
+  await expect(summary).toContainText('Enter your username.');
   await expect(summary).toContainText('Enter your password.');
 });
 
@@ -173,7 +173,7 @@ test('rate limiting is per-account, not per-source — a different account from 
   // A real account, never targeted above, from the same client — must not be caught in the blast
   // radius of the other account's lockout.
   const unrelated = await request.post('/api/auth/login', {
-    data: { email: ACCOUNTS.tutor.email, password: ACCOUNTS.tutor.password },
+    data: { email: 'tutor@learnthrive.dev', password: ACCOUNTS.tutor.password }, // the development provider still knows people by address
   });
   expect(unrelated.status()).toBe(200);
 });

@@ -10,24 +10,24 @@ import { hydrated } from './careers-support';
 // development accounts (docs/DEVELOPMENT_ACCOUNTS.md), seeded behind this same sign-in.
 
 const WHO = {
-  admin: { email: 'admin@learnthrive.dev', password: 'dev-admin-pass' },
-  tutor: { email: 'tutor@learnthrive.dev', password: 'dev-tutor-pass' },
-  client: { email: 'client@learnthrive.dev', password: 'dev-client-pass' }, // enrolled
-  student: { email: 'student@learnthrive.dev', password: 'dev-student-pass' }, // enrolled
-  member: { email: 'member@learnthrive.dev', password: 'dev-member-pass' }, // a subscription, no enrolment
-  visitor: { email: 'visitor@learnthrive.dev', password: 'dev-visitor-pass' }, // nothing yet
-  disabled: { email: 'disabled@learnthrive.dev', password: 'dev-disabled-pass' },
+  admin: { username: 'dev.admin', password: 'dev-admin-pass' },
+  tutor: { username: 'dev.tutor', password: 'dev-tutor-pass' },
+  client: { username: 'dev.client', password: 'dev-client-pass' }, // enrolled
+  student: { username: 'dev.student', password: 'dev-student-pass' }, // enrolled
+  member: { username: 'dev.member', password: 'dev-member-pass' }, // a subscription, no enrolment
+  visitor: { username: 'dev.visitor', password: 'dev-visitor-pass' }, // nothing yet
+  disabled: { username: 'dev.disabled', password: 'dev-disabled-pass' },
 } as const;
 
-async function fill(page: Page, who: { email: string; password: string }, next?: string) {
+async function fill(page: Page, who: { username: string; password: string }, next?: string) {
   await page.goto(next ? `/login?next=${encodeURIComponent(next)}` : '/login');
   await hydrated(page);
-  await page.getByLabel('Email', { exact: true }).fill(who.email);
+  await page.getByLabel('Username', { exact: true }).fill(who.username);
   await page.locator('input[name="password"]').fill(who.password);
 }
 
 /** Signs in and waits to arrive where the server sends them. */
-async function signIn(page: Page, who: { email: string; password: string }, lands: RegExp, next?: string) {
+async function signIn(page: Page, who: { username: string; password: string }, lands: RegExp, next?: string) {
   await fill(page, who, next);
   await Promise.all([page.waitForURL(lands), page.getByRole('button', { name: 'Sign in', exact: true }).click()]);
 }
@@ -169,9 +169,9 @@ test('a disabled account is told so, with no session, and a wrong password gets 
   await expect(page.locator('form [role="alert"]')).toContainText('disabled');
   expect((await page.context().cookies()).filter((c) => c.name === ACCESS)).toHaveLength(0);
 
-  await fill(page, { email: WHO.client.email, password: 'definitely not the password' });
+  await fill(page, { username: WHO.client.username, password: 'definitely not the password' });
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.locator('form [role="alert"]')).toContainText('Email or password is not right.');
+  await expect(page.locator('form [role="alert"]')).toContainText('Username or password is not right.');
 });
 
 test('one shell, by keyboard alone: the skip link first, the menu in reading order, Enter follows a link, and the account menu opens and closes', async ({ page }) => {

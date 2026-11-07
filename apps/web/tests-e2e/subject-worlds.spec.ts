@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { pinCapabilities } from './support';
 
 // plan11.md task 10's "shared route test over all four pages: content/CTA/reduced-motion/360px
 // overflow" for the four subject-specific "motion worlds" (SubjectWorld.tsx via
@@ -20,6 +21,10 @@ const SUBJECT_ROUTES: Array<{ path: string; heading: RegExp }> = [
 // spotlight section's heading is an oversized MaskedText statement — checked once, sitewide, since
 // all four routes share the one SubjectLandingPage/PageHero component.
 test.describe('subject page composition (task 7)', () => {
+  // The hero motif is a CinematicBackdrop, which the light tier (a two-core CI runner) leaves out: pin a capable desktop.
+  test.beforeEach(async ({ page }) => {
+    await pinCapabilities(page);
+  });
   for (const { path } of SUBJECT_ROUTES) {
     test(`${path}: has a hero motif and a masked spotlight heading, with no console errors`, async ({ page }) => {
       const errors: string[] = [];

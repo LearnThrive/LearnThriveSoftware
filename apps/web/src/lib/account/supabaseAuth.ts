@@ -137,7 +137,8 @@ export class SupabaseAccountAuth implements AccountAuth {
     if (!reply || reply.status >= 500 || reply.status === 429) return { ok: false as const, reason: "unavailable" as const };
     if (reply.status === 200) return { ok: true as const };
     const code = SupabaseAccountAuth.code(reply);
-    if (code === "weak_password" || (code === "validation_failed" && /password/i.test(String(reply.body?.msg ?? "")))) return { ok: false as const, reason: "weak_password" as const };
+    // same_password: a temporary password cannot be kept. It is the same answer to the person: choose a different one.
+    if (code === "weak_password" || code === "same_password" || (code === "validation_failed" && /password/i.test(String(reply.body?.msg ?? "")))) return { ok: false as const, reason: "weak_password" as const };
     return { ok: false as const, reason: "invalid_token" as const };
   }
 
@@ -153,5 +154,9 @@ export class SupabaseAccountAuth implements AccountAuth {
 
   async signOut(accessToken: string): Promise<void> {
     await this.call("POST", "/logout", {}, accessToken);
+  }
+
+  async signOutOthers(accessToken: string): Promise<void> {
+    await this.call("POST", "/logout?scope=others", {}, accessToken);
   }
 }

@@ -6,6 +6,9 @@ import { jsonResponse, logOutcome, originAllowed, readBodyLimited } from "@/lib/
 import { siteConfig } from "@/lib/site";
 import type { AccountRuntime } from "./runtime";
 import { ACCESS_COOKIE, REFRESH_COOKIE, clearSessionCookies, forgetAccessToken, renewSession, safeNextPath, setSessionCookies, type CookieJar } from "./session";
+import { sendResetLink } from "./resetEmail";
+import { selfServiceAccounts } from "./selfService";
+import { parseUsername, signInAddress, usernameFormatError } from "./username";
 import { NAME_MAX, emailError, parseDisplayName, parseEmail, parseSignIn, parseSignUp, parseTokenHash, passwordError, validateSignUp } from "./validation";
 import type { EmailLinkKind } from "./types";
 
@@ -17,6 +20,11 @@ import type { EmailLinkKind } from "./types";
  */
 const MAX_BODY_BYTES = 8 * 1024;
 const MIN_FILL_MS = 2_000;
+/**
+ * The shortest a refused sign-in or a reset request takes in production. Auth answers an unknown address sooner than it can check a password,
+ * and only a real account gets a reset email, so without a floor the time taken would say which usernames exist. Well above both.
+ */
+const ANSWER_FLOOR_MS = 900;
 const FALLBACK = `Please email ${siteConfig.email} and we will help.`;
 
 /** Per visitor address and for the whole route, as for the other forms (lib/rate-limit.ts). */
@@ -26,6 +34,8 @@ export const accountRateLimits = {
   verify: { perClient: { max: 30, windowMs: 15 * 60 * 1000 }, global: { max: 600, windowMs: 15 * 60 * 1000 } },
   password: { perClient: { max: 10, windowMs: 15 * 60 * 1000 }, global: { max: 300, windowMs: 15 * 60 * 1000 } },
   profile: { perClient: { max: 20, windowMs: 15 * 60 * 1000 }, global: { max: 600, windowMs: 15 * 60 * 1000 } },
+  /** Reset emails to one account, from anywhere: an inbox cannot be flooded by asking from many addresses. */
+  resetPerAccount: { perClient: { max: 3, windowMs: 60 * 60 * 1000 }, global: { max: 600, windowMs: 60 * 60 * 1000 } },
 } as const;
 
 const limiters = {
@@ -34,6 +44,7 @@ const limiters = {
   verify: new SlidingWindowLimiter(accountRateLimits.verify.perClient, accountRateLimits.verify.global),
   password: new SlidingWindowLimiter(accountRateLimits.password.perClient, accountRateLimits.password.global),
   profile: new SlidingWindowLimiter(accountRateLimits.profile.perClient, accountRateLimits.profile.global),
+  resetPerAccount: new SlidingWindowLimiter(accountRateLimits.resetPerAccount.perClient, accountRateLimits.resetPerAccount.global),
 };
 
 /** For tests. */
@@ -50,7 +61,15 @@ export interface Deps {
   studyBuddyOpen?: boolean;
   /** Whether the signed-in app (dashboard) is open: false in production until the portal opens. Default open. */
   dashboardOpen?: boolean;
+  /** The floor on an answer that must not reveal an account. Default: ANSWER_FLOOR_MS in production, none elsewhere. */
+  answerFloorMs?: number;
 }
+
+function answerFloor(deps: Deps): number {
+  return deps.answerFloorMs ?? ((deps.env ?? process.env).NODE_ENV === "production" ? ANSWER_FLOOR_MS : 0);
+}
+
+const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, Math.max(0, ms)));
 
 type Gate = { ok: true; rt: AccountRuntime; body: Record<string, unknown>; address: string } | { ok: false; response: Response };
 
@@ -108,9 +127,13 @@ function botChecks(body: Record<string, unknown>, event: string, env: Record<str
 
 const UNAVAILABLE = () => jsonResponse(503, { code: "unavailable", error: `We could not do that just now. Please try again shortly. ${FALLBACK}` });
 
+/** LearnThrive makes every account: what the public sign-up and its relatives answer in production. */
+export const accountsAreMadeForYou = () => jsonResponse(403, { code: "accounts_closed", error: `LearnThrive sets up every account for you. ${FALLBACK}` });
+
 export async function handleSignUp(request: Request, deps: Deps): Promise<Response> {
   const gate = await open(request, deps, "account-signup", limiters.signUp);
   if (!gate.ok) return gate.response;
+  if (!selfServiceAccounts(deps.env)) return accountsAreMadeForYou();
   const bots = botChecks(gate.body, "account-signup", deps.env ?? process.env);
   if (bots === "drop") return jsonResponse(200, { success: true });
   if (bots) return bots;
@@ -155,6 +178,7 @@ async function destinationAfterSignIn(rt: AccountRuntime, profileId: string, req
   try {
     const account = await rt.store.accounts.getAccount(profileId);
     if (!account) return requested || "/account";
+    if (account.mustChangePassword) return "/account/reset";
     const facts = await accessFactsFor(rt.store, account);
     return destinationFor(platformAccess(account.role, facts), requested, { studyBuddyOpen: deps.studyBuddyOpen ?? false, dashboardOpen: deps.dashboardOpen ?? true });
   } catch {
@@ -163,27 +187,34 @@ async function destinationAfterSignIn(rt: AccountRuntime, profileId: string, req
 }
 
 export async function handleSignIn(request: Request, deps: Deps): Promise<Response> {
+  const startedAt = Date.now();
   const gate = await open(request, deps, "account-signin");
   if (!gate.ok) return gate.response;
-  const { email, password } = parseSignIn(gate.body);
-  if (emailError(email) || !password) return jsonResponse(400, { error: "Enter your email address and password." });
+  const { username, password } = parseSignIn(gate.body);
+  const address = signInAddress(username, deps.env ?? process.env);
+  if (!address || !password) return jsonResponse(400, { error: "Enter your username and password." });
   const lockout = gate.rt.lockout;
-  if (lockout.locked(email, gate.address)) {
+  if (lockout.locked(username, gate.address)) {
     logOutcome("account-signin", "locked");
     return jsonResponse(429, { error: "Too many sign-in attempts. Please try again in a few minutes, or reset your password." });
   }
-  const result = await gate.rt.auth.signIn(email, password);
+  const result = await gate.rt.auth.signIn(address, password);
   if (!result.ok) {
-    if (result.reason === "unavailable") return UNAVAILABLE();
-    lockout.recordFailure(email, gate.address);
+    if (result.reason === "unavailable") {
+      // Auth did not answer: without this line an Auth outage would look like a quiet day in the log (checklist 3.8).
+      logOutcome("account-signin", "unavailable", { reason: "auth" });
+      return UNAVAILABLE();
+    }
+    lockout.recordFailure(username, gate.address);
     logOutcome("account-signin", result.reason);
+    await pause(startedAt + answerFloor(deps) - Date.now());
     if (result.reason === "email_not_confirmed") {
       return jsonResponse(403, { code: "email_not_confirmed", error: "Please confirm your email address first. We sent you a link when you created the account." });
     }
     if (result.reason === "account_disabled") return jsonResponse(403, { code: "account_disabled", error: `This account has been disabled. ${FALLBACK}` });
-    return jsonResponse(401, { error: "Email or password is not right." });
+    return jsonResponse(401, { error: "Username or password is not right." });
   }
-  lockout.recordSuccess(email);
+  lockout.recordSuccess(username);
   setSessionCookies(deps.jar, result.tokens, deps.env ?? process.env);
   logOutcome("account-signin", "ok");
   const next = await destinationAfterSignIn(gate.rt, result.user.id, safeNextPath(asString(gate.body.next), ""), deps);
@@ -220,15 +251,31 @@ export async function handleVerify(request: Request, deps: Deps): Promise<Respon
   return jsonResponse(200, { success: true, next: kind === "recovery" ? "/account/reset" : "/account" });
 }
 
-/** "Send me a link": forgot password, or resend the verification email. Same answer for every address. */
+/**
+ * "Send me a link": a forgotten password, or the verification email again. For a reset a person gives their username and the link goes to
+ * the address linked to it (a child's to their parent). The answer and the time it takes are the same for every username; in production
+ * the sending carries on after the answer if it runs long. An email address is only for the accounts of a local server's public sign-up.
+ */
 export async function handleEmailLink(request: Request, deps: Deps, purpose: "reset" | "verify"): Promise<Response> {
   const event = purpose === "reset" ? "account-forgot" : "account-resend";
   const gate = await open(request, deps, event, limiters.emailLink);
   if (!gate.ok) return gate.response;
-  const bots = botChecks(gate.body, event, deps.env ?? process.env);
+  const env = deps.env ?? process.env;
+  if (purpose === "verify" && !selfServiceAccounts(env)) return accountsAreMadeForYou();
+  const bots = botChecks(gate.body, event, env);
   if (bots === "drop") return jsonResponse(200, { success: true });
   if (bots) return bots;
-  const email = parseEmail(gate.body.email);
+  const identifier = parseUsername(gate.body.username ?? gate.body.email);
+  if (purpose === "reset" && !usernameFormatError(identifier)) {
+    logOutcome(event, "sent");
+    if (!limiters.resetPerAccount.allow(identifier)) return jsonResponse(200, { success: true });
+    const sending = sendResetLink(gate.rt, identifier, env).catch(() => logOutcome(event, "failed", { reason: "threw" }));
+    const floor = answerFloor(deps);
+    await (floor > 0 ? pause(floor) : sending);
+    return jsonResponse(200, { success: true });
+  }
+  if (!selfServiceAccounts(env)) return jsonResponse(422, { error: "Please check your answers and try again.", errors: { email: "Enter your username." } });
+  const email = parseEmail(identifier);
   const problem = emailError(email);
   if (problem) return jsonResponse(422, { error: "Please check your answers and try again.", errors: { email: problem } });
   const result = purpose === "reset" ? await gate.rt.auth.requestPasswordReset(email) : await gate.rt.auth.resendVerification(email);
@@ -243,7 +290,8 @@ export async function handleSetPassword(request: Request, deps: Deps): Promise<R
   if (!gate.ok) return gate.response;
   const session = await renewSession(deps.jar, gate.rt);
   const access = deps.jar.get(ACCESS_COOKIE);
-  if (session.status !== "ok" || !access) return jsonResponse(401, { code: "signed_out", error: "Your link has expired. Please ask for a new one." });
+  // The one route that accepts a session on a temporary password: it is what ends one.
+  if ((session.status !== "ok" && session.status !== "password_change") || !access) return jsonResponse(401, { code: "signed_out", error: "Your link has expired. Please ask for a new one." });
   const password = asString(gate.body.password);
   const problem = passwordError(password);
   if (problem) return jsonResponse(422, { error: "Please check your answers and try again.", errors: { password: problem } });
@@ -257,6 +305,14 @@ export async function handleSetPassword(request: Request, deps: Deps): Promise<R
     }
     return UNAVAILABLE();
   }
+  try {
+    await gate.rt.store.accounts.setMustChangePassword(session.user.id, false);
+  } catch {
+    logOutcome("account-password", "failed");
+    return UNAVAILABLE();
+  }
+  forgetAccessToken(access);
+  await gate.rt.auth.signOutOthers(access);
   logOutcome("account-password", "ok");
   return jsonResponse(200, { success: true });
 }

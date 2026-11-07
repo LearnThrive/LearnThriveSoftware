@@ -238,10 +238,9 @@ test.describe('ActivityPanel: a live turn', () => {
     await open(page);
     const panel = live(page).locator(PANEL);
     await press(page, 'Next event').click();
-    const tier = await page.locator('html').getAttribute('data-motion-tier');
-    // At most one looping animation in the whole panel: never a second indicator.
+    // Exactly one looping animation in the whole panel, the ring: never a second indicator. The ring turns on every
+    // tier (activity.module.css); only reduced motion stills it, which the states above check.
     const loops = await panel.evaluate((el) => el.getAnimations({ subtree: true }).filter((a) => a.effect?.getComputedTiming().iterations === Infinity).length);
-    expect(loops).toBeLessThanOrEqual(1);
-    if (tier !== 'full') expect(loops).toBe(0);
+    expect(loops).toBe(1);
   });
 });

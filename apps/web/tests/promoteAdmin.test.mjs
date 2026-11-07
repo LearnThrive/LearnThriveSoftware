@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { scramVerifier, grantStatements } from "../scripts/create-server-role.mjs";
@@ -16,24 +19,70 @@ const promote = (args, env = {}, input = "") => run("promote-admin.mjs", args, e
 const LOCAL = `postgresql://postgres:${PASSWORD}@127.0.0.1:54322/postgres`;
 const HOSTED = `postgresql://postgres:${PASSWORD}@db.abcdefghijklmnop.supabase.co:5432/postgres`;
 
-test("promote-admin refuses without a connection string, an email or an explicit host, before connecting", () => {
-  assert.equal(promote(["--email", "a@example.com", "--host", "127.0.0.1"]).status, 2, "no DATABASE_URL");
-  assert.equal(promote(["--host", "127.0.0.1"], { DATABASE_URL: LOCAL }).status, 2, "no email");
-  assert.equal(promote(["--email", "not an email", "--host", "127.0.0.1"], { DATABASE_URL: LOCAL }).status, 2, "a bad email");
-  const noHost = promote(["--email", "a@example.com"], { DATABASE_URL: LOCAL });
+test("promote-admin refuses without a connection string, a username or an explicit host, before connecting", () => {
+  assert.equal(promote(["--username", "a.person", "--host", "127.0.0.1"]).status, 2, "no DATABASE_URL");
+  assert.equal(promote(["--host", "127.0.0.1"], { DATABASE_URL: LOCAL }).status, 2, "no username");
+  assert.equal(promote(["--username", "not a username", "--host", "127.0.0.1"], { DATABASE_URL: LOCAL }).status, 2, "a bad username");
+  const noHost = promote(["--username", "a.person"], { DATABASE_URL: LOCAL });
   assert.equal(noHost.status, 3);
   assert.match(noHost.stderr, /--host .* is required/);
-  const wrong = promote(["--email", "a@example.com", "--host", "db.other.supabase.co"], { DATABASE_URL: LOCAL });
+  const wrong = promote(["--username", "a.person", "--host", "db.other.supabase.co"], { DATABASE_URL: LOCAL });
   assert.equal(wrong.status, 3);
   assert.match(wrong.stderr, /is not the host of DATABASE_URL/);
 });
 
 test("promote-admin against a hosted database needs a real terminal to type the host: a pipe is refused, and nothing is sent", () => {
-  const r = promote(["--email", "a@example.com", "--host", "db.abcdefghijklmnop.supabase.co"], { DATABASE_URL: HOSTED }, "a@example.com\n");
+  const r = promote(["--username", "a.person", "--host", "db.abcdefghijklmnop.supabase.co"], { DATABASE_URL: HOSTED }, "a.person\n");
   assert.equal(r.status, 3);
   assert.match(r.stderr, /needs a person at the keyboard/);
   // And it never echoes the connection string or its password, on any path.
   for (const out of [r.stdout, r.stderr]) assert.ok(!out.includes(PASSWORD) && !out.includes("postgres:"), out);
+});
+
+const account = (args, env = {}, input = "") =>
+  spawnSync(process.execPath, ["--import", "tsx", "scripts/create-account.mjs", ...args], { cwd: WEB, encoding: "utf8", input, env: { PATH: process.env.PATH, SYSTEMROOT: process.env.SYSTEMROOT, ...env }, timeout: 30_000 });
+
+test("create-account refuses before connecting: missing settings, a wrong host, a local database, a list in the repository, a bad list", () => {
+  const folder = mkdtempSync(join(tmpdir(), "learnthrive-create-account-"));
+  try {
+    const good = join(folder, "list.json");
+    writeFileSync(good, JSON.stringify([{ username: "a.parent", displayName: "A Parent", linkedEmail: "a@example.com", role: "CLIENT" }]));
+    const hosted = { DATABASE_URL: HOSTED, SUPABASE_URL: "https://abcdefghijklmnop.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "sb_secret_FakeKeyForTests_0123456789" };
+    const host = "db.abcdefghijklmnop.supabase.co";
+
+    assert.equal(account(["--file", good, "--host", host]).status, 2, "nothing set");
+    assert.equal(account(["--host", host], hosted).status, 2, "no list");
+    assert.equal(account(["--file", good], hosted).status, 3, "no host");
+    assert.match(account(["--file", good, "--host", "db.other.supabase.co"], hosted).stderr, /is not the host of DATABASE_URL/);
+    assert.match(account(["--file", good, "--host", "127.0.0.1"], { ...hosted, DATABASE_URL: LOCAL, SUPABASE_URL: "http://127.0.0.1:54321" }).stderr, /--local-stack/);
+    assert.match(account(["--file", good, "--host", host], { ...hosted, SUPABASE_URL: "https://zzzzzzzzzzzzzzzz.supabase.co" }).stderr, /not belong to the same project/);
+    assert.match(account(["--file", good, "--host", host, "--apply"], hosted).stderr, /--passwords/);
+
+    const inside = join(WEB, "tests", "_routeHelpers.mjs");
+    assert.match(account(["--file", inside, "--host", host], hosted).stderr, /outside this repository/);
+    assert.match(account(["--file", good, "--host", host, "--apply", "--passwords", join(WEB, "passwords.tsv")], hosted).stderr, /outside this repository/);
+    const already = join(folder, "already.tsv");
+    writeFileSync(already, "x");
+    assert.match(account(["--file", good, "--host", host, "--apply", "--passwords", already], hosted).stderr, /never overwritten/);
+
+    const bad = join(folder, "bad.json");
+    writeFileSync(bad, JSON.stringify([
+      { username: "admin", displayName: "Reserved", linkedEmail: "a@example.com", role: "CLIENT" },
+      { username: "kit-1234", displayName: "Kit", role: "STUDENT" },
+      { username: "kit-1234", displayName: "", linkedEmail: "nope", role: "OWNER" },
+      { username: "a.parent", displayName: "Parent", linkedEmail: "a@example.com", role: "CLIENT", teaches: true },
+    ]));
+    const refused = account(["--file", bad, "--host", host], hosted);
+    assert.equal(refused.status, 2);
+    for (const problem of [/reserved/, /needs "parent"/, /appears twice/, /displayName is required/, /role must be one of/, /"teaches" is only for an ADMIN/]) assert.match(refused.stderr, problem);
+
+    const piped = account(["--file", good, "--host", host], hosted, "x\n");
+    assert.equal(piped.status, 3, "a hosted project needs a real terminal to type the host");
+    assert.match(piped.stderr, /needs a person at the keyboard/);
+    for (const out of [piped.stdout, piped.stderr]) assert.ok(!out.includes(PASSWORD) && !out.includes("sb_secret_"), "no secret in any output");
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
 });
 
 test("create-server-role refuses a missing or weak password and a hosted database without --host, before connecting", () => {
@@ -78,7 +127,7 @@ test("the SCRAM verifier has Postgres's exact shape and is salted (the plaintext
 
 const smoke = (args, env = {}, input = "") =>
   spawnSync(process.execPath, ["--import", "tsx", "scripts/supabase-smoke.mjs", ...args], { cwd: WEB, encoding: "utf8", input, env: { PATH: process.env.PATH, SYSTEMROOT: process.env.SYSTEMROOT, ...env }, timeout: 60_000 });
-const SMOKE_BASE = { SUPABASE_ANON_KEY: "sb_publishable_FakeKeyForTests_0123456789", SUPABASE_SERVICE_ROLE_KEY: "sb_secret_FakeKeyForTests_0123456789", SMOKE_EMAIL: "someone+smoke@example.com" };
+const SMOKE_BASE = { SUPABASE_ANON_KEY: "sb_publishable_FakeKeyForTests_0123456789", SUPABASE_SERVICE_ROLE_KEY: "sb_secret_FakeKeyForTests_0123456789" };
 const API = "https://abcdefghijklmnopqrst.supabase.co";
 const POOLER = `postgresql://learnthrive_server.abcdefghijklmnopqrst:${PASSWORD}@aws-0-eu-west-2.pooler.supabase.com:6543/postgres`;
 

@@ -104,9 +104,9 @@ function sourceFiles(directory) {
   });
 }
 
-test("no page, form, email or comment mentions refresher training or induction, or names Google as a provider", () => {
-  // Owner decisions: no induction or refresher training is promised anywhere, and the company mailbox is IONOS.
-  const ruledOut = /\b(?:refresher|induction)\b|google (?:workspace|meet|drive|docs|sheets)/i;
+test("no page, form, email or comment mentions refresher training or induction, or names a Google product other than Workspace (the mailbox)", () => {
+  // Owner decisions: no induction or refresher training is promised anywhere, and the company mailbox is Google Workspace (its MX records, checked 6 Nov 2026); IONOS is DNS only.
+  const ruledOut = /\b(?:refresher|induction)\b|google (?:meet|drive|docs|sheets)/i;
   for (const file of sourceFiles(srcDir)) {
     assert.doesNotMatch(readFileSync(file, "utf8"), ruledOut, relative(srcDir, file).replaceAll("\\", "/"));
   }

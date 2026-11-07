@@ -146,10 +146,12 @@ test.describe('ProductTabs (task 1)', () => {
 
     for (const name of ['Parents', 'Students', 'Tutors']) {
       await section.getByRole('tab', { name }).click();
-      // AnimatePresence mode="wait" genuinely removes the outgoing panel before mounting the
-      // incoming one — a real, brief gap where the tab's aria-controls target doesn't exist yet.
-      // Scanning mid-transition is scanning a state a user never rests on; wait for the panel to
-      // actually be there first.
+      // ProductTabs no longer has a window where the tab's aria-controls target does not exist:
+      // it used to wrap the panel in AnimatePresence mode="wait", which removed the outgoing panel
+      // and mounted the incoming one only once the outgoing one's exit animation finished, and
+      // that gap is what this wait was here for. It now swaps the panel on a keyed m.div, in one
+      // React commit. Kept as an assertion rather than deleted: it is exactly the invariant that
+      // change is meant to guarantee, so it is worth stating on every switch.
       await expect(section.getByRole('tabpanel')).toHaveAttribute('id', await section.getByRole('tab', { name }).getAttribute('aria-controls') ?? '');
       // Mounting isn't settled: even under reduced motion the panel still runs an 80ms opacity
       // 0->1 transition (ProductTabs.tsx's transition duration is reduceMotion ? 0.08 : ...,

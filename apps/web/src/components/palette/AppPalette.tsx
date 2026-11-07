@@ -17,6 +17,7 @@ export default function AppPalette({
   onClose,
   shortcutLabel,
   role,
+  teaches = false,
   onShowShortcuts,
   onSignOut,
 }: {
@@ -24,12 +25,13 @@ export default function AppPalette({
   onClose: () => void;
   shortcutLabel: string;
   role: Role;
+  teaches?: boolean;
   onShowShortcuts: () => void;
   onSignOut: () => void;
 }) {
   const commands = useMemo(
-    () => buildAppCommands(role, { showShortcuts: onShowShortcuts, signOut: onSignOut }),
-    [role, onShowShortcuts, onSignOut],
+    () => buildAppCommands(role, { showShortcuts: onShowShortcuts, signOut: onSignOut }, teaches),
+    [role, teaches, onShowShortcuts, onSignOut],
   );
 
   // Server results become ordinary palette rows: a title, a quiet second line, a route.

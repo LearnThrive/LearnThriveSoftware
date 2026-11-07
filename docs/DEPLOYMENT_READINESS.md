@@ -23,7 +23,7 @@ Legend: **PASS** verified, with the evidence named · **OWNER** blocked on somet
 | HSTS | **PASS**, `preload` withheld | `max-age=31536000; includeSubDomains`. Adding `preload` is **OWNER** (confirm the domain is permanently HTTPS). |
 | Cross-Origin-Opener-Policy; existing headers kept | **PASS** | Smoke + `tests-e2e/security-headers.spec.ts` (camera/microphone `(self)` comment re-checked and kept). |
 | Zero third-party requests on public pages | **PASS** | Smoke records every request host on each of the 17 routes: only the site's own origin. Fonts are self-hosted by `next/font`. |
-| `npm audit --omit=dev` reviewed | **EXCEPTION** | 9 findings (2 high, 7 moderate), all transitive through `@excalidraw/excalidraw` (`nanoid`, `lodash-es` via mermaid/chevrotain/langium). Excalidraw is used only by the classroom whiteboard, which is unreachable in production while the portal is closed, and none of it is in any marketing route's JavaScript (checked). The offered fix downgrades Excalidraw to 0.17.6 (breaking). Revisit before the portal opens. |
+| `npm audit --omit=dev` reviewed | **EXCEPTION (re-checked 6 Nov 2026)** | Upgrading `next` to 16.4.5 and running `npm audit fix` cleared 9 findings, including two **critical** Next.js advisories (remote code execution in the image optimiser with SVGs, and in `use cache` functions), a critical `dompurify`, and `zod`, `sharp`, `qs`, `body-parser`, `source-map-js` and `@xmldom/xmldom`. The 12 left (9 high, 1 moderate, 2 low) all come through `@excalidraw/excalidraw` 0.18.1, the latest release: `nanoid` and `lodash-es` via mermaid, `@mermaid-js/parser`, langium and chevrotain, and `katex` via mermaid. Excalidraw pins `nanoid@3.3.3`, and `@excalidraw/mermaid-to-excalidraw` pulls `nanoid@4.0.2`, for which no patched 4.x exists; the only fix npm offers downgrades Excalidraw to 0.17.6 (breaking). All of it runs in the browser of the person drawing, on the classroom whiteboard, which is **reachable once the portal opens**; the reachability reasoning is in `PLAN13_SECURITY_AUDIT.md`. **Accepted** until Excalidraw publishes a release with patched dependencies; re-check on every monthly audit (10.2). 
 | Lockfile committed; Node engines honoured | **PASS** | `package-lock.json` is tracked; CI pins Node 22.12.0 against `engines`. |
 
 ## 16.3 Enquiry endpoint
@@ -58,7 +58,7 @@ Legend: **PASS** verified, with the evidence named · **OWNER** blocked on somet
 | Image pipeline applied | **PASS** | Wave 8 (see the audit). |
 | Production Lighthouse (mobile and desktop) per route, with budgets | **NOT RUN** | Lighthouse is not installed here and installing it is a download that was not authorised. Motion profiles (`npm run profile:motion`) were measured instead — see the completion report. Run Lighthouse on staging. |
 | INP checked by interacting (menu, accordion, form, palette, theme toggle) | **NOT RUN** | The interactions are exercised by the e2e suites; INP itself was not measured. |
-| Firefox and WebKit Playwright projects | **PASS** (configured) / **NOT RUN** locally | `playwright.prod.config.ts` adds Firefox, WebKit and an iPhone profile with `PW_CROSS_BROWSER=1`; CI installs and runs them. The browsers are not installed on the author's machine, so they have not been run. |
+| Firefox and WebKit Playwright projects | **PASS** | `playwright.prod.config.ts` adds Firefox, WebKit and an iPhone profile with `PW_CROSS_BROWSER=1`. Run on GitHub (CI installs all three), and run locally once the browsers were installed, 4 November 2026: 248 passed, 44 skipped against a production build served by `serve.mjs`. |
 | Safari/iOS behaviour of Lenis, View Transitions, WebGL, `backdrop-filter`, `animation-timeline` | **NOT RUN** | No Safari/iOS device or engine was available. Each enhancement is feature-gated and degrades to the static or native behaviour (Lenis is fine-pointer only). Do a manual pass on an iPhone and a Mac before launch. |
 
 ## 16.6 Reliability and operations
@@ -68,7 +68,7 @@ Legend: **PASS** verified, with the evidence named · **OWNER** blocked on somet
 | `/api/health` | **PASS** | `{"status":"ok"}`, `Cache-Control: no-store`, no secrets (smoke). |
 | Global error boundaries | **PASS** | `error.tsx` and `global-error.tsx` (Wave 10); branded 404. |
 | Optional error-reporting hook behind env | **OWNER** | Not added: no vendor without the owner's decision. |
-| CI workflow | **PASS** (written) / **NOT RUN** on GitHub | `.github/workflows/ci.yml`; its commands are the ones run locally. It has not yet executed on GitHub. |
+| CI workflow | **PASS** | `.github/workflows/ci.yml` has now executed on GitHub (4 November 2026): `verify` green on pull requests 8 and 9, and the main-only `e2e` job green on both merges. Launch checklist 1.4. |
 | `docs/DEPLOYMENT.md`: hosting, realtime not deployed, rollback, smoke checklist | **PASS** | Written. The hosting target itself is **OWNER**. |
 
 ## 16.7 Privacy, legal and accessibility

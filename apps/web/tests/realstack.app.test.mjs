@@ -158,7 +158,7 @@ describe("account routes on the real local stack", { skip: ENABLED ? false : "se
     // And signing in again works with the password.
     const back = await h.handleSignIn(post("signin", { email, password: PASSWORD }), { rt, jar });
     assert.equal(back.status, 200);
-    assert.deepEqual(await back.json(), { success: true, user: { displayName: "Pat Q" } });
+    assert.deepEqual(await back.json(), { success: true, user: { displayName: "Pat Q" }, next: "/account" }, "signed in with nothing yet: their account page");
     const wrong = await h.handleSignIn(post("signin", { email, password: "not the right password at all" }), { rt, jar: jarOf() });
     assert.equal(wrong.status, 401);
   });
