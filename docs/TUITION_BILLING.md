@@ -57,9 +57,11 @@ The database tables are server-only: RLS enabled and forced, no policy, no grant
 
 - `packages/data/src/tuitionBillingRules.test.ts`: the rules, on plain data.
 - `testing/tuitionBillingContract.ts`: one behaviour contract run against memory (`tuitionBillingMemory.test.ts`) and Postgres on PGlite (`tuitionBillingSql.test.ts`), including a full statement, balance and refund flow on real lessons.
+- **The real local Supabase stack** (`realstack.tuitionBilling.test.ts`, run by `npm run test:realstack`): the same contract three ways, directly, through the transaction pooler and as the narrow `learnthrive_server` role, after `supabase db reset` applied `0001`–`0021` from nothing. 51 of 51 on 8 Nov 2026. It found two bugs PGlite could not, both fixed ([SUPABASE_REAL_STACK.md](SUPABASE_REAL_STACK.md), findings 20 and 21): the statement preview hung for good through the pooler, and JSON was stored as strings, so a payment already on an issued statement was counted again the next month.
 
 ## What is not built
 
 - Collecting money, Stripe for tuition, receipts, a statement PDF or email, the month-end reminder: all wait for the family payment method (B1, B13, B19).
 - Parent-facing statement screens and the parent sign-in guide: the guide waits for Brian to check it against the final portal (H5).
 - Real rates and real people: they go in through the admin pages on the hosted database, never into the repository.
+- **Purging someone who has billing records** ([SUPABASE_REAL_STACK.md](SUPABASE_REAL_STACK.md), finding 22). The billing tables point at families and tutors with `restrict`, so the purge (task 3.7) refuses a family with any rate, statement, payment or refund, and a tutor with a pay rate. Issued statements also keep the family's name and the children's names. Needs a decision from the owners and the accountant before it is built: what a kept financial record holds once the person has gone (names, or only amounts and an invoice number), and what happens to the family and tutor rows it points at.
