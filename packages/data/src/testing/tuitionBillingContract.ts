@@ -201,6 +201,36 @@ export function tuitionBillingContract(name: string, make: () => Promise<{ harne
       assert.equal((await previewStatement(ctx("tahasin@example.test", "2026-12-02T09:00:00.000Z"), clientId, "2026-11"))?.paymentsReceivedPence, 0);
     });
 
+    test("a payment counted on an issued statement is never counted again, and the statement reads back as it was written", async () => {
+      const { clientId } = await h.family("Counted Family");
+      const kid = await child(clientId, "Noor");
+      const a = await assignment((await tutor()).id, [kid.id]);
+      await repo.familyRates.create({ clientId, assignmentId: a.id, hourlyPence: 3000, contractStart: "2026-01-01", contractEnd: "2026-12-31", createdBy: admin });
+      await lesson(a, "2026-09-08T16:00:00Z");
+      const actor = { id: admin, email: "a@example.test" };
+      await issueStatement(ctx("tahasin@example.test", "2026-10-02T09:00:00.000Z"), clientId, "2026-09", actor);
+      const pay = await recordPayment(ctx("tahasin@example.test", "2026-10-03T09:00:00.000Z"), { clientId, amountPence: 3000, receivedOn: "2026-10-03", method: "Bank transfer", note: "September" }, actor);
+      await lesson(a, "2026-10-06T16:00:00Z");
+      const october = await issueStatement(ctx("tahasin@example.test", "2026-11-02T09:00:00.000Z"), clientId, "2026-10", actor);
+      assert.deepEqual(october.paymentIds, [pay.id]);
+      assert.equal(october.paymentsReceivedPence, 3000);
+
+      // read back from the store, not the object the insert returned: arrays and objects, never JSON text
+      const stored = await repo.statements.getById(october.id);
+      assert.ok(Array.isArray(stored?.lines), "lines is an array");
+      assert.equal(stored?.lines.length, 1);
+      assert.deepEqual(stored?.paymentIds, [pay.id]);
+      assert.equal(typeof stored?.company, "object");
+      assert.equal(stored?.company.companyNumber, COMPANY.companyNumber);
+
+      await lesson(a, "2026-11-10T16:00:00Z");
+      const november = await previewStatement(ctx("tahasin@example.test", "2026-12-02T09:00:00.000Z"), clientId, "2026-11");
+      assert.equal(november?.paymentsReceivedPence, 0, "the payment was already counted in October");
+      assert.deepEqual(november?.paymentIds, []);
+      assert.equal(november?.openingBalancePence, 3000);
+      assert.equal(november?.closingBalancePence, 6000);
+    });
+
     test("an earlier month must be issued first", async () => {
       const { clientId } = await h.family("Order Family");
       const kid = await child(clientId, "Zara");
