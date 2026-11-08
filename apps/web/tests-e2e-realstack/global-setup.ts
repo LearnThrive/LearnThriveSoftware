@@ -14,7 +14,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { authAdmin, makeAccount, openSql, readStack, repoRoot, writeFixture, type Account, type Sql, type Stack } from './_stack';
+import { authAdmin, clearBilling, makeAccount, openSql, readStack, repoRoot, writeFixture, type Account, type Sql, type Stack } from './_stack';
 
 const WEB = join(repoRoot(), 'apps', 'web');
 const PASSWORD = 'a settled password of their own';
@@ -59,6 +59,8 @@ async function clearFixtures(stack: Stack, sql: Sql): Promise<void> {
   const clients = (await sql`select id from public.clients where owner_profile_id = any(${profiles})`).map((r) => r.id as string);
   const students = clients.length ? (await sql`select id from public.students where client_id = any(${clients})`).map((r) => r.id as string) : [];
   const tutors = (await sql`select id from public.tutors where profile_id = any(${profiles})`).map((r) => r.id as string);
+  // Billing rows first (billing.spec.ts makes them): they refuse the deletes below until they are gone.
+  await clearBilling(sql, clients, tutors);
   if (tutors.length) {
     await sql`delete from public.lessons where tutor_id = any(${tutors})`;
     await sql`delete from public.tuition_assignments where tutor_id = any(${tutors})`;
