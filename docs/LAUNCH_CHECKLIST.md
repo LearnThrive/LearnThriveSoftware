@@ -10,6 +10,8 @@ Written 2 November 2026. How to take the monorepo (`apps/web`, `packages/data`, 
 
 **Update 7 Nov 2026.** Tahasin's answers are recorded in [OWNER_ANSWERS_2026-11-07.md](OWNER_ANSWERS_2026-11-07.md). They **reverse** two decisions below (**lessons are now to be recorded for safeguarding, once the privacy work is done; the DPIA is reopened**) and **change the payments design** (monthly billing in arrears; the family payment method, and so whether Stripe is used, is not confirmed). Where Phase 0 or task 3.10 below still says the old thing, the 7 Nov answers win. Nothing is to be recorded and no public wording is to change until the items marked OPEN there are closed.
 
+**Update 8 Nov 2026: no separate staging project.** Brian decided to do all the testing on `learnthrive-prod` itself while it holds no real data, rather than paying for a second project (on the Pro plan the $10 compute credit covers one project; a second Micro project is about $10 a month more, billed hourly). Checked read-only that day: still only `0001`–`0009`, 0 rows in every public table, 0 auth users, 0 stored files, no `learnthrive_server` role. Wherever this checklist says **staging**, it now means `learnthrive-prod` before any real person's data is loaded (4.1), and the test data is cleared before the first real account goes in (7.12).
+
 **How to use it.** Work the phases in order; a phase's "Done when" lines are the evidence you need before starting the next. Tick a box only with evidence (a command output, a screenshot, a dashboard value). Owner = a decision or account only the business owners can supply. Build = code or config work. Ops = something done in a dashboard or shell.
 
 **Rules that apply throughout.**
@@ -91,12 +93,12 @@ None of these can be defaulted by an engineer. For each, write the answer and th
 - Legal review of `apps/web/LEGAL_REVIEW.md` sections for cookies, privacy, accounts, payments and the portal.
 
 ### 0.5 Staff access: DECIDED
-- **Alvi Hossain, Tahasin Hasan and Abdurrahman Mustafa are each admin and tutor. Brian is admin only.** Accounts are created manually (0.2). A person who is both an admin and a tutor **is built** (task 3.11), and its guards were tested on real data on 4 Nov 2026 (`docs/SCOPING_AUDIT.md`); it is still to be exercised with real accounts in staging (7.5). Staff multi-factor sign-in for the site's own admins is still **not built** (3.6); with four admins and usernames, use long unique passwords.
+- **Alvi Hossain, Tahasin Hasan and Abdurrahman Mustafa are each admin and tutor. Brian is admin only.** Accounts are created manually (0.2). A person who is both an admin and a tutor **is built** (task 3.11), and its guards were tested on real data on 4 Nov 2026 (`docs/SCOPING_AUDIT.md`); it is still to be exercised with test accounts on `learnthrive-prod` (7.5), then with the real staff accounts once they are created after the clean-up (4.9). Staff multi-factor sign-in for the site's own admins is still **not built** (3.6); with four admins and usernames, use long unique passwords.
 
 ### 0.6 Infrastructure: decisions recorded
 - **Classroom video: Cloudflare SFU plus TURN, for up to 10 students per lesson.** Alvi created a serverless SFU on Cloudflare and will supply the **TURN keys**. A peer-to-peer mesh cannot carry 10 students (each person would upload to every other), so the SFU is required, not optional: task 3.13, now a launch blocker for any lesson of more than a few students. The code today is mesh plus TURN with a hard limit of one tutor and three students.
 - **Classroom server: DECIDED and BUILT, `server.ts` in production** on one Render instance (`npm run serve --workspace=apps/web`, see 3.1). Cloudflare does not host the Socket.IO signalling, so this stays our process.
-- **Staging Supabase project:** a second project is only for rehearsing migrations and flows without touching production data; it is **not** needed for the SFU. I recommend creating one, because migrations `0010`–`0016` have never run on a hosted project. Alvi said to ask when it is needed: it is needed before 4.2.
+- **Staging Supabase project: DECIDED (8 Nov 2026), none.** Testing happens on `learnthrive-prod` while it is still empty of real data, and the test data is cleared before real accounts are created (4.1, 7.12). A second project would cost about $10 a month on top of the Pro plan. After real data is loaded there is nowhere hosted to rehearse a migration, so later migrations (collecting payments, recordings) are rehearsed on the local real stack (`npm run test:realstack`) and, if a hosted rehearsal is wanted, on a short-lived Supabase preview branch (billed by the hour, about $0.013 an hour for Micro, not covered by the compute credit or the spend cap), deleted afterwards. *(Before 8 Nov the recommendation was a second project, to ask Alvi about before 4.2.)*
 - **Supabase Data API: stays on**, `public` schema only (the probes in `supabase:verify` confirm what a browser key can reach).
 - **Backups:** point-in-time recovery on or off is still open (recommended on).
 - **Error reporting and analytics:** none (the cookie page assumes none).
@@ -289,7 +291,7 @@ Written up in `docs/RETENTION_AND_DELETION.md` ("When a student or a tutor leave
 | 3.7.4 Backups | **done in words**: the privacy notice says a backup keeps a copy until it ages out, and the runbook's restore step re-runs the purges since the backup |
 | 3.7.5 A log without personal data | **done**: `public.data_purges` holds the date, the administrator, the kind and counts, and nothing else |
 | 3.7.6 Tests | **done**: the sweep, the sign-in, the non-admin and the untouched sibling, all on the real stack (below) |
-| Rehearsal purge on staging | **NOT DONE**: there is no staging project yet (Phase 4) |
+| Rehearsal purge on staging | **NOT DONE**: to be done on `learnthrive-prod` with test accounts, after Phase 4 and before the clean-up in 7.12 |
 | Purging someone with billing records (`0021`) | **OPEN, waiting on the owners** (found 8 Nov 2026): the purge refuses a family with any billing record and a tutor with a pay rate. It fails safely, deleting nothing, so it is not a launch risk, but nobody with billing records can be purged until it is built. The proposal and the four questions are question 13 in [OWNER_ANSWERS_2026-11-07.md](OWNER_ANSWERS_2026-11-07.md) |
 
 **What the tests prove** (`npm run test:realstack` and `npm run test:e2e:realstack`): the contract runs on the in-memory provider,
@@ -383,7 +385,7 @@ the SQL function did not do it.
 - **3.11.3 Update every guard** that tests the role: the classroom join (and the join window, which differs for tutors), availability pages, the calendar's "can join" check, lesson visibility, notifications, search, navigation and shortcuts, report and attendance rules (an admin teaching a lesson acts as its tutor; an admin not teaching it acts as an admin), and the palette.
 - **3.11.4 Tests.** A tutor-admin sees both the tutor tools and the admin screens; teaches and joins their own lesson; cannot act as the tutor of someone else's lesson (only as admin); an admin who is not a tutor still cannot join as one; a tutor who is not an admin gets no admin screen; add IDOR cases for each.
 - **Launch accounts that need this:** **Alvi Hossain, Tahasin Hasan and Abdurrahman Mustafa** are each admin and tutor. **Brian** is admin only (he must not see tutor tools such as availability, and must not appear in tutor lists).
-- **Done when.** The above tests pass, and real accounts of both kinds (admin and tutor, admin only) are exercised in staging (7.5).
+- **Done when.** The above tests pass, test accounts of both kinds (admin and tutor, admin only) are exercised on `learnthrive-prod` in 7.5, and the four real staff accounts are checked once created after the clean-up (4.9, 9.2).
 
 ### 3.12 Careers applications in the database, viewed by admins (required if you want them open at launch) — BUILT (6 November 2026); the forms stay closed until 3.12.7
 
@@ -448,14 +450,21 @@ notice; the notification types are a database check constraint and were left alo
 
 ## Phase 4: Hosted Supabase (`learnthrive-prod`)
 
-Every step here needs the owner present or approving. **Not empty of migrations:** when checked read-only on 2 November 2026 the project already had `0001`–`0009` applied (by someone outside this checkout) and held no data. Re-check in 4.2 before pushing anything.
+Every step here needs the owner present or approving. **Not empty of migrations:** when checked read-only on 2 November 2026 the project already had `0001`–`0009` applied (by someone outside this checkout) and held no data; checked again on 8 November 2026, unchanged (no rows, no auth users, no files, buckets `library` and `chat-uploads` only, no `learnthrive_server` role). Re-check in 4.2 before pushing anything.
 
 **Run it from an up-to-date `main`**, with `0021` already proved on the real local stack (8 Nov 2026: `supabase db reset` applies `0001`–`0021` from nothing, and `npm run test:realstack` passes). **The operator scripts need a real terminal:** against a hosted project, `create-server-role`, `create-account`, `promote-admin` and `supabase:smoke` each ask for the host to be typed again, so the owner runs them in their own terminal (in Claude Code, a `!` command does the same), with each secret set for that one shell session only. Never paste a password, key or connection string into a chat.
 
+**In Windows PowerShell, type `npm.cmd`, not `npm`.** PowerShell's `npm` wrapper swallows the `--` before a script's own flags, so npm takes them as its own and drops them **silently**: on 8 Nov 2026 `npm run supabase:verify ... -- --expect-signup closed` ran as `supabase-verify.mjs closed`, fell back to "open" and reported sign-ups being open as a PASS. `npm.cmd run ... -- --flag` passes them through (or call `node apps/web/scripts/<script>.mjs --flag` directly). Check the line npm echoes under the script name: your flags must be on it. Set a secret with `Read-Host -AsSecureString`, and run one line at a time.
+
 **Which connection string where:** `DATABASE_ADMIN_URL` (4.5 only) is the `postgres` user's connection string (dashboard → Connect), used once to create the role. Every later step's `DATABASE_URL` is the **narrow role through the pooler**: port 6543, user `learnthrive_server.vwsjvdpkgjhwmqmufmrh`, the password from 4.5. That is the same string Render gets in 6.2.
 
-### 4.1 Choose staging vs production order
-- If you chose a staging project (0.6), do all of Phase 4 and 5–8 on **staging first** (with `ALLOWED_ORIGINS` and Redirect URLs for the staging host only), then repeat on production.
+**Every connection string ends `?sslmode=require`** (both `DATABASE_URL` and `DATABASE_ADMIN_URL`): `postgresql://learnthrive_server.vwsjvdpkgjhwmqmufmrh:<password>@aws-0-eu-west-2.pooler.supabase.com:6543/postgres?sslmode=require`. With SSL enforcement on (4.6) the database refuses anything else (`ESSLREQUIRED: SSL connection is required`), and the site's driver (`postgres` 3.4.9) only uses TLS when the URL asks for it. URL-encode the password (`[uri]::EscapeDataString(...)` in PowerShell).
+
+### 4.1 Staging is `learnthrive-prod` before real data - DECIDED (8 November 2026)
+- There is no separate staging project (0.6). Do Phase 4 once, on `learnthrive-prod`, and use the same project for the testing in Phases 5–7 while it holds **only test data**: fresh test accounts, never a real family, tutor or child.
+- **While testing,** point the Supabase Site URL, Redirect URLs and `ALLOWED_ORIGINS` at the host you are testing on (for example the Render service's `onrender.com` address). Switch them to `https://www.learnthrivetuition.co.uk` exactly (4.6) at the cutover in 8.1, and re-run `supabase:verify` afterwards.
+- **Do the rehearsals in this window,** because nothing real can be lost: the purge rehearsal (3.7), the restore rehearsal (4.10), and if needed a full reset of the project.
+- **No real person's data goes in until 7.12 is done.** That includes the four staff accounts: **decided (8 Nov 2026), they are created after the clean-up** (4.9 runs after 7.12), so the clean-up can delete every login without exceptions. For the testing itself, make throwaway administrator accounts with `create-account.mjs` (test usernames, no real names or emails); 7.12 removes them with everything else.
 
 ### 4.2 Link and dry run
 - `npx supabase link --project-ref vwsjvdpkgjhwmqmufmrh`; the CLI asks for the database password, which the owner types (or sets `SUPABASE_DB_PASSWORD` for that shell only).
@@ -465,15 +474,19 @@ Every step here needs the owner present or approving. **Not empty of migrations:
 ### 4.3 Push
 - On approval: `npx supabase db push`. Confirm `npx supabase migration list` shows all twenty-one (`0001`–`0021`) on both sides, and that the buckets `library`, `chat-uploads` and `careers` exist and are private (dashboard → Storage).
 - If a later migration is added before launch (collecting payments, recordings), repeat 4.2 and 4.3 for it, then re-run 4.5.
+- **Done (8 November 2026), 4.2 and 4.3.** Linked with CLI 2.121.0 (it used a temporary login role, so the database password was not needed or tested). `migration list` showed `0001`–`0009` remote; the dry run listed exactly `0010`–`0021`; the local migrations were identical to `origin/main`. `db push` applied all twelve without error. Checked read-only afterwards: `0001`–`0021` recorded remotely; 50 tables in `public`, matching `EXPECTED_TABLES`, with forced RLS on exactly the 42 in `FORCED_TABLES`; buckets `library`, `chat-uploads` and `careers`, all private; 0 auth users; the only rows are the two seeded settings singletons (`platform_settings`, `tuition_billing_settings`). The table comment on `chat_sessions` still says "Study Buddy" (`0004` was pushed before the 26 Oct rename); harmless, and the reset in 7.12 replays the current text.
 
 ### 4.4 Advisors
 - Run the Security and Performance advisors (dashboard → Database → Advisors). Resolve **every security warning** in a new migration (not in the dashboard). Record the result.
+- **Run 8 November 2026, after `0021`. Security:** one WARN, `public.request_chat_deletion(uuid)` is a `SECURITY DEFINER` function the `authenticated` role can call. **Intentional** (`0005`, redefined in `0010`): it is how an adult deletes their own chat; it fixes `search_path = ''`, only touches a session whose `client_id` is the caller's family and that is not a learner's, returns false otherwise, and is closed to `anon` (`rls.test.ts`, `realstack.test.ts`). It belongs to LearnThrive AI, which is off at launch. **Decided (8 Nov 2026): accepted, no migration.** The site's own code never calls it (it is part of the API contract in `docs/SUPABASE_MIGRATION.md`, proven by the RLS and real-stack tests), and revoking it would mean changing those tests and the design for a function that does exactly what it should. Revisit only if LearnThrive AI ships with chat deletion done through the server role instead. 32 INFO `rls_enabled_no_policy`: by design, those tables are server-only (no API grants, `docs/SUPABASE_MIGRATION.md`). **Performance:** 9 WARN `multiple_permissive_policies` (separate admin and family read policies, by design and negligible at this size); INFO only otherwise (43 unindexed foreign keys, mostly "by whom" audit columns, a few on `student_id`, `tutor_id` or `assignment_id`; harmless at this size, worth an index only if a page or a purge gets slow; 59 unused indexes, expected on an empty database; Auth connection pool absolute rather than a percentage, irrelevant on Micro).
+- **Re-run 8 November 2026, after the dashboard settings (4.6), the smoke test (4.8) and the test administrator:** unchanged. Security: the same accepted WARN and the same 32 INFO. Performance: the same 9 WARN and INFO only (43 unindexed foreign keys, 41 unused indexes now that the smoke test has used some, the Auth pool note). **Nothing new; advisors clean as decided.**
 
 ### 4.5 Create the narrow database role
 - The owner generates a password: `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`.
 - In one shell session: `DATABASE_ADMIN_URL=... LEARNTHRIVE_SERVER_PASSWORD=... node apps/web/scripts/create-server-role.mjs --host <db host>` and type the confirmation. It must come **after** 4.3: it grants the tables that exist when it runs, so a table pushed later is unreachable by the site until it is run again. **Re-run after any migration that adds a table.**
 - Keep the password in the password manager: it goes into `DATABASE_URL` for 4.8, 4.9 and Render (6.2).
 - Note: a password change takes 10–16 s to reach the pooler; failed bursts trip a 1-minute circuit breaker.
+- **Done (8 November 2026)**, through the session pooler (`aws-0-eu-west-2.pooler.supabase.com:5432`; the direct `db.` host is IPv6 only). The script reported `bypassrls true, superuser false, 50 public tables granted`. Checked read-only afterwards: can log in, cannot create roles or databases, connection limit 30, 30 s statement and idle-in-transaction timeouts, table grants on exactly the 50 `public` tables and none elsewhere, and execute on exactly the thirteen functions `grantStatements` lists. The role password is in the owner's password manager. The database (`postgres`) password was confirmed correct the same day (`migration list` with `SUPABASE_DB_PASSWORD` set).
 
 ### 4.6 Apply every dashboard setting
 - Work through `docs/SUPABASE_DASHBOARD_CHECKLIST.md` section by section and tick each row (Authentication, Data API, Storage, Database, API keys, Billing/spend cap/organisation). The ones that matter most for tuition:
@@ -488,13 +501,16 @@ Every step here needs the owner present or approving. **Not empty of migrations:
   - **Backups daily, PITR per 0.6, SSL enforcement on, network restrictions to Render's outbound addresses if the plan allows, spend cap on, organisation MFA required, DPA accepted and filed.**
 
 ### 4.7 Run the read-only probes
-- `SUPABASE_URL=... SUPABASE_ANON_KEY=... npm run supabase:verify --workspace=apps/web` (add `-- --expect-signup closed`: sign-ups stay off). **No FAIL.**
+- `SUPABASE_URL=... SUPABASE_ANON_KEY=... npm run supabase:verify --workspace=apps/web` (add `-- --expect-signup closed`: sign-ups stay off). **No FAIL.** In PowerShell use `npm.cmd`, or the flag is lost and an open sign-up passes (see the note at the top of Phase 4); the line to look for is `PASS signup sign-up is closed (as chosen: invite only)`.
+- **Done (8 November 2026):** 16 passed, 0 failed, 2 noted (`key-bearer`: the key is also accepted as a bearer token, Supabase's normal behaviour; `hints`: PostgREST's refusal names the table, which cannot be switched off and the repository already makes public). The first run lost `--expect-signup closed` to PowerShell and so showed sign-ups were still **open**; they were switched off in the dashboard and the re-run (`node apps/web/scripts/supabase-verify.mjs --expect-signup closed`) passed.
 
 ### 4.8 Smoke test the whole auth round trip on the hosted project
 - Needs 4.5 (the narrow role) and the API keys from 4.6. In one shell session: `SUPABASE_URL=... SUPABASE_ANON_KEY=... SUPABASE_SERVICE_ROLE_KEY=... DATABASE_URL=... npm run supabase:smoke --workspace=apps/web -- --host <api host>` (the API host, `vwsjvdpkgjhwmqmufmrh.supabase.co`), and type the host when asked.
 - It runs the site's own code: public sign-up is refused, a login made through the Auth Admin API signs in with its username, a temporary password shuts every door but choosing a new one, a one-time reset link works once, and a tiny PDF goes into the private `library` bucket and comes back through a signed link. **No mailbox is involved and nothing is sent.** It writes one test account, one resource and one file, all named by the run, and removes exactly those; if a cleanup step fails it says what remains. Every step prints PASS or FAIL.
+- **Done (8 November 2026): 11 of 11 passed**, and the cleanup removed everything it made (the download audit row, the test resource, its file row and stored file, the test account with its profile and family). The first run failed the five steps that use the narrow role with `ESSLREQUIRED` because `DATABASE_URL` lacked `?sslmode=require` (SSL enforcement had just been switched on); nothing was left behind, and the re-run with it passed.
 
 ### 4.9 First administrators (the four staff accounts)
+- **When: after the clean-up in 7.12, not during Phase 4** (decided 8 Nov 2026, 4.1). Until then, testing uses throwaway administrator accounts made the same way. The steps below are unchanged; only their timing moves.
 - With sign-ups off nobody can sign up, and no screen makes an administrator, by design. The staff accounts are made by `create-account.mjs` (3.2.8), which creates an `ADMIN` directly: **no promote step is needed.** `promote-admin` is only for making an existing account an administrator later (`DATABASE_URL=... npm run db:promote-admin --workspace=apps/web -- --username <username> --host <db host>`).
 - **Before:** agree each person's username with them, and write the list as a JSON file **outside the repository** (the format is in the script's header): Alvi, Tahasin and Abdurrahman as `"role": "ADMIN", "teaches": true` with their subjects, Brian as `"role": "ADMIN"` only (0.5), each with their own real `linkedEmail`.
 - **Dry run:** `SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... DATABASE_URL=... npm run db:create-account --workspace=apps/web -- --file <list.json> --host <the host in DATABASE_URL, i.e. the pooler's>`. It prints names, roles and usernames and changes nothing. **Alvi confirms the output** (3.2.8).
@@ -502,9 +518,10 @@ Every step here needs the owner present or approving. **Not empty of migrations:
 - Every later account (families, children, other tutors) is made from the admin screens (3.2).
 
 ### 4.10 Record and rehearse recovery
-- Read `docs/SUPABASE_RUNBOOK.md`: credential rotation, restore from backup (then re-run the role script and update `DATABASE_URL`), suspending a user, suspected key leak. Do one restore rehearsal on staging.
+- Read `docs/SUPABASE_RUNBOOK.md`: credential rotation, restore from backup (then re-run the role script and update `DATABASE_URL`), suspending a user, suspected key leak. Do one restore rehearsal on `learnthrive-prod` while it still holds only test data (4.1).
 
-**Phase 4 done when:** probes show no FAIL, the smoke test passes, advisors are clean, and a first admin exists.
+**Phase 4 done when:** probes show no FAIL, the smoke test passes, advisors are clean, and a throwaway test administrator exists for Phase 7. The real first administrators (4.9) come after 7.12.
+- **Status (8 November 2026):** 4.3 to 4.8 done; the advisors are clean (4.4); the throwaway administrator `test.admin` (ADMIN only, no tutor record) was made with `create-account.mjs` (dry run, then `--apply`: 1 created, 0 failed). Its temporary password is in a file outside the repository; it is first used on the Render test host (Phase 6), and 7.12 deletes the account. **Left:** 4.10, reading the runbook and the restore rehearsal, which waits until a daily backup taken after the 8 Nov push exists (an earlier one would restore `0001`–`0009` only).
 
 ---
 
@@ -535,7 +552,7 @@ Every step here needs the owner present or approving. **Not empty of migrations:
 ### 6.2 Environment variables (names only; values in the dashboard)
 - **Core:** `NODE_ENV=production`, `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_APP_PORTAL_ENABLED=true` (**build-time**: changing it needs a rebuild).
 - **Email:** `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `ENQUIRY_EMAIL`, and optionally `CAREERS_EMAIL`, `SUBJECT_REQUEST_EMAIL`, `CAPTCHA_SECRET` (64 hex characters: `openssl rand -hex 32`).
-- **Accounts and data:** `SUPABASE_URL`, `SUPABASE_ANON_KEY` (publishable), `SUPABASE_SERVICE_ROLE_KEY` (secret), `DATABASE_URL` (pooler, port 6543, user `learnthrive_server.<ref>`, never `postgres`).
+- **Accounts and data:** `SUPABASE_URL`, `SUPABASE_ANON_KEY` (publishable), `SUPABASE_SERVICE_ROLE_KEY` (secret), `DATABASE_URL` (pooler, port 6543, user `learnthrive_server.<ref>`, never `postgres`, ending `?sslmode=require`: without it every database call fails while SSL enforcement is on).
 - **Classroom:** `CLASSROOM_JOIN_SECRET` (long random, never defaulted), `CLOUDFLARE_TURN_KEY_ID` and `CLOUDFLARE_TURN_API_TOKEN` (server-only; no `NEXT_PUBLIC_TURN_*` in production), and the service's `PORT`.
 - **Payments (task 3.10):** `STRIPE_SECRET_KEY` (a restricted key, live only after 8.2), `STRIPE_WEBHOOK_SECRET`, the tuition price ids or settings the design needs, `STRIPE_AUTOMATIC_TAX` only if the accountant says so, and `NEXT_PUBLIC_SITE_URL` (Stripe sends people back to it). Never `STRIPE_FAKE`.
 - **Learners:** `LEARNER_INVITE_HOURS`, `LEARNER_INVITES_PER_DAY`, `LEARNER_DIRECT_MIN_YEAR` per 0.3.
@@ -598,7 +615,19 @@ Run on the staging deployment (or the production service with the portal still c
 - Confirm the staging site refuses a live Stripe key and the production site refuses a test key.
 - Confirm Library checkout is still closed with the Stripe keys set.
 
-**Phase 7 done when:** every list above is ticked with evidence and no open "must fix" remains.
+### 7.12 Clear the test data from `learnthrive-prod` (before any real account)
+Testing happens on the production project (4.1), so it must be emptied before the first real person is added. Each step writes to the hosted project and needs the owner's go-ahead at that moment; the owner runs the commands in their own terminal.
+1. **Delete every test login** (dashboard → Authentication → Users, or the Auth Admin API). Do not rely on step 3 to remove them: they live in Supabase's own `auth` schema.
+2. **Empty the storage buckets** (`library`, `chat-uploads`, `careers`) through the dashboard or the Storage API, not by deleting rows in SQL, so the files themselves go.
+3. **Reset the database:** `npx supabase db reset --linked`, after checking with `npx supabase projects list` that the linked project is `vwsjvdpkgjhwmqmufmrh`. It drops what the migrations created and applies `0001`–`0021` again. It is destructive by design, which is why it is allowed only here, before real data. The purge tool is not enough on its own: it refuses a family with a billing record or a tutor with a pay rate (3.7, question 13).
+4. **Re-run `create-server-role.mjs`** (4.5). The role survives a reset but its grants were on the dropped tables; then re-run `supabase:verify -- --expect-signup closed` (4.7).
+5. **Check it is empty:** 0 rows in every `public` table, 0 rows in `auth.users`, 0 objects in `storage.objects`, the three buckets present and private, and `npx supabase migration list` showing `0001`–`0021` on both sides. Record the result here with the date.
+6. Put back any dashboard setting changed for testing (4.1): Site URL, Redirect URLs, `ALLOWED_ORIGINS`.
+7. **Then create the four real staff accounts (4.9)**: the first real people on the project.
+
+If the clean-up goes wrong, the project still holds nothing real, so deleting it and creating a fresh one is a last resort. It changes the project ref, keys and connection strings, so every doc and Render variable that names them must be updated.
+
+**Phase 7 done when:** every list above is ticked with evidence, no open "must fix" remains, and 7.12 shows the project empty.
 
 ---
 
@@ -612,7 +641,7 @@ Launch in two steps so the riskier part opens last.
 - Submit the sitemap in Search Console; add the uptime monitor; record results in `LEGAL_REVIEW.md` ("What was checked after deployment").
 
 ### 8.2 Step two: open the portal
-- Preconditions: Phases 2–7 done, the first admin exists, staff accounts created and linked, and real data loaded per Phase 9 (or a deliberately empty start).
+- Preconditions: Phases 2–7 done (including the clean-up in 7.12), the first admin exists, staff accounts created and linked, and real data loaded per Phase 9 (or a deliberately empty start).
 - Rebuild/redeploy with `NEXT_PUBLIC_APP_PORTAL_ENABLED=true` (it is build-time). Sign-ups **stay off**; re-run `supabase:verify -- --expect-signup closed`. The first real accounts are created by an admin (3.2).
 - **Payments go live in this step, not before.** Complete the 3.10.14 gates: swap in the live restricted key and live webhook secret in Render, register the live webhook endpoint, make one real small payment and refund with the owner's own card, check the statement descriptor and receipt, and turn on Stripe's webhook-failure alerts. Until then keep Stripe in test mode and tell families fees are invoiced outside the site.
 - Immediately: run the smoke suite, sign in as the real admin, run a throwaway test lesson through the classroom, and confirm the 7.8 switch audit again on the live URL.
@@ -678,10 +707,10 @@ Launch in two steps so the riskier part opens last.
 | 3.13 Cloudflare SFU, 10 students | An hour-long lesson with 11 people on real devices | built and tested against fakes; needs the keys and a real-device test |
 | 3.8 Observability | Readiness check, error and process logs, a runbook | **code built** (6 Nov 2026): `/api/health/ready`, `server-error` lines, heartbeat, structured classroom failures, `docs/OBSERVABILITY.md`. The uptime monitor, log retention and alerts wait for the Render service |
 | 3.7 Purge tool | A purged person leaves only the documented exceptions | **built and proven locally** (4 Nov 2026): the pause, the purge, the counts-only log, and the sweep that finds nothing. The staging rehearsal waits for Phase 4 |
-| 4 Hosted Supabase | Project migrated, configured, smoke-tested, first admin | open |
+| 4 Hosted Supabase | Project migrated, configured, smoke-tested, first admin | **nearly done** (8 Nov 2026): migrated, role made, dashboard set, probes 16/0, smoke 11/11, advisors clean, test admin made; the restore rehearsal (4.10) is left. The real staff accounts come after 7.12 |
 | 5 Domain and email | Deliverable mail, DNS ready | open |
 | 6 Render | Service running with a validated environment | open |
-| 7 Staging soak | Every role, device, switch and probe checked | open |
+| 7 Staging soak | Every role, device, switch and probe checked, on `learnthrive-prod` with test data, then the test data cleared (7.12) | open |
 | 8 Go-live | Public first, then portal; rollback ready | open |
 | 9 Data | Staff, families, learners loaded and verified | open |
 | 10 Run | Monitoring, routines, 30-day review | open |
