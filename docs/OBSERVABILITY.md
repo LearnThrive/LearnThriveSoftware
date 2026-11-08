@@ -41,6 +41,7 @@ would pass it, so **callers must never pass one**. Review any new `logOutcome` c
 | --- | --- | --- |
 | `server` | `server.ts` | `started` (mode, media `sfu`/`mesh`, `maxStudents`); `heartbeat` every 5 minutes; `stopping` (signal, and the rooms and participants a restart ends); `failed` (the listen error's code) |
 | `server-error` | `src/instrumentation.ts` (`onRequestError`) | `error`: any page, route, server action or proxy that threw. Fields: `route` (the file pattern, e.g. `/dashboard/admin/students/[id]/page`), `routeType`, `method`, `kind`, `digest` |
+| `request-aborted` | `src/instrumentation.ts` (`onRequestError`) | `client_gone`, on stdout: a page cut short because the **browser** went away (someone clicked on, reloaded or lost signal while it was still streaming in). Same fields as `server-error`. Not a server failure, so it is kept out of `server-error` (it was all 7 of the `server-error` lines in one real-stack run before 8 Nov 2026). Recognised exactly: React's two stream messages and Next's `ResponseAborted`; a timeout of the site's own is still a `server-error` (`clientWentAway` in `src/lib/observability.ts`) |
 | `readiness` | `/api/health/ready` | `ok` / `failing` when the state changes, with each check |
 | `account-signin` | sign-in | `ok`, `locked`, `invalid_credentials`, `account_disabled`, `rate_limited`, `forbidden_origin`, `unavailable` |
 | `account-forgot`, `account-password`, `account-verify` | password reset and change | `sent`, `ok`, `failed`, `rate_limited` |
@@ -76,7 +77,8 @@ When a page fails on the server, the error page shows **"Reference: `<digest>`"*
 
 | Search | Means | Do |
 | --- | --- | --- |
-| `"event":"server-error"` | A page, route or action threw | Read `route` and `digest`. More than a handful an hour is an incident |
+| `"event":"server-error"` | A page, route or action threw | Read `route` and `digest`. More than a handful an hour is an incident. **Match this JSON field, not the word `Error`:** Next also prints its own `⨯ Error: The destination stream errored…` line each time a browser leaves a page early, which is not a failure (see `request-aborted`) |
+| Many `"event":"request-aborted"`, with high `loopP99Ms` | People are giving up on pages that are too slow | A few an hour is normal browsing. A rise together with a slow heartbeat means the server is struggling: look at `route` for the slow page |
 | `"event":"readiness","outcome":"failing"` | The database, Auth or the classroom is not answering | Check Supabase status and the dashboard; `SUPABASE_RUNBOOK.md` |
 | No `"outcome":"heartbeat"` for 10 minutes | The process is stuck or restarting | Check Render's events and the last lines before the gap |
 | `"outcome":"heartbeat"` with `loopP99Ms` above 200 | The server is overloaded | Lessons will stutter. Look at `rooms`, `participants` and `rssMb` |

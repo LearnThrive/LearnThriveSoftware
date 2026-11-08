@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { loadTsFrom } from "./_tsLoader.mjs";
 
 // Launch checklist 3.8 (docs/OBSERVABILITY.md): readiness, the server-error line, the heartbeat and the log line itself.
-const { readiness, requestErrorFields, heartbeatFields, registerClassroom, classroomInfo, forgetClassroom } = loadTsFrom(import.meta.url, "../src/lib/observability.ts");
+const { readiness, requestErrorFields, requestErrorLine, clientWentAway, heartbeatFields, registerClassroom, classroomInfo, forgetClassroom } = loadTsFrom(import.meta.url, "../src/lib/observability.ts");
 const { logOutcome } = loadTsFrom(import.meta.url, "../src/lib/log.ts");
 
 const PRODUCTION_OPEN = { NODE_ENV: "production", NEXT_PUBLIC_APP_PORTAL_ENABLED: "true" };
@@ -83,6 +83,35 @@ test("a server error line reduces anything unexpected to a safe value", () => {
   assert.deepEqual(fields, { kind: "other", route: "other", routeType: "render" });
   assert.deepEqual(requestErrorFields("a thrown string", {}, {}), { kind: "string", route: "other" });
   assert.equal(requestErrorFields(Object.assign(new Error(), { digest: "has spaces in it" }), {}, {}).digest, undefined);
+});
+
+test("a browser that went away is recognised exactly: React's two stream messages and Next's ResponseAborted, nothing else", () => {
+  assert.equal(clientWentAway(new Error("The destination stream errored while writing data.")), true);
+  assert.equal(clientWentAway(new Error("The destination stream closed early.")), true);
+  assert.equal(clientWentAway(Object.assign(new Error("aborted"), { name: "ResponseAborted" })), true);
+  // The site's own timeouts on Supabase Auth and Cloudflare are real failures, and so is anything else.
+  assert.equal(clientWentAway(Object.assign(new Error("This operation was aborted"), { name: "AbortError" })), false);
+  assert.equal(clientWentAway(Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" })), false);
+  assert.equal(clientWentAway(new Error("connect ECONNREFUSED 127.0.0.1:6543")), false);
+  // Exact, not "contains": a real error that happens to quote the words is still a real error.
+  assert.equal(clientWentAway(new Error("Upload failed: The destination stream errored while writing data. Retrying")), false);
+  assert.equal(clientWentAway("The destination stream closed early."), false);
+  assert.equal(clientWentAway(null), false);
+});
+
+test("a page cut short by the browser is a request-aborted line on stdout; a real failure is still a server-error on stderr", () => {
+  const context = { routePath: "/dashboard/admin/billing/[clientId]/page", routeType: "render" };
+  const gone = requestErrorLine(Object.assign(new Error("The destination stream errored while writing data."), { digest: "3046761917" }), { method: "GET" }, context);
+  assert.equal(gone.stream, "stdout");
+  assert.deepEqual(JSON.parse(gone.line), { event: "request-aborted", outcome: "client_gone", kind: "Error", digest: "3046761917", route: "/dashboard/admin/billing/[clientId]/page", routeType: "render", method: "GET" });
+  assert.doesNotMatch(gone.line, /destination stream/, "the message is never logged, even for this");
+
+  const failed = requestErrorLine(Object.assign(new Error("relation does not exist"), { digest: "17" }), { method: "GET" }, context);
+  assert.equal(failed.stream, "stderr");
+  assert.equal(JSON.parse(failed.line).event, "server-error");
+  assert.equal(JSON.parse(failed.line).outcome, "error");
+  const timedOut = requestErrorLine(Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" }), {}, context);
+  assert.equal(JSON.parse(timedOut.line).event, "server-error", "a timeout of our own is a server error");
 });
 
 test("the heartbeat is counts and sizes only", () => {
