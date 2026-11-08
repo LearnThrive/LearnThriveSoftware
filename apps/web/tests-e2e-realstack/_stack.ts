@@ -138,6 +138,31 @@ export async function recoveryTokenFor(sql: Sql, username: string): Promise<stri
   return row.recovery_token as string;
 }
 
+/**
+ * Removes the tuition billing rows (migration 0021) that hang off these families and tutors, so the fixtures under them can be deleted.
+ * The billing tables point at families, tutors and assignments with `restrict` (financial records are kept when people leave), and issued
+ * statements are append-only by trigger, so a plain delete of a family with a statement is refused twice over. This is test cleanup on the
+ * LOCAL stack only: the append-only trigger is switched off for the one delete, inside a transaction, and back on before it commits. The
+ * billing audit has no foreign keys and is append-only too; its rows name only ids, so they are left.
+ */
+export async function clearBilling(sql: Sql, clients: string[], tutors: string[]): Promise<void> {
+  await sql.begin(async (tx) => {
+    if (clients.length) {
+      await tx`alter table public.tuition_statements disable trigger tuition_statements_append_only`;
+      await tx`delete from public.tuition_statements where client_id = any(${clients})`;
+      await tx`alter table public.tuition_statements enable trigger tuition_statements_append_only`;
+      await tx`delete from public.tuition_payments where client_id = any(${clients})`;
+      await tx`delete from public.tuition_refunds where client_id = any(${clients})`;
+      await tx`delete from public.tuition_family_rates where client_id = any(${clients})`;
+      await tx`delete from public.tuition_family_profiles where client_id = any(${clients})`;
+    }
+    if (tutors.length) {
+      await tx`delete from public.tuition_family_rates where assignment_id in (select id from public.tuition_assignments where tutor_id = any(${tutors}))`;
+      await tx`delete from public.tuition_tutor_rates where tutor_id = any(${tutors})`;
+    }
+  });
+}
+
 export function writeFixture(value: unknown): void {
   writeFileSync(FIXTURE_FILE, JSON.stringify(value, null, 2), 'utf8');
 }
