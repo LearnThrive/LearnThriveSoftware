@@ -162,7 +162,7 @@ Roles cannot be self-assigned: the sign-up trigger always creates `CLIENT`, what
 
 ```bash
 cd apps/web
-DATABASE_URL=<the server connection string> npm run db:promote-admin -- --email person@example.com --host <the database host>
+DATABASE_URL=<the server connection string> npm run db:promote-admin -- --username a.person --host <the database host>
 ```
 
 It refuses unless **all** hold: `--host` is given and is the host of `DATABASE_URL` (even for a local database, `--host 127.0.0.1`); the username belongs to an account; the operator **types the username again** at the prompt; and, for a database that is not on this machine, also types the host, at a real terminal. It writes `profiles.role` through the server connection and prints one counter-only JSON line to the console (host, outcome, how many administrators there are now): never the username or a name. The person must sign in again for it to take effect. An administrator's reach (read accounts for support, never conversations or consents) is proved by a real-stack test.
