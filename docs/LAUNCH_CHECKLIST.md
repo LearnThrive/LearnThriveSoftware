@@ -28,12 +28,12 @@ Confirm each is **unset** in Render's production environment and re-check after 
 | `ASSISTANT_ENABLED`, `ASSISTANT_PRODUCTION_APPROVED`, `ASSISTANT_MINORS_APPROVED`, `ASSISTANT_PROVIDER`, `ASSISTANT_*`, `OLLAMA_API_KEY` | LearnThrive AI is closed in production unless `ASSISTANT_ENABLED` is exactly `true`. |
 | `LIBRARY_ENABLED`, `LIBRARY_PHASE`, `LIBRARY_PRICE_*`, `LIBRARY_VAT_STATUS`, `LIBRARY_TERMS_APPROVED`, `LIBRARY_MIN_PER_SUBJECT`, `LIBRARY_REQUIRED_SUBJECTS` | Library stays "coming soon", nothing can be bought. |
 | `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_ANNUAL` | These are the **Library's** subscription prices. Tuition payments get their own prices (task 3.10). Leave these unset so the Library can never be bought. |
-
-`STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` are **no longer in this list**: tuition payments need them. Because the Library shares the same Stripe code, task 3.10.6 and the switch audit (7.8) must prove that setting Stripe keys does **not** open Library checkout (it needs `LIBRARY_PHASE=live`, a price, a VAT status, a content threshold and approved terms).
 | `VOICE_*` | Voice is closed in production whatever these say. |
 | `CAREERS_OPEN_FOR_TESTING`, `STRIPE_FAKE`, `NEXT_PUBLIC_MOTION_DEBUG` | Development or test only. |
 
-**Caveat.** Building with `NEXT_PUBLIC_APP_PORTAL_ENABLED=true` makes `decide()` in `apps/web/src/lib/portal.ts` let everything except `/dev` and `/api/dev` through, including `/library/**` and `/api/assistant/**`. Those routes then rely on their own switches above. Task 8.6 proves they stay closed.
+`STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` are **no longer in this list**: tuition payments may need them (since 7 Nov 2026, whether families pay through Stripe is not confirmed: see 0.1). Because the Library shares the same Stripe code, task 3.10.6 and the switch audit (7.8) must prove that setting Stripe keys does **not** open Library checkout (it needs `LIBRARY_PHASE=live`, a price, a VAT status, a content threshold and approved terms).
+
+**Caveat.** Building with `NEXT_PUBLIC_APP_PORTAL_ENABLED=true` makes `decide()` in `apps/web/src/lib/portal.ts` let everything except `/dev` and `/api/dev` through, including `/library/**` and `/api/assistant/**`. Those routes then rely on their own switches above. The switch audit (7.8, repeated on the live URL in 8.2) proves they stay closed.
 
 ---
 
@@ -91,7 +91,7 @@ None of these can be defaulted by an engineer. For each, write the answer and th
 - Legal review of `apps/web/LEGAL_REVIEW.md` sections for cookies, privacy, accounts, payments and the portal.
 
 ### 0.5 Staff access: DECIDED
-- **Alvi Hossain, Tahasin Hasan and Abdurrahman Mustafa are each admin and tutor. Brian is admin only.** Accounts are created manually (0.2). A person who is both an admin and a tutor **does not work in the code yet** (task 3.11), so three of the four launch accounts depend on it. Staff multi-factor sign-in for the site's own admins is still **not built** (3.6); with four admins and usernames, use long unique passwords.
+- **Alvi Hossain, Tahasin Hasan and Abdurrahman Mustafa are each admin and tutor. Brian is admin only.** Accounts are created manually (0.2). A person who is both an admin and a tutor **is built** (task 3.11), and its guards were tested on real data on 4 Nov 2026 (`docs/SCOPING_AUDIT.md`); it is still to be exercised with real accounts in staging (7.5). Staff multi-factor sign-in for the site's own admins is still **not built** (3.6); with four admins and usernames, use long unique passwords.
 
 ### 0.6 Infrastructure: decisions recorded
 - **Classroom video: Cloudflare SFU plus TURN, for up to 10 students per lesson.** Alvi created a serverless SFU on Cloudflare and will supply the **TURN keys**. A peer-to-peer mesh cannot carry 10 students (each person would upload to every other), so the SFU is required, not optional: task 3.13, now a launch blocker for any lesson of more than a few students. The code today is mesh plus TURN with a hard limit of one tutor and three students.
@@ -448,24 +448,31 @@ notice; the notification types are a database check constraint and were left alo
 
 ## Phase 4: Hosted Supabase (`learnthrive-prod`)
 
-Every step here needs the owner present or approving. **Not empty of migrations:** when checked read-only on 2 November 2026 the project already had `0001`–`0009` applied (by someone outside this checkout) and held no data. Re-check with `supabase migration list` before 4.2.
+Every step here needs the owner present or approving. **Not empty of migrations:** when checked read-only on 2 November 2026 the project already had `0001`–`0009` applied (by someone outside this checkout) and held no data. Re-check in 4.2 before pushing anything.
+
+**Run it from an up-to-date `main`**, with `0021` already proved on the real local stack (8 Nov 2026: `supabase db reset` applies `0001`–`0021` from nothing, and `npm run test:realstack` passes). **The operator scripts need a real terminal:** against a hosted project, `create-server-role`, `create-account`, `promote-admin` and `supabase:smoke` each ask for the host to be typed again, so the owner runs them in their own terminal (in Claude Code, a `!` command does the same), with each secret set for that one shell session only. Never paste a password, key or connection string into a chat.
+
+**Which connection string where:** `DATABASE_ADMIN_URL` (4.5 only) is the `postgres` user's connection string (dashboard → Connect), used once to create the role. Every later step's `DATABASE_URL` is the **narrow role through the pooler**: port 6543, user `learnthrive_server.vwsjvdpkgjhwmqmufmrh`, the password from 4.5. That is the same string Render gets in 6.2.
 
 ### 4.1 Choose staging vs production order
 - If you chose a staging project (0.6), do all of Phase 4 and 5–8 on **staging first** (with `ALLOWED_ORIGINS` and Redirect URLs for the staging host only), then repeat on production.
 
 ### 4.2 Link and dry run
 - `npx supabase link --project-ref vwsjvdpkgjhwmqmufmrh`; the CLI asks for the database password, which the owner types (or sets `SUPABASE_DB_PASSWORD` for that shell only).
-- `npx supabase db push --dry-run`. It must list exactly the migrations the project does not have yet: `0010`–`0020` if it still holds `0001`–`0009` (twenty in the repo as of 6 Nov 2026, with `0020_careers.sql`). **Stop and show the owner.**
+- `npx supabase migration list` (read only): which migrations the project already has. Expect `0001`–`0009` on the remote side. **Anything else, stop**: someone has changed the project since 2 Nov, and that has to be understood before pushing.
+- `npx supabase db push --dry-run`. It must list exactly the migrations the project does not have yet: `0010`–`0021` if it still holds `0001`–`0009` (twenty-one in the repo as of 8 Nov 2026, the last `0021_tuition_billing.sql`). **Stop and show the owner.**
 
 ### 4.3 Push
-- On approval: `npx supabase db push`. Confirm the migration history lists all twenty (`0001`–`0020`) and the buckets `library`, `chat-uploads` and `careers` exist and are private.
+- On approval: `npx supabase db push`. Confirm `npx supabase migration list` shows all twenty-one (`0001`–`0021`) on both sides, and that the buckets `library`, `chat-uploads` and `careers` exist and are private (dashboard → Storage).
+- If a later migration is added before launch (collecting payments, recordings), repeat 4.2 and 4.3 for it, then re-run 4.5.
 
 ### 4.4 Advisors
 - Run the Security and Performance advisors (dashboard → Database → Advisors). Resolve **every security warning** in a new migration (not in the dashboard). Record the result.
 
 ### 4.5 Create the narrow database role
 - The owner generates a password: `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`.
-- In one shell session: `DATABASE_ADMIN_URL=... LEARNTHRIVE_SERVER_PASSWORD=... node apps/web/scripts/create-server-role.mjs --host <db host>` and type the confirmation. **Re-run after any migration that adds a table.**
+- In one shell session: `DATABASE_ADMIN_URL=... LEARNTHRIVE_SERVER_PASSWORD=... node apps/web/scripts/create-server-role.mjs --host <db host>` and type the confirmation. It must come **after** 4.3: it grants the tables that exist when it runs, so a table pushed later is unreachable by the site until it is run again. **Re-run after any migration that adds a table.**
+- Keep the password in the password manager: it goes into `DATABASE_URL` for 4.8, 4.9 and Render (6.2).
 - Note: a password change takes 10–16 s to reach the pooler; failed bursts trip a 1-minute circuit breaker.
 
 ### 4.6 Apply every dashboard setting
@@ -484,10 +491,15 @@ Every step here needs the owner present or approving. **Not empty of migrations:
 - `SUPABASE_URL=... SUPABASE_ANON_KEY=... npm run supabase:verify --workspace=apps/web` (add `-- --expect-signup closed`: sign-ups stay off). **No FAIL.**
 
 ### 4.8 Smoke test the whole auth round trip on the hosted project
-- `SMOKE_EMAIL=you+smoke@<your domain> npm run supabase:smoke --workspace=apps/web -- --host <api host> --mailbox prompt`. It creates and removes one test account and proves the emailed link points at the right host.
+- Needs 4.5 (the narrow role) and the API keys from 4.6. In one shell session: `SUPABASE_URL=... SUPABASE_ANON_KEY=... SUPABASE_SERVICE_ROLE_KEY=... DATABASE_URL=... npm run supabase:smoke --workspace=apps/web -- --host <api host>` (the API host, `vwsjvdpkgjhwmqmufmrh.supabase.co`), and type the host when asked.
+- It runs the site's own code: public sign-up is refused, a login made through the Auth Admin API signs in with its username, a temporary password shuts every door but choosing a new one, a one-time reset link works once, and a tiny PDF goes into the private `library` bucket and comes back through a signed link. **No mailbox is involved and nothing is sent.** It writes one test account, one resource and one file, all named by the run, and removes exactly those; if a cleanup step fails it says what remains. Every step prints PASS or FAIL.
 
-### 4.9 First administrator
-- With sign-ups off nobody can sign up to become the first admin, and the dashboard's "Add user" needs a real email. The **first admin is created by the account script (3.2.8)**, run once with the owner's approval against the hosted project, then promoted with `DATABASE_URL=... npm run db:promote-admin --workspace=apps/web -- --username <name> --host <db host>` (adapted to usernames in 3.2.2). Every later account comes from the admin screen (3.2); no screen promotes anyone to admin, by design.
+### 4.9 First administrators (the four staff accounts)
+- With sign-ups off nobody can sign up, and no screen makes an administrator, by design. The staff accounts are made by `create-account.mjs` (3.2.8), which creates an `ADMIN` directly: **no promote step is needed.** `promote-admin` is only for making an existing account an administrator later (`DATABASE_URL=... npm run db:promote-admin --workspace=apps/web -- --username <username> --host <db host>`).
+- **Before:** agree each person's username with them, and write the list as a JSON file **outside the repository** (the format is in the script's header): Alvi, Tahasin and Abdurrahman as `"role": "ADMIN", "teaches": true` with their subjects, Brian as `"role": "ADMIN"` only (0.5), each with their own real `linkedEmail`.
+- **Dry run:** `SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... DATABASE_URL=... npm run db:create-account --workspace=apps/web -- --file <list.json> --host <the host in DATABASE_URL, i.e. the pooler's>`. It prints names, roles and usernames and changes nothing. **Alvi confirms the output** (3.2.8).
+- **Real run:** the same with `--apply --passwords <a new file outside the repository>`, then type the host and the number of accounts. The temporary passwords go to that file only; the owner hands each one over privately, and each person must choose their own at first sign-in. Delete the passwords file once they have.
+- Every later account (families, children, other tutors) is made from the admin screens (3.2).
 
 ### 4.10 Record and rehearse recovery
 - Read `docs/SUPABASE_RUNBOOK.md`: credential rotation, restore from backup (then re-run the role script and update `DATABASE_URL`), suspending a user, suspected key leak. Do one restore rehearsal on staging.
