@@ -112,6 +112,40 @@ export function requestErrorFields(
   return fields;
 }
 
+/**
+ * The errors that mean the BROWSER went away, not that the server failed. React's streaming renderer stops a page with one of these two
+ * fixed messages when the response stream it is writing to errors or closes before the page is done (react-dom's renderToPipeableStream:
+ * `destination.on("error" | "close", ...)`), which is what happens every time someone clicks away, reloads or loses signal while a page is
+ * still streaming in. `ResponseAborted` is the error Next itself raises for the same thing in a route handler.
+ *
+ * Deliberately narrow, matched exactly: `AbortError` and `TimeoutError` are NOT here, because the site's own code aborts its calls to
+ * Supabase Auth and Cloudflare on a timeout, and those are real failures. The message is used only to decide; it is never logged.
+ */
+const CLIENT_GONE_MESSAGES = new Set(["The destination stream errored while writing data.", "The destination stream closed early."]);
+
+export function clientWentAway(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const { name, message } = error as { name?: unknown; message?: unknown };
+  return name === "ResponseAborted" || (typeof message === "string" && CLIENT_GONE_MESSAGES.has(message));
+}
+
+/**
+ * The one line onRequestError writes (src/instrumentation.ts). A real failure is a `server-error` on stderr, which the alerts count. A page
+ * cut short because the browser left is a `request-aborted` on stdout instead: the same safe fields, so a sudden rise can still be seen
+ * (people giving up on slow pages), but never counted as the server failing. Measured on the real-stack browser suite before this: 7
+ * `server-error` lines in one run of 20 tests, and every one of them was this.
+ */
+export function requestErrorLine(
+  error: unknown,
+  request: { method?: string },
+  context: { routePath?: string; routeType?: string },
+): { stream: "stdout" | "stderr"; line: string } {
+  const fields = requestErrorFields(error, request, context);
+  return clientWentAway(error)
+    ? { stream: "stdout", line: JSON.stringify({ event: "request-aborted", outcome: "client_gone", ...fields }) }
+    : { stream: "stderr", line: JSON.stringify({ event: "server-error", outcome: "error", ...fields }) };
+}
+
 /** The periodic line server.ts writes: is the process healthy, and how busy is the classroom. Counts only. */
 export function heartbeatFields(input: {
   uptimeSeconds: number;
