@@ -57,7 +57,7 @@ Supabase backups hold the **database**. **They do not hold uploaded files** (the
    - for each family that asked to delete a chat or its account since the backup, delete again (the account page's own "delete" actions, or `delete from auth.users` through the dashboard for erased accounts);
    - a restore that resurrected a deleted account or an un-purged person is a **personal-data incident**: record it and decide with the owners whether anyone must be told.
 4. Check the schema is what the code expects: `npx supabase db push --dry-run` should list nothing to apply (or only newer migrations), and `npm run supabase:verify` must show no FAIL.
-5. Run the smoke test (`npm run supabase:smoke`, `docs/SUPABASE_REAL_STACK.md`) and sign in as a test family.
+5. Run the smoke test (`npm run supabase:smoke`; the command and what it needs are in `docs/LAUNCH_CHECKLIST.md`, 4.8) and sign in as a test family.
 6. **Reopen the site** and write down what was restored, from when, and what was re-deleted.
 
 ## 3. Suspending a user
