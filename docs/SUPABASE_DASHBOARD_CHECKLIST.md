@@ -74,10 +74,10 @@ The owner answers these in chat; **where an answer is missing, the safest defaul
 
 | Setting | Value | Dashboard path | Confirmed by |
 | --- | --- | --- | --- |
-| The site's connection | The **transaction pooler**, port **6543**, as **`learnthrive_server.<project ref>`**, never `postgres` | Connect (pooler, transaction mode) | `npm run check:env -- --env production` (it refuses `postgres`, a direct connection and a local address) |
+| The site's connection | The **transaction pooler**, port **6543**, as **`learnthrive_server.<project ref>`**, never `postgres`, ending **`?sslmode=require`** | Connect (pooler, transaction mode) | `npm run check:env -- --env production` (it refuses `postgres`, a direct connection, a local address and a URL without `sslmode=require`) |
 | The narrow role | Created with `scripts/create-server-role.mjs`; password from the owner, in one shell session. Re-run after a migration adds a table | n/a | `supabase db push`, then the role script, then the smoke test |
 | Postgres password (`postgres`) | Long, random, kept only by the owner; **not** in Render | Project Settings, Database | dashboard only |
-| SSL enforcement | **On** | Project Settings, Database, SSL Configuration | dashboard only |
+| SSL enforcement | **On**. Every connection string must then end `?sslmode=require` (the site's, the role script's and the operator scripts'), or it is refused with `ESSLREQUIRED` | Project Settings, Database, SSL Configuration | the smoke test (launch checklist 4.8) |
 | Network restrictions | Restrict direct access to Render's outbound addresses if the plan allows | Project Settings, Database, Network Restrictions | dashboard only |
 | Backups | **Daily on**; point-in-time recovery per the decision | Database, Backups | dashboard only |
 | Advisors | **Zero security warnings** after the push; resolve each in a new migration | Database, Advisors (Security, Performance) | dashboard or CLI; record the result |
