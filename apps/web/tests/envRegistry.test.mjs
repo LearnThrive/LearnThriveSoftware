@@ -132,7 +132,7 @@ test("local: anything that points at the hosted project fails, in every kind of 
 });
 
 test("production: required variables, forbidden ones, held switches, the pooler and the narrow role", () => {
-  const good = { NODE_ENV: "production", SUPABASE_URL: "https://abcdefghijklmnopqrst.supabase.co", SUPABASE_ANON_KEY: PUB, SUPABASE_SERVICE_ROLE_KEY: SECRET, DATABASE_URL: "postgresql://learnthrive_server.abcdefghijklmnopqrst:pw-pw-pw-pw-pw@aws-0-eu-west-2.pooler.supabase.com:6543/postgres", RESEND_API_KEY: `re_${"x".repeat(30)}`, RESEND_FROM_EMAIL: "hello@example.com", ENQUIRY_EMAIL: "info@example.com", CAPTCHA_SECRET: "c".repeat(40), CLOUDFLARE_TURN_KEY_ID: "k".repeat(16), CLOUDFLARE_TURN_API_TOKEN: "t".repeat(32), CLOUDFLARE_SFU_APP_ID: "a".repeat(32), CLOUDFLARE_SFU_APP_SECRET: "s".repeat(40), CLASSROOM_JOIN_SECRET: "j".repeat(64) };
+  const good = { NODE_ENV: "production", SUPABASE_URL: "https://abcdefghijklmnopqrst.supabase.co", SUPABASE_ANON_KEY: PUB, SUPABASE_SERVICE_ROLE_KEY: SECRET, DATABASE_URL: "postgresql://learnthrive_server.abcdefghijklmnopqrst:pw-pw-pw-pw-pw@aws-0-eu-west-2.pooler.supabase.com:6543/postgres?sslmode=require", RESEND_API_KEY: `re_${"x".repeat(30)}`, RESEND_FROM_EMAIL: "hello@example.com", ENQUIRY_EMAIL: "info@example.com", CAPTCHA_SECRET: "c".repeat(40), CLOUDFLARE_TURN_KEY_ID: "k".repeat(16), CLOUDFLARE_TURN_API_TOKEN: "t".repeat(32), CLOUDFLARE_SFU_APP_ID: "a".repeat(32), CLOUDFLARE_SFU_APP_SECRET: "s".repeat(40), CLASSROOM_JOIN_SECRET: "j".repeat(64) };
   const base = checkEnvironment(good, { mode: "production" });
   assert.equal(base.failures, 0, JSON.stringify(base.rows.filter((r) => ["MISSING", "MALFORMED", "FORBIDDEN"].includes(r.status))));
   assert.equal(base.warnings, 0);
@@ -146,6 +146,14 @@ test("production: required variables, forbidden ones, held switches, the pooler 
   assert.match(status({ ...good, DATABASE_URL: "postgresql://postgres.abcdefghijklmnopqrst:pw-pw-pw-pw-pw@aws-0-eu-west-2.pooler.supabase.com:6543/postgres" }, "production", "DATABASE_URL").note, /narrow learnthrive_server role/);
   assert.match(status({ ...good, DATABASE_URL: "postgresql://learnthrive_server:pw-pw-pw-pw-pw@db.abcdefghijklmnopqrst.supabase.co:5432/postgres" }, "production", "DATABASE_URL").note, /transaction pooler/);
   assert.match(status({ ...good, DATABASE_URL: "postgresql://u:p@127.0.0.1:5432/db" }, "production", "DATABASE_URL").note, /local address/);
+  const pooler = "postgresql://learnthrive_server.abcdefghijklmnopqrst:pw-pw-pw-pw-pw@aws-0-eu-west-2.pooler.supabase.com:6543/postgres";
+  for (const missing of [pooler, `${pooler}?sslmode=prefer`, `${pooler}?sslmode=disable`, `${pooler}?ssl=true`]) {
+    const row = status({ ...good, DATABASE_URL: missing }, "production", "DATABASE_URL");
+    assert.equal(row.status, "MALFORMED", missing.slice(pooler.length) || "no sslmode");
+    assert.match(row.note, /sslmode=require/);
+  }
+  for (const tls of ["?sslmode=verify-full", "?sslmode=verify-ca", "?sslrootcert=system"]) assert.equal(status({ ...good, DATABASE_URL: pooler + tls }, "production", "DATABASE_URL").status, "ok", tls);
+  assert.equal(status({ DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:54322/postgres" }, "local", "DATABASE_URL").status, "ok", "the local stack has no TLS and needs none");
   assert.match(status({ ...good, SUPABASE_URL: "http://127.0.0.1:54321" }, "production", "SUPABASE_URL").note, /local address/);
   assert.match(status({ ...good, ASSISTANT_PROVIDER: "ollama_cloud" }, "production", "ASSISTANT_PROVIDER").note, /only custom qualifies/);
   assert.match(status({ ...good, NEXT_PUBLIC_SITE_URL: "http://example.com" }, "production", "NEXT_PUBLIC_SITE_URL").note, /https/);

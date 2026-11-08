@@ -23,12 +23,14 @@ If the project is still on the **legacy** `anon` / `service_role` JWT keys, rota
 
 ```bash
 # one shell session; the owner generates the password, it never goes in a file
-export DATABASE_ADMIN_URL=...          # the postgres connection (owner only)
+export DATABASE_ADMIN_URL=...          # the postgres connection (owner only), ending ?sslmode=require
 export LEARNTHRIVE_SERVER_PASSWORD=$(node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))")
 node apps/web/scripts/create-server-role.mjs --host <the database host>
 # then immediately put the new password into Render's DATABASE_URL and redeploy
 unset DATABASE_ADMIN_URL LEARNTHRIVE_SERVER_PASSWORD
 ```
+
+Both connection strings end `?sslmode=require` (URL-encode the password): SSL enforcement is on, and the driver only uses TLS when the URL asks, so without it every connection is refused with `ESSLREQUIRED`. In Windows PowerShell set each with `$env:NAME = ...` (a secret via `Read-Host -AsSecureString`) and type `npm.cmd`, not `npm`, before `-- --flag` (launch checklist, Phase 4).
 
 **Two measured behaviours of the pooler** (Supavisor; `docs/SUPABASE_REAL_STACK.md`):
 

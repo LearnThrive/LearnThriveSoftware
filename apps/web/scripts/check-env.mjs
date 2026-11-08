@@ -115,6 +115,11 @@ const CHECKS = {
       if (LOCAL_HOSTS.has(u.hostname)) return "a local address cannot be used in production";
       if (isHostedHost(u.hostname) && u.port !== "6543") return "use the transaction pooler (port 6543), not the direct connection";
       if (decodeURIComponent(u.username).split(".")[0] === "postgres") return "connect as the narrow learnthrive_server role, not postgres (scripts/create-server-role.mjs)";
+      // SSL enforcement is on, and the driver (postgres 3.4.9) only uses TLS when the URL asks: without it every query fails
+      // with ESSLREQUIRED (seen on the hosted project, 8 Nov 2026). `prefer` and `allow` would fall back to plain text.
+      const sslmode = u.searchParams.get("sslmode");
+      const tls = ["require", "verify-ca", "verify-full"].includes(sslmode ?? "") || u.searchParams.get("sslrootcert") === "system";
+      if (!tls) return "end the URL with ?sslmode=require (SSL enforcement refuses any other connection)";
     }
     return null;
   },
