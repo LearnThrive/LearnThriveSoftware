@@ -94,14 +94,8 @@ PGlite stays as the fast, offline proof and runs in every `npm test`. The real s
 
 ## The hosted project: not done, and what it needs
 
-The hosted project (`learnthrive-prod`, London, Postgres 17) is **empty and was not touched**. Plan20's section 5 needs the owner:
+The hosted project (`learnthrive-prod`, London, Postgres 17) is **not migrated past `0009` and holds no data**: when checked read-only on 2 November 2026 it had `0001`–`0009` applied (by someone outside this checkout). Nothing in this document was run against it.
 
-1. **Link:** `npx supabase link --project-ref vwsjvdpkgjhwmqmufmrh`. The CLI asks for the database password; the owner types it (or sets `SUPABASE_DB_PASSWORD` for that shell session only).
-2. **Dry run:** `npx supabase db push --dry-run` lists the nine migrations that would be applied (`0001` to `0009`). **Show it to the owner and stop for approval.** Then `npx supabase db push`.
-3. **Advisors:** run the Security and Performance advisors (dashboard, Database, Advisors, or the CLI) and resolve every security warning in a new migration. The local stack cannot show hosted-only warnings.
-4. **The server role:** the owner generates the password (`node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`), then, in one shell session, `DATABASE_ADMIN_URL=... LEARNTHRIVE_SERVER_PASSWORD=... node scripts/create-server-role.mjs --host <host>` (typed confirmation). Re-run it after any migration that adds a table.
-5. **Probes:** `SUPABASE_URL=... SUPABASE_ANON_KEY=... npm run supabase:verify` (read only).
-6. **Smoke test:** `npm run supabase:smoke -- --host <api host>`. It writes one test account on the internal domain, one resource and one file, removes them, and proves public sign-up is refused, a login made by the Admin API signs in, a temporary password shuts every door but choosing a new one, and a reset link works once. No mailbox is involved: nothing is sent.
-7. **First administrator:** `DATABASE_URL=... npm run db:promote-admin -- --email ... --host ...` after that person has signed up and confirmed.
+**The steps live in one place: Phase 4 of [LAUNCH_CHECKLIST.md](LAUNCH_CHECKLIST.md)** (link, check what is already there, dry run, push `0010`–`0021`, advisors, the narrow role, dashboard settings, probes, the smoke test, the staff accounts, recovery). They were kept here too until 8 Nov 2026 and had drifted (nine migrations, an `--email` flag the scripts no longer take), so this copy was removed rather than kept in step. Every step needs the owner present or approving.
 
 `LIBRARY_ENABLED` and the portal switch stay unset in production throughout.
