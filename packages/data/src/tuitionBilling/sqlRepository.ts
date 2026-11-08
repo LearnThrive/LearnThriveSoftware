@@ -161,7 +161,7 @@ export function createSqlTuitionBilling(db: SqlExecutor): TuitionBillingReposito
             `insert into public.tuition_statements (client_id, period, invoice_number, issued_on, issued_by, client_name, period_start, period_end, lines, lesson_charges_pence,
                missed_lesson_charges_pence, sibling_discount_pence, sibling_discount_percent, sibling_discount_applied, total_charges_pence, payments_received_pence, payment_ids,
                opening_balance_pence, closing_balance_pence, blockers, company)
-             values ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13, $14, $15, $16, $17::jsonb, $18, $19, $20::text[], $21::jsonb) returning *`,
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9::text::jsonb, $10, $11, $12, $13, $14, $15, $16, $17::text::jsonb, $18, $19, $20::text[], $21::text::jsonb) returning *`,
             [draft.clientId, draft.period, invoiceNumber, issuedOn, actorId(issuedBy), draft.clientName, draft.periodStart, draft.periodEnd, JSON.stringify(draft.lines), draft.lessonChargesPence,
               draft.missedLessonChargesPence, draft.siblingDiscountPence, draft.siblingDiscountPercent, draft.siblingDiscountApplied, draft.totalChargesPence, draft.paymentsReceivedPence,
               JSON.stringify(draft.paymentIds), draft.openingBalancePence, draft.closingBalancePence, draft.blockers, JSON.stringify(draft.company)],
@@ -221,7 +221,7 @@ export function createSqlTuitionBilling(db: SqlExecutor): TuitionBillingReposito
     },
     audit: {
       async append(entry) {
-        const [row] = await q("insert into public.tuition_billing_audit (actor_id, action, subject, detail) values ($1, $2, $3, $4::jsonb) returning *", [entry.actorId.slice(0, 100), entry.action.slice(0, 60), entry.subject.slice(0, 200), JSON.stringify(entry.detail ?? {})]);
+        const [row] = await q("insert into public.tuition_billing_audit (actor_id, action, subject, detail) values ($1, $2, $3, $4::text::jsonb) returning *", [entry.actorId.slice(0, 100), entry.action.slice(0, 60), entry.subject.slice(0, 200), JSON.stringify(entry.detail ?? {})]);
         return toAudit(row!);
       },
       async recent(limit) {

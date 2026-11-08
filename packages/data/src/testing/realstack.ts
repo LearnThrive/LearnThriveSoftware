@@ -118,11 +118,13 @@ export async function waitUntilConnects(url: string, { settleMs = 18_000, retryM
 export type Sql = ReturnType<typeof openDb>;
 
 /**
- * The one row `public.platform_settings` is supposed to hold (migration 0011 seeds it; it is a singleton, not data). Truncating the
- * public tables takes it away, and then the settings repository has nothing to update, so put it back.
+ * The single rows the migrations seed: `public.platform_settings` (0011) and `public.tuition_billing_settings` (0021). They are
+ * singletons, not data. Truncating the public tables takes them away, and then their repositories have nothing to read or update, so
+ * put them back.
  */
 export async function ensurePlatformSettings(sql: Sql): Promise<void> {
   await sql`insert into public.platform_settings (singleton) values (true) on conflict (singleton) do nothing`;
+  await sql`insert into public.tuition_billing_settings (singleton) values (true) on conflict (singleton) do nothing`;
 }
 
 /** Empties every table in public (and only on this machine) so a test that needs a fresh database has one. Never takes a URL. */
