@@ -28,6 +28,9 @@ export default defineConfig({
       LEARNTHRIVE_DOCKER: '0',
       NEXT_DIST_DIR: '.next-3105',
       NEXT_PUBLIC_SITE_URL: 'http://localhost:3105',
+      // The one named refund approver (owner answer B11) for billing.spec.ts: an administrator whose linked email this is. A server
+      // already running on this port without it (reuseExistingServer) fails that spec's approval step: stop it first.
+      TUITION_REFUND_APPROVER_EMAILS: 'rs-approver@example.com',
       ASSISTANT_PROVIDER: 'mock',
       VOICE_PROVIDER: 'mock',
       OLLAMA_API_KEY: '',
