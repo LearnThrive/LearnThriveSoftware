@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { uniqueLabel } from './support';
+import { showMonthOf, uniqueLabel } from './support';
 
 // Plan6.md section 89's "one-dev-server regression test" and section 90's "stale URL regression
 // test": proves the single-origin architecture (custom apps/web/server.ts hosting Next.js +
@@ -31,9 +31,14 @@ const TUTOR = { username: 'dev.tutor', password: 'dev-tutor-pass' };
 /** The calendar's side panel (plan6 section 56) opens on event click rather than navigating
  * straight to the lesson — this drills through to the full detail page. Waits for the URL
  * itself, not just the click event dispatching — see the identical rationale on lessons.spec.ts's
- * copy of this helper. */
+ * copy of this helper.
+ *
+ * `.first()`: this lesson starts "now + 12 minutes", so a run late on a Sunday evening books one that runs past midnight
+ * into Monday, and the month view (weeks start on Monday, CalendarView's firstDay={1}) draws it as two blocks, one at the
+ * end of each week row (CI on Sunday 8 Nov 2026, 23:46: "resolved to 2 elements"; reproduced locally with a Sunday 23:30
+ * lesson). Both blocks are the same lesson and open the same panel, and the title is unique to the run (uniqueLabel). */
 async function openLessonFromCalendar(page: Page, eventText: string) {
-  await page.locator('.fc-event', { hasText: eventText }).click();
+  await page.locator('.fc-event', { hasText: eventText }).first().click();
   await Promise.all([
     page.waitForURL(/\/dashboard\/lessons\/[^/]+$/),
     page.getByRole('link', { name: 'View full details' }).click(),
@@ -95,6 +100,9 @@ test('the one-dev-server regression test: Home, Login, Admin dashboard, a Lesson
   await expect(page).toHaveURL(/\/dashboard\/calendar$/, { timeout: SLOW });
 
   await page.goto('/dashboard/calendar');
+  // Shortly before midnight on a month's last day, "now + 12 minutes" is the 1st of next month, which the calendar's
+  // opening month does not show.
+  await showMonthOf(page, date);
   await openLessonFromCalendar(page, lessonTitle);
   await expect(page).toHaveURL(/\/dashboard\/lessons\/(.+)/);
   const lessonUrl = page.url();
