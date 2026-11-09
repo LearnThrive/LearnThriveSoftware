@@ -125,5 +125,24 @@ test.describe('automated accessibility (axe-core: WCAG 2.2 AA on the public site
     await runAxe(page, '/dashboard (Tutor)');
     await page.goto('/dashboard/tutor/availability');
     await runAxe(page, '/dashboard/tutor/availability');
+    await page.goto('/dashboard/concerns');
+    await runAxe(page, '/dashboard/concerns (Tutor)');
+  });
+
+  // Screens added after the first audit and never scanned until 9 Nov 2026: the safeguarding records, a tutor's profile with its checks,
+  // and the four billing pages.
+  test('Admin: safeguarding records and billing', async ({ page }) => {
+    test.setTimeout(120_000);
+    await login(page, ADMIN.username, ADMIN.password);
+    for (const path of [
+      '/dashboard/admin/vetting', '/dashboard/admin/concerns', '/dashboard/concerns', '/dashboard/admin/tutors/tutor-jamie-patel',
+      '/dashboard/admin/billing', '/dashboard/admin/billing/client-sarah-ahmed', '/dashboard/admin/billing/settings', '/dashboard/admin/billing/tutor-rates',
+    ]) {
+      await page.goto(path);
+      // Exactly one h1, and it says something: the profile pages used to render a second, empty one (found 9 Nov 2026).
+      await expect(page.locator('h1')).toHaveCount(1);
+      await expect(page.locator('h1')).not.toBeEmpty();
+      await runAxe(page, path);
+    }
   });
 });

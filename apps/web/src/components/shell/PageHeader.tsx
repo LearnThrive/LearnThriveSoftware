@@ -74,7 +74,9 @@ export function PageHeader({
       <div className="page-header__main">
         <div className="page-header__text">
           {eyebrow && <p className="page-header__eyebrow">{eyebrow}</p>}
-          <h1 className="page-header__title">{title}</h1>
+          {/* The profile pages pass an empty title and draw their own h1 beside the avatar; an empty heading here would be a second,
+              nameless h1 for a screen reader to land on. */}
+          {title !== "" && title !== null && title !== undefined && <h1 className="page-header__title">{title}</h1>}
           {description && <p className="page-header__description">{description}</p>}
           {meta && <div className="page-header__meta">{meta}</div>}
         </div>
