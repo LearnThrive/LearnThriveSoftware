@@ -21,6 +21,81 @@ Written 2 November 2026. How to take the monorepo (`apps/web`, `packages/data`, 
 
 ---
 
+## Before we host on Render: the short list (9 Nov 2026)
+
+Everything that has to happen before the site runs on Render, pulled out of the phases below and checked against the repo on 9 Nov 2026 (`npm run check:env -- --env production` on an empty environment, the Phase 4 results, `RENDER.md`, `OWNER_ANSWERS_2026-11-07.md`). The detail for each line is in the task it points at; this is the order to work in. Three gates, because "host it" can mean three different things:
+
+| Gate | Meaning | Needs |
+| --- | --- | --- |
+| **A. A running test service** | Render builds `main` and serves it on its own `onrender.com` address, so the deploy, the environment, the classroom proxy and the mail can be tested on `learnthrive-prod` with test data (4.1) | Section A |
+| **B. The public site on `www.learnthrivetuition.co.uk`** | Step one of go-live (8.1): marketing pages, enquiry, subject requests; sign-in shows "Portal opening soon" | A, then section B |
+| **C. The portal open to families and tutors** | Step two (8.2) | B, then section C. **Not needed to host the website**, listed so nothing is forgotten |
+
+**Already done, so not on the list:** the repo is clean and merged on `main` with CI green on GitHub (1.1, 1.3 to 1.5); the tuition database is proven on a real local Supabase stack (Phase 2); `learnthrive-prod` has `0001`–`0021` applied, the narrow `learnthrive_server` role made, the dashboard settings applied, the probes passing (16 passed, 0 failed), the auth smoke test passing (11 of 11), the advisors clean and a throwaway administrator `test.admin` created (Phase 4, 8 Nov); the production build is proven locally behind `serve.mjs` (65 of 65 smoke tests); the observability code is built (3.8). The only Phase 4 item left is the restore rehearsal (4.10), which has to wait for a daily backup taken after the 8 Nov push.
+
+### A. To get a test service running on Render
+
+| # | What | Who | Where |
+| --- | --- | --- | --- |
+| A1 | **Create the Render web service** and connect it to the repository. Paid instance (a free one cold-starts), Node 22, repository root, **one instance only** (classroom rooms are in memory), health check `/api/health`. Note the region and add Render to the privacy page's supplier list. | Brian (0.7) | 6.1 |
+| A2 | **Settle the build command.** `RENDER.md` says `npm ci --include=dev && npm run build --workspace=apps/web`; 6.1 below says `npm ci && npm run build`. Render sets `NODE_ENV=production`, so the first would skip the build tools without `--include=dev`. Use `npm ci --include=dev && npm run build` (the root build also typechecks the realtime code that `server.ts` imports), start `npm run serve --workspace=apps/web`, and make `RENDER.md` and 6.1 say the same. | Build | 6.1, `RENDER.md` |
+| A3 | **Point Render at the right repository.** GitHub now says the repository moved to `LearnThrive/LearnThriveSoftware`; `origin` still names the old `AlviHossain97` address. Update `origin`, connect Render to the new one, and protect `main` with the `verify` job required (1.2: a setting in GitHub, there is no `gh` here). The `gitlab` remote asks for a login and is not used. | Alvi / Brian | 1.2 |
+| A4 | **Resend:** create the account, verify the sending domain, create the site's key. The shared `onboarding@resend.dev` sender is refused in production, so even the test service needs this to send an enquiry. | Owner / Ops | 5.1 |
+| A5 | **Choose `ENQUIRY_EMAIL`** (the decided public address is `info@learnthrivetuition.co.uk`, I1) and who watches it. | Owner | 5.4 |
+| A6 | **Cloudflare credentials** from Alvi: `CLOUDFLARE_SFU_APP_ID`, `CLOUDFLARE_SFU_APP_SECRET`, `CLOUDFLARE_TURN_KEY_ID`, `CLOUDFLARE_TURN_API_TOKEN`. The environment check requires all four in production, whether or not the portal is open. Set a billing alert in Cloudflare (3.13.4). | Alvi | 3.1, 3.13 |
+| A7 | **Generate the two secrets** with `openssl rand -hex 32`: `CAPTCHA_SECRET` and `CLASSROOM_JOIN_SECRET`. Never reuse a development value. | Ops | 6.2 |
+| A8 | **Set the environment in Render's dashboard.** The check reports 13 missing on an empty environment: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `ENQUIRY_EMAIL`, `CAPTCHA_SECRET`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, the four Cloudflare names and `CLASSROOM_JOIN_SECRET`. The four Supabase values already exist (4.5, 4.6); `DATABASE_URL` is the pooler, port 6543, user `learnthrive_server.vwsjvdpkgjhwmqmufmrh`, ending **`?sslmode=require`**. Also: `NEXT_PUBLIC_SITE_URL` and `ALLOWED_ORIGINS` set to the test service's address (build time: changing `NEXT_PUBLIC_*` needs a rebuild), and `TUITION_REFUND_APPROVER_EMAILS` (optional: the **linked** emails of the people who may approve a refund; unset means nobody can). Everything in the "OFF at launch" list stays unset. | Brian / Ops | 6.2 |
+| A9 | **Run `npm run check:env --workspace=apps/web -- --env production`** in a shell with those values. Done when it reports no MISSING, MALFORMED or FORBIDDEN (the `HELD` lines are correct). | Ops | 6.3 |
+| A10 | **Point the Supabase project at the test host while testing:** Site URL and the two Redirect URLs (no wildcards), then back to the real domain at the cutover (4.1, 8.1). | Owner | 4.1, 4.6 |
+| A11 | **Prove the service itself:** `/api/health` and `/api/health/ready` answer 200; a WebSocket upgrade works through Render's proxy and `/api/turn-credentials` returns `iceServers` (3.1.2, 3.1.6); the production smoke suite passes against the Render address (`PROD_BASE_URL`); the careers upload-size probe and the forged `X-Forwarded-For` probe are run and `CLIENT_IP_HEADER` or `TRUSTED_PROXY_HOPS` set from the result (`RENDER.md`, 7.4). | Ops | 7.1, 7.4 |
+| A12 | **Host protections:** a rate rule at Render or a CDN on `POST /api/enquiry` and the sign-in routes; previews never pointed at the production database. | Ops | 6.4 |
+| A13 | **Monitoring:** an uptime monitor on `/api/health/ready`, the alerts in `docs/OBSERVABILITY.md`, and a decision on log retention (a log store is a new supplier for the privacy page). | Ops | 3.8 |
+
+**Gate A is met when** the service is up on its `onrender.com` address with `check:env` clean, the smoke suite passes against it, a test enquiry arrives at `info@`, and the monitor is watching it.
+
+### B. Before `www.learnthrivetuition.co.uk` points at Render (public site, portal closed)
+
+| # | What | Who | Where |
+| --- | --- | --- | --- |
+| B1 | **DNS and mail records in IONOS.** Merge Resend's `include:` into the **one** existing SPF record (keep Google Workspace's MX and SPF), add Resend's DKIM, add DMARC at `p=none`, then test mail both ways. Lower the TTL a day or more before; `www` to Render, apex redirects to `www` (308); keep the old values for rollback. | Owner / Ops | 5.2, 8.1 |
+| B2 | **Deliverability test:** a real enquiry reaches `info@` with Reply-To set to the parent, the auto-reply arrives, and both read well in Gmail, Outlook, Apple Mail and on a phone. | Ops | 5.3 |
+| B3 | **Decide the public wording.** Section 4 of `OWNER_ANSWERS_2026-11-07.md` lists the pages that still say the old thing: "Invoices may be issued in advance" (billing is now monthly in arrears), "free consultation" (now a free 30-minute taster; is it the same thing?), and the safeguarding and FAQ pages on recording (still "not recorded", which stays true until recording is switched on). Tahasin said to align the wording and to **verify the safeguarding numbers, tutor checks and insurance claims before publication** (I4); the solicitor review is mid-December. The choice is the owners': launch with the current wording after checking it is still true, or wait for the review. | Owners | I4, `OWNER_ANSWERS` s.4 |
+| B4 | **Careers pages say LearnThrive pays for the DBS check; 0.4 decided tutors pay.** The forms stay closed, but the pages are public the day the site goes live. Needs Tahasin's wording. | Owner | 3.12.4 |
+| B5 | **Terms page.** Tahasin is providing the terms; until they arrive the terms page and any payment wording cannot be finalised. Say what the site shows meanwhile. | Owner | 0.4, 3.10.13b |
+| B6 | **Privacy and legal sign-off:** the cookie notice and privacy page match what is set; the supplier list is complete (Render, Supabase, Resend, Cloudflare, Google Workspace, IONOS for DNS only; Stripe only if used); the owner and the legal reviewer have signed `LEGAL_REVIEW.md`; the privacy-notice change about Google Workspace (1.5) and the careers privacy change (3.12.6) have been seen by the reviewer. | Owners / reviewer | 7.10 |
+| B7 | **Public-site checks on the live service:** every route 200 with an `<h1>`, branded 404, headers present, no cookies from public pages, no third-party requests (7.2); the axe, keyboard and zoom suites, then a manual screen-reader pass and a real iPhone and Mac Safari pass (7.3); the switch audit with the portal flag **unset** (7.8). | Ops | 7.2, 7.3, 7.8 |
+| B8 | **Security leftovers:** the 12 `npm audit` findings through Excalidraw are accepted and recorded; decide whether CI's audit job should fail at `--audit-level=critical` (1.5). Confirm `security.txt`'s `info@` is monitored (I2). | Build / Owner | 1.5, 0.8 |
+| B9 | **Decide what the old marketing site and TutorCruncher do** and list the old URLs to redirect with 308s. | Owners | 9.1 |
+| B10 | **Write the rollback** (redeploy the previous deploy, or rebuild with the portal flag unset) and who decides it. | Owners | 8.3 |
+| B11 | **Cutover:** custom domain on Render, wait for the certificate, switch DNS, re-run the smoke suite on the live URL, send one real enquiry, look at the live headers and requests, submit the sitemap to Search Console, record the results in `LEGAL_REVIEW.md`. | Ops | 8.1 |
+
+**Gate B is met when** the public site is live on the real domain with the portal closed, a real enquiry has been received and answered, and the rollback is written down.
+
+### C. Not needed to host the website; needed before families and tutors sign in
+
+These do **not** block A or B. They are here because the portal build is deployed on the same service, so none of them can be forgotten at 8.2.
+
+- **Test every role on the Render service** with throwaway accounts (7.5 to 7.9), the classroom on two real networks with the Cloudflare keys, then an hour with a tutor and ten students (3.13), and the TURN relay check (`?forceTurn=1`).
+- **Rehearse the purge** on test data (3.7) and the **restore** (4.10, once a post-8-Nov backup exists).
+- **Clear the test data (7.12)**, then create the four real staff accounts (4.9): the first real people on the project.
+- **Billing:** collection is blocked on the family payment method (question 12 and B13/B19: PayPal is excluded, the rest is open). Until it is decided, families are told fees are invoiced outside the site and an admin records payments by hand. Also open: the family rates, the repeat late-cancellation fee, the allowance reset, the second-approver threshold (set on `/dashboard/admin/billing/settings`), and **what happens to billing records when someone leaves** (question 13: the purge refuses a family with a billing record or a tutor with a pay rate). `TUITION_REFUND_APPROVER_EMAILS` must be set before the first refund is decided.
+- **Recording is not switched on** until the privacy work and the impact assessment (F5) are done, and the careers forms stay closed until the agreement is approved (3.12.7).
+- **Staff MFA** is not built: accept the risk in writing or build it (3.6). **Branch protection** and the **first real data load** (3.3: the owners still have to name the source of truth) also sit here.
+- **Parent sign-in guide** screens, once Brian has checked them against the final portal (H5), and the family terms from Tahasin.
+
+### Decisions only the owners can make (the ones that stop Gate A or B)
+
+Every open question, in detail with answer boxes, is in [TAHASIN_HANDOVER_ROUND2.md](TAHASIN_HANDOVER_ROUND2.md) (also as a Word file to fill in). Sections 1 and 2 of it are the ones above.
+
+1. Who creates the Render service, and from which repository address (A1, A3).
+2. The Cloudflare keys (A6, Alvi).
+3. Launch with the current public wording, or wait for the solicitor review in mid-December (B3).
+4. The DBS wording on the careers pages (B4) and the terms page (B5).
+5. Which mailbox is `ENQUIRY_EMAIL` and who watches it (A5).
+6. What the old site and TutorCruncher do, and when (B9).
+
+---
+
 ## Switches that stay OFF at launch (AI and Library are out of scope)
 
 Confirm each is **unset** in Render's production environment and re-check after every deploy:
@@ -337,7 +412,7 @@ the SQL function did not do it.
 
 > **7 Nov 2026:** the charging model is now **monthly statements in arrears** (see 0.1 and [OWNER_ANSWERS_2026-11-07.md](OWNER_ANSWERS_2026-11-07.md) section 3), and the family payment method is **not confirmed**, so Stripe checkout, prepaid Checkout and subscriptions below may not be the right design. Build the decided parts first (rates, chargeable-lesson rules with per-child waivers, the sibling line, the statement, hiding amounts from tutors, overdue as a flag) and add collection when the method is chosen.
 >
-> **Built (7 Nov 2026):** all of those decided parts, as admin-only pages and a recorded-by-hand payment ledger, plus the named-approver refund action. See [TUITION_BILLING.md](TUITION_BILLING.md). Still to do: migration `0021` on the hosted database (owner), set `TUITION_REFUND_APPROVER_EMAILS`, the owners' open rules (repeat fee, allowance reset, second approver), collection once the payment method is chosen.
+> **Built (7 Nov 2026):** all of those decided parts, as admin-only pages and a recorded-by-hand payment ledger, plus the named-approver refund action. See [TUITION_BILLING.md](TUITION_BILLING.md). Migration `0021` was applied to the hosted `learnthrive-prod` on 8 Nov 2026 (4.3). Still to do: set `TUITION_REFUND_APPROVER_EMAILS` (their linked emails) in Render, the owners' open rules (repeat fee, allowance reset, second approver), collection once the payment method is chosen.
 >
 > **Tested on the real local stack (8 Nov 2026):** `0001`–`0021` applied from nothing, and the billing contract passes 51 of 51 directly, through the pooler and as the narrow role. It found and fixed two bugs: queries through the pooler could hang for good (a site-wide fix in `apps/web/src/lib/db.ts`), and a payment already on an issued statement was counted again the next month ([SUPABASE_REAL_STACK.md](SUPABASE_REAL_STACK.md), findings 20 and 21). **Deliberately left open:** purging someone with billing records (finding 22, and 3.7 above). These fixes go in without that answer because the purge refuses safely in the meantime; it waits on question 13 in [OWNER_ANSWERS_2026-11-07.md](OWNER_ANSWERS_2026-11-07.md). **The admin pages in a browser on the real stack** (`tests-e2e-realstack/billing.spec.ts`, 8 Nov 2026): rates, a cancelled-lesson decision, two issued months with the payment counted once, the named-approver refund, tutor pay, and every non-admin refused, 4 of 4 (the suite 20 of 20).
 
@@ -546,7 +621,7 @@ Every step here needs the owner present or approving. **Not empty of migrations:
 
 ### 6.1 Create the service
 - Web Service (Node), root = repo root, **paid instance** (free tier cold-starts), health check `/api/health`, Node 22.
-- Build: `npm ci && npm run build` (builds classroom + web). Start: `npm run serve --workspace=apps/web` (the unified server, 3.1). **One instance only.**
+- Build: `npm ci --include=dev && npm run build` (builds classroom + web; Render sets `NODE_ENV=production`, so `--include=dev` is needed for the build tools; see A2). Start: `npm run serve --workspace=apps/web` (the unified server, 3.1). **One instance only.**
 - The build needs outbound network once for fonts.
 
 ### 6.2 Environment variables (names only; values in the dashboard)
@@ -699,7 +774,7 @@ Launch in two steps so the riskier part opens last.
 | 1 Repo | Clean `main`, CI green on GitHub, bundle check | **1.1, 1.3, 1.4 and 1.5 done** (6 Nov 2026; the Next 16.4.5 security upgrade is its own pull request). **1.2 open**: protect `main` in GitHub's settings |
 | 2 Real stack | Tuition tables and identity work on real Supabase | **done locally (4 Nov 2026)**: 307 real-stack tests and 12 real-stack browser tests pass; scoping audit in `docs/SCOPING_AUDIT.md`. The reset email's Resend hop and the hosted project remain |
 | 3 Build gaps | Classroom served, onboarding path, backfill tool | open |
-| 3.10 Tuition payments | Stripe sandbox flow, refunds, tamper and cross-family tests | open (product rules unanswered) |
+| 3.10 Tuition payments | Stripe sandbox flow, refunds, tamper and cross-family tests | **billing records built and tested** (7 to 8 Nov 2026: statements, rates, hand-recorded payments, named-approver refunds, tutors see no money; `0021` on the hosted project). **Collection open**: the family payment method is not decided |
 | 3.1 Classroom server | `serve.mjs` runs site, signalling and TURN endpoint on one origin | built and proven locally; not yet on Render |
 | 3.2 Username sign-in and admin-created accounts | Create parent, children and tutor; sign in by username; sign-up closed end to end | built; real Auth, the operator script and **the admin screen** proven locally (`realstack.accounts`, `tests-e2e-realstack`); the reset link is proven but its **delivery through Resend** is not, nor are the hosted accounts |
 | 3.11 Tutor-admin | A tutor who is also an admin can teach and admin | built; **its guards are now tested on real data** (4 Nov 2026, `tests-e2e-realstack/scoping.spec.ts`): tutor tools scoped to their own teaching, no way into another tutor's lesson as its tutor |
@@ -708,8 +783,8 @@ Launch in two steps so the riskier part opens last.
 | 3.8 Observability | Readiness check, error and process logs, a runbook | **code built** (6 Nov 2026): `/api/health/ready`, `server-error` lines, heartbeat, structured classroom failures, `docs/OBSERVABILITY.md`. The uptime monitor, log retention and alerts wait for the Render service |
 | 3.7 Purge tool | A purged person leaves only the documented exceptions | **built and proven locally** (4 Nov 2026): the pause, the purge, the counts-only log, and the sweep that finds nothing. The staging rehearsal waits for Phase 4 |
 | 4 Hosted Supabase | Project migrated, configured, smoke-tested, first admin | **nearly done** (8 Nov 2026): migrated, role made, dashboard set, probes 16/0, smoke 11/11, advisors clean, test admin made; the restore rehearsal (4.10) is left. The real staff accounts come after 7.12 |
-| 5 Domain and email | Deliverable mail, DNS ready | open |
-| 6 Render | Service running with a validated environment | open |
+| 5 Domain and email | Deliverable mail, DNS ready | open (Resend and the DNS records are gate A4 and B1) |
+| 6 Render | Service running with a validated environment | open. The ordered list of what has to happen first is **"Before we host on Render"** at the top (gates A, B, C) |
 | 7 Staging soak | Every role, device, switch and probe checked, on `learnthrive-prod` with test data, then the test data cleared (7.12) | open |
 | 8 Go-live | Public first, then portal; rollback ready | open |
 | 9 Data | Staff, families, learners loaded and verified | open |

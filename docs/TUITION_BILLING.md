@@ -2,7 +2,7 @@
 
 What was built for the owners' answers of 7 Nov 2026 ([OWNER_ANSWERS_2026-11-07.md](OWNER_ANSWERS_2026-11-07.md), items B1 to B19). It records what families owe. **It does not collect money**: the family payment method is not confirmed (B1, B13, B19), so an admin records payments by hand. Nothing here is visible to a tutor (B17).
 
-Status of this work: built and tested; **not applied to the hosted database** (migration `0021` waits for the owner like the others), and **not yet seen by the owners**.
+Status of this work: built and tested; applied to the hosted `learnthrive-prod` database on 8 Nov 2026 (with `0001`–`0021`; no billing rows yet), and **not yet seen by the owners**.
 
 ## Where things are
 
@@ -26,7 +26,7 @@ Status of this work: built and tested; **not applied to the hosted database** (m
 - **Statements are monthly, in arrears** (B1, B14, B16), issued in order, and **frozen** once issued (an append-only trigger rejects any change). They carry the invoice number, date, period, lines, missed-lesson charges, discount, payments received, opening and closing balance, and the company details. A month that has not ended cannot be issued.
 - **Payments** are recorded by hand and **voided with a reason, never edited**. Each payment is counted once, in the first statement after it is recorded.
 - **Overdue is a flag** (B12). A family is flagged when charges are unpaid a calendar month after the statement date (payments are applied oldest-first). Nothing is suspended, no late fee is added; `autoSuspend` is always `false`.
-- **Refunds** (B11): any admin may *request* one. Only the people in `TUITION_REFUND_APPROVER_EMAILS` can approve or reject; a refusal is itself logged. If the owners set a threshold, a second, different approver is needed above it. Rejecting needs a note.
+- **Refunds** (B11): any admin may *request* one. Only the people whose account's **linked email** is in `TUITION_REFUND_APPROVER_EMAILS` (the address on the account, not the username) can approve or reject; a refusal is itself logged. If the owners set a threshold, a second, different approver is needed above it. Rejecting needs a note.
 - **Audit**: every change to rates, decisions, payments, statements, refunds and settings is appended to `tuition_billing_audit` (append-only).
 
 ## Open rules stay blank, never guessed

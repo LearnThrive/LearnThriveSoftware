@@ -178,6 +178,8 @@ These are **not changed** by this file. Change them only when the decision behin
 
 ## 5. Questions to send back to Tahasin (all of them, in priority order)
 
+**Superseded by [TAHASIN_HANDOVER_ROUND2.md](TAHASIN_HANDOVER_ROUND2.md) (9 Nov 2026)**, which turns these into 77 numbered questions with the reason for each, a suggestion where there is one, and an answer box. Use that for sending; keep this list as the record.
+
 1. **Billing.** What is the family payment method (not PayPal)? Are cash or manual bank transfers allowed? What are the family rates, and who sets them? What is the repeat late-cancellation fee and when does the allowance reset? When exactly does the "more than one month overdue" clock start, and who authorises a pause?
 2. **Prepaid.** B1 bills in arrears but B10 describes prepaid lessons. Are prepaid blocks sold at all? If yes, how do they sit with the monthly bill?
 3. **Sibling discount.** Does a family need two or more enrolled children before any child gets the 10%? How is eligibility recorded?
