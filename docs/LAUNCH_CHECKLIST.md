@@ -519,16 +519,21 @@ Every step here needs the owner present or approving. **Not empty of migrations:
 
 ### 4.10 Record and rehearse recovery
 - Read `docs/SUPABASE_RUNBOOK.md`: credential rotation, restore from backup (then re-run the role script and update `DATABASE_URL`), suspending a user, suspected key leak. Do one restore rehearsal on `learnthrive-prod` while it still holds only test data (4.1).
+- **Done (9 November 2026): restore rehearsal from the daily backup of 9 Nov, 04:54** (the first taken after the 8 Nov push). Before restoring, a marker login `restore.marker` (CLIENT) was made with `create-account.mjs`, so a restore that silently did nothing could not pass. Restored from the dashboard (Database, Backups); it took a few minutes. Checked read-only afterwards: `restore.marker` and its family were gone, `test.admin` was there, 21 migrations, 50 public tables, the three private buckets, and the `learnthrive_server` role with its grants. Then, as the runbook says: the role script re-run with the same password (`50 public tables granted`), `migration list` `0001`–`0021` on both sides and `db push --dry-run` "up to date", probes 16 passed 0 failed, smoke test **11 of 11**.
+- **What the rehearsal taught:**
+  - **After re-running the role script, wait about two minutes before anything connects as `learnthrive_server`.** The first smoke run, a minute or two after the role script, was refused by the pooler (`Authentication credentials are invalid. Please reconnect with fresh credentials to restore pool functionality.`): it still held the password's previous form, even though the value was the same, and the refusals then trip its breaker (runbook, the pooler's two measured behaviours). The run a few minutes later passed. In a real restore the site is down for that time too: reopen it only after a smoke test passes.
+  - **The smoke test could stop before its cleanup.** In that refused run, an error escaped from inside the database driver as an unhandled rejection, Node exited, and the run's test login stayed behind (deleted by hand with the owner's go-ahead). Fixed: `supabase-smoke.mjs` now counts such an error as a failure and always reaches its cleanup (`tests/smokeCleanup.test.mjs`).
 
 **Phase 4 done when:** probes show no FAIL, the smoke test passes, advisors are clean, and a throwaway test administrator exists for Phase 7. The real first administrators (4.9) come after 7.12.
-- **Status (8 November 2026):** 4.3 to 4.8 done; the advisors are clean (4.4); the throwaway administrator `test.admin` (ADMIN only, no tutor record) was made with `create-account.mjs` (dry run, then `--apply`: 1 created, 0 failed). Its temporary password is in a file outside the repository; it is first used on the Render test host (Phase 6), and 7.12 deletes the account. **Left:** 4.10, reading the runbook and the restore rehearsal, which waits until a daily backup taken after the 8 Nov push exists (an earlier one would restore `0001`–`0009` only).
+- **Status (8 November 2026):** 4.3 to 4.8 done; the advisors are clean (4.4); the throwaway administrator `test.admin` (ADMIN only, no tutor record) was made with `create-account.mjs` (dry run, then `--apply`: 1 created, 0 failed). Its temporary password is in a file outside the repository; it is first used on the Render test host (Phase 6), and 7.12 deletes the account.
+- **MET, 9 November 2026:** the restore rehearsal (4.10) is done too. The project holds test data only (`test.admin` and the two seeded settings rows) until the clean-up in 7.12.
 
 ---
 
 ## Phase 5: Domain and email
 
 ### 5.1 Resend
-- Verify the sending domain; copy the SPF/DKIM records; set `RESEND_FROM_EMAIL` to an address on it (the shared `onboarding@resend.dev` sender is never used in production). Create two API keys: one for the site (`RESEND_API_KEY`), one for Supabase Auth SMTP.
+- Verify the sending domain; copy the SPF/DKIM records; set `RESEND_FROM_EMAIL` to an address on it (the shared `onboarding@resend.dev` sender is never used in production). Create one API key, for the site (`RESEND_API_KEY`). A second key for Supabase Auth SMTP is needed only if custom SMTP is ever set up, which username sign-in made optional (4.6).
 
 ### 5.2 DNS records
 - IONOS holds the domain and its DNS. **Keep every existing mail record** (Google Workspace's MX records at `aspmx.l.google.com` and the SPF `include:_spf.google.com`). A domain may have only **one SPF record**, so merge Resend's `include:` into the existing one rather than adding a second. Add Resend's DKIM records as given. Add DMARC at `p=none` with a report address; tighten later. Because the same domain sends mail from two providers, test both after the change.
@@ -707,7 +712,7 @@ Launch in two steps so the riskier part opens last.
 | 3.13 Cloudflare SFU, 10 students | An hour-long lesson with 11 people on real devices | built and tested against fakes; needs the keys and a real-device test |
 | 3.8 Observability | Readiness check, error and process logs, a runbook | **code built** (6 Nov 2026): `/api/health/ready`, `server-error` lines, heartbeat, structured classroom failures, `docs/OBSERVABILITY.md`. The uptime monitor, log retention and alerts wait for the Render service |
 | 3.7 Purge tool | A purged person leaves only the documented exceptions | **built and proven locally** (4 Nov 2026): the pause, the purge, the counts-only log, and the sweep that finds nothing. The staging rehearsal waits for Phase 4 |
-| 4 Hosted Supabase | Project migrated, configured, smoke-tested, first admin | **nearly done** (8 Nov 2026): migrated, role made, dashboard set, probes 16/0, smoke 11/11, advisors clean, test admin made; the restore rehearsal (4.10) is left. The real staff accounts come after 7.12 |
+| 4 Hosted Supabase | Project migrated, configured, smoke-tested, first admin | **done** (9 Nov 2026): migrated, role made, dashboard set, probes 16/0, smoke 11/11, advisors clean, test admin made, restore rehearsed from a daily backup. The real staff accounts come after 7.12 |
 | 5 Domain and email | Deliverable mail, DNS ready | open |
 | 6 Render | Service running with a validated environment | open |
 | 7 Staging soak | Every role, device, switch and probe checked, on `learnthrive-prod` with test data, then the test data cleared (7.12) | open |
