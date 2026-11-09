@@ -43,7 +43,8 @@ export default defineConfig({
     // plan15 Wave 3: the theme toggle and dark theme are behind this flag (src/lib/theme.ts).
     // CAREERS_OPEN_FOR_TESTING opens the application and reconfirmation forms while the safeguarding agreement is
     // still a draft (lib/careers-config.ts). It is ignored by a production build, so `next start` never honours it.
-    env: { NEXT_PUBLIC_THEME_TOGGLE: '1', CAREERS_OPEN_FOR_TESTING: '1', LEARNTHRIVE_DOCKER: '0' },
+    // SAFEGUARDING_LEAD_EMAILS names dev.admin as the safeguarding lead, so dev.teaching-admin is an administrator who is not one (tests-e2e/safeguarding.spec.ts).
+    env: { NEXT_PUBLIC_THEME_TOGGLE: '1', CAREERS_OPEN_FOR_TESTING: '1', LEARNTHRIVE_DOCKER: '0', SAFEGUARDING_LEAD_EMAILS: 'admin@learnthrive.dev' },
     url: 'http://localhost:3100',
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,

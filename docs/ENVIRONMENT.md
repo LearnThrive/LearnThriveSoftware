@@ -204,6 +204,7 @@ Set these in Render's environment, as secrets where the table says so, and nowhe
 
 | Variable | What it does | Local | Render production | Secret | Where you get it | If unset |
 | --- | --- | --- | --- | --- | --- | --- |
+| `SAFEGUARDING_LEAD_EMAILS` | Comma-separated LINKED emails (the address on each account, not the username) of the safeguarding lead and deputy: the only people who can read a concern raised in the dashboard, and who are emailed (no details) when one is raised. Empty = concerns cannot be recorded in the app and the page shows the published contact route instead. | optional | optional | no | the owners: who the safeguarding lead and deputy are | unset (the concern form is closed) |
 | `NEXT_PUBLIC_APP_PORTAL_ENABLED` | true opens the portal (login, dashboards, classroom). Unset is closed in production. Build-time. | optional | unset until the owner flips it | no | n/a | unset |
 | `NEXT_PUBLIC_CLASSROOM_URL` | Where an external classroom is served; also added to the CSP. | optional | optional | no | n/a | unset |
 | `NEXT_PUBLIC_TURN_URL` | TURN server URL for classroom video (public by nature). | optional | optional | no | n/a | unset |

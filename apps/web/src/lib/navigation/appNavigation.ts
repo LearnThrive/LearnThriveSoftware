@@ -44,6 +44,7 @@ const ADMIN_NAV: AppNavSection[] = [
       { label: "Students", href: "/dashboard/admin/people/students", icon: "students", matchPrefix: "/dashboard/admin/students" },
       { label: "Clients", href: "/dashboard/admin/people/clients", icon: "clients", matchPrefix: "/dashboard/admin/clients" },
       { label: "Tutors", href: "/dashboard/admin/people/tutors", icon: "tutors", matchPrefix: "/dashboard/admin/tutors" },
+      { label: "Tutor checks", href: "/dashboard/admin/vetting", icon: "tutors" },
       { label: "Applications", href: "/dashboard/admin/careers", icon: "applications", matchPrefix: "/dashboard/admin/careers" },
     ],
   },
@@ -60,6 +61,7 @@ const ADMIN_NAV: AppNavSection[] = [
     items: [
       { label: "Notifications", href: "/dashboard/notifications", icon: "notifications" },
       { label: "Activity", href: "/dashboard/activity", icon: "activity" },
+      { label: "Concerns", href: "/dashboard/admin/concerns", icon: "activity", matchPrefix: "/dashboard/admin/concerns" },
     ],
   },
   {
@@ -84,6 +86,7 @@ const TUTOR_NAV: AppNavSection[] = [
     items: [
       { label: "Availability", href: "/dashboard/tutor/availability", icon: "availability" },
       { label: "Notifications", href: "/dashboard/notifications", icon: "notifications" },
+      { label: "Raise a concern", href: "/dashboard/concerns", icon: "activity" },
       { label: "Settings", href: "/dashboard/settings", icon: "settings" },
     ],
   },

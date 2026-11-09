@@ -82,6 +82,9 @@ regardless of what a higher layer already decided:
 | `setLearnerLoginAction` | `ADMIN` only | suspend, restore or remove a child's login (launch checklist 3.5). A removed login is never changed again, and removing needs the confirmation box |
 | `markLeftAction`/`cancelLeftAction`/`bringForwardAction` | `ADMIN` only | the pause before a purge (launch checklist 3.7.3). The date can only be brought forward, never pushed back |
 | `purgeStudentAction`/`purgeTutorAction`/`purgeFamilyAction` | `ADMIN` only | the record must already be marked as left and out of its pause — enforced in the database too (migration 0019), so no caller can skip it — and the administrator must type the confirmation phrase |
+| `recordVettingCheckAction`/`voidVettingCheckAction` | `ADMIN` only | a tutor never sees or changes their own checks. See `docs/SAFEGUARDING_RECORDS.md` |
+| `raiseConcernAction` | `TUTOR`/`ADMIN` | refused (nothing stored) unless a safeguarding lead is named in `SAFEGUARDING_LEAD_EMAILS` |
+| `updateConcernAction` | `ADMIN`, **and** a named safeguarding lead | the data layer refuses an administrator who is not a lead and records the attempt on the concern. Reading a concern has the same rule (`readConcern`, `listConcerns`) |
 | Every action in `lib/actions/tuitionBilling.ts` (rates, sibling flag, charge decisions, issue statement, payments, refunds, billing rules) | `ADMIN` only | none. Tutors never see money (B17); `decideRefundAction` additionally needs the signer to be a named refund approver (`TUITION_REFUND_APPROVER_EMAILS`). See `docs/TUITION_BILLING.md` |
 
 ## What each role actually sees

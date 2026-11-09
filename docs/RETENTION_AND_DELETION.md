@@ -59,6 +59,13 @@ An online application is stored, not emailed: migration `0020_careers.sql`, the 
 
 The website does not collect DBS certificate information. The application only asks whether an applicant already holds a suitable certificate and uses the Update Service, and tells them not to upload a certificate. The check itself is arranged through the DBS process. Do not store certificates in the mailbox either.
 
+## Tutor checks and safeguarding concerns (migration 0022)
+
+Added 9 November 2026; the detail is in [SAFEGUARDING_RECORDS.md](SAFEGUARDING_RECORDS.md).
+
+- **A tutor's checks** (that a DBS check, identity, references and so on were seen, on what date, and when they run out; never a certificate number or a copy) are deleted with the tutor's record when the tutor is purged. How long the log should outlive a tutor, if at all, is an open decision (OWNER_ANSWERS F7); today it does not.
+- **A safeguarding concern** raised in the dashboard is deliberately **not** removed when a person is purged: safeguarding records are one of the retention exceptions in [LAWFUL_BASES.md](LAWFUL_BASES.md). The application cannot edit or delete one. The retention period, and deleting a concern when it ends, belong to the safeguarding lead and are done outside the application. Until the owners name a lead (`SAFEGUARDING_LEAD_EMAILS`), no concern can be stored at all.
+
 ## Library accounts, downloads and LearnThrive AI (plan19)
 
 These live in the database and in a private storage bucket, not in the mailbox, and a job deletes them; nobody has to remember.

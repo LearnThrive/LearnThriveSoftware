@@ -150,6 +150,18 @@
 .alert--info { background: var(--tone-info-soft-bg); border-color: var(--tone-info-soft-border); color: var(--tone-info-fg); }
 .alert--warning { background: var(--tone-warning-soft-bg); border-color: var(--tone-warning-soft-border); color: var(--tone-warning-soft-fg); }
 .alert--error { background: var(--error-bg); border-color: var(--tone-critical-border); color: var(--fg-error); }
+.alert__body { display: grid; gap: var(--space-2); }
+
+/* ============================================================ Tutor checks register */
+
+.vetting-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: var(--space-3) var(--space-5); margin: 0;
+}
+.vetting-grid__item { display: grid; gap: var(--space-1); }
+.vetting-grid dt { font-size: var(--text-small); color: var(--fg-muted); }
+.vetting-grid dd { margin: 0; }
+.vetting-grid__date { font-size: var(--text-small); color: var(--fg-muted); }
 
 /* ============================================================ Error / 403 / 404 pages */
 

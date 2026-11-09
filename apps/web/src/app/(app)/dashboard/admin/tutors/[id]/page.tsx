@@ -21,6 +21,9 @@ import { PurgePanel } from "@/components/people/PurgePanel";
 import { createTutorLoginAction } from "@/lib/actions/accounts";
 import { purgeTutorAction } from "@/lib/actions/purge";
 import { linkTutorLoginAction } from "@/lib/actions/enrolment";
+import { vettingStatus } from "@learnthrive/data/safeguarding";
+import { VettingCard } from "@/components/people/VettingCard";
+import { getSafeguarding, todayInLondon } from "@/lib/safeguarding/runtime";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -39,13 +42,16 @@ export default async function TutorProfilePage({ params }: { params: Promise<{ i
   const tutor = await data.tutors.get(id);
   if (!tutor) notFound();
 
-  const [assignments, allLessons, availability, allStudents, purge] = await Promise.all([
+  const [assignments, allLessons, availability, allStudents, purge, checks] = await Promise.all([
     data.assignments.forTutor(tutor.id),
     data.lessons.forTutor(tutor.id),
     data.availability.forTutor(tutor.id),
     data.students.list(),
     data.purges.previewTutor(tutor.id),
+    getSafeguarding().vetting.list(tutor.id),
   ]);
+  const today = todayInLondon();
+  const vetting = vettingStatus(checks, today);
 
   const nowIso = new Date().toISOString();
   const upcoming = allLessons.filter((lesson) => lesson.status !== "CANCELLED" && lesson.startAt >= nowIso)
@@ -215,6 +221,7 @@ export default async function TutorProfilePage({ params }: { params: Promise<{ i
         </div>
 
         <div className="stack">
+          <VettingCard tutorId={tutor.id} lines={vetting} today={today} />
           <Card>
             <CardHeader title="Students" />
             <CardBody className="card__body--flush">

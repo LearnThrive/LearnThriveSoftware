@@ -166,6 +166,7 @@ export const REGISTRY = [
   e("LEARNTHRIVE_DOCKER", "assistant", "0 stops npm run dev from starting the model and voice in Docker (the Playwright servers set it).", { production: "unset", check: "flag:0" }),
 
   // ---- Portal and classroom -----------------------------------------------------------------------------------------------
+  e("SAFEGUARDING_LEAD_EMAILS", "portal", "Comma-separated LINKED emails (the address on each account, not the username) of the safeguarding lead and deputy: the only people who can read a concern raised in the dashboard, and who are emailed (no details) when one is raised. Empty = concerns cannot be recorded in the app and the page shows the published contact route instead.", { source: "the owners: who the safeguarding lead and deputy are", fallback: "unset (the concern form is closed)", check: "text" }),
   e("NEXT_PUBLIC_APP_PORTAL_ENABLED", "portal", "true opens the portal (login, dashboards, classroom). Unset is closed in production. Build-time.", { production: "unset until the owner flips it", held: true, check: "true-only" }),
   e("NEXT_PUBLIC_CLASSROOM_URL", "portal", "Where an external classroom is served; also added to the CSP.", { check: "url" }),
   e("NEXT_PUBLIC_TURN_URL", "portal", "TURN server URL for classroom video (public by nature).", { check: "text" }),
