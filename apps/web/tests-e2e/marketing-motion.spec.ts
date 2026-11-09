@@ -793,7 +793,11 @@ test.describe('ProductStoryScene', () => {
     await page.goto('/');
     await tierOf(page);
     const section = page.locator('#lesson-story');
-    await section.scrollIntoViewIfNeeded();
+    // Scene progress runs "start start" to "end end", so 0 (the first scene) is the section's top at the viewport's top.
+    // Jump there exactly, as scrollSceneTo does above. scrollIntoViewIfNeeded on this section, which is several screens
+    // tall, landed part-way through it on a busy machine: CI on main, 9 Nov 2026, failed all three attempts showing the
+    // third scene ("Learning together"), and locally it failed 3 of 4 runs with two workers but passed 4 of 4 with one.
+    await section.evaluate((el) => window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY, behavior: 'instant' }));
     await expect(section.locator('[class*="stageChrome"]').first()).toBeVisible();
     await expect(section.locator('[class*="stageInner"] [class*="stageLabel"]')).toHaveText('Match');
     expect(errors).toEqual([]);
