@@ -77,6 +77,16 @@ const step = async (name, fn) => {
   }
 };
 
+// A rejection nobody awaits must not end the run before the cleanup below: Node would exit there and then, and whatever this
+// run had made would stay. On the hosted project (9 Nov 2026), straight after the role script re-saved the password, the
+// pooler refused the narrow role ("Authentication credentials are invalid ... reconnect with fresh credentials"); the step
+// that asked reported it, but a second copy of that error escaped from inside the driver as an unhandled rejection, Node
+// stopped, and the test login stayed behind. Now it counts as a failure and the run carries on to its cleanup.
+process.on("unhandledRejection", (error) => {
+  results.push({ name: "an error outside any step", ok: false });
+  console.log(`FAIL  an error outside any step  (${String(error?.message ?? error).split(apiUrl).join("<project>").slice(0, 200)})`);
+});
+
 const connection = await createExecutor(databaseUrl);
 const store = new SqlLibraryStore(connection.executor);
 const auth = new SupabaseAccountAuth({ url: apiUrl, anonKey });
