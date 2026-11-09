@@ -52,7 +52,7 @@ export default async function BillingSettingsPage() {
             <Field label="Refund amount that needs a second approver (£)" htmlFor="b-second" hint={`Now: ${s.refundSecondApprovalPence === null ? "one approver is enough" : formatPence(s.refundSecondApprovalPence)}.`}>
               <input id="b-second" name="refundSecondApproval" inputMode="decimal" defaultValue={pounds(s.refundSecondApprovalPence)} autoComplete="off" />
             </Field>
-            <FormActions><button className="button" type="submit">Save</button></FormActions>
+            <FormActions><button className="btn btn--primary" type="submit">Save</button></FormActions>
           </form>
         </CardBody>
       </Card>

@@ -52,7 +52,7 @@ export function VettingCard({ tutorId, lines, today }: { tutorId: string; lines:
               <Field label="Note" htmlFor="vetting-note">
                 <input id="vetting-note" name="note" maxLength={500} autoComplete="off" />
               </Field>
-              <FormActions><button className="button" type="submit">Record check</button></FormActions>
+              <FormActions><button className="btn btn--primary" type="submit">Record check</button></FormActions>
             </form>
           </Dialog>
         }
@@ -80,7 +80,7 @@ export function VettingCard({ tutorId, lines, today }: { tutorId: string; lines:
                         <Field label="Reason" htmlFor={`void-${line.check.id}`} required>
                           <input id={`void-${line.check.id}`} name="reason" required minLength={3} maxLength={500} autoComplete="off" />
                         </Field>
-                        <FormActions><button className="button" type="submit">Remove record</button></FormActions>
+                        <FormActions><button className="btn btn--primary" type="submit">Remove record</button></FormActions>
                       </form>
                     </Dialog>
                   )}

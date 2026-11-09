@@ -32,8 +32,8 @@ export default async function BillingPage() {
         description="Monthly statements in arrears for lessons delivered. Overdue is a flag for a person to look at: nothing here pauses a family's lessons."
         actions={
           <>
-            <Link className="button button--secondary" href="/dashboard/admin/billing/tutor-rates">Tutor pay</Link>
-            <Link className="button button--secondary" href="/dashboard/admin/billing/settings">Billing rules</Link>
+            <Link className="btn btn--secondary" href="/dashboard/admin/billing/tutor-rates">Tutor pay</Link>
+            <Link className="btn btn--secondary" href="/dashboard/admin/billing/settings">Billing rules</Link>
           </>
         }
       />

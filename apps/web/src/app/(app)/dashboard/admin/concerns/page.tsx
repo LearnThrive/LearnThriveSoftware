@@ -31,7 +31,7 @@ const STATUS: Record<ConcernStatus, { label: string; tone: BadgeTone }> = {
 export default async function ConcernsLogPage() {
   const user = await requireRole(["ADMIN"]);
   const result = await listConcerns(getSafeguarding(), { id: user.id, email: user.email }, safeguardingLeads());
-  const raise = <Link className="button button--secondary" href="/dashboard/concerns">Raise a concern</Link>;
+  const raise = <Link className="btn btn--secondary" href="/dashboard/concerns">Raise a concern</Link>;
 
   if (!result.ok) {
     return (

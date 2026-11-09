@@ -84,7 +84,7 @@ export default async function ConcernPage({ params }: { params: Promise<{ id: st
             <Field label="Note" htmlFor="concern-note" hint="What was done, who was told, and when. Do not paste anything that belongs in a restricted case file.">
               <textarea id="concern-note" name="note" maxLength={2000} rows={4} />
             </Field>
-            <FormActions><button className="button" type="submit">Save</button></FormActions>
+            <FormActions><button className="btn btn--primary" type="submit">Save</button></FormActions>
           </form>
         </CardBody>
       </Card>

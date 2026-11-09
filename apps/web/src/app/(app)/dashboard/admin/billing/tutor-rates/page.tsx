@@ -49,7 +49,7 @@ export default async function TutorRatesPage() {
                   <Field label="From" htmlFor={`from-${t.id}`} required>
                     <input id={`from-${t.id}`} name="effectiveFrom" type="date" defaultValue={today} required />
                   </Field>
-                  <FormActions><button className="button" type="submit">Set pay</button></FormActions>
+                  <FormActions><button className="btn btn--primary" type="submit">Set pay</button></FormActions>
                 </form>
               </CardBody>
             </Card>

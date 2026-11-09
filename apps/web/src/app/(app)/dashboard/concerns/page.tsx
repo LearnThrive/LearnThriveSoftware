@@ -77,7 +77,7 @@ export default async function ConcernsPage({ searchParams }: { searchParams: Pro
                   <option value="true">Yes</option>
                 </select>
               </Field>
-              <FormActions><button className="button" type="submit">Send to the safeguarding lead</button></FormActions>
+              <FormActions><button className="btn btn--primary" type="submit">Send to the safeguarding lead</button></FormActions>
             </form>
           </CardBody>
         </Card>
