@@ -568,12 +568,20 @@ export class SqlLibraryStore implements LibraryStore {
       );
       return (rows[0]?.n ?? 0) > 0;
     },
-    recordAudit: async ({ actor, action, clientId, studentId, now }) => {
-      await this.db.query(`insert into public.identity_audit (at, actor_profile_id, action, client_id, student_id) values ($1, $2, $3, $4, $5)`, [now, actor, action, clientId ?? null, studentId ?? null]);
+    recordAudit: async ({ actor, action, clientId, studentId, tutorId, fields, now }) => {
+      // JSON goes in as text and is cast in SQL: sent as jsonb, the driver stores it as a string (the rule at the top of this file).
+      await this.db.query(
+        `insert into public.identity_audit (at, actor_profile_id, action, client_id, student_id, tutor_id, detail) values ($1, $2, $3, $4, $5, $6, $7::text::jsonb)`,
+        [now, actor, action, clientId ?? null, studentId ?? null, tutorId ?? null, JSON.stringify(fields?.length ? { fields } : {})],
+      );
     },
+    auditForTutor: async (tutorId, limit = 50) =>
+      (await this.db.query<Row>(`select at, actor_profile_id, action, client_id, student_id, tutor_id, detail from public.identity_audit where tutor_id = $1 order by id desc limit $2`, [tutorId, Math.min(Math.max(limit, 1), 500)])).map(
+        (r): IdentityAuditEntry => ({ at: new Date(r.at), actorProfileId: r.actor_profile_id, action: r.action, clientId: r.client_id, studentId: r.student_id, tutorId: r.tutor_id, ...(Array.isArray(r.detail?.fields) ? { fields: r.detail.fields } : {}) }),
+      ),
     auditFor: async (studentId, limit = 50) =>
-      (await this.db.query<Row>(`select at, actor_profile_id, action, client_id, student_id from public.identity_audit where student_id = $1 order by id desc limit $2`, [studentId, Math.min(Math.max(limit, 1), 500)])).map(
-        (r): IdentityAuditEntry => ({ at: new Date(r.at), actorProfileId: r.actor_profile_id, action: r.action, clientId: r.client_id, studentId: r.student_id }),
+      (await this.db.query<Row>(`select at, actor_profile_id, action, client_id, student_id, detail from public.identity_audit where student_id = $1 order by id desc limit $2`, [studentId, Math.min(Math.max(limit, 1), 500)])).map(
+        (r): IdentityAuditEntry => ({ at: new Date(r.at), actorProfileId: r.actor_profile_id, action: r.action, clientId: r.client_id, studentId: r.student_id, ...(Array.isArray(r.detail?.fields) ? { fields: r.detail.fields } : {}) }),
       ),
   };
 

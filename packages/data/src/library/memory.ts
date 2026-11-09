@@ -562,8 +562,11 @@ export class InMemoryLibraryStore implements LibraryStore {
       this.audit(guardianProfileId, "supervised_ended", this.clients.get(guardianProfileId) ?? null, row.studentId, now);
       return true;
     },
-    recordAudit: async ({ actor, action, clientId, studentId, now }) => void this.audit(actor, action, clientId ?? null, studentId ?? null, now),
+    recordAudit: async ({ actor, action, clientId, studentId, tutorId, fields, now }) => {
+      this.auditRows.push({ at: now, actorProfileId: actor, action, clientId: clientId ?? null, studentId: studentId ?? null, tutorId: tutorId ?? null, ...(fields?.length ? { fields: [...fields] } : {}) });
+    },
     auditFor: async (studentId, limit = 50) => this.auditRows.filter((a) => a.studentId === studentId).slice().reverse().slice(0, limit),
+    auditForTutor: async (tutorId, limit = 50) => this.auditRows.filter((a) => a.tutorId === tutorId).slice().reverse().slice(0, limit),
   };
 
   billing: BillingRepository = {

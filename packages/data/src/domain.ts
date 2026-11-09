@@ -64,7 +64,8 @@ export interface TuitionAssignment {
   defaultLessonNotes?: string;
   // Plan section 45: overrides PlatformSettings.requireReportApproval for lessons on this
   // Assignment only. Absent means "use the platform default".
-  requireReportApproval?: boolean;
+  // `null` in an update clears the override, back to the platform default.
+  requireReportApproval?: boolean | null;
   createdAt: string;
 }
 
@@ -150,7 +151,9 @@ export interface LessonAttendanceRecord {
 // Plan section 40: a chronological, append-only audit/activity timeline per Lesson — never
 // edited or deleted once written, so it stays a trustworthy record of what actually happened.
 export type LessonActivityEventType =
-  | "CREATED" | "RESCHEDULED" | "CANCELLED" | "ATTENDANCE_MARKED" | "COMPLETED" | "REPORT_SUBMITTED" | "REPORT_APPROVED";
+  | "CREATED" | "RESCHEDULED" | "CANCELLED" | "ATTENDANCE_MARKED" | "COMPLETED" | "REPORT_SUBMITTED" | "REPORT_APPROVED"
+  // An administrator sent a submitted report back to its tutor for changes (migration 0023).
+  | "REPORT_RETURNED";
 
 export interface LessonActivityEvent {
   id: string;

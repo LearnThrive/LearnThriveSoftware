@@ -91,6 +91,10 @@ export interface IdentityAuditEntry {
   action: string;
   clientId: string | null;
   studentId: string | null;
+  /** The tutor a correction was about (tutor_details_changed). */
+  tutorId?: string | null;
+  /** Which fields a correction changed: their names only, never the old or the new value. */
+  fields?: string[];
 }
 
 /** The kind of consent a guardian gives for a learner to use LearnThrive AI. Withdrawing it closes the assistant for that learner. */
@@ -151,8 +155,10 @@ export interface IdentityRepository {
   endSupervised(tokenHash: string, guardianProfileId: string, now: Date): Promise<boolean>;
 
   /** Writes one audit entry (ids and an action word, never personal data). For staff operations outside this repository, such as enrolment changes. */
-  recordAudit(input: { actor: string; action: string; clientId?: string | null; studentId?: string | null; now: Date }): Promise<void>;
+  recordAudit(input: { actor: string; action: string; clientId?: string | null; studentId?: string | null; tutorId?: string | null; fields?: string[]; now: Date }): Promise<void>;
 
   /** Newest first. For staff and tests. */
   auditFor(studentId: string, limit?: number): Promise<IdentityAuditEntry[]>;
+  /** The same for a tutor: corrections to their record. */
+  auditForTutor(tutorId: string, limit?: number): Promise<IdentityAuditEntry[]>;
 }
