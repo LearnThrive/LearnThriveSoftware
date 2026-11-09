@@ -19,9 +19,14 @@ import { pathToFileURL } from "node:url";
 
 /** Every table in public (a test compares this with the migrations, so a new table cannot be forgotten). */
 export const PUBLIC_TABLES = [
-  "admin_grants", "assignment_students", "billing_customers", "careers_application_events", "careers_application_files", "careers_application_notes", "careers_applications", "careers_deletions", "chat_file_chunks", "chat_files", "chat_messages", "chat_sessions", "client_students", "clients",
-  "consents", "data_purges", "download_events", "entitlements", "identity_audit", "learner_identities", "learner_invitations", "lesson_activity", "lesson_attendance", "lesson_reports", "lesson_students", "lessons", "notifications", "paper_assessment_versions", "paper_jobs", "platform_settings", "profiles", "resource_files", "resources", "students", "stripe_webhook_events",
-  "subscriptions", "supervised_contexts", "tuition_assignments", "tuition_billing_audit", "tuition_billing_settings", "tuition_charge_decisions", "tuition_family_profiles", "tuition_family_rates", "tuition_payments", "tuition_refunds", "tuition_statements", "tuition_tutor_rates", "tutor_availability_blocks", "tutors", "usage_counters",
+  "admin_grants", "assignment_students", "billing_customers", "careers_application_events", "careers_application_files", "careers_application_notes",
+  "careers_applications", "careers_deletions", "chat_file_chunks", "chat_files", "chat_messages", "chat_sessions", "client_students", "clients",
+  "consents", "data_purges", "download_events", "entitlements", "identity_audit", "learner_identities", "learner_invitations", "lesson_activity",
+  "lesson_attendance", "lesson_reports", "lesson_students", "lessons", "notifications", "paper_assessment_versions", "paper_jobs",
+  "platform_settings", "profiles", "resource_files", "resources", "safeguarding_concern_events", "safeguarding_concerns", "stripe_webhook_events",
+  "students", "subscriptions", "supervised_contexts", "tuition_assignments", "tuition_billing_audit", "tuition_billing_settings",
+  "tuition_charge_decisions", "tuition_family_profiles", "tuition_family_rates", "tuition_payments", "tuition_refunds", "tuition_statements",
+  "tuition_tutor_rates", "tutor_availability_blocks", "tutor_vetting_checks", "tutors", "usage_counters",
 ];
 const NOT_EXPOSED_SCHEMAS = ["private", "auth", "storage", "extensions", "pg_catalog", "information_schema", "vault", "supabase_migrations", "graphql_public"];
 const BUCKETS = ["library", "chat-uploads", "careers"];

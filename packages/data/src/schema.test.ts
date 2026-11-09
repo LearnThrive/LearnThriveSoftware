@@ -40,6 +40,8 @@ const EXPECTED_TABLES = [
   "profiles",
   "resource_files",
   "resources",
+  "safeguarding_concern_events",
+  "safeguarding_concerns",
   "stripe_webhook_events",
   "students",
   "subscriptions",
@@ -55,6 +57,7 @@ const EXPECTED_TABLES = [
   "tuition_statements",
   "tuition_tutor_rates",
   "tutor_availability_blocks",
+  "tutor_vetting_checks",
   "tutors",
   "usage_counters",
 ];
@@ -89,6 +92,8 @@ const FORCED_TABLES = [
   "platform_settings",
   "resource_files",
   "resources",
+  "safeguarding_concern_events",
+  "safeguarding_concerns",
   "stripe_webhook_events",
   "subscriptions",
   "supervised_contexts",
@@ -102,6 +107,7 @@ const FORCED_TABLES = [
   "tuition_statements",
   "tuition_tutor_rates",
   "tutor_availability_blocks",
+  "tutor_vetting_checks",
   "usage_counters",
 ];
 
@@ -177,6 +183,7 @@ describe("migrations", () => {
       "0019_leaving.sql",
       "0020_careers.sql",
       "0021_tuition_billing.sql",
+      "0022_safeguarding.sql",
     ]);
     assert.deepEqual(
       applied.map((f) => Number(f.slice(0, 4))),
