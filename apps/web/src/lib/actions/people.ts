@@ -6,6 +6,7 @@ import { accountRuntime } from "@/lib/account/runtime";
 import { getDataProvider } from "@/lib/data/provider";
 import { mirrorStudent } from "@/lib/dev/memoryMirror";
 import { requireRole } from "@/lib/auth/guard";
+import { studentCorrection, tutorCorrection } from "@/lib/people/corrections";
 
 function text(formData: FormData, key: string): string {
   const value = formData.get(key);
@@ -87,4 +88,47 @@ export async function createAssignmentAction(formData: FormData): Promise<void> 
   for (const studentId of studentIds) await mirrorStudent(rt, data, studentId);
   revalidatePath("/dashboard/admin/assignments");
   redirect(`/dashboard/admin/assignments?toast=${encodeURIComponent(`${title} created`)}`);
+}
+
+// ---- corrections (docs/improvement/PLAN.md item 5) ---------------------------------------------------------------------------------
+// A record that is wrong can be put right, by an administrator, and the correction is audited: who changed which fields of whose
+// record. The audit never holds the old or the new value (identity_audit: ids and actions only).
+
+export async function updateStudentAction(formData: FormData): Promise<void> {
+  const admin = await requireRole(["ADMIN"]);
+  const id = text(formData, "studentId");
+  const page = `/dashboard/admin/students/${encodeURIComponent(id)}`;
+  const data = getDataProvider();
+  const student = await data.students.get(id);
+  if (!student) redirect(`/dashboard/admin/people/students?toast=${encodeURIComponent("That student no longer exists.")}`);
+  const change = studentCorrection(student, { name: text(formData, "name"), yearGroup: text(formData, "yearGroup") });
+  if (!change.ok) redirect(`${page}?toast=${encodeURIComponent(change.message)}`);
+  if (change.fields.length === 0) redirect(`${page}?toast=${encodeURIComponent("Nothing was changed")}`);
+  await data.students.update(id, change.patch);
+  const rt = await accountRuntime();
+  if (rt) {
+    const family = (await data.students.clientsFor(id))[0];
+    await rt.store.identity.recordAudit({ actor: admin.id, action: "student_details_changed", studentId: id, clientId: family?.id ?? null, fields: change.fields, now: new Date() });
+  }
+  revalidatePath(page);
+  revalidatePath("/dashboard/admin/people/students");
+  redirect(`${page}?toast=${encodeURIComponent("Details corrected")}`);
+}
+
+export async function updateTutorAction(formData: FormData): Promise<void> {
+  const admin = await requireRole(["ADMIN"]);
+  const id = text(formData, "tutorId");
+  const page = `/dashboard/admin/tutors/${encodeURIComponent(id)}`;
+  const data = getDataProvider();
+  const tutor = await data.tutors.get(id);
+  if (!tutor) redirect(`/dashboard/admin/people/tutors?toast=${encodeURIComponent("That tutor no longer exists.")}`);
+  const change = tutorCorrection(tutor, { name: text(formData, "name"), email: text(formData, "email"), subjects: text(formData, "subjects") });
+  if (!change.ok) redirect(`${page}?toast=${encodeURIComponent(change.message)}`);
+  if (change.fields.length === 0) redirect(`${page}?toast=${encodeURIComponent("Nothing was changed")}`);
+  await data.tutors.update(id, change.patch);
+  const rt = await accountRuntime();
+  if (rt) await rt.store.identity.recordAudit({ actor: admin.id, action: "tutor_details_changed", tutorId: id, fields: change.fields, now: new Date() });
+  revalidatePath(page);
+  revalidatePath("/dashboard/admin/people/tutors");
+  redirect(`${page}?toast=${encodeURIComponent("Details corrected")}`);
 }

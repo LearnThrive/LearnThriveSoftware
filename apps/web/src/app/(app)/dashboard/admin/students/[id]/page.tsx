@@ -19,6 +19,7 @@ import { PurgePanel } from "@/components/people/PurgePanel";
 import { createLearnerLoginAction } from "@/lib/actions/accounts";
 import { learnerLogin } from "@/lib/account/loginDetails";
 import { purgeStudentAction } from "@/lib/actions/purge";
+import { EditStudentDialog } from "@/components/people/EditDetails";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -97,6 +98,7 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
           </div>
         </div>
         <div className="profile-header__actions">
+          <EditStudentDialog student={student} />
           <Link href={`/dashboard/progress/${student.id}`} className="btn btn--secondary">See progress</Link>
           <Link href="/dashboard/admin/lessons/new" className="btn btn--primary">
             <CalendarPlus size={16} aria-hidden="true" />Schedule lesson

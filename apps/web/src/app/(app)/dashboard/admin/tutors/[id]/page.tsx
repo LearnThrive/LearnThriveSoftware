@@ -23,6 +23,7 @@ import { purgeTutorAction } from "@/lib/actions/purge";
 import { linkTutorLoginAction } from "@/lib/actions/enrolment";
 import { vettingStatus } from "@learnthrive/data/safeguarding";
 import { VettingCard } from "@/components/people/VettingCard";
+import { EditTutorDialog } from "@/components/people/EditDetails";
 import { getSafeguarding, todayInLondon } from "@/lib/safeguarding/runtime";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -96,6 +97,7 @@ export default async function TutorProfilePage({ params }: { params: Promise<{ i
           </div>
         </div>
         <div className="profile-header__actions">
+          <EditTutorDialog tutor={tutor} />
           <Link href="/dashboard/admin/lessons/new" className="btn btn--primary">
             <CalendarPlus size={16} aria-hidden="true" />Schedule lesson
           </Link>
