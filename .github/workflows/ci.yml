@@ -5,7 +5,8 @@ name: CI
 #             (apps/web/tests-prod) in Chromium, Firefox and WebKit against `next start`.  BLOCKING.
 #   e2e       the full dev-server Playwright suite (apps/web/tests-e2e), Chromium. Runs on pushes to
 #             main only: it is the slow one (about 70 minutes) and needs a quiet machine.  BLOCKING there.
-#   audit     `npm audit --omit=dev`, reported, never blocking (known exceptions: docs/DEPLOYMENT_READINESS.md).
+#   audit     `npm audit --omit=dev`: a CRITICAL advisory fails the job (two in Next went unnoticed until 6 Nov 2026 while this
+#             only reported); everything below critical is reported, not blocking (known exceptions: docs/DEPLOYMENT_READINESS.md).
 #
 # The branch and deploy process is in docs/DEPLOYMENT.md.
 
@@ -118,6 +119,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-      - name: Production dependency audit (report only)
+      - name: Production dependency audit (full report, not blocking)
         continue-on-error: true
         run: npm audit --omit=dev
+      - name: No critical advisory in a production dependency (blocking)
+        run: npm audit --omit=dev --audit-level=critical
