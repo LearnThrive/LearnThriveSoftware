@@ -1,7 +1,7 @@
 import type { DataProvider } from "@learnthrive/data/repositories";
 import type { LessonReport, ReportAssessmentLevel } from "@learnthrive/data/domain";
 import { logActivity } from "@/lib/activity/activityService";
-import { notifyProfiles, notifyRole } from "@/lib/notifications/notificationService";
+import { notifyProfile, notifyProfiles, notifyRole } from "@/lib/notifications/notificationService";
 
 export class ReportError extends Error {}
 
@@ -80,6 +80,27 @@ export async function approveReport(data: DataProvider, reportId: string, actorI
   const updated = await data.reports.update(reportId, { status: "APPROVED", approvedAt, approvedBy: actorId });
   await logActivity(data, report.lessonId, "REPORT_APPROVED", "Lesson report approved", actorId);
   if (lesson) await notifyProfiles(data, lesson.clientIds, "REPORT_AVAILABLE", `A new report is available for "${lesson.title}".`, `/dashboard/lessons/${lesson.id}`);
+  return updated;
+}
+
+/**
+ * Admin-only in practice (enforced by the calling Server Action): SUBMITTED -> DRAFT, with a reason the tutor can act on. Only a report
+ * that is waiting for approval can be sent back: an approved one is already with the family, and withdrawing that is a different
+ * decision. Families never saw a SUBMITTED report, so nothing changes for them. The reason is on the lesson's activity (which only the
+ * tutor and administrators see) and in the tutor's notification.
+ */
+export async function returnReport(data: DataProvider, reportId: string, actorId: string, reason: string): Promise<LessonReport> {
+  const report = await data.reports.get(reportId);
+  if (!report) throw new ReportError("Report not found.");
+  if (report.status !== "SUBMITTED") throw new ReportError("Only a report that is waiting for approval can be sent back.");
+  const why = reason.trim().replace(/\s+/g, " ");
+  if (why.length < 3) throw new ReportError("Say what needs changing, so the tutor knows.");
+  if (why.length > 500) throw new ReportError("Keep the reason to 500 characters.");
+
+  const lesson = await data.lessons.get(report.lessonId);
+  const updated = await data.reports.update(reportId, { status: "DRAFT" });
+  await logActivity(data, report.lessonId, "REPORT_RETURNED", `Lesson report sent back for changes: ${why}`, actorId);
+  if (lesson) await notifyProfile(data, lesson.tutorId, "REPORT_REQUIRED", `Your report for "${lesson.title}" was sent back for changes: ${why}`, `/dashboard/lessons/${lesson.id}`);
   return updated;
 }
 

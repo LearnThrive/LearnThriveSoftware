@@ -48,6 +48,21 @@ export async function setAssignmentStatusAction(formData: FormData): Promise<voi
   back(`/dashboard/admin/assignments/${id}`, status === "ENDED" ? "Enrolment ended" : status === "PAUSED" ? "Assignment paused" : "Assignment resumed");
 }
 
+/**
+ * The per-assignment override of "reports need approval" (docs/LESSON_REPORTS.md): follow the platform setting, always approve, or
+ * never. It changes what happens to reports submitted from now on; a report already submitted keeps its status.
+ */
+export async function setAssignmentReportApprovalAction(formData: FormData): Promise<void> {
+  await requireRole(["ADMIN"]);
+  const id = field(formData, "assignmentId");
+  const choice = field(formData, "reportApproval");
+  if (!ID.test(id) || !["default", "required", "not_required"].includes(choice)) throw new Error("That is not a valid change.");
+  const data = getDataProvider();
+  if (!(await data.assignments.get(id))) throw new Error("There is no such assignment.");
+  await data.assignments.update(id, { requireReportApproval: choice === "default" ? null : choice === "required" });
+  back(`/dashboard/admin/assignments/${id}`, choice === "default" ? "Reports here follow the platform setting" : choice === "required" ? "Reports here need approval" : "Reports here are shared as soon as they are submitted");
+}
+
 export async function setAssignmentTutorAction(formData: FormData): Promise<void> {
   const admin = await requireRole(["ADMIN"]);
   const id = field(formData, "assignmentId");

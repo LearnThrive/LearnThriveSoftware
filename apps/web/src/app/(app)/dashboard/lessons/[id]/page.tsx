@@ -8,7 +8,7 @@ import { createMetadata } from "@/lib/metadata";
 import { getDataProvider } from "@/lib/data/provider";
 import { cancelLessonAction } from "@/lib/actions/lessons";
 import { markAttendanceAction, completeLessonAction } from "@/lib/actions/attendance";
-import { approveReportAction, saveReportDraftAction, submitReportAction } from "@/lib/actions/reports";
+import { approveReportAction, returnReportAction, saveReportDraftAction, submitReportAction } from "@/lib/actions/reports";
 import { visibleReportFor } from "@/lib/reports/reportService";
 import { isWithinJoinWindow } from "@/lib/scheduling/joinWindow";
 import { formatLongDate, formatRelative, formatTimeRange } from "@/lib/format";
@@ -301,10 +301,21 @@ export default async function LessonDetailPage({
                 )}
 
                 {isAdmin && report?.status === "SUBMITTED" && (
-                  <form action={approveReportAction} style={{ marginTop: "var(--space-4)" }}>
-                    <input type="hidden" name="lessonId" value={lesson.id} />
-                    <button type="submit" className="btn btn--primary">Approve report</button>
-                  </form>
+                  <div style={{ marginTop: "var(--space-4)", display: "flex", gap: "var(--space-3)", flexWrap: "wrap" }}>
+                    <form action={approveReportAction}>
+                      <input type="hidden" name="lessonId" value={lesson.id} />
+                      <button type="submit" className="btn btn--primary">Approve report</button>
+                    </form>
+                    <Dialog trigger="Send back for changes" tone="secondary" title="Send this report back" description="The tutor is told why and can edit and submit it again. The family has not seen it.">
+                      <form action={returnReportAction} className="form">
+                        <input type="hidden" name="lessonId" value={lesson.id} />
+                        <Field label="What needs changing" htmlFor="return-reason" required hint="The tutor sees this.">
+                          <textarea id="return-reason" name="reason" required minLength={3} maxLength={500} rows={3} />
+                        </Field>
+                        <FormActions><button type="submit" className="btn btn--primary">Send back</button></FormActions>
+                      </form>
+                    </Dialog>
+                  </div>
                 )}
               </CardBody>
             </Card>

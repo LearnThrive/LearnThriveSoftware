@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getDataProvider } from "@/lib/data/provider";
 import { requireRole } from "@/lib/auth/guard";
-import { approveReport, getOrCreateDraft, ReportError, saveDraft, submitReport } from "@/lib/reports/reportService";
+import { approveReport, getOrCreateDraft, ReportError, returnReport, saveDraft, submitReport } from "@/lib/reports/reportService";
 import type { ReportAssessmentLevel } from "@learnthrive/data/domain";
 
 function text(formData: FormData, key: string): string {
@@ -58,6 +58,23 @@ export async function submitReportAction(formData: FormData): Promise<void> {
   if (!report) throw new Error("No draft report exists to submit.");
   try {
     await submitReport(data, report.id, user.id);
+  } catch (error) {
+    if (error instanceof ReportError) throw new Error(error.message);
+    throw error;
+  }
+  revalidatePath(`/dashboard/lessons/${lessonId}`);
+}
+
+/** An administrator sends a submitted report back to its tutor with a reason (docs/improvement/PLAN.md item 6). */
+export async function returnReportAction(formData: FormData): Promise<void> {
+  const user = await requireRole(["ADMIN"]);
+  const lessonId = text(formData, "lessonId");
+  if (!lessonId) throw new Error("Lesson is required.");
+  const data = getDataProvider();
+  const report = await data.reports.forLesson(lessonId);
+  if (!report) throw new Error("No report exists for this lesson.");
+  try {
+    await returnReport(data, report.id, user.id, text(formData, "reason"));
   } catch (error) {
     if (error instanceof ReportError) throw new Error(error.message);
     throw error;

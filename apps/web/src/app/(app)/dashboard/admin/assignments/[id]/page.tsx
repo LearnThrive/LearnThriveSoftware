@@ -15,7 +15,7 @@ import { PersonList, PersonRow } from "@/components/people/PersonRow";
 import { formatDateOnly, formatRelative } from "@/lib/format";
 import { RecordList, RecordRow } from "@/components/records/RecordRow";
 import { Field, FormActions } from "@/components/ui/Field";
-import { addAssignmentStudentAction, removeAssignmentStudentAction, setAssignmentStatusAction, setAssignmentTutorAction } from "@/lib/actions/enrolment";
+import { addAssignmentStudentAction, removeAssignmentStudentAction, setAssignmentReportApprovalAction, setAssignmentStatusAction, setAssignmentTutorAction } from "@/lib/actions/enrolment";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -215,6 +215,17 @@ export default async function AssignmentDetailPage({ params }: { params: Promise
                 <div><dt>Location</dt><dd>{assignment.defaultLocationType === "IN_PERSON" ? "In person" : "Online"}</dd></div>
                 <div><dt>Report approval</dt><dd>{reportApprovalRequired ? "Required" : "Not required"}{assignment.requireReportApproval == null ? " (platform default)" : ""}</dd></div>
               </dl>
+              <form action={setAssignmentReportApprovalAction} className="form">
+                <input type="hidden" name="assignmentId" value={assignment.id} />
+                <Field label="Reports on this assignment" htmlFor="assignment-report-approval" hint="Applies to reports submitted from now on.">
+                  <select id="assignment-report-approval" name="reportApproval" defaultValue={assignment.requireReportApproval == null ? "default" : assignment.requireReportApproval ? "required" : "not_required"}>
+                    <option value="default">Follow the platform setting</option>
+                    <option value="required">Always need approval</option>
+                    <option value="not_required">Never need approval</option>
+                  </select>
+                </Field>
+                <FormActions><button type="submit" className="btn btn--secondary">Save</button></FormActions>
+              </form>
             </CardBody>
           </Card>
 
