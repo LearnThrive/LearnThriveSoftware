@@ -476,7 +476,7 @@ export function ApplicationForm({ roles, initialRole, today }: ApplicationFormPr
                 checked={values.declDbs}
                 onChange={(on) => set("declDbs", on)}
                 error={shown.declDbs}
-                label="I agree to an Enhanced DBS check including the Children’s Barred List, carried out by LearnThrive if I am offered a place. LearnThrive pays for it unless I already hold a suitable certificate or choose to pay for my own check."
+                label="I agree to an Enhanced DBS check including the Children’s Barred List before I teach. I understand that I pay for my own check to begin with unless I already hold a suitable certificate, and that LearnThrive may reimburse the cost at a later date, subject to approval."
               />
               <CheckboxField name="declSelfEmployed" checked={values.declSelfEmployed} onChange={(on) => set("declSelfEmployed", on)} error={shown.declSelfEmployed} label="I understand that tutors are self-employed, and that any start is subject to the checks described." />
               <CheckboxField

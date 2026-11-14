@@ -193,7 +193,7 @@ export const safeguardingTeam = { lead: "Tahasin Hasan", deputy: "Abdurrahman Mu
 export const confirmedSafeguardingFacts: readonly string[] = [
   `Our safeguarding lead is ${safeguardingTeam.lead} and our deputy safeguarding lead is ${safeguardingTeam.deputy}.`,
   "Every applicant must read and agree to the safeguarding agreement as part of applying.",
-  "Every tutor must agree to an Enhanced DBS check including the Children’s Barred List. LearnThrive arranges it and pays for it, unless you already hold a suitable certificate or choose to pay for your own check.",
+  "Every tutor must agree to an Enhanced DBS check including the Children’s Barred List. Tutors pay for their own check to begin with, unless they already hold a suitable certificate. LearnThrive may reimburse the cost at a later date, subject to approval.",
   "No tutor teaches any student, or has any contact with one, until every check is complete.",
   "Tutors reconfirm the safeguarding agreement every year, and whenever a new version is issued.",
 ];

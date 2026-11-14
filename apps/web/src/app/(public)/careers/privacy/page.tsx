@@ -108,8 +108,8 @@ export default function CareersPrivacyPage() {
           content: (
             <>
               <p>
-                Every tutor must agree to an Enhanced DBS check including the Children’s Barred List, arranged by LearnThrive through the DBS
-                process. LearnThrive pays for it, unless you already hold a suitable certificate or choose to pay for your own check.
+                Every tutor must agree to an Enhanced DBS check including the Children’s Barred List. Tutors pay for their own check to begin
+                with, unless they already hold a suitable certificate. LearnThrive may reimburse the cost at a later date, subject to approval.
               </p>
               <p>{suitableCertificateText}</p>
               <p>

@@ -24,7 +24,7 @@ export default function BookPage() {
       <PageHero
         eyebrow="Free consultation"
         title="Tell us how we can support your child"
-        intro="Share a few practical details and we'll be in touch to arrange a free consultation."
+        intro="Share a few practical details and we'll be in touch to arrange your free consultation: a free 30-minute taster session, where we get to know your child and they meet a tutor."
         aside={
           <div className="contact-mini-card">
             <span>Prefer to speak directly?</span>

@@ -108,7 +108,7 @@ test.describe('the careers hub', () => {
     const section = page.locator('#safeguarding-heading').locator('xpath=ancestor::section');
     await expect(section).toContainText('Our safeguarding lead is Tahasin Hasan and our deputy safeguarding lead is Abdurrahman Mustafa.');
     await expect(section).toContainText('Every applicant must read and agree to the safeguarding agreement as part of applying.');
-    await expect(section).toContainText('LearnThrive arranges it and pays for it, unless you already hold a suitable certificate or choose to pay for your own check.');
+    await expect(section).toContainText('Tutors pay for their own check to begin with, unless they already hold a suitable certificate. LearnThrive may reimburse the cost at a later date, subject to approval.');
     await expect(section.getByRole('link', { name: /Read the safeguarding agreement/ })).toHaveAttribute('href', '/careers/safeguarding-agreement');
     await expect(section.getByRole('link', { name: /Our safeguarding information/ })).toHaveAttribute('href', '/safeguarding');
   });
@@ -280,7 +280,7 @@ test.describe('the rest of the site', () => {
       'deputy safeguarding lead is Abdurrahman Mustafa',
       'No tutor teaches any student, or has any contact with one, until every check is complete.',
       'Enhanced DBS check including the Children’s Barred List',
-      'LearnThrive pays for it unless the tutor already holds a suitable certificate or chooses to pay for their own check',
+      'Tutors pay for their own check to begin with, unless they already hold a suitable certificate; LearnThrive may reimburse the cost at a later date, subject to approval',
       'reconfirm the safeguarding agreement every year',
       'If a child is in immediate danger, call 999 first.',
       'LearnThrive lessons are not recorded by default.',

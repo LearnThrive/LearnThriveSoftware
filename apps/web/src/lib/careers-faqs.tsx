@@ -103,8 +103,9 @@ export const careersFaqs: readonly FaqItem[] = [
     answer: (
       <>
         <p>
-          Every tutor must agree to an Enhanced DBS check including the Children’s Barred List. LearnThrive arranges it and pays for it,
-          unless you already hold a suitable certificate or choose to pay for your own check. Any start is subject to the outcome.
+          Every tutor must agree to an Enhanced DBS check including the Children’s Barred List. Tutors pay for their own check to begin
+          with, unless they already hold a suitable certificate. LearnThrive may reimburse the cost at a later date, subject to approval.
+          Any start is subject to the outcome.
         </p>
         <p>{suitableCertificateText}</p>
         <p>The application asks only whether you hold a certificate and whether you use the Update Service. Please do not upload a certificate or send any DBS information through the form.</p>

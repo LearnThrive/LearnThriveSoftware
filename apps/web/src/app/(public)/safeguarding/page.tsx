@@ -81,9 +81,9 @@ export default function SafeguardingPage() {
                 <li>pass identity checks and right-to-work checks;</li>
                 <li>
                   agree to an Enhanced DBS check including the Children’s
-                  Barred List, arranged by LearnThrive. LearnThrive pays for it
-                  unless the tutor already holds a suitable certificate or
-                  chooses to pay for their own check;
+                  Barred List. Tutors pay for their own check to begin with,
+                  unless they already hold a suitable certificate; LearnThrive
+                  may reimburse the cost at a later date, subject to approval;
                 </li>
                 <li>
                   read and agree to the safeguarding agreement as part of

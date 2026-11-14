@@ -188,8 +188,8 @@ export const legalFaqs: readonly FaqItem[] = [
           <li>{"the parent or guardian accepts them"}</li>
           <li>{"LearnThrive confirms the tuition arrangement"}</li>
         </ul>
-        <p>{"Invoices may be issued in advance, including on a monthly basis where appropriate."}</p>
-        <p>{"Unless otherwise agreed, payment should be made by the stated invoice due date."}</p>
+        <p>{"Parents are invoiced monthly, after the lessons have taken place, for the lessons that were delivered and any lessons that are chargeable under the cancellation policy below."}</p>
+        <p>{"Payment is made by bank transfer, following the instructions on the invoice, by the due date shown on it. Families commit for an initial three months, then give one month's notice to stop."}</p>
         <h3>{"How much notice is required to cancel a lesson?"}</h3>
         <p>{"The working cancellation policy is:"}</p>
         <p><strong>{"At least 24 hours' notice"}</strong>{" should normally be provided where a lesson needs to be cancelled or rearranged."}</p>
@@ -288,7 +288,7 @@ export const legalFaqs: readonly FaqItem[] = [
         <p>{"Every tutor must:"}</p>
         <ul>
           <li>{"pass identity checks and right-to-work checks"}</li>
-          <li>{"agree to an Enhanced DBS check including the Children's Barred List, which LearnThrive arranges and pays for unless the tutor already holds a suitable certificate or chooses to pay for their own check"}</li>
+          <li>{"agree to an Enhanced DBS check including the Children's Barred List: tutors pay for their own check to begin with unless they already hold a suitable certificate, and LearnThrive may reimburse the cost at a later date, subject to approval"}</li>
           <li>{"read and agree to the safeguarding agreement as part of applying, and agree to the same expectations in the tutor agreement they sign"}</li>
           <li>{"reconfirm the safeguarding agreement every year, and whenever a new version is issued"}</li>
         </ul>
