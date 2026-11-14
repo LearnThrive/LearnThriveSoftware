@@ -1,5 +1,5 @@
 import type { SqlExecutor } from "../library/ports";
-import { rangesOverlap, validateDecision, validateFamilyRate, validatePayment, validateRefundRequest, validateSettings, validateTutorRate } from "./validate";
+import { planFamilyRate, validateDecision, validateFamilyRate, validatePayment, validateRefundRequest, validateSettings, validateTutorRate } from "./validate";
 import type { TuitionBillingRepository } from "./repository";
 import {
   BillingError, type AuditEntry, type BillingSettings, type ChargeDecision, type FamilyBillingProfile, type FamilyRate, type IssuedStatement, type Payment,
@@ -20,7 +20,7 @@ const ymd = (v: unknown): string => (typeof v === "string" ? v.slice(0, 10) : ne
 /** An actor id from a session. Real sessions carry a profile uuid; anything else is stored as null on the row and kept in the audit text. */
 const actorId = (v: string): string | null => (isId(v) ? v : null);
 
-const toFamilyRate = (r: Row): FamilyRate => ({ id: r.id, clientId: r.client_id, assignmentId: r.assignment_id, hourlyPence: r.hourly_pence, contractStart: ymd(r.contract_start), contractEnd: ymd(r.contract_end), createdBy: r.created_by ?? "", createdAt: iso(r.created_at) });
+const toFamilyRate = (r: Row): FamilyRate => ({ id: r.id, clientId: r.client_id, assignmentId: r.assignment_id, hourlyPence: r.hourly_pence, contractStart: ymd(r.contract_start), contractEnd: r.contract_end ? ymd(r.contract_end) : null, createdBy: r.created_by ?? "", createdAt: iso(r.created_at) });
 const toTutorRate = (r: Row): TutorRate => ({ id: r.id, tutorId: r.tutor_id, hourlyPence: r.hourly_pence, effectiveFrom: ymd(r.effective_from), createdBy: r.created_by ?? "", createdAt: iso(r.created_at) });
 const toDecision = (r: Row): ChargeDecision => ({ lessonId: r.lesson_id, ...(r.party ? { party: r.party } : {}), waive: r.waive, note: r.note, decidedBy: r.decided_by ?? "", decidedAt: iso(r.decided_at) });
 const toPayment = (r: Row): Payment => ({ id: r.id, clientId: r.client_id, amountPence: r.amount_pence, receivedOn: ymd(r.received_on), method: r.method, note: r.note, recordedBy: r.recorded_by ?? "", createdAt: iso(r.created_at) });
@@ -39,12 +39,12 @@ const toStatement = (r: Row): IssuedStatement => ({
 });
 const toSettings = (r: Row): BillingSettings => ({
   lateCancelNoticeHours: r.late_cancel_notice_hours, siblingDiscountPercent: r.sibling_discount_percent, repeatLateCancelFeePence: r.repeat_late_cancel_fee_pence ?? null,
-  allowanceResetMonths: r.allowance_reset_months ?? null, refundSecondApprovalPence: r.refund_second_approval_pence ?? null,
+  allowanceResetMonths: r.allowance_reset_months ?? null, refundSecondApprovalPence: r.refund_second_approval_pence ?? null, paymentInstructions: r.payment_instructions ?? "",
 });
 
 const SETTINGS_COLUMNS: Record<keyof BillingSettings, string> = {
   lateCancelNoticeHours: "late_cancel_notice_hours", siblingDiscountPercent: "sibling_discount_percent", repeatLateCancelFeePence: "repeat_late_cancel_fee_pence",
-  allowanceResetMonths: "allowance_reset_months", refundSecondApprovalPence: "refund_second_approval_pence",
+  allowanceResetMonths: "allowance_reset_months", refundSecondApprovalPence: "refund_second_approval_pence", paymentInstructions: "payment_instructions",
 };
 
 const REFUND_COLUMNS: Record<string, string> = {
@@ -89,11 +89,10 @@ export function createSqlTuitionBilling(db: SqlExecutor): TuitionBillingReposito
       async create(input) {
         validateFamilyRate(input);
         if (!isId(input.clientId) || !isId(input.assignmentId)) throw new BillingError("INVALID", "The family or the assignment is not recognised.");
-        const existing = await q("select contract_start, contract_end from public.tuition_family_rates where client_id = $1 and assignment_id = $2", [input.clientId, input.assignmentId]);
-        if (existing.some((r) => rangesOverlap(ymd(r.contract_start), ymd(r.contract_end), input.contractStart, input.contractEnd))) {
-          throw new BillingError("RATE_LOCKED", "This family already has an agreed rate for these lessons that covers some of those dates. The rate is fixed for the contract year.");
-        }
-        const [row] = await q("insert into public.tuition_family_rates (client_id, assignment_id, hourly_pence, contract_start, contract_end, created_by) values ($1, $2, $3, $4, $5, $6) returning *", [input.clientId, input.assignmentId, input.hourlyPence, input.contractStart, input.contractEnd, actorId(input.createdBy)]);
+        const existing = await q("select id, contract_start, contract_end from public.tuition_family_rates where client_id = $1 and assignment_id = $2", [input.clientId, input.assignmentId]);
+        const plan = planFamilyRate(existing.map((r) => ({ id: r.id as string, contractStart: ymd(r.contract_start), contractEnd: r.contract_end ? ymd(r.contract_end) : null })), input);
+        // Ending the old rate and starting the new one happen in one statement, so a failure cannot leave a family with a gap.
+        const [row] = await q("with ended as (update public.tuition_family_rates set contract_end = $7::date where id = $8::uuid returning id) insert into public.tuition_family_rates (client_id, assignment_id, hourly_pence, contract_start, contract_end, created_by) values ($1, $2, $3, $4, $5, $6) returning *", [input.clientId, input.assignmentId, input.hourlyPence, input.contractStart, input.contractEnd, actorId(input.createdBy), plan.endOn, plan.endId]);
         return toFamilyRate(row!);
       },
     },

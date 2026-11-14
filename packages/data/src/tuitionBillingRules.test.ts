@@ -185,13 +185,15 @@ describe("the monthly statement (B1, B4, B14, B16)", () => {
     const early = buildStatement(input({ asOf: "2026-10-20T09:00:00Z", lessons: [delivered("2026-10-06T16:00:00Z")] }));
     assert.deepEqual(early.blockers, ["PERIOD_NOT_ENDED"]);
   });
-  test("a repeat late cancellation is flagged, not priced, until the fee is decided; then it is charged", () => {
+  test("a repeat late cancellation is charged at the lesson price; a fixed fee replaces that if one is set (14 Nov 2026)", () => {
     const l1 = lesson({ startAt: "2026-10-06T16:00:00Z", status: "CANCELLED", cancelledAt: "2026-10-06T10:00:00Z" });
     const l2 = lesson({ startAt: "2026-10-13T16:00:00Z", status: "CANCELLED", cancelledAt: "2026-10-13T10:00:00Z" });
     const decisions = [l1, l2].map((l): ChargeDecision => ({ lessonId: l.id, party: "FAMILY", waive: false, note: "", decidedBy: "u", decidedAt: "x" }));
     const open = buildStatement(input({ lessons: [l1, l2], decisions }));
-    assert.deepEqual(open.blockers, ["FEE_UNCONFIRMED"]);
-    assert.deepEqual(open.lines.map((l) => [l.waived, l.amountPence]), [[true, 0], [false, 0]]);
+    assert.deepEqual(open.blockers, [], "nothing blocks the statement: the amount is the lesson's own price");
+    assert.deepEqual(open.lines.map((l) => [l.waived, l.amountPence]), [[true, 0], [false, 3000]], "the first is free, the second is charged at the rate");
+    assert.equal(open.missedLessonChargesPence, 3000);
+    assert.match(open.lines[1]!.description, /charged at the lesson price/);
     const decided = buildStatement(input({ lessons: [l1, l2], decisions, settings: { ...DEFAULT_BILLING_SETTINGS, repeatLateCancelFeePence: 1500 } }));
     assert.deepEqual(decided.blockers, []);
     assert.equal(decided.missedLessonChargesPence, 1500);

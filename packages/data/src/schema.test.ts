@@ -185,6 +185,7 @@ describe("migrations", () => {
       "0021_tuition_billing.sql",
       "0022_safeguarding.sql",
       "0023_corrections.sql",
+      "0024_billing_terms_14nov.sql",
     ]);
     assert.deepEqual(
       applied.map((f) => Number(f.slice(0, 4))),

@@ -3,6 +3,7 @@
 
 import type { DataProvider } from "../repositories";
 import { buildStatement, chargeablePeriodsBefore, overdueVerdict, type OverdueVerdict, type StatementInput } from "./statement";
+import { tutorPay, type TutorPayAttendance, type TutorPaySummary } from "./tutorPay";
 import { londonYmd } from "./period";
 import { decideRefund, isRefundApprover, type Actor, type RefundApprovers } from "./refunds";
 import { deriveChargeEvents, type BillingAttendance, type BillingLesson } from "./rules";
@@ -104,6 +105,60 @@ export async function familyBalances(ctx: BillingContext): Promise<FamilyBalance
   return out.sort((a, b) => a.clientName.localeCompare(b.clientName));
 }
 
+/**
+ * What a PARENT may see of their own family's money: the statements issued to them, what they have paid and what they owe. A projection,
+ * not the stored rows: it carries no lesson or child id, no administrator's id, no internal note on a payment, and nothing about a rate
+ * beyond what is printed on the statement itself. Built from the family id the caller has already resolved from the signed-in parent,
+ * never from anything the parent sends.
+ */
+export interface ParentStatementLine { date: string; childName: string; title: string; description: string; minutes: number; amountPence: Pence }
+export interface ParentStatement {
+  invoiceNumber: string;
+  period: string;
+  issuedOn: string;
+  lines: ParentStatementLine[];
+  lessonChargesPence: Pence;
+  missedLessonChargesPence: Pence;
+  siblingDiscountPence: Pence;
+  siblingDiscountPercent: number;
+  siblingDiscountApplied: boolean;
+  totalChargesPence: Pence;
+  paymentsReceivedPence: Pence;
+  openingBalancePence: Pence;
+  closingBalancePence: Pence;
+  company: CompanyDetails;
+}
+export interface ParentPayment { receivedOn: string; amountPence: Pence; method: string }
+export interface ParentAccount {
+  /** What the family owes now: the last statement's closing balance less payments recorded since. Negative = in credit. */
+  balancePence: Pence;
+  overdue: boolean;
+  statements: ParentStatement[];
+  payments: ParentPayment[];
+  /** How to pay, written by an administrator. Empty until they have. */
+  paymentInstructions: string;
+}
+
+export async function parentAccount(ctx: BillingContext, clientId: string): Promise<ParentAccount> {
+  const [statements, payments, settings] = await Promise.all([ctx.billing.statements.list(clientId), ctx.billing.payments.list(clientId), ctx.billing.settings.get()]);
+  const counted = new Set(statements.flatMap((s) => s.paymentIds));
+  const uncounted = payments.filter((p) => !counted.has(p.id)).reduce((n, p) => n + p.amountPence, 0);
+  const last = statements[statements.length - 1];
+  return {
+    balancePence: (last?.closingBalancePence ?? 0) - uncounted,
+    overdue: overdueVerdict(statements, payments, nowOf(ctx)).overdue,
+    statements: statements.slice().reverse().map((s): ParentStatement => ({
+      invoiceNumber: s.invoiceNumber, period: s.period, issuedOn: s.issuedOn,
+      lines: s.lines.filter((l) => l.kind !== "NEEDS_DECISION").map((l) => ({ date: l.date, childName: l.studentName, title: l.title, description: l.description, minutes: l.minutes, amountPence: l.amountPence })),
+      lessonChargesPence: s.lessonChargesPence, missedLessonChargesPence: s.missedLessonChargesPence, siblingDiscountPence: s.siblingDiscountPence,
+      siblingDiscountPercent: s.siblingDiscountPercent, siblingDiscountApplied: s.siblingDiscountApplied, totalChargesPence: s.totalChargesPence,
+      paymentsReceivedPence: s.paymentsReceivedPence, openingBalancePence: s.openingBalancePence, closingBalancePence: s.closingBalancePence, company: s.company,
+    })),
+    payments: payments.slice().sort((a, b) => b.receivedOn.localeCompare(a.receivedOn)).map((p): ParentPayment => ({ receivedOn: p.receivedOn, amountPence: p.amountPence, method: p.method })),
+    paymentInstructions: settings.paymentInstructions,
+  };
+}
+
 function countNeedingDecision(input: StatementInput): number {
   const mine = new Set(input.students.map((s) => s.id));
   const events = deriveChargeEvents({ lessons: input.lessons, attendance: input.attendance, decisions: input.decisions, settings: input.settings, asOf: input.asOf });
@@ -136,6 +191,20 @@ export async function lessonsNeedingDecision(ctx: BillingContext, clientId: stri
   }
   return out.sort((a, b) => a.startAt.localeCompare(b.startAt));
 }
+
+/** What each tutor is owed for a month's lessons (admin only; see tutorPay.ts for the rules and what is left undecided). */
+export async function tutorPayFor(ctx: BillingContext, period: string): Promise<TutorPaySummary[]> {
+  const [tutors, lessons, rates] = await Promise.all([ctx.data.tutors.list(), ctx.data.lessons.list(), ctx.billing.tutorRates.list()]);
+  const attendance: TutorPayAttendance[] = [];
+  for (const l of lessons) {
+    if (l.status !== "COMPLETED" || londonYmd(l.startAt).slice(0, 7) !== period) continue;
+    for (const a of await ctx.data.attendance.forLesson(l.id)) attendance.push({ lessonId: a.lessonId, studentId: a.studentId, status: a.status });
+  }
+  return tutorPay({ period, tutors: tutors.filter((t) => t.id !== ARCHIVED_TUTOR_ID).map((t) => ({ id: t.id, name: t.name })), lessons, attendance, rates });
+}
+
+/** The archived "Former tutor" a purge moves history to: nobody is paid through it. */
+const ARCHIVED_TUTOR_ID = "00000000-0000-4000-8000-0000000000fe";
 
 export async function recordPayment(ctx: BillingContext, input: Omit<Payment, "id" | "createdAt" | "recordedBy">, actor: Actor): Promise<Payment> {
   const payment = await ctx.billing.payments.record({ ...input, recordedBy: actor.id });

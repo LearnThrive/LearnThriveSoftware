@@ -49,7 +49,14 @@ export function monthsBetween(a: string, b: string): number {
   return Math.max(0, months);
 }
 
-/** A contract year: the start date to the day before the same date a year later. */
+/** The calendar day before a yyyy-mm-dd date. */
+export function dayBefore(ymd: string): string {
+  const d = new Date(`${ymd}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+/** A year from a start date, to the day before the same date. No longer used for rates (there is no fixed contract year), kept for the terms drafts. */
 export function contractEndFor(start: string): string {
   const next = addMonths(start, 12);
   const d = new Date(`${next}T00:00:00Z`);

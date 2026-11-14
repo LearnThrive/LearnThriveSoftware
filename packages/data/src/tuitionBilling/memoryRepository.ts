@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { rangesOverlap, validateDecision, validateFamilyRate, validatePayment, validateRefundRequest, validateSettings, validateTutorRate } from "./validate";
+import { planFamilyRate, validateDecision, validateFamilyRate, validatePayment, validateRefundRequest, validateSettings, validateTutorRate } from "./validate";
 import type { TuitionBillingRepository } from "./repository";
 import {
   BillingError, DEFAULT_BILLING_SETTINGS, type AuditEntry, type BillingSettings, type ChargeDecision, type FamilyBillingProfile, type FamilyRate, type IssuedStatement,
@@ -39,8 +39,9 @@ export function createMemoryTuitionBilling(): TuitionBillingRepository {
       async list(clientId) { return familyRates.filter((r) => !clientId || r.clientId === clientId).sort((a, b) => a.contractStart.localeCompare(b.contractStart)); },
       async create(input) {
         validateFamilyRate(input);
-        const clash = familyRates.find((r) => r.clientId === input.clientId && r.assignmentId === input.assignmentId && rangesOverlap(r.contractStart, r.contractEnd, input.contractStart, input.contractEnd));
-        if (clash) throw new BillingError("RATE_LOCKED", "This family already has an agreed rate for these lessons that covers some of those dates. The rate is fixed for the contract year.");
+        const plan = planFamilyRate(familyRates.filter((r) => r.clientId === input.clientId && r.assignmentId === input.assignmentId), input);
+        const ended = plan.endId ? familyRates.find((r) => r.id === plan.endId) : undefined;
+        if (ended) ended.contractEnd = plan.endOn;
         const rate: FamilyRate = { ...input, id: randomUUID(), createdAt: now() };
         familyRates.push(rate);
         return rate;

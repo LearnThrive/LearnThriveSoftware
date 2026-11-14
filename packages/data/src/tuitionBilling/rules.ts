@@ -99,7 +99,7 @@ export function applyAllowances(events: ChargeEvent[], settings: BillingSettings
 
 /** The family rate in force on a date for an assignment, or null. */
 export function rateFor(rates: FamilyRate[], clientId: string, assignmentId: string, ymd: string): FamilyRate | null {
-  return rates.find((r) => r.clientId === clientId && r.assignmentId === assignmentId && r.contractStart <= ymd && ymd <= r.contractEnd) ?? null;
+  return rates.find((r) => r.clientId === clientId && r.assignmentId === assignmentId && r.contractStart <= ymd && (r.contractEnd === null || ymd <= r.contractEnd)) ?? null;
 }
 
 export interface PricedEvent {
@@ -126,7 +126,13 @@ export function priceEvent(event: ChargeEvent, rate: FamilyRate | null, verdict:
       return full === null ? noRate("Missed lesson: repeat no-show (no agreed rate recorded)", true) : { amountPence: full, ratePence, waived: false, missed: true, description: "Missed lesson: repeat no-show, charged in full", listed: true };
     case "LATE_CANCEL":
       if (verdict?.waived) return { amountPence: 0, ratePence, waived: true, missed: true, description: "Late cancellation: first one, waived", listed: true };
-      if (settings.repeatLateCancelFeePence === null) return { amountPence: 0, ratePence, waived: false, missed: true, description: "Late cancellation: repeat (the charge is not decided yet)", flag: "FEE_UNCONFIRMED", listed: true };
+      // Decided 14 Nov 2026: "subsequent late cancellations will be charged". The amount was not stated, so unless a fixed fee is set the
+      // lesson's own price is charged (the same as a repeat no-show). The owners can set a fixed fee on the billing rules page instead.
+      if (settings.repeatLateCancelFeePence === null) {
+        return full === null
+          ? noRate("Late cancellation: repeat (no agreed rate recorded)", true)
+          : { amountPence: full, ratePence, waived: false, missed: true, description: "Late cancellation: repeat, charged at the lesson price", listed: true };
+      }
       return { amountPence: settings.repeatLateCancelFeePence, ratePence, waived: false, missed: true, description: "Late cancellation: repeat", listed: true };
     case "NEEDS_DECISION":
       return { amountPence: 0, ratePence, waived: false, missed: false, description: "Needs a decision before it can be charged", flag: "NEEDS_DECISION", listed: true };

@@ -1,7 +1,7 @@
 // What a billing record has to look like before it is stored. Shared by both repositories, so the rules are the same in memory and on
 // Postgres (the database has matching CHECK constraints as the last line of defence).
 
-import { YMD } from "./period";
+import { dayBefore, YMD } from "./period";
 import { BillingError, TUTOR_RATE_MAX_PENCE, TUTOR_RATE_MIN_PENCE, type BillingSettings, type FamilyRate, type Payment, type RefundRequest, type TutorRate } from "./types";
 
 const isInt = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n);
@@ -19,7 +19,30 @@ export function validateFamilyRate(input: Omit<FamilyRate, "id" | "createdAt">):
   text(input.clientId, 1, 80, "The family");
   text(input.assignmentId, 1, 80, "The assignment");
   if (!isInt(input.hourlyPence) || input.hourlyPence < FAMILY_RATE_MIN_PENCE || input.hourlyPence > FAMILY_RATE_MAX_PENCE) bad("The hourly rate must be a whole number of pence between 1 and 200 pounds.");
-  if (!YMD.test(input.contractStart) || !YMD.test(input.contractEnd) || input.contractEnd < input.contractStart) bad("The contract needs a start date and an end date after it.");
+  if (!YMD.test(input.contractStart)) bad("The rate needs a start date.");
+  if (input.contractEnd !== null && (!YMD.test(input.contractEnd) || input.contractEnd < input.contractStart)) bad("A rate's end date must be a date on or after its start.");
+}
+
+const FOREVER = "9999-12-31";
+
+/**
+ * What creating a rate does to the ones already there for the same family and assignment. A rate with no end replaces the current
+ * open-ended one: that one is ended the day before this starts, provided this starts AFTER it did. Anything else that shares a day with
+ * the new rate is refused (RATE_LOCKED): a price cannot be rewritten for dates it already covers.
+ */
+export function planFamilyRate(existing: Array<Pick<FamilyRate, "id" | "contractStart" | "contractEnd">>, input: Pick<FamilyRate, "contractStart" | "contractEnd">): { endId: string | null; endOn: string | null } {
+  let endId: string | null = null;
+  let endOn: string | null = null;
+  for (const r of existing) {
+    if (!rangesOverlap(r.contractStart, r.contractEnd ?? FOREVER, input.contractStart, input.contractEnd ?? FOREVER)) continue;
+    if (r.contractEnd === null && input.contractEnd === null && r.contractStart < input.contractStart) {
+      endId = r.id;
+      endOn = dayBefore(input.contractStart);
+      continue;
+    }
+    throw new BillingError("RATE_LOCKED", "This family already has a rate for these lessons that covers some of those dates. A new rate has to start after the current one began, and the current one then ends the day before.");
+  }
+  return { endId, endOn };
 }
 
 export function validateTutorRate(input: Omit<TutorRate, "id" | "createdAt">): void {
@@ -50,6 +73,7 @@ export function validateSettings(next: BillingSettings): void {
   if (next.repeatLateCancelFeePence !== null && (!isInt(next.repeatLateCancelFeePence) || next.repeatLateCancelFeePence < 0 || next.repeatLateCancelFeePence > 100_000)) bad("The repeat late-cancellation fee is whole pence, up to 1,000 pounds, or not decided.");
   if (next.allowanceResetMonths !== null && (!isInt(next.allowanceResetMonths) || next.allowanceResetMonths < 1 || next.allowanceResetMonths > 60)) bad("The allowance reset is 1 to 60 months, or never.");
   if (next.refundSecondApprovalPence !== null && (!isInt(next.refundSecondApprovalPence) || next.refundSecondApprovalPence < 1)) bad("The second-approval threshold is whole pence, or none.");
+  if (typeof next.paymentInstructions !== "string" || next.paymentInstructions.length > 1000) bad("The payment instructions are text of at most 1000 characters.");
 }
 
 export function validateDecision(input: { lessonId: string; party?: string; waive: boolean; note: string }): void {

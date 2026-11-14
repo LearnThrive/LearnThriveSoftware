@@ -58,7 +58,15 @@ export function tuitionBillingContract(name: string, make: () => Promise<{ harne
 
     test("settings: the decided rules are there; the open ones are not decided yet", async () => {
       const s = await repo.settings.get();
-      assert.deepEqual(s, { lateCancelNoticeHours: 24, siblingDiscountPercent: 10, repeatLateCancelFeePence: null, allowanceResetMonths: null, refundSecondApprovalPence: null });
+      assert.deepEqual(s, { lateCancelNoticeHours: 24, siblingDiscountPercent: 10, repeatLateCancelFeePence: null, allowanceResetMonths: null, refundSecondApprovalPence: null, paymentInstructions: "" });
+    });
+    test("settings: the bank-transfer instructions are text an administrator writes, kept as written, and bounded", async () => {
+      const text = "Pay by bank transfer to LearnThrive Tuition Ltd.\nQuote your invoice number as the reference.";
+      assert.equal((await repo.settings.update({ paymentInstructions: text }, admin)).paymentInstructions, text);
+      assert.equal((await repo.settings.get()).paymentInstructions, text);
+      await rejects(repo.settings.update({ paymentInstructions: "x".repeat(1001) }, admin), "INVALID");
+      assert.equal((await repo.settings.get()).paymentInstructions, text, "a refused update changes nothing");
+      assert.equal((await repo.settings.update({ paymentInstructions: "" }, admin)).paymentInstructions, "");
     });
     test("settings: updates are checked, and an open rule can be decided and un-decided", async () => {
       assert.equal((await repo.settings.update({ repeatLateCancelFeePence: 1500, allowanceResetMonths: 12 }, admin)).repeatLateCancelFeePence, 1500);
@@ -71,19 +79,25 @@ export function tuitionBillingContract(name: string, make: () => Promise<{ harne
       assert.equal(back.allowanceResetMonths, null);
     });
 
-    test("family rates are fixed for the contract year (B3)", async () => {
+    test("a family's rate runs until a newer one replaces it: there is no fixed contract year (14 Nov 2026)", async () => {
       const { clientId } = await h.family("Rates");
       const kid = await child(clientId);
       const a = await assignment((await tutor()).id, [kid.id]);
-      const make = (over: object) => ({ clientId, assignmentId: a.id, hourlyPence: 3000, contractStart: "2026-09-01", contractEnd: "2027-08-31", createdBy: admin, ...over });
+      const make = (over: object) => ({ clientId, assignmentId: a.id, hourlyPence: 3000, contractStart: "2026-09-01", contractEnd: null, createdBy: admin, ...over });
       const first = await repo.familyRates.create(make({}));
       assert.equal(first.hourlyPence, 3000);
-      await rejects(repo.familyRates.create(make({ hourlyPence: 3500, contractStart: "2027-01-01", contractEnd: "2027-12-31" })), "RATE_LOCKED");
+      assert.equal(first.contractEnd, null, "open-ended: it applies until it is replaced");
+      // A price cannot be rewritten for days the current rate already covers.
       await rejects(repo.familyRates.create(make({ hourlyPence: 3500 })), "RATE_LOCKED");
-      const renewal = await repo.familyRates.create(make({ hourlyPence: 3300, contractStart: "2027-09-01", contractEnd: "2028-08-31" }));
-      assert.deepEqual((await repo.familyRates.list(clientId)).map((r) => r.id), [first.id, renewal.id]);
+      await rejects(repo.familyRates.create(make({ hourlyPence: 3500, contractStart: "2026-08-01" })), "RATE_LOCKED");
+      await rejects(repo.familyRates.create(make({ hourlyPence: 3500, contractStart: "2026-10-01", contractEnd: "2026-10-31" })), "RATE_LOCKED");
+      // A newer rate ends the old one the day before it starts.
+      const next = await repo.familyRates.create(make({ hourlyPence: 3300, contractStart: "2027-01-01" }));
+      const listed = await repo.familyRates.list(clientId);
+      assert.deepEqual(listed.map((r) => [r.id, r.contractStart, r.contractEnd]), [[first.id, "2026-09-01", "2026-12-31"], [next.id, "2027-01-01", null]]);
+      await rejects(repo.familyRates.create(make({ hourlyPence: 3600, contractStart: "2026-11-01" })), "RATE_LOCKED");
       await rejects(repo.familyRates.create(make({ hourlyPence: 10 })), "INVALID");
-      await rejects(repo.familyRates.create(make({ contractEnd: "2026-08-31" })), "INVALID");
+      await rejects(repo.familyRates.create(make({ contractStart: "2028-01-01", contractEnd: "2027-12-31" })), "INVALID");
       const b = await assignment((await tutor()).id, [kid.id]);
       assert.ok(await repo.familyRates.create(make({ assignmentId: b.id })), "another assignment has its own rate");
     });

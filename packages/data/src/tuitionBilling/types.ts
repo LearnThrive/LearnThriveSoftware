@@ -13,12 +13,17 @@ export interface BillingSettings {
   lateCancelNoticeHours: number;
   /** B4, decided: percent off the monthly lesson charges of an eligible family. */
   siblingDiscountPercent: number;
-  /** B6, OPEN: the charge for a repeat late cancellation. null = not decided: a repeat is flagged and priced at nothing. */
+  /**
+   * B6: the charge for a repeat late cancellation. Decided 14 Nov 2026 that it IS charged, but not how much, so null = the lesson's own
+   * price (the same as a repeat no-show). A number is a fixed fee instead.
+   */
   repeatLateCancelFeePence: Pence | null;
   /** B6, OPEN: months after which a child's waived-first allowance starts again. null = never. */
   allowanceResetMonths: number | null;
   /** B11, OPEN: a refund of at least this many pence needs a second approver. null = one approver is enough. */
   refundSecondApprovalPence: Pence | null;
+  /** How a parent pays by bank transfer (the account details and the reference to quote). Shown on their statement page. Empty until an administrator writes it. */
+  paymentInstructions: string;
 }
 
 export const DEFAULT_BILLING_SETTINGS: BillingSettings = {
@@ -26,18 +31,22 @@ export const DEFAULT_BILLING_SETTINGS: BillingSettings = {
   siblingDiscountPercent: 10,
   repeatLateCancelFeePence: null,
   allowanceResetMonths: null,
+  paymentInstructions: "",
   refundSecondApprovalPence: null,
 };
 
-/** B2: what a family pays per child per hour, fixed for the annual contract (B3). */
+/**
+ * B2: what a family pays per child per hour. There is no fixed contract year any more (14 Nov 2026: three months to start with, then a
+ * month's notice), so a rate applies from its start until a newer rate for the same assignment replaces it.
+ */
 export interface FamilyRate {
   id: string;
   clientId: string;
   assignmentId: string;
   hourlyPence: Pence;
-  /** ISO dates (yyyy-mm-dd), inclusive. A contract is a year; the rate cannot change inside it. */
+  /** ISO dates (yyyy-mm-dd), inclusive. `contractEnd` is null while this is the current rate. */
   contractStart: string;
-  contractEnd: string;
+  contractEnd: string | null;
   createdBy: string;
   createdAt: string;
 }
