@@ -2,6 +2,16 @@ import type { DataProvider } from "@learnthrive/data/repositories";
 import type { AttendanceStatus, Lesson, LessonAttendanceRecord } from "@learnthrive/data/domain";
 import { logActivity } from "@/lib/activity/activityService";
 
+/** Tahasin, 14 Nov 2026: a tutor waits 15 minutes from the scheduled start before marking a student as a no-show. */
+export const NO_SHOW_WAIT_MINUTES = 15;
+
+export class AttendanceError extends Error {}
+
+/** The moment a student may first be marked absent for a lesson. */
+export function noShowAllowedFrom(startAt: string): Date {
+  return new Date(new Date(startAt).getTime() + NO_SHOW_WAIT_MINUTES * 60_000);
+}
+
 export interface MarkAttendanceInput {
   status: AttendanceStatus;
   arrivalTime?: string;
@@ -12,10 +22,17 @@ export interface MarkAttendanceInput {
 /** Plan section 38: one record per Student per Lesson. Records who marked it and when — an
  * audit trail, not just the current decision. */
 export async function markAttendance(
-  data: DataProvider, lessonId: string, studentId: string, input: MarkAttendanceInput, markedBy: string,
+  data: DataProvider, lessonId: string, studentId: string, input: MarkAttendanceInput, markedBy: string, now: Date = new Date(),
 ): Promise<LessonAttendanceRecord> {
+  if (input.status === "ABSENT") {
+    // An absence is what makes a lesson chargeable as a no-show, so it cannot be marked while the student might still be arriving.
+    const lesson = await data.lessons.get(lessonId);
+    if (lesson && now < noShowAllowedFrom(lesson.startAt)) {
+      throw new AttendanceError(`A student can be marked absent only ${NO_SHOW_WAIT_MINUTES} minutes after the lesson's scheduled start. Wait until then in case they are late.`);
+    }
+  }
   const record: LessonAttendanceRecord = {
-    lessonId, studentId, status: input.status, markedBy, markedAt: new Date().toISOString(),
+    lessonId, studentId, status: input.status, markedBy, markedAt: now.toISOString(),
     ...(input.arrivalTime ? { arrivalTime: input.arrivalTime } : {}),
     ...(input.departureTime ? { departureTime: input.departureTime } : {}),
     ...(input.notes ? { notes: input.notes } : {}),

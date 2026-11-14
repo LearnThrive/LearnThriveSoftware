@@ -86,3 +86,31 @@ test("completeLesson: a cancelled lesson can never be marked complete", async ()
   await data.lessons.update(lesson.id, { status: "CANCELLED" });
   await assert.rejects(() => completeLesson(data, lesson.id, tutor.id), LessonCompletionError);
 });
+
+// Tahasin, 14 Nov 2026: a tutor waits 15 minutes from the scheduled start before marking a student as a no-show.
+const { AttendanceError, NO_SHOW_WAIT_MINUTES, noShowAllowedFrom } = loadTsFrom(import.meta.url, "../src/lib/attendance/attendanceService.ts");
+
+test("a student cannot be marked absent until 15 minutes after the lesson's scheduled start", async () => {
+  const data = getDataProvider();
+  const { lesson, students, tutor } = await freshLesson(data);
+  const start = new Date(lesson.startAt).getTime();
+  assert.equal(NO_SHOW_WAIT_MINUTES, 15);
+  assert.equal(noShowAllowedFrom(lesson.startAt).getTime(), start + 15 * 60_000);
+
+  await assert.rejects(() => markAttendance(data, lesson.id, students[0].id, { status: "ABSENT" }, tutor.id, new Date(start - 60_000)), AttendanceError, "before the lesson");
+  await assert.rejects(() => markAttendance(data, lesson.id, students[0].id, { status: "ABSENT" }, tutor.id, new Date(start + 14 * 60_000 + 59_000)), AttendanceError, "a second short of 15 minutes");
+  assert.equal((await data.attendance.forLesson(lesson.id)).length, 0, "a refused absence stores nothing and logs nothing");
+  assert.equal((await data.activity.forLesson(lesson.id)).some((e) => e.type === "ATTENDANCE_MARKED"), false);
+
+  const absent = await markAttendance(data, lesson.id, students[0].id, { status: "ABSENT" }, tutor.id, new Date(start + 15 * 60_000));
+  assert.equal(absent.status, "ABSENT", "at exactly 15 minutes it is allowed");
+});
+
+test("the 15-minute wait applies only to ABSENT: a student can be marked present or late as soon as the lesson starts", async () => {
+  const data = getDataProvider();
+  const { lesson, students, tutor } = await freshLesson(data, 2);
+  const start = new Date(lesson.startAt).getTime();
+  assert.equal((await markAttendance(data, lesson.id, students[0].id, { status: "ATTENDED" }, tutor.id, new Date(start - 5 * 60_000))).status, "ATTENDED");
+  assert.equal((await markAttendance(data, lesson.id, students[1].id, { status: "LATE" }, tutor.id, new Date(start + 3 * 60_000))).status, "LATE");
+  assert.equal((await markAttendance(data, lesson.id, students[1].id, { status: "EXCUSED" }, tutor.id, new Date(start + 1_000))).status, "EXCUSED");
+});

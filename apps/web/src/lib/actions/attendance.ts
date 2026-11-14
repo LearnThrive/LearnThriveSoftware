@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getDataProvider } from "@/lib/data/provider";
 import { requireRole } from "@/lib/auth/guard";
-import { completeLesson, LessonCompletionError, markAttendance } from "@/lib/attendance/attendanceService";
+import { AttendanceError, completeLesson, LessonCompletionError, markAttendance } from "@/lib/attendance/attendanceService";
 import type { AttendanceStatus } from "@learnthrive/data/domain";
 
 function text(formData: FormData, key: string): string {
@@ -34,12 +34,17 @@ export async function markAttendanceAction(formData: FormData): Promise<void> {
   const departureTime = text(formData, "departureTime");
   const notes = text(formData, "notes");
 
-  await markAttendance(data, lessonId, studentId, {
-    status: status as AttendanceStatus,
-    ...(arrivalTime ? { arrivalTime: new Date(arrivalTime).toISOString() } : {}),
-    ...(departureTime ? { departureTime: new Date(departureTime).toISOString() } : {}),
-    ...(notes ? { notes } : {}),
-  }, user.id);
+  try {
+    await markAttendance(data, lessonId, studentId, {
+      status: status as AttendanceStatus,
+      ...(arrivalTime ? { arrivalTime: new Date(arrivalTime).toISOString() } : {}),
+      ...(departureTime ? { departureTime: new Date(departureTime).toISOString() } : {}),
+      ...(notes ? { notes } : {}),
+    }, user.id);
+  } catch (error) {
+    if (error instanceof AttendanceError) throw new Error(error.message);
+    throw error;
+  }
 
   revalidatePath(`/dashboard/lessons/${lessonId}`);
 }

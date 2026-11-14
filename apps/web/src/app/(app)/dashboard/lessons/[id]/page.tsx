@@ -11,7 +11,8 @@ import { markAttendanceAction, completeLessonAction } from "@/lib/actions/attend
 import { approveReportAction, returnReportAction, saveReportDraftAction, submitReportAction } from "@/lib/actions/reports";
 import { visibleReportFor } from "@/lib/reports/reportService";
 import { isWithinJoinWindow } from "@/lib/scheduling/joinWindow";
-import { formatLongDate, formatRelative, formatTimeRange } from "@/lib/format";
+import { formatLongDate, formatRelative, formatTime, formatTimeRange } from "@/lib/format";
+import { noShowAllowedFrom } from "@/lib/attendance/attendanceService";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/Badge";
@@ -73,6 +74,9 @@ export default async function LessonDetailPage({
   const joinRole = joinRoleFor(user, lesson);
   const canJoin = lesson.locationType === "ONLINE" && lesson.status !== "CANCELLED" && joinRole !== null;
   const joinWindowOpen = canJoin && isWithinJoinWindow(lesson, joinRole);
+  // A student can be marked absent only 15 minutes after the scheduled start (the server enforces it; this explains it).
+  const noShowFrom = noShowAllowedFrom(lesson.startAt);
+  const absentAllowed = new Date() >= noShowFrom;
   const allAttendanceMarked = lesson.studentIds.every((studentId) => attendanceByStudent.has(studentId));
   const reportBlocksCompletion = lesson.reportRequired && (!report || report.status === "DRAFT");
   const canComplete = canManage && lesson.status !== "CANCELLED" && lesson.status !== "COMPLETED";
@@ -208,8 +212,8 @@ export default async function LessonDetailPage({
                             <input type="hidden" name="studentId" value={student.id} />
                             <select name="status" defaultValue={record?.status ?? "ATTENDED"} aria-label={`Attendance status for ${student.name}`}>
                               {ATTENDANCE_STATUSES.map((status) => (
-                                <option key={status} value={status}>
-                                  {status.charAt(0) + status.slice(1).toLowerCase()}
+                                <option key={status} value={status} disabled={status === "ABSENT" && !absentAllowed && record?.status !== "ABSENT"}>
+                                  {status.charAt(0) + status.slice(1).toLowerCase()}{status === "ABSENT" && !absentAllowed && record?.status !== "ABSENT" ? ` (from ${formatTime(noShowFrom)})` : ""}
                                 </option>
                               ))}
                             </select>
