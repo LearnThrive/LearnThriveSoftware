@@ -108,6 +108,7 @@ const CLIENT_NAV: AppNavSection[] = [
       { label: "Children", href: "/dashboard/children", icon: "students" },
       { label: "Calendar", href: "/dashboard/calendar", icon: "calendar" },
       { label: "Lesson reports", href: "/dashboard/reports", icon: "reports" },
+      { label: "Fees", href: "/dashboard/billing", icon: "reports" },
       { label: "Notifications", href: "/dashboard/notifications", icon: "notifications" },
       { label: "Settings", href: "/dashboard/settings", icon: "settings" },
     ],

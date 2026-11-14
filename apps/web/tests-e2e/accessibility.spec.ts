@@ -55,6 +55,7 @@ async function login(page: Page, username: string, password: string) {
 
 const ADMIN = { username: 'dev.admin', password: 'dev-admin-pass' };
 const TUTOR = { username: 'dev.tutor', password: 'dev-tutor-pass' };
+const CLIENT = { username: 'dev.client', password: 'dev-client-pass' };
 
 test.describe('automated accessibility (axe-core: WCAG 2.2 AA on the public site, WCAG 2 A/AA in the app)', () => {
   // The marketing site's own entrance animations (home.module.css's lt-rise: opacity 0 -> 1 over
@@ -129,6 +130,13 @@ test.describe('automated accessibility (axe-core: WCAG 2.2 AA on the public site
     await runAxe(page, '/dashboard/concerns (Tutor)');
   });
 
+  test('Parent: the Fees page', async ({ page }) => {
+    await login(page, CLIENT.username, CLIENT.password);
+    await page.goto('/dashboard/billing');
+    await expect(page.locator('h1')).toHaveText('Fees');
+    await runAxe(page, '/dashboard/billing (Parent)');
+  });
+
   // Screens added after the first audit and never scanned until 9 Nov 2026: the safeguarding records, a tutor's profile with its checks,
   // and the four billing pages.
   test('Admin: safeguarding records and billing', async ({ page }) => {
@@ -136,7 +144,7 @@ test.describe('automated accessibility (axe-core: WCAG 2.2 AA on the public site
     await login(page, ADMIN.username, ADMIN.password);
     for (const path of [
       '/dashboard/admin/vetting', '/dashboard/admin/concerns', '/dashboard/concerns', '/dashboard/admin/tutors/tutor-jamie-patel',
-      '/dashboard/admin/billing', '/dashboard/admin/billing/client-sarah-ahmed', '/dashboard/admin/billing/settings', '/dashboard/admin/billing/tutor-rates',
+      '/dashboard/admin/billing', '/dashboard/admin/billing/client-sarah-ahmed', '/dashboard/admin/billing/settings', '/dashboard/admin/billing/tutor-rates', '/dashboard/admin/billing/tutor-pay',
     ]) {
       await page.goto(path);
       // Exactly one h1, and it says something: the profile pages used to render a second, empty one (found 9 Nov 2026).

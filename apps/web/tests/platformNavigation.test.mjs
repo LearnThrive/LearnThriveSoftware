@@ -19,7 +19,7 @@ const nav = (role, f, over = {}) => {
 
 test("a guardian with active family tuition: the family's tuition areas, LearnThrive AI and the Library, in ONE menu", () => {
   const sections = nav("CLIENT", facts({ enrolled: true }));
-  assert.deepEqual(labels(sections), ["Home", "Children", "Calendar", "Lesson reports", "Notifications", "Settings", "LearnThrive AI", "Library"]);
+  assert.deepEqual(labels(sections), ["Home", "Children", "Calendar", "Lesson reports", "Fees", "Notifications", "Settings", "LearnThrive AI", "Library"]);
   assert.deepEqual(titles(sections), ["Learning"]);
   assert.ok(!labels(sections).includes("Account"), "the account is in the account menu, keeping this sidebar short");
 });

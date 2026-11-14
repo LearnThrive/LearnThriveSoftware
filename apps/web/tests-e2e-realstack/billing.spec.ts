@@ -123,18 +123,18 @@ test('an admin takes a family from no rate to two issued months, and a payment i
   await expect(statementCard(page).getByRole('button', { name: 'Issue statement' })).toBeDisabled();
 
   // The family rate, from the first of that month: £30 an hour.
-  const rates = card(page, 'Fixed for the contract year');
+  const rates = card(page, 'Family rate');
   await rates.getByLabel(/Rate per hour/).fill('30');
-  await rates.getByLabel(/Contract starts/).fill(`${older}-01`);
+  await rates.getByLabel(/This rate starts/).fill(`${older}-01`);
   await rates.getByRole('button', { name: 'Set rate' }).click();
   expect(await toast(page)).toBe('Family rate saved');
 
-  // A second rate inside the contract year is refused, with the reason on the page (B3).
+  // There is no fixed contract year (14 Nov 2026), but a CHANGE of price cannot reach back and reprice lessons already taught: refused, with the reason on the page.
   await settled(page, familyPath(older));
-  await card(page, 'Fixed for the contract year').getByLabel(/Rate per hour/).fill('35');
-  await card(page, 'Fixed for the contract year').getByLabel(/Contract starts/).fill(`${last}-01`);
-  await card(page, 'Fixed for the contract year').getByRole('button', { name: 'Set rate' }).click();
-  expect(await toast(page)).toContain('The rate is fixed for the contract year.');
+  await card(page, 'Family rate').getByLabel(/Rate per hour/).fill('35');
+  await card(page, 'Family rate').getByLabel(/This rate starts/).fill(`${last}-01`);
+  await card(page, 'Family rate').getByRole('button', { name: 'Set rate' }).click();
+  expect(await toast(page)).toContain('A change of price can start today or later.');
   expect(await count('tuition_family_rates', 'client_id', clientId), 'only the first rate was stored').toBe(1);
 
   // The oldest month: one hour at £30, issued once and frozen.

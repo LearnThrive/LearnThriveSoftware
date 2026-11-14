@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import {
-  contractEndFor, formatPence, isRefundApprover, lessonsNeedingDecision, londonYmd, previewStatement, previousPeriod, PERIOD, type StatementBlocker,
+  formatPence, isRefundApprover, lessonsNeedingDecision, londonYmd, overdueVerdict, previewStatement, previousPeriod, PERIOD, type StatementBlocker,
 } from "@learnthrive/data/tuitionBilling";
 import { requireRole } from "@/lib/auth/guard";
 import { createMetadata } from "@/lib/metadata";
 import { billingContext } from "@/lib/tuitionBilling/runtime";
 import {
-  decideChargeAction, decideRefundAction, issueStatementAction, recordPaymentAction, requestRefundAction, setFamilyRateAction, setSiblingEligibleAction, voidPaymentAction,
+  decideChargeAction, decideRefundAction, issueStatementAction, recordPaymentAction, requestRefundAction, setFamilyLessonsPausedAction, setFamilyRateAction, setSiblingEligibleAction, voidPaymentAction,
 } from "@/lib/actions/tuitionBilling";
 import { formatDateOnly } from "@/lib/format";
 import { PageHeader } from "@/components/shell/PageHeader";
@@ -44,6 +44,7 @@ export default async function FamilyBillingPage({ params, searchParams }: { para
     previewStatement(ctx, clientId, period), ctx.billing.statements.list(clientId), ctx.billing.payments.list(clientId), ctx.billing.refunds.list(clientId),
   ]);
   const issued = statements.find((s) => s.period === period) ?? null;
+  const overdue = overdueVerdict(statements, payments, new Date().toISOString());
 
   return (
     <>
@@ -71,7 +72,7 @@ export default async function FamilyBillingPage({ params, searchParams }: { para
       </Card>
 
       <Card>
-        <CardHeader title="Family rate" description="Fixed for the contract year: it cannot be changed inside it." />
+        <CardHeader title="Family rate" description="There is no fixed term: a rate applies until a newer one replaces it. Families commit for three months to start with, then give a month's notice." />
         <CardBody>
           {assignments.length === 0 && <EmptyState title="No tuition assignments" description="A rate belongs to an assignment." />}
           {assignments.map((a) => {
@@ -79,12 +80,12 @@ export default async function FamilyBillingPage({ params, searchParams }: { para
             return (
               <div key={a.id} className="stack">
                 <h3>{a.title}</h3>
-                {mine.length === 0 ? <p>No rate set.</p> : <ul>{mine.map((r) => <li key={r.id}>{formatPence(r.hourlyPence)} an hour, {r.contractStart} to {r.contractEnd}</li>)}</ul>}
+                {mine.length === 0 ? <p>No rate set.</p> : <ul>{mine.map((r) => <li key={r.id}>{formatPence(r.hourlyPence)} an hour, from {r.contractStart}{r.contractEnd ? ` until ${r.contractEnd}` : " (current)"}</li>)}</ul>}
                 <form action={setFamilyRateAction} className="form">
                   <input type="hidden" name="clientId" value={clientId} />
                   <input type="hidden" name="assignmentId" value={a.id} />
                   <Field label="Rate per hour (£)" htmlFor={`rate-${a.id}`} required><input id={`rate-${a.id}`} name="hourly" inputMode="decimal" required autoComplete="off" /></Field>
-                  <Field label="Contract starts" htmlFor={`start-${a.id}`} required hint={`Runs a year, to ${contractEndFor(today)} if it starts today.`}>
+                  <Field label="This rate starts" htmlFor={`start-${a.id}`} required hint={mine.length === 0 ? "It applies until you set a new one. It can start in the past, to cover lessons already taught." : "A new price starts today or later and ends the current rate the day before."}>
                     <input id={`start-${a.id}`} name="contractStart" type="date" defaultValue={today} required />
                   </Field>
                   <FormActions><button className="btn btn--primary" type="submit">Set rate</button></FormActions>
@@ -181,6 +182,25 @@ export default async function FamilyBillingPage({ params, searchParams }: { para
             <Field label="Method" htmlFor="p-method" required hint="For example bank transfer or cash."><input id="p-method" name="method" required maxLength={40} autoComplete="off" /></Field>
             <Field label="Note" htmlFor="p-note" required hint="Who paid and for what."><input id="p-note" name="note" required minLength={3} maxLength={500} autoComplete="off" /></Field>
             <FormActions><button className="btn btn--primary" type="submit">Record payment</button></FormActions>
+          </form>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader title="Lessons and overdue payment" description="Lessons are paused once a family is more than a month overdue, until the payment is sorted out. A person decides, with a reason: nothing pauses by itself." />
+        <CardBody>
+          <p>{overdue.overdue ? <><Badge tone="critical">Overdue</Badge> {formatPence(overdue.amountOverduePence)} unpaid since the statement of {overdue.oldestUnpaidIssuedOn}.</> : "Nothing is overdue."}</p>
+          <p>{assignments.filter((a) => a.status === "PAUSED").length > 0 ? `${assignments.filter((a) => a.status === "PAUSED").length} of this family's assignments are paused. No new lessons can be scheduled on them.` : "No assignment is paused."}</p>
+          <form action={setFamilyLessonsPausedAction} className="form">
+            <input type="hidden" name="clientId" value={clientId} />
+            <input type="hidden" name="pause" value="true" />
+            <Field label="Why are the lessons being paused" htmlFor="pause-reason" required><input id="pause-reason" name="reason" required minLength={3} maxLength={500} autoComplete="off" /></Field>
+            <FormActions><button className="btn btn--secondary" type="submit">Pause this family&apos;s lessons</button></FormActions>
+          </form>
+          <form action={setFamilyLessonsPausedAction} className="form">
+            <input type="hidden" name="clientId" value={clientId} />
+            <input type="hidden" name="pause" value="false" />
+            <FormActions><button className="btn btn--secondary" type="submit">Resume this family&apos;s lessons</button></FormActions>
           </form>
         </CardBody>
       </Card>

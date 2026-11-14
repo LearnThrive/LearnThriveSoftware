@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
-  BillingError, contractEndFor, decideRefundRequest, issueStatement, parsePounds, recordPayment, requestRefund, voidPayment, PERIOD, YMD,
+  BillingError, decideRefundRequest, issueStatement, londonYmd, parsePounds, recordPayment, requestRefund, voidPayment, PERIOD, YMD,
   type Actor, type CancelParty,
 } from "@learnthrive/data/tuitionBilling";
 import { requireRole } from "@/lib/auth/guard";
@@ -60,12 +60,19 @@ export async function setFamilyRateAction(formData: FormData): Promise<void> {
   const clientId = text(formData, "clientId");
   await attempt(familyPath(clientId), "Family rate saved", async () => {
     const ctx = billingContext();
-    const contractStart = ymd(formData, "contractStart", "The contract start");
+    const contractStart = ymd(formData, "contractStart", "The rate's start date");
+    const assignmentId = text(formData, "assignmentId");
+    // There is no fixed contract year (14 Nov 2026): a rate runs until a newer one replaces it. The first rate for an assignment may start in
+    // the past, to cover lessons already taught; a CHANGE may not, because it would reprice lessons that have already happened.
+    const earlier = (await ctx.billing.familyRates.list(clientId)).filter((r) => r.assignmentId === assignmentId);
+    if (earlier.length > 0 && contractStart < londonYmd(new Date().toISOString())) {
+      throw new BillingError("INVALID", "A change of price can start today or later. It cannot reach back and reprice lessons that have already happened.");
+    }
     const rate = await ctx.billing.familyRates.create({
-      clientId, assignmentId: text(formData, "assignmentId"), hourlyPence: pence(formData, "hourly", "The hourly rate"),
-      contractStart, contractEnd: contractEndFor(contractStart), createdBy: actor.id,
+      clientId, assignmentId, hourlyPence: pence(formData, "hourly", "The hourly rate"),
+      contractStart, contractEnd: null, createdBy: actor.id,
     });
-    await ctx.billing.audit.append({ actorId: actor.id, action: "family_rate.set", subject: clientId, detail: { rateId: rate.id, hourlyPence: rate.hourlyPence, contractStart, contractEnd: rate.contractEnd } });
+    await ctx.billing.audit.append({ actorId: actor.id, action: "family_rate.set", subject: clientId, detail: { rateId: rate.id, hourlyPence: rate.hourlyPence, startsOn: contractStart } });
   });
 }
 
@@ -167,6 +174,28 @@ export async function decideRefundAction(formData: FormData): Promise<void> {
   });
 }
 
+/**
+ * Pausing and resuming a family's lessons (Tahasin, 14 Nov 2026: lessons are paused once a family is more than a month overdue, until
+ * the payment is resolved). A person does it, with a reason, and it is audited: nothing pauses automatically. It marks the family's active
+ * assignments Paused, and a Paused assignment cannot have new lessons scheduled on it. Lessons already booked are left for the
+ * administrator to cancel.
+ */
+export async function setFamilyLessonsPausedAction(formData: FormData): Promise<void> {
+  const actor = await admin();
+  const clientId = text(formData, "clientId");
+  const pause = text(formData, "pause") === "true";
+  await attempt(familyPath(clientId), pause ? "Lessons paused" : "Lessons resumed", async () => {
+    const ctx = billingContext();
+    const reason = text(formData, "reason");
+    if (pause && reason.length < 3) throw new BillingError("INVALID", "Say why the lessons are being paused.");
+    if (!(await ctx.data.clients.get(clientId))) throw new BillingError("NOT_FOUND", "There is no such family.");
+    const targets = (await ctx.data.assignments.forClient(clientId)).filter((a) => a.status === (pause ? "ACTIVE" : "PAUSED"));
+    if (targets.length === 0) throw new BillingError("INVALID", pause ? "This family has no active assignments to pause." : "This family has no paused assignments to resume.");
+    for (const a of targets) await ctx.data.assignments.update(a.id, { status: pause ? "PAUSED" : "ACTIVE" });
+    await ctx.billing.audit.append({ actorId: actor.id, action: pause ? "lessons.paused" : "lessons.resumed", subject: clientId, detail: { assignments: targets.length, ...(reason ? { reason } : {}) } });
+  });
+}
+
 export async function updateBillingSettingsAction(formData: FormData): Promise<void> {
   const actor = await admin();
   await attempt(`${BASE}/settings`, "Billing rules saved", async () => {
@@ -183,6 +212,7 @@ export async function updateBillingSettingsAction(formData: FormData): Promise<v
       repeatLateCancelFeePence: poundsOrNull("repeatLateCancelFee", "The repeat late-cancellation fee"),
       allowanceResetMonths: whole("allowanceResetMonths"),
       refundSecondApprovalPence: poundsOrNull("refundSecondApproval", "The second-approval amount"),
+      paymentInstructions: text(formData, "paymentInstructions"),
     }, actor.id);
     await ctx.billing.audit.append({ actorId: actor.id, action: "settings.updated", subject: "billing", detail: { ...next } });
   });

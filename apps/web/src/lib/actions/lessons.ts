@@ -63,6 +63,8 @@ export async function createLessonAction(_prevState: CreateLessonState, formData
   }
   const assignment = await data.assignments.get(assignmentId);
   if (!assignment) return { error: "That Tuition Assignment no longer exists.", values };
+  // A paused (for example an overdue family) or ended assignment gets no new lessons until it is resumed.
+  if (assignment.status !== "ACTIVE") return { error: `This assignment is ${assignment.status.toLowerCase()}, so no new lessons can be scheduled on it. Resume it first.`, values };
 
   const [year, month, day] = dateStr.split("-").map(Number);
   const [hour, minute] = timeStr.split(":").map(Number);

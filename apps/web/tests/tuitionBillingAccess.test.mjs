@@ -24,7 +24,9 @@ function walk(dir) {
 }
 const rel = (file) => relative(src, file).split(sep).join("/");
 const ADMIN_BILLING_DIR = "app/(app)/dashboard/admin/billing/";
-const ALLOWED_IMPORTERS = (path) => path.startsWith(ADMIN_BILLING_DIR) || path === "lib/actions/tuitionBilling.ts" || path.startsWith("lib/tuitionBilling/");
+// The one other door: a parent's own Fees page, guarded for the CLIENT role and scoped to the family the signed-in parent owns (tested below).
+const PARENT_FEES_PAGE = "app/(app)/dashboard/billing/page.tsx";
+const ALLOWED_IMPORTERS = (path) => path.startsWith(ADMIN_BILLING_DIR) || path === PARENT_FEES_PAGE || path === "app/api/admin/billing/export/route.ts" || path === "lib/actions/tuitionBilling.ts" || path.startsWith("lib/tuitionBilling/");
 
 test("nothing a tutor (or anyone but the admin billing pages) can reach imports the billing code", () => {
   const BILLING = /@learnthrive\/data\/tuitionBilling|@\/lib\/tuitionBilling|@\/lib\/actions\/tuitionBilling/;
@@ -43,6 +45,15 @@ test("every billing page checks for an admin before it reads anything", () => {
   }
 });
 
+test("the billing export route answers an administrator only, and anyone else gets the same 404 as an unknown kind", () => {
+  const code = readFileSync(join(src, "app", "api", "admin", "billing", "export", "route.ts"), "utf8").replaceAll("\r\n", "\n");
+  assert.match(code, /requireRoleForApi\(\["ADMIN"\]\)/);
+  assert.ok(code.indexOf('requireRoleForApi(["ADMIN"])') < code.indexOf("billingContext()"), "the role is checked before billing is touched");
+  assert.match(code, /if \(!admin\) return NOT_FOUND\(\)/, "a tutor or a parent is told nothing, not even that the route exists");
+  assert.match(code, /"Cache-Control": "no-store, private"/);
+  assert.match(code, /Content-Disposition/, "a download, not a page");
+});
+
 test("every billing Server Action re-checks for an admin as its first step", () => {
   const code = readFileSync(join(src, "lib", "actions", "tuitionBilling.ts"), "utf8");
   assert.match(code, /^"use server";/);
@@ -54,11 +65,23 @@ test("every billing Server Action re-checks for an admin as its first step", () 
   assert.equal(otherExports.length, 0, "a use-server file exports only async actions");
 });
 
-test("only an admin's navigation, shortcuts and quick-create reach billing", () => {
+test("only an admin's navigation reaches billing, and a parent's reaches only their own Fees page", () => {
   const { navigationFor } = loadTsFrom(import.meta.url, "../src/lib/navigation/appNavigation.ts");
   const hrefs = (role) => navigationFor(role).flatMap((s) => s.items.map((i) => i.href));
   assert.ok(hrefs("ADMIN").includes("/dashboard/admin/billing"));
-  for (const role of ["TUTOR", "CLIENT", "STUDENT"]) assert.deepEqual(hrefs(role).filter((h) => /billing/.test(h)), [], `${role} has no billing link`);
+  for (const role of ["TUTOR", "STUDENT"]) assert.deepEqual(hrefs(role).filter((h) => /billing/.test(h)), [], `${role} has no billing link`);
+  assert.deepEqual(hrefs("CLIENT").filter((h) => /billing/.test(h)), ["/dashboard/billing"], "a parent sees their own Fees page and nothing of the admin screens");
+  assert.equal(hrefs("CLIENT").some((h) => /admin/.test(h)), false);
+});
+
+test("a parent's Fees page is for the CLIENT role only and shows the family the signed-in parent owns, never one named in the address", () => {
+  const code = readFileSync(join(src, ...PARENT_FEES_PAGE.split("/")), "utf8");
+  assert.match(code, /requireRole\(\["CLIENT"\]\)/, "not a tutor, not a learner, not an administrator");
+  assert.ok(code.indexOf('requireRole(["CLIENT"])') < code.indexOf("billingContext()"), "the role is checked before billing is touched");
+  assert.match(code, /clients\.get\(user\.profileId\)/, "the family comes from the session");
+  assert.doesNotMatch(code, /searchParams|params\b|useSearchParams/, "nothing in the address can pick another family");
+  assert.match(code, /parentAccount\(ctx, family\.id\)/, "what is shown is the parent projection, not the stored rows");
+  assert.doesNotMatch(code, /billing\.(statements|payments|refunds|audit|familyRates|tutorRates)/, "it never reads the repository directly");
 });
 
 test("the data shapes the tutor screens are built from carry no money", () => {
@@ -76,7 +99,7 @@ test("the data shapes the tutor screens are built from carry no money", () => {
 test("the tutor-facing source never formats a price", () => {
   // Tutor pages, the lesson, report and attendance code and the calendar export: none may format pence as money.
   const TUTOR_REACHABLE = (path) =>
-    (path.startsWith("app/(app)/dashboard/") && !path.startsWith("app/(app)/dashboard/admin/")) || path.startsWith("lib/reports/") || path.startsWith("lib/attendance/") || path.startsWith("lib/calendar/") ||
+    (path.startsWith("app/(app)/dashboard/") && !path.startsWith("app/(app)/dashboard/admin/") && path !== PARENT_FEES_PAGE) || path.startsWith("lib/reports/") || path.startsWith("lib/attendance/") || path.startsWith("lib/calendar/") ||
     path.startsWith("lib/notifications/") || path.startsWith("components/lessons/") || path.startsWith("components/reports/");
   const offenders = walk(src).filter((f) => TUTOR_REACHABLE(rel(f))).filter((f) => /formatPence|hourlyPence|amountPence|balancePence|invoiceNumber/.test(readFileSync(f, "utf8"))).map(rel);
   assert.deepEqual(offenders, []);
@@ -114,4 +137,42 @@ test("a statement for a seeded family cannot be issued with no agreed rate: it s
     checked += 1;
   }
   assert.ok(checked > 0, "the development data has a family with a completed lesson");
+});
+
+test("what a parent is shown is a projection: their own statements and payments, no internal ids or notes, and never another family's", async () => {
+  const { randomUUID } = await import("node:crypto");
+  const ctx = { ...billingContext({ NODE_ENV: "test" }), now: () => "2030-01-02T09:00:00.000Z" };
+  const { data } = ctx;
+  const make = async (name) => {
+    const client = await data.clients.create({ userId: randomUUID(), name, email: `${randomUUID()}@example.test`, active: true });
+    const student = await data.students.create({ name: `${name} child`, active: true, clientId: client.id });
+    await data.students.linkClient(client.id, student.id);
+    const tutor = await data.tutors.create({ name: "Tutor", email: `${randomUUID()}@example.test`, subjects: ["Maths"], active: true });
+    const assignment = await data.assignments.create({ title: "Maths", subject: "Maths", tutorId: tutor.id, studentIds: [student.id], clientIds: [client.id], status: "ACTIVE", defaultDurationMinutes: 60 });
+    await data.lessons.create({ assignmentId: assignment.id, tutorId: tutor.id, studentIds: [student.id], clientIds: [client.id], title: "Algebra", subject: "Maths", startAt: "2029-06-05T16:00:00Z", durationMinutes: 60, locationType: "ONLINE", reportRequired: false, status: "COMPLETED" });
+    await ctx.billing.familyRates.create({ clientId: client.id, assignmentId: assignment.id, hourlyPence: 3000, contractStart: "2029-01-01", contractEnd: null, createdBy: "admin" });
+    return client;
+  };
+  const a = await make("Family A");
+  const b = await make("Family B");
+  const admin = { id: "admin-1", email: "admin@example.test" };
+  await ctx.billing.settings.update({ paymentInstructions: "Pay LearnThrive Tuition Ltd by bank transfer." }, admin.id);
+  await billing.issueStatement(ctx, a.id, "2029-06", admin);
+  await billing.recordPayment(ctx, { clientId: a.id, amountPence: 1000, receivedOn: "2029-07-10", method: "Bank transfer", note: "Sarah rang about the late payment" }, admin);
+
+  const mine = await billing.parentAccount(ctx, a.id);
+  assert.equal(mine.statements.length, 1);
+  assert.equal(mine.statements[0].lines.length, 1);
+  assert.equal(mine.statements[0].lines[0].amountPence, 3000);
+  assert.equal(mine.balancePence, 3000 - 1000, "the statement total less the payment recorded since");
+  assert.equal(mine.paymentInstructions, "Pay LearnThrive Tuition Ltd by bank transfer.");
+  assert.deepEqual(mine.payments, [{ receivedOn: "2029-07-10", amountPence: 1000, method: "Bank transfer" }]);
+
+  const json = JSON.stringify(mine);
+  for (const secret of ["Sarah rang", "admin-1", "lessonId", "studentId", "issuedBy", "paymentIds", "blockers", "createdBy", "recordedBy"]) {
+    assert.equal(json.includes(secret), false, `the parent's view must not carry ${secret}`);
+  }
+  const theirs = await billing.parentAccount(ctx, b.id);
+  assert.deepEqual([theirs.statements.length, theirs.payments.length, theirs.balancePence], [0, 0, 0], "another family has none of the first family's statements or payments");
+  assert.equal(JSON.stringify(theirs).includes(mine.statements[0].invoiceNumber), false);
 });
