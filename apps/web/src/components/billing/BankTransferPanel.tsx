@@ -74,17 +74,18 @@ export function BankTransferPanel({ details }: { details: BankTransferDetails })
   return (
     <section aria-labelledby="bank-transfer-heading">
       <h2 id="bank-transfer-heading" className={styles.heading}>Pay by bank transfer</h2>
+      {/* A <dl> row may hold only <dt> and <dd> (axe: definition-list, dlitem), so the copy button is the term's second <dd>. */}
       <dl className={styles.list}>
         {rows.map((row) => (
           <div key={row.key} className={styles.row}>
-            <div>
-              <dt className={styles.label}>{row.label}</dt>
-              <dd className={`${styles.value} ${row.className ?? ""}`}>{row.value}</dd>
-            </div>
-            <button type="button" className={`btn btn--secondary btn--sm ${styles.copy}`} onClick={() => void copy(row)} aria-label={`Copy ${row.copyAs}`}>
-              {copied === row.key ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
-              <span aria-hidden="true">{copied === row.key ? "Copied" : "Copy"}</span>
-            </button>
+            <dt className={styles.label}>{row.label}</dt>
+            <dd className={`${styles.value} ${row.className ?? ""}`}>{row.value}</dd>
+            <dd className={styles.copyCell}>
+              <button type="button" className={`btn btn--secondary btn--sm ${styles.copy}`} onClick={() => void copy(row)} aria-label={`Copy ${row.copyAs}`}>
+                {copied === row.key ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
+                <span aria-hidden="true">{copied === row.key ? "Copied" : "Copy"}</span>
+              </button>
+            </dd>
           </div>
         ))}
       </dl>
