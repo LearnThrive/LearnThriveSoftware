@@ -33,6 +33,12 @@ function loadTsModule(fileUrl) {
       const file = new URL(`../../../packages/data/src/${subpath}.ts`, import.meta.url);
       return loadTsModule(existsSync(file) ? file : new URL(`../../../packages/data/src/${subpath}/index.ts`, import.meta.url));
     }
+    // packages/shared is raw TS source too (its package.json exports map ./<name> to ./<name>.ts),
+    // so a plain require() would hand the .ts file to Node, which cannot parse its type syntax.
+    if (specifier.startsWith("@learnthrive/shared/")) {
+      const subpath = specifier.slice("@learnthrive/shared/".length);
+      return loadTsModule(new URL(`../../../packages/shared/${subpath}.ts`, import.meta.url));
+    }
     // apps/web's own tsconfig path alias (@/* -> ./src/*) — same reasoning as @learnthrive/data/*
     // above: real Node require() has no idea this alias exists at all.
     if (specifier.startsWith("@/")) {
