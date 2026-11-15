@@ -86,3 +86,4 @@ supabase/.temp/
 
 # The content-authoring workspace (per-subject pieces and tools, with several Python virtual environments and model files). Local only; never committed.
 /LearnThriveContentTest/
+docs/RUNNING_COSTS.md
