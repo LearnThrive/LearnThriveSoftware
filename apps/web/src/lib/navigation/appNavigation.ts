@@ -173,8 +173,11 @@ function tuitionSections(role: RoleSet, teaches: boolean | undefined): AppNavSec
   let sections = NAV_BY_ROLE[first];
   if (first === "ADMIN" && teaches && !rest.some((r) => r === "TUTOR" || r === "JUNIOR_TUTOR")) sections = [sections[0], ADMIN_TEACHING, ...sections.slice(1)];
   const have = new Set(sections.flatMap((section) => section.items.map((item) => item.href)));
+  // An administrator's menu already has "Students" (everyone's), so a tutor role added to it keeps ADMIN_TEACHING's names ("My students").
+  const renamed = first === "ADMIN" ? new Map(ADMIN_TEACHING.items.map((item) => [item.href, item.label])) : undefined;
   for (const next of rest) {
-    const items = NAV_BY_ROLE[next].flatMap((section) => section.items).filter((item) => !have.has(item.href));
+    const items = NAV_BY_ROLE[next].flatMap((section) => section.items).filter((item) => !have.has(item.href))
+      .map((item) => ({ ...item, label: renamed?.get(item.href) ?? item.label }));
     if (items.length === 0) continue;
     items.forEach((item) => have.add(item.href));
     // Added entries sit before the closing "System"/"You" group so Settings stays last.
