@@ -83,3 +83,6 @@ supabase/.temp/
 # Local drafts of pull-request descriptions and downloaded CI job logs written at the repo root: scratch, not source.
 /PR-*.md
 /*job-logs*.txt
+
+# The content-authoring workspace (per-subject pieces and tools, with several Python virtual environments and model files). Local only; never committed.
+/LearnThriveContentTest/
