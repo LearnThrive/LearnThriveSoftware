@@ -88,6 +88,9 @@ test("the menu is the union too, and never offers a junior tutor a tutor's avail
   assert.ok(asTeachingAdmin.includes("/dashboard/tutor/availability"));
   assert.ok(asTeachingAdmin.includes("/dashboard/students"));
   assert.equal(new Set(asTeachingAdmin).size, asTeachingAdmin.length, "no page twice");
+  const labels = navigationFor(scope.rolesOf(teachingAdmin)).flatMap((s) => s.items.map((i) => i.label));
+  assert.equal(new Set(labels).size, labels.length, "no two links with the same name");
+  assert.ok(labels.includes("My students"), "their own students are 'My students', apart from the administrator's 'Students'");
   assert.ok(!hrefs(jamie).includes("/dashboard/admin/roles"), "a tutor is not offered the Roles screen");
 });
 
