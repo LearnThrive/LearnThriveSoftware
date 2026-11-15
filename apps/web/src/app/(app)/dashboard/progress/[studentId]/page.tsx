@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Download, TrendingUp } from "lucide-react";
 import { requireSession } from "@/lib/auth/guard";
+import { holds } from "@/lib/auth/scope";
+import { teaches } from "@/lib/auth/teaching";
 import { createMetadata } from "@/lib/metadata";
 import { getDataProvider } from "@/lib/data/provider";
 import { studentProgressFor, type ProgressEntry } from "@/lib/dashboard/progress";
@@ -39,9 +41,9 @@ export default async function ProgressPage({ params }: { params: Promise<{ stude
   const upcoming = entries.filter((entry) => entry.upcoming).sort((a, b) => a.startAt.localeCompare(b.startAt));
   const history = entries.filter((entry) => !entry.upcoming);
   const back =
-    user.role === "ADMIN" ? { href: `/dashboard/admin/students/${student.id}`, label: `Back to ${student.name}` }
-    : user.role === "TUTOR" ? { href: "/dashboard/students", label: "Back to my students" }
-    : user.role === "CLIENT" ? { href: "/dashboard/children", label: "Back to your children" }
+    holds(user, "ADMIN") ? { href: `/dashboard/admin/students/${student.id}`, label: `Back to ${student.name}` }
+    : teaches(user) && student.id !== user.studentId ? { href: "/dashboard/students", label: "Back to my students" }
+    : holds(user, "CLIENT") ? { href: "/dashboard/children", label: "Back to your children" }
     : { href: "/dashboard/reports", label: "Back to feedback" };
 
   return (
@@ -50,7 +52,7 @@ export default async function ProgressPage({ params }: { params: Promise<{ stude
         eyebrow="Progress"
         title={student.name}
         description={
-          user.role === "CLIENT" || user.role === "STUDENT"
+          !holds(user, "ADMIN") && !teaches(user)
             ? "Every lesson and the report written after it, newest first."
             : "Lessons and lesson reports over time, newest first."
         }

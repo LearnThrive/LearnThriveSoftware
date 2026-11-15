@@ -50,7 +50,7 @@ export interface CreateUserOptions {
   /** Extra raw_user_meta_data (user-controlled at sign-up), for adversarial tests. */
   metadata?: Record<string, unknown>;
   /** Fixture shortcut: set profiles.role afterwards, as the server (service role) would. */
-  role?: "ADMIN" | "TUTOR" | "CLIENT" | "STUDENT";
+  role?: "ADMIN" | "TUTOR" | "JUNIOR_TUTOR" | "CLIENT" | "STUDENT";
 }
 
 export interface TestDb {

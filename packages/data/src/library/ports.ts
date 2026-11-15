@@ -5,6 +5,10 @@ import type { AdminGrantInput, AdminGrantRecord, ClaimResult, EntitlementWindow,
 import type {
   AccessFacts,
   Account,
+  AccountRecords,
+  ProfileSummary,
+  RoleChangeEntry,
+  RoleChangeResult,
   DownloadEvent,
   ProvisionInput,
   ProvisionResult,
@@ -38,6 +42,21 @@ export interface AccountRepository {
   getOwnerProfileId(clientId: string): Promise<string | null>;
   /** The tutor record this person teaches as, or null. Only an ACTIVE record counts: a tutor who has stopped does not teach. */
   tutorRef(profileId: string): Promise<string | null>;
+  /**
+   * EVERY record this person is: tutor, family and student at once where they hold more than one role. `domainRef` answers with just one of
+   * them; a person with several roles needs each, because each role is scoped to ITS OWN record and never to another's.
+   */
+  records(profileId: string): Promise<AccountRecords>;
+  /** Everyone, with their roles, for the administrator's roles screen. */
+  listProfiles(): Promise<ProfileSummary[]>;
+  /**
+   * Changes a person's roles to exactly `roles`, if the caller may. Every rule is checked (an administrator, not oneself, a valid set, the last
+   * administrator stays one, a role that needs a record has one) and the change is audited, in ONE step: the Postgres store does it in one
+   * database function under locks, so two changes at once cannot both succeed against the same last administrator.
+   */
+  changeRoles(input: { actor: string; profileId: string; roles: readonly unknown[]; now?: Date }): Promise<RoleChangeResult>;
+  /** Newest first: the audit of role changes, for one person or everyone. */
+  roleHistory(profileId?: string, limit?: number): Promise<RoleChangeEntry[]>;
   /** The address to write to for a profile: the linked one. Never the internal sign-in address of a username account. null if there is none. */
   getEmail(profileId: string): Promise<string | null>;
   /** The name printed on downloads. The caller has already cleaned it (at most 80 characters). Throws if there is no such profile. */

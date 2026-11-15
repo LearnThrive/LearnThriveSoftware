@@ -78,7 +78,8 @@ test("a parent's Fees page is for the CLIENT role only and shows the family the 
   const code = readFileSync(join(src, ...PARENT_FEES_PAGE.split("/")), "utf8");
   assert.match(code, /requireRole\(\["CLIENT"\]\)/, "not a tutor, not a learner, not an administrator");
   assert.ok(code.indexOf('requireRole(["CLIENT"])') < code.indexOf("billingContext()"), "the role is checked before billing is touched");
-  assert.match(code, /clients\.get\(user\.profileId\)/, "the family comes from the session");
+  assert.match(code, /recordFor\(user, "CLIENT"\)/, "the family is the one the signed-in person's parent role stands on (their session), not a tutor or student record they also hold");
+  assert.match(code, /clients\.get\(familyId\)/, "and that is the family read");
   assert.doesNotMatch(code, /searchParams|params\b|useSearchParams/, "nothing in the address can pick another family");
   assert.match(code, /parentAccount\(ctx, family\.id\)/, "what is shown is the parent projection, not the stored rows");
   assert.doesNotMatch(code, /billing\.(statements|payments|refunds|audit|familyRates|tutorRates)/, "it never reads the repository directly");

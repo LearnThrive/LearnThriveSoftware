@@ -1,6 +1,5 @@
 import type { PaletteCommand } from "@/components/palette/CommandPalette";
-import type { Role } from "@/lib/auth/types";
-import { navigationFor } from "@/lib/navigation/appNavigation";
+import { navigationFor, type RoleSet } from "@/lib/navigation/appNavigation";
 import { quickCreateFor } from "@/lib/navigation/quickCreate";
 import { goToTargetsFor } from "@/lib/palette/appShortcuts";
 import { setMotionPreference } from "@/lib/motion/preference";
@@ -21,7 +20,7 @@ export interface AppCommandActions {
   signOut: () => void;
 }
 
-export function buildAppCommands(role: Role, actions: AppCommandActions, teaches = false): PaletteCommand[] {
+export function buildAppCommands(role: RoleSet, actions: AppCommandActions, teaches = false): PaletteCommand[] {
   const commands: PaletteCommand[] = [];
   const shortcutByHref = new Map(goToTargetsFor(role, teaches).map((t) => [t.href, `G ${t.key.toUpperCase()}`]));
 

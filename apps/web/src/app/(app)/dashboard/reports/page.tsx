@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { FileText } from "lucide-react";
 import { requireSession } from "@/lib/auth/guard";
+import { holds, rolesOf } from "@/lib/auth/scope";
+import { teaches, teachesLesson } from "@/lib/auth/teaching";
 import { createMetadata } from "@/lib/metadata";
 import { getDataProvider } from "@/lib/data/provider";
 import { visibleReportsFor } from "@/lib/dashboard/queries";
@@ -28,6 +30,7 @@ type Filter = "awaiting" | "approved" | "drafts" | "all";
 const FILTERS_BY_ROLE: Record<string, Filter[]> = {
   ADMIN: ["awaiting", "approved", "drafts", "all"],
   TUTOR: ["drafts", "awaiting", "approved", "all"],
+  JUNIOR_TUTOR: ["drafts", "awaiting", "approved", "all"],
   CLIENT: ["approved"],
   STUDENT: ["approved"],
 };
@@ -41,7 +44,14 @@ const LABELS: Record<Filter, string> = {
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ filter?: string }> }) {
   const user = await requireSession();
-  const available = FILTERS_BY_ROLE[user.role] ?? ["approved"];
+  // A person with several roles gets every tab any of them gets (the tabs are a page permission: a union). What each tab lists is still
+  // only what that person may see (visibleReportsFor and visibleReportFor).
+  const isAdmin = holds(user, "ADMIN");
+  const isTeacher = teaches(user);
+  const isLearnerOnly = rolesOf(user).every((r) => r === "STUDENT");
+  const wanted = new Set(rolesOf(user).flatMap((r) => FILTERS_BY_ROLE[r] ?? []));
+  const available = (Object.keys(LABELS) as Filter[]).filter((f) => wanted.has(f));
+  if (available.length === 0) available.push("approved");
   const { filter: rawFilter } = await searchParams;
   const filter: Filter = available.includes(rawFilter as Filter) ? (rawFilter as Filter) : available[0];
 
@@ -67,14 +77,14 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     <>
       <PageHeader
         eyebrow="Tuition"
-        title={user.role === "STUDENT" ? "Your feedback" : "Lesson reports"}
-        description={user.role === "ADMIN"
+        title={isLearnerOnly ? "Your feedback" : "Lesson reports"}
+        description={isAdmin
           ? "Review and approve what tutors have written before families see it."
-          : user.role === "TUTOR"
+          : isTeacher
             ? "Reports you still owe, and those already submitted or approved."
             : "Reports your tutor has written and an admin has approved."}
-        actions={user.role === "STUDENT" && user.profileId ? (
-          <Link href={`/dashboard/progress/${user.profileId}`} className="btn btn--secondary">See my progress</Link>
+        actions={holds(user, "STUDENT") && user.studentId ? (
+          <Link href={`/dashboard/progress/${user.studentId}`} className="btn btn--secondary">See my progress</Link>
         ) : undefined}
       />
 
@@ -87,8 +97,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             value,
             label: LABELS[value],
             count: buckets[value].length,
-            tone: (value === "awaiting" && user.role === "ADMIN" && buckets.awaiting.length > 0)
-              || (value === "drafts" && user.role === "TUTOR" && buckets.drafts.length > 0)
+            tone: (value === "awaiting" && isAdmin && buckets.awaiting.length > 0)
+              || (value === "drafts" && isTeacher && buckets.drafts.length > 0)
               ? "warning" : undefined,
           }))}
         />
@@ -99,10 +109,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           <EmptyState
             icon={<FileText size={22} />}
             title={filter === "awaiting" ? "Nothing awaiting approval" : filter === "drafts" ? "No reports to finish" : "No reports yet"}
-            description={user.role === "CLIENT" || user.role === "STUDENT"
+            description={!isAdmin && !isTeacher
               ? "Once a tutor writes a report and it's approved, it will appear here."
               : "Reports are written from a lesson, once its attendance has been marked."}
-            action={user.role === "ADMIN" || user.role === "TUTOR" ? (
+            action={isAdmin || isTeacher ? (
               <Link href="/dashboard/lessons?filter=needs-attention" className="btn btn--secondary">
                 Lessons needing attention
               </Link>
@@ -120,7 +130,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                   title={lesson.title}
                   meta={[
                     students || "No students",
-                    ...(user.role !== "TUTOR" ? [tutorNames.get(lesson.tutorId) ?? "Unknown tutor"] : []),
+                    ...(!teachesLesson(user, lesson) ? [tutorNames.get(lesson.tutorId) ?? "Unknown tutor"] : []),
                     formatDateOnly(lesson.startAt),
                   ].join(" · ")}
                   aside={<StatusBadge status={report.status} />}

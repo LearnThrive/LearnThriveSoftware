@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import type { Role } from "@/lib/auth/types";
+import type { RoleSet } from "@/lib/navigation/appNavigation";
 import { OPEN_PALETTE_EVENT } from "@/lib/palette/events";
 import { createGoToTracker, goToTargetsFor, isGoToCandidate, opensShortcutHelp } from "@/lib/palette/appShortcuts";
 import { isMacPlatform, opensPalette } from "@/lib/palette/shortcuts";
@@ -19,7 +19,7 @@ const AppPalette = dynamic(() => import("./AppPalette"), { ssr: false });
  * It owns the palette's and the help overlay's open state and the keyboard: Ctrl/Cmd+K (and `/`) for the
  * palette, `?` for the help, and `g` then a letter to go to a page (role-scoped; see appShortcuts.ts).
  */
-export function AppPaletteHost({ role, teaches = false, onSignOut }: { role: Role; teaches?: boolean; onSignOut: () => void }) {
+export function AppPaletteHost({ role, teaches = false, onSignOut }: { role: RoleSet; teaches?: boolean; onSignOut: () => void }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);

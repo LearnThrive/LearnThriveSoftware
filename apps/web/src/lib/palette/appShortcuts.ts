@@ -1,5 +1,4 @@
-import type { Role } from "@/lib/auth/types";
-import { navigationFor } from "@/lib/navigation/appNavigation";
+import { navigationFor, rolesIn, type RoleSet } from "@/lib/navigation/appNavigation";
 import { isTypingTarget, type ShortcutEventLike, type TargetLike } from "@/lib/palette/shortcuts";
 
 /**
@@ -25,7 +24,7 @@ export interface GoToTarget {
   href: string;
 }
 
-const CANDIDATES: Array<{ key: string; label: string; hrefFor: (role: Role, teaches: boolean) => string | null }> = [
+const CANDIDATES: Array<{ key: string; label: string; hrefFor: (role: RoleSet, teaches: boolean) => string | null }> = [
   { key: "d", label: "Overview", hrefFor: () => "/dashboard" },
   { key: "c", label: "Calendar", hrefFor: () => "/dashboard/calendar" },
   { key: "l", label: "Lessons", hrefFor: () => "/dashboard/lessons" },
@@ -35,15 +34,15 @@ const CANDIDATES: Array<{ key: string; label: string; hrefFor: (role: Role, teac
   {
     key: "p",
     label: "People",
-    hrefFor: (role) =>
-      role === "ADMIN" ? "/dashboard/admin/people/students" : role === "TUTOR" ? "/dashboard/students" : role === "CLIENT" ? "/dashboard/children" : null,
+    hrefFor: (role, teaches) =>
+      rolesIn(role).includes("ADMIN") ? "/dashboard/admin/people/students" : teaches || rolesIn(role).includes("TUTOR") || rolesIn(role).includes("JUNIOR_TUTOR") ? "/dashboard/students" : rolesIn(role).includes("CLIENT") ? "/dashboard/children" : null,
   },
-  { key: "a", label: "Assignments", hrefFor: (role) => (role === "ADMIN" ? "/dashboard/admin/assignments" : null) },
-  { key: "v", label: "Availability", hrefFor: (role, teaches) => (role === "TUTOR" || teaches ? "/dashboard/tutor/availability" : null) },
+  { key: "a", label: "Assignments", hrefFor: (role) => (rolesIn(role).includes("ADMIN") ? "/dashboard/admin/assignments" : null) },
+  { key: "v", label: "Availability", hrefFor: (role, teaches) => (rolesIn(role).includes("TUTOR") || teaches ? "/dashboard/tutor/availability" : null) },
 ];
 
 /** The go-to sequences this role has: only pages that are in its own navigation. */
-export function goToTargetsFor(role: Role, teaches = false): GoToTarget[] {
+export function goToTargetsFor(role: RoleSet, teaches = false): GoToTarget[] {
   const navigable = new Set(navigationFor(role, { teaches }).flatMap((section) => section.items.map((item) => item.href)));
   const targets: GoToTarget[] = [];
   for (const candidate of CANDIDATES) {

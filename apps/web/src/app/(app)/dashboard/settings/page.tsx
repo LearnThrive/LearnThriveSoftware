@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { requireSession } from "@/lib/auth/guard";
+import { holds, rolesOf } from "@/lib/auth/scope";
 import { createMetadata } from "@/lib/metadata";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
@@ -20,12 +21,13 @@ export const metadata: Metadata = createMetadata({
 });
 
 const ROLE_LABELS: Record<string, string> = {
-  ADMIN: "Admin", TUTOR: "Tutor", CLIENT: "Parent or guardian", STUDENT: "Student",
+  ADMIN: "Admin", TUTOR: "Tutor", JUNIOR_TUTOR: "Junior tutor", CLIENT: "Parent or guardian", STUDENT: "Student",
 };
 
 const ROLE_SUMMARY: Record<string, string> = {
   ADMIN: "Full access to people, scheduling, reports and platform settings.",
   TUTOR: "Your own lessons, students, availability and reports.",
+  JUNIOR_TUTOR: "The lessons and students you are assigned to: attendance and report drafts. A tutor or administrator sends a report on.",
   CLIENT: "Your children's lessons and their approved reports.",
   STUDENT: "Your own lessons and the feedback shared with you.",
 };
@@ -39,7 +41,7 @@ export default async function SettingsPage() {
   // Admin only: the platform default for report approval, and how many assignments override it.
   let requireApproval = true;
   let overrides = 0;
-  if (user.role === "ADMIN") {
+  if (holds(user, "ADMIN")) {
     const data = getDataProvider();
     requireApproval = (await data.settings.get()).requireReportApproval;
     overrides = (await data.assignments.list()).filter((assignment) => assignment.requireReportApproval != null).length;
@@ -62,12 +64,12 @@ export default async function SettingsPage() {
             </div>
             <dl className="detail-list">
               <div>
-                <dt>Role</dt>
-                <dd><Badge tone="info">{ROLE_LABELS[user.role]}</Badge></dd>
+                <dt>{rolesOf(user).length > 1 ? "Roles" : "Role"}</dt>
+                <dd>{rolesOf(user).map((r) => <Badge key={r} tone="info">{ROLE_LABELS[r]}</Badge>)}</dd>
               </div>
               <div>
                 <dt>Access</dt>
-                <dd>{ROLE_SUMMARY[user.role]}</dd>
+                <dd>{rolesOf(user).map((r) => ROLE_SUMMARY[r]).join(" ")}</dd>
               </div>
             </dl>
             <p className="form-hint">
@@ -98,7 +100,7 @@ export default async function SettingsPage() {
           </CardBody>
         </Card>
 
-        {user.role === "ADMIN" && (
+        {holds(user, "ADMIN") && (
           <Card>
             <CardHeader
               title="Report approval"
@@ -165,7 +167,7 @@ export default async function SettingsPage() {
                 Resetting returns everything — people, lessons, reports and notifications — to the
                 original demo scenario. Anything added while trying the product out is discarded.
               </p>
-              {user.role === "ADMIN" ? (
+              {holds(user, "ADMIN") ? (
                 <ResetDevDataButton />
               ) : (
                 <p className="form-hint">Only an admin can reset the demo data.</p>

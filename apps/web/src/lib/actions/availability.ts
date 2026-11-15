@@ -11,7 +11,7 @@ import { requireTutor } from "@/lib/auth/guard";
 // administrator who teaches, on their own record; requireTutor() gives profileId as that record.
 
 export async function addAvailabilityAction(formData: FormData): Promise<void> {
-  const user = await requireTutor();
+  const user = await requireTutor("tutor.availability");
   if (!user.profileId) throw new Error("Your account isn't linked to a Tutor profile yet.");
 
   const weekday = Number(formData.get("weekday"));
@@ -34,7 +34,7 @@ export async function addAvailabilityAction(formData: FormData): Promise<void> {
 }
 
 export async function removeAvailabilityAction(formData: FormData): Promise<void> {
-  const user = await requireTutor();
+  const user = await requireTutor("tutor.availability");
   if (!user.profileId) throw new Error("Your account isn't linked to a Tutor profile yet.");
 
   const blockId = String(formData.get("blockId") ?? "");

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { CalendarPlus } from "lucide-react";
 import { requireSession } from "@/lib/auth/guard";
+import { holds } from "@/lib/auth/scope";
 import { joinRoleFor } from "@/lib/auth/teaching";
 import { createMetadata } from "@/lib/metadata";
 import { getDataProvider } from "@/lib/data/provider";
@@ -34,7 +35,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   // Section 55's "role filtering": with every lesson on the platform visible at once, Admin
   // needs a way to narrow the calendar down to one tutor's diary. Tutor/Client/Student calendars
   // are already scoped to their own lessons by visibleLessonsFor, so the filter is Admin-only.
-  const isAdmin = user.role === "ADMIN";
+  const isAdmin = holds(user, "ADMIN");
   const lessons = isAdmin && tutorFilter !== "all"
     ? allLessons.filter((lesson) => lesson.tutorId === tutorFilter)
     : allLessons;
@@ -66,8 +67,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       <PageHeader
         eyebrow="Workspace"
         title="Calendar"
-        description={user.role === "ADMIN" ? "Every lesson across the platform. Drag a lesson to reschedule it." : "Your lessons, at a glance."}
-        actions={user.role === "ADMIN" ? (
+        description={isAdmin ? "Every lesson across the platform. Drag a lesson to reschedule it." : "Your lessons, at a glance."}
+        actions={isAdmin ? (
           <Link href="/dashboard/admin/lessons/new" className="btn btn--primary">
             <CalendarPlus size={16} aria-hidden="true" />Schedule lesson
           </Link>
@@ -92,8 +93,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
             <EmptyState
               icon={<CalendarPlus size={22} aria-hidden="true" />}
               title={tutorFilter === "all" ? "No lessons on your calendar yet" : "No lessons for this tutor"}
-              description={user.role === "ADMIN" ? "Scheduled lessons will appear here as soon as you create one." : "Lessons you're scheduled for will appear here."}
-              action={user.role === "ADMIN" ? (
+              description={isAdmin ? "Scheduled lessons will appear here as soon as you create one." : "Lessons you're scheduled for will appear here."}
+              action={isAdmin ? (
                 <Link href="/dashboard/admin/lessons/new" className="btn btn--primary">Schedule a lesson</Link>
               ) : undefined}
             />

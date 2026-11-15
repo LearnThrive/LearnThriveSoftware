@@ -45,6 +45,7 @@ const ADMIN_NAV: AppNavSection[] = [
       { label: "Clients", href: "/dashboard/admin/people/clients", icon: "clients", matchPrefix: "/dashboard/admin/clients" },
       { label: "Tutors", href: "/dashboard/admin/people/tutors", icon: "tutors", matchPrefix: "/dashboard/admin/tutors" },
       { label: "Tutor checks", href: "/dashboard/admin/vetting", icon: "tutors" },
+      { label: "Roles", href: "/dashboard/admin/roles", icon: "settings", matchPrefix: "/dashboard/admin/roles" },
       { label: "Applications", href: "/dashboard/admin/careers", icon: "applications", matchPrefix: "/dashboard/admin/careers" },
     ],
   },
@@ -101,6 +102,12 @@ const ADMIN_TEACHING: AppNavSection = {
   ],
 };
 
+/** A junior tutor takes the lessons and students they are assigned to, drafts reports and marks attendance. They set no availability: a tutor does. */
+const JUNIOR_TUTOR_NAV: AppNavSection[] = TUTOR_NAV.map((section) => ({
+  ...section,
+  items: section.items.filter((item) => item.icon !== "availability"),
+}));
+
 const CLIENT_NAV: AppNavSection[] = [
   {
     items: [
@@ -131,6 +138,7 @@ const STUDENT_NAV: AppNavSection[] = [
 const NAV_BY_ROLE: Record<Role, AppNavSection[]> = {
   ADMIN: ADMIN_NAV,
   TUTOR: TUTOR_NAV,
+  JUNIOR_TUTOR: JUNIOR_TUTOR_NAV,
   CLIENT: CLIENT_NAV,
   STUDENT: STUDENT_NAV,
 };
@@ -147,12 +155,35 @@ export interface NavExtras {
   teaches?: boolean;
 }
 
-function tuitionSections(role: Role, teaches: boolean | undefined): AppNavSection[] {
-  const sections = NAV_BY_ROLE[role];
-  return role === "ADMIN" && teaches ? [sections[0], ADMIN_TEACHING, ...sections.slice(1)] : sections;
+/** One role, or the set a person holds. */
+export type RoleSet = Role | readonly Role[];
+export const rolesIn = (role: RoleSet): readonly Role[] => (typeof role === "string" ? [role] : role);
+
+const NAV_ORDER: readonly Role[] = ["ADMIN", "TUTOR", "JUNIOR_TUTOR", "CLIENT", "STUDENT"];
+const ADDED_TITLE: Record<Role, string> = { ADMIN: "Administration", TUTOR: "Teaching", JUNIOR_TUTOR: "Teaching", CLIENT: "Family", STUDENT: "Learning" };
+
+/**
+ * A person with several roles gets the menu of their first role (in the order above) and, for each further role, the entries that role has
+ * which the menu does not already link to, in one section named for it. The menu is a page permission, so it is the union of the roles'; it
+ * widens nothing, because every page and API still checks again (hiding a link is never the control).
+ */
+function tuitionSections(role: RoleSet, teaches: boolean | undefined): AppNavSection[] {
+  const held = NAV_ORDER.filter((r) => rolesIn(role).includes(r));
+  const [first = "STUDENT" as Role, ...rest] = held;
+  let sections = NAV_BY_ROLE[first];
+  if (first === "ADMIN" && teaches && !rest.some((r) => r === "TUTOR" || r === "JUNIOR_TUTOR")) sections = [sections[0], ADMIN_TEACHING, ...sections.slice(1)];
+  const have = new Set(sections.flatMap((section) => section.items.map((item) => item.href)));
+  for (const next of rest) {
+    const items = NAV_BY_ROLE[next].flatMap((section) => section.items).filter((item) => !have.has(item.href));
+    if (items.length === 0) continue;
+    items.forEach((item) => have.add(item.href));
+    // Added entries sit before the closing "System"/"You" group so Settings stays last.
+    sections = [...sections, { title: ADDED_TITLE[next], items }];
+  }
+  return sections;
 }
 
-export function navigationFor(role: Role, extras: NavExtras = {}): AppNavSection[] {
+export function navigationFor(role: RoleSet, extras: NavExtras = {}): AppNavSection[] {
   const learning: AppNavItem[] = [];
   if (extras.studyBuddy) learning.push({ label: "LearnThrive AI", href: "/library/ai", icon: "study-buddy" });
   if (extras.library) learning.push({ label: "Library", href: "/library", icon: "library" });
@@ -172,6 +203,8 @@ export function navigationFor(role: Role, extras: NavExtras = {}): AppNavSection
  */
 export interface PlatformNavInput {
   role: Role;
+  /** Every role held. Absent for a person with one `role`. */
+  roles?: readonly Role[];
   tuition: boolean;
   studyBuddy: boolean;
   library: boolean;
@@ -180,7 +213,7 @@ export interface PlatformNavInput {
 }
 
 export function platformNavigation(input: PlatformNavInput): AppNavSection[] {
-  const sections: AppNavSection[] = input.tuition ? [...tuitionSections(input.role, input.teaches)] : [];
+  const sections: AppNavSection[] = input.tuition ? [...tuitionSections(input.roles?.length ? input.roles : input.role, input.teaches)] : [];
   const learning: AppNavItem[] = [];
   if (input.studyBuddy) learning.push({ label: "LearnThrive AI", href: "/library/ai", icon: "study-buddy" });
   if (input.library) learning.push({ label: "Library", href: "/library", icon: "library", matchPrefix: "/library/search" });

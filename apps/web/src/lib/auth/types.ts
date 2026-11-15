@@ -1,13 +1,16 @@
-// Platform account roles. STAFF is a named future possibility in the plan behind this
-// migration but is deliberately not built yet — adding it here would be scaffolding with
-// no behaviour attached to it.
-export type Role = "ADMIN" | "TUTOR" | "CLIENT" | "STUDENT";
+import type { Role } from "@learnthrive/data/roles";
+
+// Platform account roles (packages/data/src/roles.ts holds the list, the permissions each carries and the rules for changing them).
+// A person holds a SET of them: `AuthenticatedUser.roles`. `role` is the highest of the set, kept for the places that want one word.
+// Never decide who may do something from `role`: use `lib/auth/scope.ts` (`holds`, `scopes`) or `can()`. STAFF is still deliberately not built.
+export type { Role };
 
 export interface DevelopmentUser {
   id: string;
   email: string;
   passwordHash: string;
   role: Role;
+  roles: Role[];
   name: string;
   // Domain-model linkage (e.g. a Tutor/Client/Student record) arrives in Phase C. Left as an
   // opaque optional field now so the auth layer doesn't need to change shape when it does.
@@ -18,11 +21,22 @@ export interface DevelopmentUser {
 export interface AuthenticatedUser {
   id: string;
   email: string;
+  /** The highest role held. A label and a default, NOT a permission: `roles` is what is checked. */
   role: Role;
+  /** Every role this person holds. Absent only on an object built by hand with one `role` (a test): `rolesOf` reads either. */
+  roles?: Role[];
   name: string;
+  /**
+   * The domain record of the PRIMARY role (a tutor's own id, a parent's client id, a student's id). A person with several roles has one
+   * record per role: use `tutorId`, `clientId` and `studentId` below through `recordFor` in lib/auth/scope.ts, never this.
+   */
   profileId?: string;
-  /** Set for an administrator who teaches: their tutor record. Read it through lib/auth/teaching.ts, never directly. */
+  /** The tutor record this person teaches as (they hold TUTOR or JUNIOR_TUTOR). Read it through lib/auth/teaching.ts, never directly. */
   tutorId?: string;
+  /** The family this person owns (they hold CLIENT). */
+  clientId?: string;
+  /** The student this person is (they hold STUDENT and have a learner login). */
+  studentId?: string;
 }
 
 export type LoginFailureReason = "invalid_credentials" | "account_disabled";

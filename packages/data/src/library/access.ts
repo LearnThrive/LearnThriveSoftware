@@ -16,8 +16,8 @@ export interface AccessDecision {
  * Anything unpublished (a draft, or scheduled for later) is closed to everyone else, whatever they hold.
  * No account at all is not a question this function answers: the route returns 401 before it asks.
  */
-export function canAccess(account: Pick<Account, "role">, resource: Pick<Resource, "accessTier" | "publishedAt">, facts: AccessFacts, now: Date): AccessDecision {
-  if (account.role === "ADMIN") return { allowed: true, reason: "admin" };
+export function canAccess(account: Partial<Pick<Account, "role" | "roles">>, resource: Pick<Resource, "accessTier" | "publishedAt">, facts: AccessFacts, now: Date): AccessDecision {
+  if (account.role === "ADMIN" || account.roles?.includes("ADMIN")) return { allowed: true, reason: "admin" };
   if (resource.publishedAt === null || resource.publishedAt.getTime() > now.getTime()) return { allowed: false, reason: "unpublished" };
   if (resource.accessTier === "free_sample") return { allowed: true, reason: "free_sample" };
   if (facts.enrolled) return { allowed: true, reason: "enrolled" };
@@ -50,9 +50,26 @@ export interface PlatformAccess {
   studyBuddy: boolean;
 }
 
-export function platformAccess(role: AccountRole, facts: AccessFacts): PlatformAccess {
+const TIER_RANK: Record<PlatformTier, number> = { staff: 3, enrolled: 2, library: 1, none: 0 };
+
+/**
+ * What one person finds behind the front door. A person with SEVERAL roles gets the union of what each gives: the dashboard if any role opens it,
+ * the Library if any does, and the highest tier. Passing one role works as it always did.
+ */
+export function platformAccess(roles: AccountRole | readonly AccountRole[], facts: AccessFacts): PlatformAccess {
+  const held = typeof roles === "string" ? [roles] : roles;
+  if (held.length <= 1) return platformAccessForRole(held[0] ?? "CLIENT", facts);
+  return held.map((role) => platformAccessForRole(role, facts)).reduce((a, b) => ({
+    tier: TIER_RANK[a.tier] >= TIER_RANK[b.tier] ? a.tier : b.tier,
+    dashboard: a.dashboard || b.dashboard,
+    library: a.library || b.library,
+    studyBuddy: a.studyBuddy || b.studyBuddy,
+  }));
+}
+
+function platformAccessForRole(role: AccountRole, facts: AccessFacts): PlatformAccess {
   const libraryRight = role === "ADMIN" || facts.enrolled || facts.subscription || facts.adminGrant;
-  if (role === "ADMIN" || role === "TUTOR") return { tier: "staff", dashboard: true, library: libraryRight, studyBuddy: libraryRight };
+  if (role === "ADMIN" || role === "TUTOR" || role === "JUNIOR_TUTOR") return { tier: "staff", dashboard: true, library: libraryRight, studyBuddy: libraryRight };
   // A learner's own login: the tuition routes follow THEIR OWN enrolment (never a sibling's); the household's Library benefit
   // (the family is enrolled, subscribed or granted) gives the Library and LearnThrive AI and nothing else.
   if (role === "STUDENT") {

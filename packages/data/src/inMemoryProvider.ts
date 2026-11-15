@@ -9,6 +9,7 @@ import type {
   SettingsRepository, StudentRepository, TutorRepository,
 } from "./repositories";
 import { ARCHIVED_TUTOR_ID, PURGE_DELAY_DAYS, PURGE_NOTES } from "./repositories";
+import { generatePaymentReference, PAYMENT_REFERENCE_TRIES } from "./paymentReference";
 
 // Fixed, well-known ids for the seeded demo people (plan section 89's scenario) — not random,
 // so apps/web's auth seed (devProvider.ts) can set matching AuthenticatedUser.profileId values
@@ -25,7 +26,40 @@ export const SEED_IDS = {
   lessonUpcoming: "lesson-gcse-maths-upcoming",
   classroomRoomUpcoming: "classroom-room-gcse-maths-upcoming",
   reportApproved: "report-gcse-maths-completed-approved",
+  // Synthetic multi-role people (docs/ROLE_PERMISSIONS.md): a 17-year-old who is a student AND a junior tutor, their parent, and a peer they tutor.
+  tutorJuniorSam: "tutor-junior-sam",
+  studentJuniorSam: "student-junior-sam",
+  clientJuniorParent: "client-junior-parent",
+  studentPeerRobin: "student-peer-robin",
+  assignmentJuniorSamLearns: "assignment-sam-learns-english",
+  assignmentJuniorSamTeaches: "assignment-sam-teaches-robin",
+  lessonJuniorSamLearns: "lesson-sam-learns-english",
+  lessonJuniorSamTeaches: "lesson-sam-teaches-robin",
 } as const;
+
+/**
+ * The four owners and testers, each with TWO development logins so that every role can be tried (docs/DEVELOPMENT_ACCOUNTS.md):
+ *   the main login   ADMIN + TUTOR + CLIENT   an administrator who teaches and owns a family
+ *   the learner login STUDENT + JUNIOR_TUTOR  a student in that family who is also a junior tutor
+ * (TUTOR cannot be held with JUNIOR_TUTOR, nor CLIENT with STUDENT, so no single login can hold every role.) Each person's learner is taught by the
+ * NEXT person's tutor record in a lesson that is on right now (so the lesson chat can be tried at once), and is assigned, as a junior tutor, to the
+ * learner two along. The lesson that is on now is made when the seed is made: reset the development data to refresh it.
+ */
+export const TEAM = [
+  { key: "alvi", name: "Alvi Hossain" },
+  { key: "tahasin", name: "Tahasin Hasan" },
+  { key: "abdurrahman", name: "Abdurrahman Mustafa" },
+  { key: "brian", name: "Brian James Khalawon" },
+].map((p, i, all) => ({
+  ...p,
+  tutor: `tutor-team-${p.key}`,
+  juniorTutor: `tutor-team-${p.key}-junior`,
+  client: `client-team-${p.key}`,
+  student: `student-team-${p.key}`,
+  /** Whose tutor teaches this person's learner, and whose learner this person's junior tutor is assigned to. */
+  taughtBy: all[(i + 1) % all.length]!.key,
+  assistsWith: all[(i + 2) % all.length]!.key,
+}));
 
 function now() {
   return new Date().toISOString();
@@ -52,7 +86,21 @@ class InMemoryTutorRepository implements TutorRepository {
 }
 
 class InMemoryClientRepository implements ClientRepository {
+  private readonly references = new Map<string, string>(); // clientId -> payment reference: not on the Client, so update() cannot set it
   constructor(private readonly store: Map<string, Client>) {}
+  async ensurePaymentReference(clientId: string) {
+    if (!this.store.has(clientId)) return null;
+    const existing = this.references.get(clientId);
+    if (existing) return existing;
+    const taken = new Set(this.references.values());
+    for (let i = 0; i < PAYMENT_REFERENCE_TRIES; i += 1) {
+      const reference = generatePaymentReference();
+      if (taken.has(reference)) continue;
+      this.references.set(clientId, reference);
+      return reference;
+    }
+    throw new Error("Could not make a unique payment reference.");
+  }
   async list() { return [...this.store.values()]; }
   async get(id: string) { return this.store.get(id) ?? null; }
   async getByUserId(userId: string) { return [...this.store.values()].find((c) => c.userId === userId) ?? null; }
@@ -631,6 +679,33 @@ function seedProvider(): DataProvider {
     active: true, createdAt: now(),
   });
   links.push({ clientId: SEED_IDS.clientSarahAhmed, studentId: SEED_IDS.studentAyaanAhmed });
+
+  // A student who is also a junior tutor (all names synthetic). There is no date of birth in this model: the person is 17, so Year 12.
+  // As a STUDENT they learn English with the development administrator's tutor record; as a JUNIOR TUTOR they teach a peer. The peer is not their
+  // own family and Brian (above) is neither: the junior must reach their own student data and the peer, and nothing else.
+  tutorStore.set(SEED_IDS.tutorJuniorSam, {
+    id: SEED_IDS.tutorJuniorSam, name: "Sam Junior-Test", email: "junior@learnthrive.dev", subjects: ["English"], active: true, createdAt: now(),
+  });
+  clientStore.set(SEED_IDS.clientJuniorParent, {
+    id: SEED_IDS.clientJuniorParent, name: "Pat Parent-Test", email: "junior-parent@learnthrive.dev", active: true, createdAt: now(),
+  });
+  studentStore.set(SEED_IDS.studentJuniorSam, {
+    id: SEED_IDS.studentJuniorSam, name: "Sam Junior-Test", yearGroup: "Year 12", active: true, createdAt: now(),
+  });
+  studentStore.set(SEED_IDS.studentPeerRobin, {
+    id: SEED_IDS.studentPeerRobin, name: "Robin Peer-Test", yearGroup: "Year 9", active: true, createdAt: now(),
+  });
+  links.push({ clientId: SEED_IDS.clientJuniorParent, studentId: SEED_IDS.studentJuniorSam });
+  assignmentStore.set(SEED_IDS.assignmentJuniorSamLearns, {
+    id: SEED_IDS.assignmentJuniorSamLearns, title: "A Level English — Sam", subject: "English", level: "A Level",
+    tutorId: SEED_IDS.tutorMeeraShah, studentIds: [SEED_IDS.studentJuniorSam], clientIds: [SEED_IDS.clientJuniorParent],
+    status: "ACTIVE", defaultDurationMinutes: 60, defaultLocationType: "ONLINE", createdAt: now(),
+  });
+  assignmentStore.set(SEED_IDS.assignmentJuniorSamTeaches, {
+    id: SEED_IDS.assignmentJuniorSamTeaches, title: "Year 9 English — Robin", subject: "English", level: "KS3",
+    tutorId: SEED_IDS.tutorJuniorSam, studentIds: [SEED_IDS.studentPeerRobin], clientIds: [],
+    status: "ACTIVE", defaultDurationMinutes: 45, defaultLocationType: "ONLINE", createdAt: now(),
+  });
   assignmentStore.set(SEED_IDS.assignmentGcseMaths, {
     id: SEED_IDS.assignmentGcseMaths, title: "GCSE Mathematics — Brian", subject: "Mathematics", level: "GCSE",
     tutorId: SEED_IDS.tutorJamiePatel, studentIds: [SEED_IDS.studentAyaanAhmed], clientIds: [SEED_IDS.clientSarahAhmed],
@@ -671,6 +746,47 @@ function seedProvider(): DataProvider {
     locationType: "ONLINE", reportRequired: true, status: "PLANNED", createdAt: now(), updatedAt: now(),
     classroomRoomId: SEED_IDS.classroomRoomUpcoming,
   });
+
+  lessonStore.set(SEED_IDS.lessonJuniorSamLearns, {
+    id: SEED_IDS.lessonJuniorSamLearns, assignmentId: SEED_IDS.assignmentJuniorSamLearns, tutorId: SEED_IDS.tutorMeeraShah,
+    studentIds: [SEED_IDS.studentJuniorSam], clientIds: [SEED_IDS.clientJuniorParent],
+    title: "A Level English — Sam", subject: "English", startAt: nextTuesday, durationMinutes: 60,
+    locationType: "ONLINE", reportRequired: true, status: "PLANNED", createdAt: now(), updatedAt: now(),
+  });
+  lessonStore.set(SEED_IDS.lessonJuniorSamTeaches, {
+    id: SEED_IDS.lessonJuniorSamTeaches, assignmentId: SEED_IDS.assignmentJuniorSamTeaches, tutorId: SEED_IDS.tutorJuniorSam,
+    studentIds: [SEED_IDS.studentPeerRobin], clientIds: [],
+    title: "Year 9 English — Robin", subject: "English", startAt: nextTuesday, durationMinutes: 45,
+    locationType: "ONLINE", reportRequired: true, status: "PLANNED", createdAt: now(), updatedAt: now(),
+  });
+
+  // The team (see TEAM): a family, a learner and two tutor records each, and two lessons per person.
+  const minutesFromNow = (n: number) => new Date(Date.now() + n * 60_000).toISOString();
+  for (const person of TEAM) {
+    tutorStore.set(person.tutor, { id: person.tutor, name: person.name, email: `team-${person.key}@learnthrive.dev`, subjects: ["Mathematics", "English"], active: true, createdAt: now() });
+    tutorStore.set(person.juniorTutor, { id: person.juniorTutor, name: `${person.name} (junior tutor)`, email: `team-${person.key}-learner@learnthrive.dev`, subjects: ["English"], active: true, createdAt: now() });
+    clientStore.set(person.client, { id: person.client, name: person.name, email: `team-${person.key}@learnthrive.dev`, active: true, createdAt: now() });
+    studentStore.set(person.student, { id: person.student, name: `${person.name} (learner)`, yearGroup: "Year 12", active: true, createdAt: now() });
+    links.push({ clientId: person.client, studentId: person.student });
+  }
+  for (const person of TEAM) {
+    const teacher = TEAM.find((t) => t.key === person.taughtBy)!;
+    const helped = TEAM.find((t) => t.key === person.assistsWith)!;
+    // This person's learner is taught by the next person's tutor record, in a lesson that is on right now.
+    const learns = `assignment-team-${person.key}-learns`;
+    assignmentStore.set(learns, { id: learns, title: `Maths: ${person.name}`, subject: "Mathematics", level: "A Level", tutorId: teacher.tutor, studentIds: [person.student], clientIds: [person.client], status: "ACTIVE", defaultDurationMinutes: 60, defaultLocationType: "ONLINE", createdAt: now() });
+    lessonStore.set(`lesson-team-${person.key}-now`, {
+      id: `lesson-team-${person.key}-now`, assignmentId: learns, tutorId: teacher.tutor, studentIds: [person.student], clientIds: [person.client], title: `Maths: ${person.name}`, subject: "Mathematics",
+      startAt: minutesFromNow(-10), durationMinutes: 60, locationType: "ONLINE", reportRequired: true, status: "PLANNED", createdAt: now(), updatedAt: now(),
+    });
+    // This person's JUNIOR tutor record is assigned to the learner two along, tomorrow: they can read and draft, and cannot send messages.
+    const assists = `assignment-team-${person.key}-assists`;
+    assignmentStore.set(assists, { id: assists, title: `English: ${helped.name}`, subject: "English", level: "A Level", tutorId: person.juniorTutor, studentIds: [helped.student], clientIds: [helped.client], status: "ACTIVE", defaultDurationMinutes: 60, defaultLocationType: "ONLINE", createdAt: now() });
+    lessonStore.set(`lesson-team-${person.key}-tomorrow`, {
+      id: `lesson-team-${person.key}-tomorrow`, assignmentId: assists, tutorId: person.juniorTutor, studentIds: [helped.student], clientIds: [helped.client], title: `English: ${helped.name}`, subject: "English",
+      startAt: minutesFromNow(24 * 60), durationMinutes: 60, locationType: "ONLINE", reportRequired: true, status: "PLANNED", createdAt: now(), updatedAt: now(),
+    });
+  }
 
   // Plan section 89's "one approved report" — attached to the one completed seed lesson, since a
   // report on a lesson that hasn't happened yet wouldn't make sense as demo data.

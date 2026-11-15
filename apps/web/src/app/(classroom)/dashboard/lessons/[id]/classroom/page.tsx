@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth/guard";
+import { holds } from "@/lib/auth/scope";
 import { joinRoleFor } from "@/lib/auth/teaching";
 import { getDataProvider } from "@/lib/data/provider";
 import { signClassroomJoinToken } from "@learnthrive/shared/classroomToken";
@@ -30,7 +31,7 @@ export default async function LessonClassroomPage({
   // IDOR & assignment check. An administrator who is not this lesson's tutor has no join role: they never enter as its tutor.
   const joinRole = joinRoleFor(user, lesson);
 
-  if (user.role !== "ADMIN" && !joinRole) {
+  if (!holds(user, "ADMIN") && !joinRole) {
     redirect("/403");
   }
 

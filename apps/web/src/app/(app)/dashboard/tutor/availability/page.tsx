@@ -20,7 +20,7 @@ export const metadata: Metadata = createMetadata({
 const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export default async function TutorAvailabilityPage() {
-  const user = await requireTutor();
+  const user = await requireTutor("tutor.availability");
   if (!user.profileId) {
     return (
       <>

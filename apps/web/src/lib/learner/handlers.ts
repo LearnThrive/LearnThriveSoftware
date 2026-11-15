@@ -88,7 +88,7 @@ async function guardianGate(request: Request, deps: LearnerDeps, event: string, 
   const session = await renewSession(deps.jar, deps.rt);
   if (session.status !== "ok") return { ok: false, response: refuse(401, "signed_out", "Please sign in again.") };
   const account = await deps.rt.store.accounts.getAccount(session.user.id);
-  if (!account || account.role === "STUDENT" || account.learner) return { ok: false, response: refuse(403, "adult_required", "Only a parent or guardian can do that.") };
+  if (!account || account.roles.includes("STUDENT") || account.learner) return { ok: false, response: refuse(403, "adult_required", "Only a parent or guardian can do that.") };
   if (!account.adultConfirmed) return { ok: false, response: refuse(403, "adult_required", "Only a parent or guardian can do that.") };
   const now = clock(deps);
   const token = deps.jar.get(SUPERVISED_COOKIE);

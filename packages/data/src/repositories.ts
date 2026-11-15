@@ -1,3 +1,4 @@
+import type { Role } from "./roles";
 import type {
   Client, ClientStudentLink, Lesson, LessonActivityEvent, LessonAttendanceRecord, LessonReport, Notification, PlatformSettings, Student,
   TuitionAssignment, Tutor, TutorAvailabilityBlock,
@@ -29,6 +30,11 @@ export interface ClientRepository {
   getByUserId(userId: string): Promise<Client | null>;
   create(input: Omit<Client, "id" | "createdAt">): Promise<Client>;
   update(id: string, patch: Partial<Omit<Client, "id" | "createdAt">>): Promise<Client>;
+  /**
+   * The family's payment reference (`LT-` and six characters), made on the first call and the same on every later one. It is kept apart from
+   * `Client` and from `update` on purpose: nothing a form submits can set or change it. null if there is no such family.
+   */
+  ensurePaymentReference(clientId: string): Promise<string | null>;
 }
 
 export interface StudentRepository {
@@ -101,7 +107,7 @@ export interface NotificationRepository {
   /** The login behind a tutor, family or student record, or null: many records have none, and they simply get no notification. */
   recipientFor(recordId: string): Promise<string | null>;
   /** Every login with this role, except one that has been disabled. */
-  recipientsWithRole(role: "ADMIN" | "TUTOR" | "CLIENT" | "STUDENT"): Promise<string[]>;
+  recipientsWithRole(role: Role): Promise<string[]>;
 }
 
 export interface ReportRepository {

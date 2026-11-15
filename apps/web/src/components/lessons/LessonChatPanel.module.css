@@ -1,0 +1,34 @@
+/* The chat inside a lesson page. Tokens only. */
+
+.wrap { display: grid; gap: var(--space-3); }
+
+.log {
+  display: grid;
+  gap: var(--space-2);
+  max-height: 24rem;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.message {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  max-width: 90%;
+}
+
+.mine { margin-left: auto; background: var(--surface-2, var(--surface-1)); }
+.meta { color: var(--fg-muted); font-size: var(--text-small, 0.875rem); }
+.text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--fg-strong); }
+.removed { color: var(--fg-muted); font-style: italic; }
+.file { display: inline-flex; gap: var(--space-2); align-items: center; }
+
+.composer { display: grid; gap: var(--space-2); }
+.row { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.notice { margin: 0; color: var(--fg-muted); }
+.error { margin: 0; color: var(--status-critical-fg, currentColor); }

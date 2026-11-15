@@ -21,7 +21,7 @@ export const dynamic = "force-dynamic";
 const NOT_FOUND = () => Response.json({ error: "Not found." }, { status: 404, headers: { "Cache-Control": "no-store" } });
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await requireRoleForApi(["ADMIN", "TUTOR", "CLIENT", "STUDENT"]);
+  const user = await requireRoleForApi(["ADMIN", "TUTOR", "JUNIOR_TUTOR", "CLIENT", "STUDENT"]);
   if (!user) return Response.json({ error: "Sign in to download this lesson." }, { status: 401, headers: { "Cache-Control": "no-store" } });
 
   const { id } = await params;

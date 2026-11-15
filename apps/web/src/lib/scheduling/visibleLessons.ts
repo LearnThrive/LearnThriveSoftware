@@ -1,5 +1,6 @@
 import type { DataProvider } from "@learnthrive/data/repositories";
 import type { Lesson } from "@learnthrive/data/domain";
+import { unionOver } from "@/lib/auth/scope";
 import type { AuthenticatedUser } from "@/lib/auth/types";
 
 /** Plan section 24: calendar role filtering, enforced server-side, in exactly one place — every
@@ -9,10 +10,17 @@ import type { AuthenticatedUser } from "@/lib/auth/types";
  * AuthenticatedUser.profileId — see docs/DOMAIN_MODEL.md's cross-referencing note). A role
  * without a linked profileId yet sees nothing, not an error and not everything. */
 export async function visibleLessonsFor(data: DataProvider, user: AuthenticatedUser): Promise<Lesson[]> {
+  // A person with several roles sees the lessons each role reaches ON ITS OWN RECORD, merged: never more than the roles reach one by one.
+  return unionOver(user, (scoped) => visibleLessonsForRole(data, scoped));
+}
+
+/** What ONE role reaches. `user` here is a single-role copy (lib/auth/scope.ts `asRole`), or a person who only ever had one role. */
+async function visibleLessonsForRole(data: DataProvider, user: AuthenticatedUser): Promise<Lesson[]> {
   switch (user.role) {
     case "ADMIN":
       return data.lessons.list();
     case "TUTOR":
+    case "JUNIOR_TUTOR":
       return user.profileId ? data.lessons.forTutor(user.profileId) : [];
     case "CLIENT":
       return user.profileId ? data.lessons.forClient(user.profileId) : [];

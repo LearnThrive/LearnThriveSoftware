@@ -43,6 +43,7 @@ const UNAVAILABLE = "That could not be done just now. Nothing was changed. Pleas
 
 export async function createLogin(rt: AccountRuntime, input: NewLogin): Promise<Created | Refused> {
   if (input.role === "ADMIN") return refused("not_eligible", "Administrators are made by the operator script, never here.");
+  if (input.role === "JUNIOR_TUTOR") return refused("not_eligible", "A junior tutor is made by adding the role to a person on the Roles page, never here.");
   const usernameProblem = usernameError(input.username);
   if (usernameProblem) return refused("bad_username", usernameProblem);
   const emailProblem = emailError(input.linkedEmail);

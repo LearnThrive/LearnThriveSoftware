@@ -82,7 +82,7 @@ test("resetDataProvider: discards anything created beyond the seed scenario, but
   assert.equal(after, getDataProvider()); // the singleton itself was replaced, not just its contents
 
   const tutorsAfterReset = await after.tutors.list();
-  assert.equal(tutorsAfterReset.length, 2); // the seeded tutor, and the tutor record of the development administrator who teaches
+  assert.equal(tutorsAfterReset.length, 3 + 8); // the seeded tutor, the teaching administrator, the junior tutor (a student too), and the team's eight (a tutor and a junior tutor record for each of four people)
   assert.ok(tutorsAfterReset.some((tutor) => tutor.id === SEED_IDS.tutorJamiePatel)); // same fixed id, not a new random one
 
   const assignment = await after.assignments.get(SEED_IDS.assignmentGcseMaths);

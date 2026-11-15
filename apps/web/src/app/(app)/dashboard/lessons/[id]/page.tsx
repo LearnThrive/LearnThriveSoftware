@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AlertCircle, CheckCircle2, Lock, Video, CalendarPlus, Download } from "lucide-react";
 import { requireSession } from "@/lib/auth/guard";
+import { holds, rolesOf, scopes } from "@/lib/auth/scope";
+import type { AuthenticatedUser } from "@/lib/auth/types";
 import { joinRoleFor, teachesLesson } from "@/lib/auth/teaching";
 import { createMetadata } from "@/lib/metadata";
 import { getDataProvider } from "@/lib/data/provider";
@@ -13,6 +15,7 @@ import { visibleReportFor } from "@/lib/reports/reportService";
 import { isWithinJoinWindow } from "@/lib/scheduling/joinWindow";
 import { formatLongDate, formatRelative, formatTime, formatTimeRange } from "@/lib/format";
 import { noShowAllowedFrom } from "@/lib/attendance/attendanceService";
+import { LessonChatPanel } from "@/components/lessons/LessonChatPanel";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/Badge";
@@ -34,13 +37,19 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 // IDOR boundary (plan5 section 85: "Tutor edits someone else's Lesson", "Student joins unrelated
 // classroom") — every non-Admin role must be explicitly connected to *this specific* lesson, not
 // just authenticated. See tests-e2e/lessons.spec.ts for the adversarial proof of this.
-function canView(user: { role: string; profileId?: string }, lesson: { tutorId: string; studentIds: string[]; clientIds: string[] }): boolean {
+// A person with several roles may open a lesson if ANY ONE of their roles is connected to it through that role's OWN record (a student who
+// is also a junior tutor opens the lessons they attend and the lessons they teach, and no other).
+function canViewAs(user: { role: string; profileId?: string }, lesson: { tutorId: string; studentIds: string[]; clientIds: string[] }): boolean {
   if (user.role === "ADMIN") return true;
   if (!user.profileId) return false;
-  if (user.role === "TUTOR") return lesson.tutorId === user.profileId;
+  if (user.role === "TUTOR" || user.role === "JUNIOR_TUTOR") return lesson.tutorId === user.profileId;
   if (user.role === "CLIENT") return lesson.clientIds.includes(user.profileId);
   if (user.role === "STUDENT") return lesson.studentIds.includes(user.profileId);
   return false;
+}
+
+function canView(user: AuthenticatedUser, lesson: { tutorId: string; studentIds: string[]; clientIds: string[] }): boolean {
+  return scopes(user).some((scoped) => canViewAs(scoped, lesson));
 }
 
 export default async function LessonDetailPage({
@@ -67,7 +76,7 @@ export default async function LessonDetailPage({
   const attendanceByStudent = new Map(attendanceRecords.map((record) => [record.studentId, record]));
   const namedStudents = students.filter((student): student is NonNullable<typeof student> => student !== null);
 
-  const isAdmin = user.role === "ADMIN";
+  const isAdmin = holds(user, "ADMIN");
   const isOwningTutor = teachesLesson(user, lesson);
   const canManage = isAdmin || isOwningTutor;
   const canCancel = isAdmin && lesson.status === "PLANNED";
@@ -185,6 +194,13 @@ export default async function LessonDetailPage({
 
       <div className="profile-grid">
         <div className="stack">
+          {/* The ONLY place a tutor and a student exchange messages and files: here, during the lesson (docs/LESSON_CHAT.md). Who may do what is the server's. */}
+          {lesson.status !== "CANCELLED" && (
+            <Card>
+              <CardHeader title="Lesson chat" description="Messages and photos or PDFs for this lesson, during the lesson only. Parents can read them afterwards." />
+              <CardBody><LessonChatPanel lessonId={lesson.id} isAdmin={isAdmin} /></CardBody>
+            </Card>
+          )}
           {canManage && (
             <Card>
               <CardHeader
@@ -328,7 +344,7 @@ export default async function LessonDetailPage({
           {/* The family's view: only ever an approved report, only its public fields. */}
           {!canManage && (
             <Card>
-              <CardHeader title={user.role === "STUDENT" ? "Your feedback" : "Lesson report"} />
+              <CardHeader title={rolesOf(user).every((r) => r === "STUDENT") ? "Your feedback" : "Lesson report"} />
               <CardBody>
                 {visibleReport ? (
                   <ReportReadOnly

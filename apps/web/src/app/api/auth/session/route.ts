@@ -25,5 +25,5 @@ export async function GET() {
   const home = who ? homePath(who.access, { studyBuddyOpen, dashboardOpen: PORTAL_ENABLED }) : "/dashboard";
   const homeLabel = home === "/dashboard" ? "Dashboard" : home === "/library/ai" ? "LearnThrive AI" : home === "/library" ? "Library" : "Account";
   const name = user?.name || who?.account.displayName || who?.account.username || who?.user.email || "Member";
-  return NextResponse.json({ signedIn: true, name, role: user?.role ?? who?.account.role ?? "CLIENT", home, homeLabel }, { headers });
+  return NextResponse.json({ signedIn: true, name, role: user?.role ?? who?.account.role ?? "CLIENT", roles: user?.roles ?? who?.account.roles, home, homeLabel }, { headers });
 }

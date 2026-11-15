@@ -20,10 +20,11 @@ import {
   getSidebarCollapsed, getSidebarCollapsedServer, setSidebarCollapsed, subscribeToSidebarPreference,
 } from "@/lib/ui/sidebarPreference";
 import { teaches } from "@/lib/auth/teaching";
+import { rolesOf } from "@/lib/auth/scope";
 import type { AuthenticatedUser } from "@/lib/auth/types";
 
 const ROLE_LABELS: Record<AuthenticatedUser["role"], string> = {
-  ADMIN: "Admin", TUTOR: "Tutor", CLIENT: "Parent", STUDENT: "Student",
+  ADMIN: "Admin", TUTOR: "Tutor", JUNIOR_TUTOR: "Junior tutor", CLIENT: "Parent", STUDENT: "Student",
 };
 
 /** Pages that are one focused working area (the conversation) and want the whole content column, not a padded, width-limited one. */
@@ -54,6 +55,7 @@ export function AppShellClient({
   children: ReactNode;
 }) {
   const pathname = usePathname();
+  const allRoleLabels = rolesOf(user).map((r) => ROLE_LABELS[r]).join(" · ");
   const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const collapsed = useSyncExternalStore(subscribeToSidebarPreference, getSidebarCollapsed, getSidebarCollapsedServer);
@@ -269,7 +271,7 @@ export function AppShellClient({
               <Avatar name={user.name} size="sm" />
               <span className="app-usermenu__who">
                 <span className="app-usermenu__name">{user.name}</span>
-                <span className="app-usermenu__role">{roleLabel ?? ROLE_LABELS[user.role]}</span>
+                <span className="app-usermenu__role">{roleLabel ?? allRoleLabels}</span>
               </span>
             </button>
             {menu.rendered && (
@@ -278,7 +280,7 @@ export function AppShellClient({
                   <Avatar name={user.name} size="md" />
                   <div>
                     <p className="app-usermenu__name">{user.name}</p>
-                    <p className="app-usermenu__meta">{roleLabel ?? ROLE_LABELS[user.role]} · {user.email}</p>
+                    <p className="app-usermenu__meta">{roleLabel ?? allRoleLabels} · {user.email}</p>
                   </div>
                 </div>
                 <div className="app-usermenu__appearance">
@@ -311,7 +313,7 @@ export function AppShellClient({
       <Suspense fallback={null}><Toaster /></Suspense>
 
       {/* Ctrl/Cmd+K search, `?` shortcuts and "g then a letter" navigation: one host, this shell only. */}
-      {tuition ? <AppPaletteHost role={user.role} teaches={teaches(user)} onSignOut={handleLogout} /> : null}
+      {tuition ? <AppPaletteHost role={rolesOf(user)} teaches={teaches(user)} onSignOut={handleLogout} /> : null}
     </div>
     </SidebarContext.Provider>
   );

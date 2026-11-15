@@ -60,7 +60,7 @@ test("the concern pages never read a concern around the lead check", () => {
   assert.match(one, /if \(result\.reason === "not_lead"\) redirect\("\/403"\)/, "an administrator who is not a lead is refused, not shown an empty page");
   assert.match(list, /requireRole\(\["ADMIN"\]\)/);
   assert.match(one, /requireRole\(\["ADMIN"\]\)/);
-  assert.match(raise, /requireRole\(\["TUTOR", "ADMIN"\]\)/, "a parent or a learner cannot open the staff concern form");
+  assert.match(raise, /requirePermission\("concern\.raise"\)/, "a parent or a learner cannot open the staff concern form");
   assert.match(raise, /myConcernReceipts\(getSafeguarding\(\), user\.id\)/, "the person who raised a concern gets receipts for their OWN id only");
 });
 
@@ -72,7 +72,7 @@ test("every safeguarding Server Action checks who is calling as its first step",
   const first = Object.fromEntries(actions);
   assert.match(first.recordVettingCheckAction, /await requireRole\(\["ADMIN"\]\)/);
   assert.match(first.voidVettingCheckAction, /await requireRole\(\["ADMIN"\]\)/);
-  assert.match(first.raiseConcernAction, /await requireRole\(\["TUTOR", "ADMIN"\]\)/);
+  assert.match(first.raiseConcernAction, /await requirePermission\("concern\.raise"\)/);
   assert.match(first.updateConcernAction, /await requireRole\(\["ADMIN"\]\)/);
   assert.match(code, /updateConcern\(getSafeguarding\(\), id, \{ id: user\.id, email: user\.email \}, safeguardingLeads\(\)/, "an update goes through the lead check in the data layer");
   assert.match(code, /if \(!concernsOpen\(\)\) redirect\(/, "a concern is refused, not stored, when no lead is named");

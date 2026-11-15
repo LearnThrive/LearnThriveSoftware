@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CONCERN_CATEGORIES, CONCERN_CATEGORY_LABELS, myConcernReceipts } from "@learnthrive/data/safeguarding";
-import { requireRole } from "@/lib/auth/guard";
+import { requirePermission } from "@/lib/auth/guard";
 import { createMetadata } from "@/lib/metadata";
 import { formatDateOnly } from "@/lib/format";
 import { siteConfig } from "@/lib/site";
@@ -26,7 +26,7 @@ const REFERENCE = /^SC-\d{8}-[0-9A-F]{6}$/;
  * been named, nothing can be stored and the page gives the published contact route instead.
  */
 export default async function ConcernsPage({ searchParams }: { searchParams: Promise<{ raised?: string; told?: string }> }) {
-  const user = await requireRole(["TUTOR", "ADMIN"]);
+  const user = await requirePermission("concern.raise");
   const { raised = "", told } = await searchParams;
   const open = concernsOpen();
   const receipts = open ? await myConcernReceipts(getSafeguarding(), user.id) : [];

@@ -26,6 +26,11 @@ const TIPS: Record<Role, string[]> = {
     "Set your weekly availability so lessons can be scheduled around you.",
     "Press ? anywhere for the keyboard shortcuts, or Ctrl K (⌘K) to search.",
   ],
+  JUNIOR_TUTOR: [
+    "Mark attendance and draft the report straight after a lesson you take; a tutor or an administrator sends it on.",
+    "You see only the lessons and students you are assigned to.",
+    "Press ? anywhere for the keyboard shortcuts, or Ctrl K (⌘K) to search.",
+  ],
   CLIENT: [
     "Your children's lessons and approved reports are under Children and Lesson reports; See progress shows them over time.",
     "On any lesson page, Add to calendar puts it in your own calendar.",
@@ -55,7 +60,9 @@ function dismissedNow(): boolean {
   }
 }
 
-export function GettingStarted({ role }: { role: Role }) {
+export function GettingStarted({ roles }: { roles: Role[] }) {
+  // Someone with several roles gets the tips of each, once each.
+  const tips = [...new Set(roles.flatMap((r) => TIPS[r]))];
   // The server (and the first client render) always shows the card; a dismissed visitor loses it right after hydration.
   const dismissed = useSyncExternalStore(subscribe, dismissedNow, () => false);
   if (dismissed) return null;
@@ -80,7 +87,7 @@ export function GettingStarted({ role }: { role: Role }) {
         </button>
       </div>
       <ul className="getting-started__list">
-        {TIPS[role].map((tip) => (
+        {tips.map((tip) => (
           <li key={tip}>{tip}</li>
         ))}
       </ul>

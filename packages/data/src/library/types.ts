@@ -13,7 +13,10 @@ export type AccessTier = (typeof ACCESS_TIERS)[number];
 
 import type { LearnerContext } from "./identity";
 
-export type AccountRole = "ADMIN" | "TUTOR" | "CLIENT" | "STUDENT";
+import type { Role, RoleChangeRefusal } from "../roles";
+
+/** One role. A person holds a SET of them (`Account.roles`, packages/data/src/roles.ts). */
+export type AccountRole = Role;
 
 export interface Resource {
   id: string;
@@ -88,6 +91,9 @@ export interface FacetScope {
 /** A signed-in person, as the Library sees them. */
 export interface Account {
   profileId: string;
+  /** The roles this person holds, in canonical order, at least one. THIS is what every permission decision reads. */
+  roles: AccountRole[];
+  /** The highest of `roles`: only for a place that wants one word (a label, a default page). NEVER an authorization decision. */
   role: AccountRole;
   displayName: string;
   /** The adult (18 or over) declaration made at sign-up. Students under 18 never hold an account of their own. */
@@ -122,6 +128,39 @@ export interface ProvisionInput {
 }
 
 export type ProvisionResult = "ok" | "no_profile" | "username_taken" | "not_eligible";
+
+/** The domain records a person is: each is null unless they hold the matching record. A person can be several at once (a learner who also tutors). */
+export interface AccountRecords {
+  /** The tutor record they teach as (an active one), if they hold TUTOR or JUNIOR_TUTOR. */
+  tutorId: string | null;
+  /** The family they own, if any. */
+  clientId: string | null;
+  /** The student they are, if they have an active learner login. */
+  studentId: string | null;
+}
+
+/** A line in the administrator's list of people and their roles. No address and no internal id beyond the profile's own. */
+export interface ProfileSummary {
+  profileId: string;
+  displayName: string;
+  username: string | null;
+  roles: AccountRole[];
+  loginDisabled: boolean;
+}
+
+export type RoleChangeStatus = RoleChangeRefusal | "NOT_FOUND" | "NEEDS_RECORD";
+
+export type RoleChangeResult =
+  | { status: "changed"; before: AccountRole[]; after: AccountRole[] }
+  | { status: "refused"; reason: RoleChangeStatus; message: string };
+
+export interface RoleChangeEntry {
+  at: Date;
+  actorProfileId: string | null;
+  targetProfileId: string | null;
+  before: AccountRole[];
+  after: AccountRole[];
+}
 
 /** What the server knows about a family account's rights at one moment. Input to canAccess. */
 export interface AccessFacts {

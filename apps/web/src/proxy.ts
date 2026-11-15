@@ -55,6 +55,10 @@ export const config = {
     "/login", "/403", "/dashboard/:path*", "/api/auth/:path*", "/api/lessons/:path*", "/api/dev/:path*", "/dev/:path*",
     // Administrators' file and export routes for tutor applications (launch checklist 3.12): closed with the portal.
     "/api/admin/:path*",
+    // How to pay by bank transfer (signed-in parents and administrators): closed with the portal.
+    "/api/tuition/:path*",
+    // The classroom server relaying a lesson chat message: closed with the portal (the route also needs the shared secret).
+    "/api/internal/:path*",
     // plan19 phase C. ":path+" on /library so the public /library page itself never reaches the proxy.
     "/account/:path*", "/library/:path+", "/api/account/:path*", "/api/library/:path*", "/api/billing/:path*", "/api/assistant/:path*",
   ],

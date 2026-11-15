@@ -39,6 +39,12 @@ export interface ClassroomJoinTokenPayload {
   name: string;
   role: ParticipantRole;
   exp: number; // epoch ms
+  /**
+   * Who this is on the platform (the account id), set by apps/web when it signs the token. The classroom keeps it for the life of the socket
+   * and sends it with each chat message, so apps/web can check the lesson chat rules (docs/LESSON_CHAT.md) against the real person, with their
+   * roles and records looked up fresh, never from anything the browser sent. Optional so older tokens still verify.
+   */
+  uid?: string;
 }
 
 function base64UrlEncode(input: string): string {
@@ -72,9 +78,36 @@ export function verifyClassroomJoinToken(token: string): ClassroomJoinTokenPaylo
       typeof payload.name !== "string" || (payload.role !== "tutor" && payload.role !== "student") ||
       typeof payload.exp !== "number"
     ) return null;
+    if (payload.uid !== undefined && (typeof payload.uid !== "string" || payload.uid.length > 100)) return null;
     if (payload.exp < Date.now()) return null;
     return payload as ClassroomJoinTokenPayload;
   } catch {
     return null;
+  }
+}
+
+// ---- apps/realtime -> apps/web service calls ---------------------------------------------------------------------------------------------
+// The classroom server has no database. For the lesson chat it asks apps/web, which decides everything (who, when, which lesson). The request is
+// signed with the same shared secret as the join token: HMAC over the timestamp and the exact body, so a captured request cannot be changed,
+// and goes stale after a minute. See docs/LESSON_CHAT.md.
+
+export const SERVICE_TIMESTAMP_HEADER = "x-learnthrive-timestamp";
+export const SERVICE_SIGNATURE_HEADER = "x-learnthrive-signature";
+const SERVICE_MAX_SKEW_MS = 60_000;
+
+export function signServiceRequest(rawBody: string, timestamp: number): string {
+  return sign(`service.${timestamp}.${rawBody}`);
+}
+
+/** True only for a fresh request whose signature matches this exact body. Never throws. */
+export function verifyServiceRequest(rawBody: string, timestamp: unknown, signature: unknown, now: number = Date.now()): boolean {
+  const ts = typeof timestamp === "string" ? Number(timestamp) : typeof timestamp === "number" ? timestamp : Number.NaN;
+  if (!Number.isFinite(ts) || Math.abs(now - ts) > SERVICE_MAX_SKEW_MS || typeof signature !== "string") return false;
+  try {
+    const expected = Buffer.from(signServiceRequest(rawBody, ts));
+    const given = Buffer.from(signature);
+    return expected.length === given.length && timingSafeEqual(expected, given);
+  } catch {
+    return false;
   }
 }

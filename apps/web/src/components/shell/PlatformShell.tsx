@@ -11,6 +11,7 @@ import { getDataProvider } from "@/lib/data/provider";
 import { supervisedLearner } from "@/lib/learner/resolve";
 import { libraryPhase, libraryShows } from "@/lib/library-config";
 import { platformNavigation } from "@/lib/navigation/appNavigation";
+import { rolesOf } from "@/lib/auth/scope";
 import { teaches } from "@/lib/auth/teaching";
 import { PORTAL_ENABLED } from "@/lib/portal";
 
@@ -41,6 +42,7 @@ export async function PlatformShell({ children, requireDashboard = false }: { ch
   const role = dashboardUser?.role ?? (who?.account.role ?? "CLIENT");
   const user: AuthenticatedUser = dashboardUser ?? {
     id: who!.account.profileId,
+    roles: who!.account.roles,
     email: who!.account.linkedEmail ?? who!.user.email,
     role,
     name: who!.account.displayName || who!.user.displayName || who!.account.username || who!.user.email,
@@ -54,7 +56,7 @@ export async function PlatformShell({ children, requireDashboard = false }: { ch
   return (
     <AppShellClient
       user={user}
-      sections={platformNavigation({ role, tuition, studyBuddy, library, account, teaches: teaches(user) })}
+      sections={platformNavigation({ role, roles: rolesOf(user), tuition, studyBuddy, library, account, teaches: teaches(user) })}
       unreadCount={unreadCount}
       isDevelopment={process.env.NODE_ENV !== "production"}
       homeHref={home}

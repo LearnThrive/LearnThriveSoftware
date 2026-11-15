@@ -53,7 +53,7 @@ export interface Actor {
 }
 
 export interface ActorInput {
-  account: Pick<Account, "profileId" | "role" | "adultConfirmed" | "clientId" | "learner">;
+  account: Pick<Account, "profileId" | "role" | "roles" | "adultConfirmed" | "clientId" | "learner">;
   /** The family's facts for a guardian or staff; the learner's facts (`access.learnerFacts`) for a learner or a supervised learner. */
   facts: AccessFacts;
   /** The learner selected in a supervised session, already verified by the caller (an active guardian link, the supervised access mode). */
@@ -86,7 +86,8 @@ export function resolveActor(input: ActorInput): Actor {
   const base = { profileId: account.profileId, role: account.role };
 
   // A learner's own login. A student profile without a learner record (never bound, or removed) has nothing.
-  if (account.role === "STUDENT") {
+  // (Held, not primary: a student who is also a junior tutor is still a learner here, with the learner's own view and nothing wider.)
+  if (account.roles.includes("STUDENT")) {
     const learner = account.learner;
     if (!learner) {
       return { mode: "learner", ...base, familyClientId: null, studentId: null, owner: null, adultOperations: false, platform: platformAccess("STUDENT", { enrolled: false, subscription: false, adminGrant: false }), assistant: denied("no_access") };
@@ -102,7 +103,7 @@ export function resolveActor(input: ActorInput): Actor {
   }
 
   // A guardian with one learner selected: still the guardian's session, but the learner's view and no adult operations.
-  if (input.supervised && account.role === "CLIENT" && account.clientId) {
+  if (input.supervised && account.roles.includes("CLIENT") && account.clientId) {
     const learner = input.supervised;
     const platform = platformAccess("STUDENT", facts);
     return {
@@ -111,8 +112,8 @@ export function resolveActor(input: ActorInput): Actor {
     };
   }
 
-  const platform = platformAccess(account.role, facts);
-  const staff = account.role === "ADMIN" || account.role === "TUTOR";
+  const platform = platformAccess(account.roles, facts);
+  const staff = account.roles.some((r) => r === "ADMIN" || r === "TUTOR" || r === "JUNIOR_TUTOR");
   let assistant: AssistantEligibility;
   if (!account.adultConfirmed) assistant = denied("adult_required");
   else if (!platform.studyBuddy) assistant = denied("no_access");

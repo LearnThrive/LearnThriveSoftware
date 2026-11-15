@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
-import type { Role } from "@/lib/auth/types";
+import type { RoleSet } from "@/lib/navigation/appNavigation";
 import { goToTargetsFor, GO_PREFIX } from "@/lib/palette/appShortcuts";
 import { useDelayedUnmount } from "@/lib/motion/useDelayedUnmount";
 import styles from "./ShortcutsOverlay.module.css";
@@ -22,7 +22,7 @@ export function ShortcutsOverlay({
 }: {
   open: boolean;
   onClose: () => void;
-  role: Role;
+  role: RoleSet;
   teaches?: boolean;
   mac: boolean;
 }) {

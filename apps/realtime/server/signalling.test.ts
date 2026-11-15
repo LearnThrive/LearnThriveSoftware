@@ -955,19 +955,19 @@ describe('signalling through real Socket.IO clients', () => {
     expect(await stopped).toBeNull();
   });
 
-  it('deletes a chat message and clears the chat via relay only, with no server-side storage', async () => {
+  it('does not let anyone delete or clear chat messages, the tutor included (they are removed by an administrator, with an audit trail)', async () => {
     const tutor = await connect();
     await joinTutor(tutor, 'Alice');
     const student = await connect();
     await admit(tutor, student);
 
-    const deleted = new Promise<{ id: string }>((resolve) => student.once('chat:message-deleted', resolve));
+    const deleted = new Promise<{ message: string }>((resolve) => tutor.once('room:error', resolve));
     tutor.emit('chat:delete', { id: 'some-message-id' });
-    expect(await deleted).toEqual({ id: 'some-message-id' });
+    expect((await deleted).message).toMatch(/cannot be deleted/);
 
-    const cleared = new Promise<void>((resolve) => student.once('chat:cleared', () => resolve()));
+    const cleared = new Promise<{ message: string }>((resolve) => tutor.once('room:error', resolve));
     tutor.emit('chat:clear');
-    await cleared;
+    expect((await cleared).message).toMatch(/cannot be cleared/);
   });
 
   it("lowers a student's raised hand, notifying the student too", async () => {

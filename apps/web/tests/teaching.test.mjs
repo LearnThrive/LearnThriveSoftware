@@ -11,7 +11,7 @@ const { goToTargetsFor } = loadTsFrom(import.meta.url, "../src/lib/palette/appSh
 const { toPlatformUser } = loadTsFrom(import.meta.url, "../src/lib/access/platformUser.ts");
 
 const tutor = { id: "a", role: "TUTOR", profileId: "tutor-1", name: "T", email: "t@example.test" };
-const adminWhoTeaches = { id: "b", role: "ADMIN", profileId: "tutor-2", tutorId: "tutor-2", name: "A", email: "a@example.test" };
+const adminWhoTeaches = { id: "b", role: "ADMIN", roles: ["ADMIN", "TUTOR"], profileId: "b", tutorId: "tutor-2", name: "A", email: "a@example.test" };
 const adminOnly = { id: "c", role: "ADMIN", profileId: "c", name: "B", email: "b@example.test" };
 const family = { id: "d", role: "CLIENT", profileId: "client-1", name: "C", email: "c@example.test" };
 const learner = { id: "e", role: "STUDENT", profileId: "student-1", name: "L", email: "l@example.test" };
@@ -26,6 +26,8 @@ test("who teaches: a tutor and an administrator with a tutor record, and nobody 
     assert.equal(teaches(nobody), false);
   }
   assert.equal(teachingTutorId({ role: "CLIENT", profileId: "x", tutorId: "tutor-9" }), null, "a stray tutorId on a family account gives nothing");
+  assert.equal(teachingTutorId({ role: "ADMIN", roles: ["ADMIN"], profileId: "x", tutorId: "tutor-9" }), null, "a tutor record without the tutor ROLE gives nothing: the role is what says they may teach");
+  assert.equal(teachingTutorId({ role: "JUNIOR_TUTOR", roles: ["JUNIOR_TUTOR"], profileId: "x", tutorId: "tutor-5" }), "tutor-5", "a junior tutor teaches as their own tutor record");
   assert.equal(teachingTutorId({ role: "TUTOR" }), null, "a tutor with no linked record teaches nothing");
 });
 
@@ -49,6 +51,7 @@ test("joining a classroom: the lesson's tutor and its own students, and no other
 test("the tutor view only narrows: an administrator scoped to their own teaching, and null for anyone who does not teach", () => {
   const view = asTutor(adminWhoTeaches);
   assert.equal(view.role, "TUTOR");
+  assert.deepEqual(view.roles, ["TUTOR"], "narrowed to the teaching role alone");
   assert.equal(view.profileId, "tutor-2");
   assert.equal(view.id, adminWhoTeaches.id, "still the same person: their notifications stay theirs");
   assert.equal(adminWhoTeaches.role, "ADMIN", "the original is untouched");
@@ -81,15 +84,24 @@ test("the shortcuts follow the menu", () => {
   assert.ok(keys(goToTargetsFor("TUTOR")).includes("v"));
 });
 
-test("an account as the app's user: an administrator's tutor record becomes the capability, and only an administrator's", () => {
+test("an account as the app's user: each role stands on its own record, and a record never outlives its role", () => {
   const signedIn = { email: "person@accounts.learnthrivetuition.co.uk", displayName: "" };
   const env = { NODE_ENV: "production" };
-  const admin = { profileId: "p-1", role: "ADMIN", displayName: "Alvi", linkedEmail: "alvi@example.test", username: "alvi" };
-  const user = toPlatformUser(signedIn, admin, "tutor-7", env, "tutor-7");
+  const admin = { profileId: "p-1", role: "ADMIN", roles: ["ADMIN", "TUTOR"], displayName: "Alvi", linkedEmail: "alvi@example.test", username: "alvi" };
+  const user = toPlatformUser(signedIn, admin, { tutorId: "tutor-7", clientId: "client-9", studentId: null }, env);
   assert.equal(user.tutorId, "tutor-7");
+  assert.equal(user.clientId, undefined, "a family record without the parent role gives nothing");
+  assert.deepEqual(user.roles, ["ADMIN", "TUTOR"]);
   assert.equal(teaches(user), true);
   assert.equal(user.email, "alvi@example.test", "the linked address, never the internal one");
-  assert.equal(teaches(toPlatformUser(signedIn, admin, "client-9", env, null)), false, "an administrator's family record is not a tutor record");
-  assert.equal(toPlatformUser(signedIn, { ...admin, role: "CLIENT" }, "client-9", env, "tutor-7").tutorId, undefined);
-  assert.equal(toPlatformUser(signedIn, { profileId: "p-2", role: "CLIENT", displayName: "", username: "kit-4821" }, null, env).name, "kit-4821", "a name is never the internal address");
+  assert.equal(teaches(toPlatformUser(signedIn, { ...admin, roles: ["ADMIN"] }, { tutorId: "tutor-7" }, env)), false, "a tutor record without the tutor role is not teaching");
+  assert.equal(teaches(toPlatformUser(signedIn, admin, {}, env)), false, "the tutor role without a record has no lessons");
+  assert.equal(toPlatformUser(signedIn, { ...admin, role: "CLIENT", roles: ["CLIENT"] }, { tutorId: "tutor-7" }, env).tutorId, undefined);
+  assert.equal(toPlatformUser(signedIn, { profileId: "p-2", role: "CLIENT", roles: ["CLIENT"], displayName: "", username: "kit-4821" }, {}, env).name, "kit-4821", "a name is never the internal address");
+
+  const both = toPlatformUser(signedIn, { profileId: "p-3", role: "STUDENT", roles: ["STUDENT", "JUNIOR_TUTOR"], displayName: "S" }, { studentId: "student-3", tutorId: "tutor-3" }, env);
+  assert.equal(both.role, "JUNIOR_TUTOR", "the highest role is the label");
+  assert.equal(both.profileId, "tutor-3", "profileId follows the highest role that has a record");
+  assert.equal(both.studentId, "student-3");
+  assert.equal(both.tutorId, "tutor-3");
 });

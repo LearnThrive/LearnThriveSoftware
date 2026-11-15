@@ -43,6 +43,22 @@ export function scanForLeaks(dir, needles, { accept = () => true } = {}) {
   return { hits, scanned };
 }
 
+/**
+ * The bank account built into the site (src/lib/bank/siteBankDetails.ts) is not a secret variable but must not reach a browser either: the
+ * account number and the sort code, plain and dashed, are searched for in everything a browser can receive. Read from the file, so this script
+ * never holds them itself.
+ */
+export function siteBankNeedles(file = join(WEB, "src", "lib", "bank", "siteBankDetails.ts")) {
+  if (!existsSync(file)) return [];
+  const text = readFileSync(file, "latin1");
+  const account = /accountNumber:\s*"(\d{8})"/.exec(text)?.[1];
+  const sort = /sortCode:\s*"(\d{6})"/.exec(text)?.[1];
+  return [
+    ...(account ? [{ text: account, label: "the site's bank account number" }] : []),
+    ...(sort ? [{ text: sort, label: "the site's bank sort code" }, { text: `${sort.slice(0, 2)}-${sort.slice(2, 4)}-${sort.slice(4)}`, label: "the site's bank sort code (dashed)" }] : []),
+  ];
+}
+
 /** The needles: for each secret variable its sentinel value and its name, labelled by name so a report never prints a value. */
 export function needlesFor(sentinels) {
   return Object.entries(sentinels).flatMap(([name, value]) => [
@@ -75,7 +91,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   }
   // What a browser can receive: client chunks, prerendered pages and their payloads, and the public folder.
   const reachable = (file) => /[\\/]static[\\/]/.test(file) || /[\\/]server[\\/]app[\\/].*\.(html|rsc|json|segment)$/.test(file) || /[\\/]server[\\/]pages[\\/].*\.(html|json)$/.test(file);
-  const needles = needlesFor(sentinels);
+  const needles = [...needlesFor(sentinels), ...siteBankNeedles()];
   const inBuild = scanForLeaks(dist, needles, { accept: reachable });
   const inPublic = scanForLeaks(join(WEB, "public"), needles);
   const hits = [...inBuild.hits.map((h) => ({ ...h, area: DIST })), ...inPublic.hits.map((h) => ({ ...h, area: "public" }))];

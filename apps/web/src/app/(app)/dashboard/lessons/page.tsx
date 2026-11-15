@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { BookOpen, Plus } from "lucide-react";
 import { requireSession } from "@/lib/auth/guard";
+import { holds } from "@/lib/auth/scope";
+import { teachesLesson } from "@/lib/auth/teaching";
 import { createMetadata } from "@/lib/metadata";
 import { getDataProvider } from "@/lib/data/provider";
 import { lessonBucketsFor } from "@/lib/dashboard/queries";
@@ -37,6 +39,7 @@ export default async function LessonsPage({ searchParams }: { searchParams: Prom
   const { filter: rawFilter } = await searchParams;
   const filter: Filter = FILTERS.includes(rawFilter as Filter) ? (rawFilter as Filter) : "upcoming";
 
+  const isAdmin = holds(user, "ADMIN");
   const data = getDataProvider();
   const buckets = await lessonBucketsFor(data, user);
 
@@ -55,10 +58,8 @@ export default async function LessonsPage({ searchParams }: { searchParams: Prom
 
   function subtitleFor(lesson: Lesson): string {
     const students = lesson.studentIds.map((id) => studentNames.get(id)).filter(Boolean).join(", ");
-    if (user.role === "TUTOR" || user.role === "CLIENT" || user.role === "STUDENT") {
-      return user.role === "TUTOR" ? students : `with ${tutorNames.get(lesson.tutorId) ?? "your tutor"}`;
-    }
-    return [students, tutorNames.get(lesson.tutorId)].filter(Boolean).join(" · ");
+    if (isAdmin) return [students, tutorNames.get(lesson.tutorId)].filter(Boolean).join(" · ");
+    return teachesLesson(user, lesson) ? students : `with ${tutorNames.get(lesson.tutorId) ?? "your tutor"}`;
   }
 
   return (
@@ -66,10 +67,10 @@ export default async function LessonsPage({ searchParams }: { searchParams: Prom
       <PageHeader
         eyebrow="Workspace"
         title="Lessons"
-        description={user.role === "ADMIN"
+        description={isAdmin
           ? "Every lesson across the platform, in one list."
           : "Your lessons, most urgent first."}
-        actions={user.role === "ADMIN" ? (
+        actions={isAdmin ? (
           <Link href="/dashboard/admin/lessons/new" className="btn btn--primary">
             <Plus size={16} aria-hidden="true" />Schedule lesson
           </Link>
@@ -98,7 +99,7 @@ export default async function LessonsPage({ searchParams }: { searchParams: Prom
               : filter === "upcoming"
                 ? "Lessons you're scheduled for will appear here."
                 : "Nothing to show under this filter yet."}
-            action={user.role === "ADMIN" && filter === "upcoming" ? (
+            action={isAdmin && filter === "upcoming" ? (
               <Link href="/dashboard/admin/lessons/new" className="btn btn--primary">
                 <Plus size={16} aria-hidden="true" />Schedule a lesson
               </Link>

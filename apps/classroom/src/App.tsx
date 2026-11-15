@@ -53,7 +53,7 @@ function App() {
     snapshot, prepareMedia, toggleAudio, toggleVideo, toggleScreenShare, toggleChat, sendChatMessage,
     switchCamera, switchMicrophone, flipCamera, toggleHand, sendReaction, admitOne, admitAll, denyOne,
     setRoomLocked, setStudentsCanShareScreen, setStudentsCanChat, muteParticipant, muteAll, allowUnmute,
-    removeParticipant, stopShare, lowerHand, deleteChatMessage, clearChat, createPoll, closePoll, clearPoll,
+    removeParticipant, stopShare, lowerHand, createPoll, closePoll, clearPoll,
     votePoll, startUnderstandingCheck, endUnderstandingCheck, respondUnderstanding, startTimer, pauseTimer,
     resumeTimer, stopTimer, sendBoardUpdate, sendBoardCursor, sendBoardLaser, createBoardPage, renameBoardPage,
     deleteBoardPage, reorderBoardPages, switchBoardPage, setBoardBackground, setStudentsCanDraw, clearBoardPage,
@@ -328,7 +328,7 @@ function App() {
           )}
           <ChatPanel
             messages={snapshot.messages} open={snapshot.chatOpen} onClose={toggleChat} onSend={sendChatMessage} triggerRef={chatTriggerRef}
-            isTutor={snapshot.role === 'tutor'} onDeleteMessage={deleteChatMessage} onClearChat={clearChat}
+            isTutor={snapshot.role === 'tutor'}
             canChat={snapshot.role === 'tutor' || snapshot.roomSettings.studentsCanChat}
           />
         </div>

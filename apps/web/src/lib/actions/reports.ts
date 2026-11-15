@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { getDataProvider } from "@/lib/data/provider";
-import { requireRole } from "@/lib/auth/guard";
+import type { Permission } from "@learnthrive/data/roles";
+import { requirePermission, requireRole } from "@/lib/auth/guard";
+import { mayActOnLesson } from "@/lib/auth/teaching";
 import { approveReport, getOrCreateDraft, ReportError, returnReport, saveDraft, submitReport } from "@/lib/reports/reportService";
 import type { ReportAssessmentLevel } from "@learnthrive/data/domain";
 
@@ -16,19 +18,19 @@ function level(formData: FormData, key: string): ReportAssessmentLevel | undefin
   return value === "LOW" || value === "MEDIUM" || value === "HIGH" ? value : undefined;
 }
 
-async function requireOwningTutorOrAdmin(lessonId: string) {
-  const user = await requireRole(["TUTOR", "ADMIN"]);
+async function requireOwningTutorOrAdmin(lessonId: string, permission: Permission) {
+  const user = await requirePermission(permission);
   const data = getDataProvider();
   const lesson = await data.lessons.get(lessonId);
   if (!lesson) throw new Error("Lesson not found.");
-  if (user.role === "TUTOR" && lesson.tutorId !== user.profileId) throw new Error("You are not the Tutor for this lesson.");
+  if (!mayActOnLesson(user, lesson)) throw new Error("You are not the Tutor for this lesson.");
   return { user, data, lesson };
 }
 
 export async function saveReportDraftAction(formData: FormData): Promise<void> {
   const lessonId = text(formData, "lessonId");
   if (!lessonId) throw new Error("Lesson is required.");
-  const { user, data, lesson } = await requireOwningTutorOrAdmin(lessonId);
+  const { user, data, lesson } = await requireOwningTutorOrAdmin(lessonId, "report.draft");
 
   const draft = await getOrCreateDraft(data, lessonId, lesson.tutorId);
   try {
@@ -52,7 +54,7 @@ export async function saveReportDraftAction(formData: FormData): Promise<void> {
 export async function submitReportAction(formData: FormData): Promise<void> {
   const lessonId = text(formData, "lessonId");
   if (!lessonId) throw new Error("Lesson is required.");
-  const { user, data } = await requireOwningTutorOrAdmin(lessonId);
+  const { user, data } = await requireOwningTutorOrAdmin(lessonId, "report.submit");
 
   const report = await data.reports.forLesson(lessonId);
   if (!report) throw new Error("No draft report exists to submit.");

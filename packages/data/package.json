@@ -16,7 +16,9 @@
     "./library": "./src/library/index.ts",
     "./careers": "./src/careers.ts",
     "./tuitionBilling": "./src/tuitionBilling/index.ts",
-    "./safeguarding": "./src/safeguarding/index.ts"
+    "./safeguarding": "./src/safeguarding/index.ts",
+    "./roles": "./src/roles.ts",
+    "./lessonChat": "./src/lessonChat/index.ts"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.10",

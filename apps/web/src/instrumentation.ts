@@ -2,6 +2,17 @@ import type { Instrumentation } from "next";
 import { requestErrorLine } from "@/lib/observability";
 
 /**
+ * Runs once when the server starts. The bank transfer details are checked here (lib/bank/config.ts): partly set or malformed, or missing in
+ * production with the signed-in app open, and the server REFUSES TO START with a message naming each variable at fault and never a value.
+ * Skipped while building (the build has no host environment) and on the Edge runtime.
+ */
+export async function register() {
+  if (process.env.NEXT_RUNTIME !== "nodejs" || process.env.NEXT_PHASE === "phase-production-build") return;
+  const { assertBankConfig } = await import("@/lib/bank/config");
+  assertBankConfig();
+}
+
+/**
  * Next calls this for every error a page, route handler, server action or the proxy throws on the server (launch checklist 3.8,
  * docs/OBSERVABILITY.md). It writes one `server-error` line with the route's file pattern, the error's kind and the digest the error page
  * shows, and never the message, the URL or a header: those can hold a child's name, an id or a token. There is no third-party error

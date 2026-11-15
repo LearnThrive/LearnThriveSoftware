@@ -14,16 +14,25 @@ import { DEV_ACCOUNTS } from "./accounts";
  * Buddy opens for them without the children's approval switch.
  */
 export async function seedDevAccounts(auth: MemoryAccountAuth, store: InMemoryLibraryStore, now: Date = new Date()): Promise<void> {
+  const familyStudents = new Map<string, string>(); // a parent account's id -> the family's student in the Library store
   let familyStudent: string | null = null;
   for (const account of DEV_ACCOUNTS) {
     const address = internalEmailFor(account.username);
     if (auth.userIdFor(address)) continue;
     await auth.seedUser({ id: account.id, email: address, displayName: account.name, password: account.password, disabled: !account.active });
-    store.seedProfile({ id: account.id, role: account.role, displayName: account.name, adultConfirmed: true, email: account.email, username: account.username, linkedEmail: account.email });
-    if (account.role === "STUDENT" && account.library === "enrolled" && familyStudent) store.seedLearner(familyStudent, account.id);
+    store.seedProfile({ id: account.id, roles: [...account.roles], displayName: account.name, adultConfirmed: true, email: account.email, username: account.username, linkedEmail: account.email });
+    if (account.records?.tutorId) store.seedTutorRef(account.id, account.records.tutorId);
+    const learnerOf = account.learnerOf ? familyStudents.get(account.learnerOf) : account.roles.includes("STUDENT") && account.library === "enrolled" ? familyStudent : null;
+    if (learnerOf) store.seedLearner(learnerOf, account.id);
     else if (account.library === "enrolled") {
-      familyStudent = store.seedStudent(account.id, { displayName: "Brian", isMinor: false, yearGroup: "A Level" });
-      store.seedAssignment(familyStudent, "ACTIVE");
+      // The first family is the development client's (Brian, an adult learner); a later one is a family with a 17-year-old (a minor).
+      const first = familyStudent === null;
+      // The junior's family has a 17-year-old (a minor); the team's learners are adults, so LearnThrive AI opens for them without the children's switch.
+      const junior = account.username === "dev.junior-parent";
+      const student = store.seedStudent(account.id, first ? { displayName: "Brian", isMinor: false, yearGroup: "A Level" } : { displayName: junior ? "Sam" : account.name.split(" ")[0]!, isMinor: junior, yearGroup: junior ? "Year 12" : "A Level" });
+      store.seedAssignment(student, "ACTIVE");
+      familyStudents.set(account.id, student);
+      familyStudent ??= student;
     } else if (account.library === "subscriber") store.seedEntitlement(account.id, "subscription", new Date(now.getTime() - 60_000), null);
   }
 }

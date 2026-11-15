@@ -180,7 +180,7 @@ async function destinationAfterSignIn(rt: AccountRuntime, profileId: string, req
     if (!account) return requested || "/account";
     if (account.mustChangePassword) return "/account/reset";
     const facts = await accessFactsFor(rt.store, account);
-    return destinationFor(platformAccess(account.role, facts), requested, { studyBuddyOpen: deps.studyBuddyOpen ?? false, dashboardOpen: deps.dashboardOpen ?? true });
+    return destinationFor(platformAccess(account.roles, facts), requested, { studyBuddyOpen: deps.studyBuddyOpen ?? false, dashboardOpen: deps.dashboardOpen ?? true });
   } catch {
     return requested || "/account";
   }

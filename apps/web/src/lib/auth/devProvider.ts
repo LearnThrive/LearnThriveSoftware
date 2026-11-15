@@ -1,4 +1,4 @@
-import { DEV_ACCOUNTS } from "@/lib/dev/accounts";
+import { DEV_ACCOUNTS, devRecordsFor } from "@/lib/dev/accounts";
 import { hashPassword, verifyPassword } from "./passwords";
 import type { AuthProvider, DevelopmentUser, LoginResult } from "./types";
 
@@ -30,7 +30,7 @@ async function ensureSeeded(): Promise<void> {
       for (const account of SEED_ACCOUNTS) {
         const passwordHash = await hashPassword(account.password);
         store.set(account.email.toLowerCase(), {
-          id: account.id, email: account.email, passwordHash, role: account.role, name: account.name, active: account.active,
+          id: account.id, email: account.email, passwordHash, role: account.role, roles: [...account.roles], name: account.name, active: account.active,
           profileId: account.domainId,
         });
       }
@@ -54,7 +54,8 @@ export class DevelopmentAuthProvider implements AuthProvider {
     const valid = await verifyPassword(password, user.passwordHash);
     if (!valid) return { ok: false, reason: "invalid_credentials" };
     if (!user.active) return { ok: false, reason: "account_disabled" };
-    return { ok: true, user: { id: user.id, email: user.email, role: user.role, name: user.name, profileId: user.profileId } };
+    const records = devRecordsFor(user.id) ?? {};
+    return { ok: true, user: { id: user.id, email: user.email, role: user.role, roles: user.roles, name: user.name, profileId: user.profileId, ...records } };
   }
 }
 
@@ -95,5 +96,5 @@ export async function findUserIdByProfileId(profileId: string): Promise<string |
 
 export async function findUserIdsByRole(role: DevelopmentUser["role"]): Promise<string[]> {
   await ensureSeeded();
-  return [...usersStore().values()].filter((u) => u.role === role && u.active).map((u) => u.id);
+  return [...usersStore().values()].filter((u) => u.roles.includes(role) && u.active).map((u) => u.id);
 }

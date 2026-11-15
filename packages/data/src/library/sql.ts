@@ -1,9 +1,10 @@
+import { isRole, normaliseRoles } from "../roles";
 import { deriveEntitlement, type AdminGrantRecord, type PlanInterval, type SubscriptionRecord, type SubscriptionStatus } from "./billing";
 import type { ChatExport, ChatFileChunkRecord, ChatFileRecord, ChatMessageRecord, ChatSessionRecord } from "./chat";
 import type { AccessMode, IdentityAuditEntry, InvitationPeek, IdentityRepository, InvitationRecord, LearnerContext, LinkStatus, StudentRecord } from "./identity";
 import { PAPER_JOB_DAYS, PAPER_JOB_MAX_ATTEMPTS, type AssessmentVersion, type PaperJobKind, type PaperJobRecord, type PaperJobRepository, type PaperJobState } from "./papers";
 import type { AccessRepository, AccountRepository, BillingRepository, ChatRepository, DownloadRepository, LibraryStore, ResourceRepository, SqlExecutor } from "./ports";
-import type { AccessFacts, Account, Facet, FacetScope, Level, ProvisionResult, Resource, ResourceFacets, ResourceFile, ResourcePage, ResourceQuery, ResourceType } from "./types";
+import type { AccessFacts, Account, ProfileSummary, RoleChangeEntry, RoleChangeResult, RoleChangeStatus, Facet, FacetScope, Level, ProvisionResult, Resource, ResourceFacets, ResourceFile, ResourcePage, ResourceQuery, ResourceType } from "./types";
 
 const DEFAULT_LIMIT = 24;
 const MAX_LIMIT = 100;
@@ -77,6 +78,8 @@ function toInvitation(row: Row): InvitationRecord {
 }
 
 /** A learner's context from a learner_identities row joined to its student: `guardian_link` is whether the owner's link is active. */
+const isUuid = (v: unknown): v is string => typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+
 function toLearner(row: Row): LearnerContext {
   return {
     studentId: row.student_id, familyClientId: row.family_client_id, status: row.status as LinkStatus, displayName: row.display_name, yearGroup: row.year_group,
@@ -149,17 +152,23 @@ export class SqlLibraryStore implements LibraryStore {
   /** `condition` is one of two fixed strings in this file, never anything from a request. */
   private async accountWhere(condition: string, value: string): Promise<Account | null> {
     const rows = await this.db.query<Row>(
-      `select p.id, p.role, p.display_name, p.adult_confirmed_at, p.username, p.linked_email, p.must_change_password, p.login_disabled_at, c.id as client_id
+      `select p.id, p.role, (select coalesce(array_agg(r.role), '{}') from public.profile_roles r where r.profile_id = p.id) as roles,
+              p.display_name, p.adult_confirmed_at, p.username, p.linked_email, p.must_change_password, p.login_disabled_at, c.id as client_id
          from public.profiles p left join public.clients c on c.owner_profile_id = p.id
         where ${condition}`,
       [value],
     );
     const row = rows[0];
     if (!row) return null;
-    const learner = row.role === "STUDENT" ? ((await this.db.query<Row>(`${LEARNER_SELECT} where l.profile_id = $1`, [row.id]))[0] ?? null) : null;
+    // The set in profile_roles is what a person IS; profiles.role is only its primary, kept for older functions. A profile with no row yet
+    // (never: the migration backfills one) falls back to that column rather than to no role.
+    const roles = normaliseRoles(((row.roles as string[] | null) ?? []).filter(isRole));
+    const held = roles.length > 0 ? roles : normaliseRoles([row.role]);
+    const learner = held.includes("STUDENT") ? ((await this.db.query<Row>(`${LEARNER_SELECT} where l.profile_id = $1`, [row.id]))[0] ?? null) : null;
     return {
       profileId: row.id,
-      role: row.role,
+      roles: held,
+      role: held[0]!,
       displayName: row.display_name,
       adultConfirmed: row.adult_confirmed_at !== null,
       clientId: row.client_id,
@@ -203,6 +212,49 @@ export class SqlLibraryStore implements LibraryStore {
       const rows = await this.db.query<Row>(`select id from public.tutors where profile_id = $1 and active`, [profileId]);
       return rows[0]?.id ?? null;
     },
+    records: async (profileId) => {
+      const rows = await this.db.query<Row>(
+        `select (select t.id from public.tutors t where t.profile_id = $1 and t.active)::text as tutor_id,
+                (select c.id from public.clients c where c.owner_profile_id = $1)::text as client_id,
+                (select l.student_id from public.learner_identities l where l.profile_id = $1 and l.status = 'active')::text as student_id`,
+        [profileId],
+      );
+      return { tutorId: rows[0]?.tutor_id ?? null, clientId: rows[0]?.client_id ?? null, studentId: rows[0]?.student_id ?? null };
+    },
+    listProfiles: async () =>
+      (await this.db.query<Row>(
+        `select p.id, p.display_name, p.username, p.login_disabled_at,
+                (select coalesce(array_agg(r.role), '{}') from public.profile_roles r where r.profile_id = p.id) as roles
+           from public.profiles p order by p.display_name, p.id`,
+      )).map((r): ProfileSummary => ({ profileId: r.id, displayName: r.display_name, username: r.username, roles: normaliseRoles(((r.roles as string[]) ?? []).filter(isRole)), loginDisabled: r.login_disabled_at !== null })),
+    changeRoles: async ({ actor, profileId, roles, now }) => {
+      const refused = (reason: RoleChangeStatus, message: string): RoleChangeResult => ({ status: "refused", reason, message });
+      // Rejected here when the input cannot even be a list of role names, so nothing odd reaches the database function.
+      if (!isUuid(actor) || !isUuid(profileId)) return refused("NOT_FOUND", "There is no such person.");
+      if (!Array.isArray(roles) || !roles.every((r) => typeof r === "string")) return refused("UNKNOWN_ROLE", "That is not a role.");
+      const rows = await this.db.query<Row>(`select * from public.set_profile_roles($1, $2, $3::text[], $4)`, [actor, profileId, roles as string[], now ?? new Date()]);
+      const r = rows[0];
+      if (!r) return refused("NOT_FOUND", "There is no such person.");
+      switch (r.status) {
+        case "changed": return { status: "changed", before: normaliseRoles((r.before_roles as string[]).filter(isRole)), after: normaliseRoles((r.after_roles as string[]).filter(isRole)) };
+        case "not_admin": return refused("NOT_ADMIN", "Only an administrator can change roles.");
+        case "self": return refused("SELF", "You cannot change your own roles. Ask another administrator.");
+        case "not_found": return refused("NOT_FOUND", "There is no such person.");
+        case "empty": return refused("EMPTY", "A person must keep at least one role.");
+        case "unknown_role": return refused("UNKNOWN_ROLE", "That is not a role.");
+        case "exclusive": return refused("EXCLUSIVE", "Those roles cannot be held together.");
+        case "last_admin": return refused("LAST_ADMIN", "This is the last administrator. Make someone else an administrator first.");
+        case "needs_record": return refused("NEEDS_RECORD", "That role needs the person's own record first (a tutor record, or a learner login).");
+        case "unchanged": return refused("UNCHANGED", "Nothing would change.");
+        default: return refused("UNKNOWN_ROLE", "That change was not accepted.");
+      }
+    },
+    roleHistory: async (profileId, limit = 50) =>
+      (await this.db.query<Row>(
+        `select at, actor_profile_id, target_profile_id, old_roles, new_roles from public.role_changes
+          where ($1::uuid is null or target_profile_id = $1) order by id desc limit $2`,
+        [profileId && isUuid(profileId) ? profileId : null, Math.min(Math.max(limit, 1), 500)],
+      )).map((r): RoleChangeEntry => ({ at: new Date(r.at), actorProfileId: r.actor_profile_id, targetProfileId: r.target_profile_id, before: normaliseRoles((r.old_roles as string[]).filter(isRole)), after: normaliseRoles((r.new_roles as string[]).filter(isRole)) })),
     getEmail: async (profileId) => {
       // Through a function: the site's database role has no access to the auth schema (migration 0009). It answers the linked address first (0017).
       const rows = await this.db.query<Row>(`select public.auth_email($1) as email`, [profileId]);
@@ -221,6 +273,8 @@ export class SqlLibraryStore implements LibraryStore {
         `select public.provision_account($1, $2, $3, $4, $5, $6, $7, $8, $9) as result`,
         [input.profileId, input.username, input.linkedEmail, input.displayName, input.role, input.tutorId ?? null, input.studentId ?? null, input.actor, input.now ?? new Date()],
       );
+      // An administrator who teaches ends up holding TUTOR as well: the database gives it when the profile becomes an administrator while
+      // linked to a tutor record (migration 0025), so every route that provisions one (this one and the operator script) gets it.
       return rows[0]!.result as ProvisionResult;
     },
     setMustChangePassword: async (profileId, required) => {

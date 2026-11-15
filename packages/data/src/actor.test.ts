@@ -10,8 +10,8 @@ const learner = (over: Partial<LearnerContext> = {}): LearnerContext => ({
   studentId: "stu-1", familyClientId: "fam-1", status: "active", displayName: "Kid", yearGroup: "Year 9", isMinor: true, accessMode: "direct", guardianActive: true, ...over,
 });
 const login = { username: null, linkedEmail: null, mustChangePassword: false, loginDisabled: false };
-const guardian = (over: Partial<Account> = {}): Account => ({ profileId: "p-guardian", role: "CLIENT", displayName: "G", adultConfirmed: true, clientId: "fam-1", learner: null, ...login, ...over });
-const student = (l: LearnerContext | null = learner()): Account => ({ profileId: "p-learner", role: "STUDENT", displayName: "K", adultConfirmed: false, clientId: null, learner: l, ...login });
+const guardian = (over: Partial<Account> = {}): Account => ({ profileId: "p-guardian", role: "CLIENT", roles: over.role ? [over.role] : ["CLIENT"], displayName: "G", adultConfirmed: true, clientId: "fam-1", learner: null, ...login, ...over });
+const student = (l: LearnerContext | null = learner()): Account => ({ profileId: "p-learner", role: "STUDENT", roles: ["STUDENT"], displayName: "K", adultConfirmed: false, clientId: null, learner: l, ...login });
 const open = { minorsApproved: true };
 
 test("a guardian acts as themselves: own chats, adult operations, LearnThrive AI on any Library right", () => {
@@ -138,4 +138,15 @@ test("direct sign-in age policy: an adult always; a minor from the configured ye
   for (const g of ["Year 1", "Year 6", "Y8", "8", "KS2", "", null, "primary", "Year 14", "Year 99"]) assert.equal(minor(g), false, String(g));
   assert.equal(directLoginAllowed({ isMinor: true, yearGroup: "Year 8" }, 8), true, "the year is configurable");
   assert.equal(directLoginAllowed({ isMinor: true, yearGroup: "Year 8" }, 10), false);
+});
+
+test("a student who is also a junior tutor is still a learner: their own view, never the staff one (docs/ROLE_PERMISSIONS.md)", () => {
+  const both: Account = { ...student(), role: "JUNIOR_TUTOR", roles: ["STUDENT", "JUNIOR_TUTOR"] };
+  const a = resolveActor({ account: both, facts: facts({ subscription: true }), learnerConsent: true, ...open });
+  assert.equal(a.mode, "learner");
+  assert.equal(a.studentId, "stu-1");
+  assert.equal(a.adultOperations, false);
+  const noLearner = resolveActor({ account: { ...both, learner: null }, facts: facts({ subscription: true }), ...open });
+  assert.equal(noLearner.mode, "learner", "no learner record: nothing, not the staff view");
+  assert.equal(noLearner.studentId, null);
 });

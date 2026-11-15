@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 /** The guardian's learner management. Adult account holders only; closed inside a supervised view (they leave it with their password first). */
 export default async function LearnersPage() {
   const { rt, account } = await requireAccountPage("/account/learners");
-  if (account.role === "STUDENT" || account.learner || !account.adultConfirmed) notFound();
+  if (account.roles.includes("STUDENT") || account.learner || !account.adultConfirmed) notFound();
   if (await inSupervisedView(rt, await nextJar(), account.profileId)) redirect("/library/ai");
   return (
     <div className={styles.page} style={{ maxWidth: "52rem" }}>

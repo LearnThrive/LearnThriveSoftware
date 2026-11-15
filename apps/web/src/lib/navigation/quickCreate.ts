@@ -1,4 +1,4 @@
-import type { Role } from "@/lib/auth/types";
+import { rolesIn, type RoleSet } from "@/lib/navigation/appNavigation";
 
 /**
  * What the "+ Create" control offers, and to whom (plan6 section 51). One list for the menu
@@ -15,6 +15,6 @@ export const QUICK_CREATE = [
 ] as const;
 
 /** Only an Admin creates records today; every other role starts nothing from the palette or the menu. */
-export function quickCreateFor(role: Role): readonly (typeof QUICK_CREATE)[number][] {
-  return role === "ADMIN" ? QUICK_CREATE : [];
+export function quickCreateFor(role: RoleSet): readonly (typeof QUICK_CREATE)[number][] {
+  return rolesIn(role).includes("ADMIN") ? QUICK_CREATE : [];
 }

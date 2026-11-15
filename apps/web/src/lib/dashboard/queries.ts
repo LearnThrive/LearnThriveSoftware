@@ -1,5 +1,6 @@
 import type { DataProvider } from "@learnthrive/data/repositories";
 import type { Lesson, LessonReport, Student } from "@learnthrive/data/domain";
+import { unionOver } from "@/lib/auth/scope";
 import type { AuthenticatedUser } from "@/lib/auth/types";
 import { visibleLessonsFor } from "@/lib/scheduling/visibleLessons";
 
@@ -54,6 +55,12 @@ export async function visibleReportsFor(
 /** The Students this person is entitled to see: their own children (Client), the ones they teach
  * (Tutor), themselves (Student), or everyone (Admin). */
 export async function visibleStudentsFor(data: DataProvider, user: AuthenticatedUser): Promise<Student[]> {
+  // Several roles: the students each role reaches on its own record, merged. A student who is also a junior tutor sees themselves and the
+  // students they are assigned to, not every student (docs/ROLE_PERMISSIONS.md).
+  return unionOver(user, (scoped) => visibleStudentsForRole(data, scoped));
+}
+
+async function visibleStudentsForRole(data: DataProvider, user: AuthenticatedUser): Promise<Student[]> {
   if (user.role === "ADMIN") return data.students.list();
   if (!user.profileId) return [];
   if (user.role === "CLIENT") return data.students.studentsFor(user.profileId);
@@ -61,7 +68,7 @@ export async function visibleStudentsFor(data: DataProvider, user: Authenticated
     const self = await data.students.get(user.profileId);
     return self ? [self] : [];
   }
-  // Tutor: everyone on one of their assignments.
+  // Tutor or junior tutor: everyone on one of their assignments.
   const assignments = await data.assignments.forTutor(user.profileId);
   const ids = [...new Set(assignments.flatMap((assignment) => assignment.studentIds))];
   const students = await Promise.all(ids.map((id) => data.students.get(id)));

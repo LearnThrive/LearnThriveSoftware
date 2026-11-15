@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { getDataProvider } from "@/lib/data/provider";
 import { requireSession } from "@/lib/auth/guard";
+import { holds } from "@/lib/auth/scope";
 import { joinRoleFor, teaches } from "@/lib/auth/teaching";
 import { signClassroomJoinToken } from "@learnthrive/shared/classroomToken";
 import { isWithinJoinWindow } from "@/lib/scheduling/joinWindow";
@@ -19,7 +20,7 @@ export async function joinClassroomAction(formData: FormData): Promise<void> {
   if (!lessonId) redirect("/dashboard/calendar");
   const back = (reason: string) => redirect(`/dashboard/lessons/${lessonId}?joinError=${encodeURIComponent(reason)}`);
 
-  if (!teaches(user) && user.role !== "STUDENT") back("Only the assigned Tutor or Student can join this lesson's classroom.");
+  if (!teaches(user) && !holds(user, "STUDENT")) back("Only the assigned Tutor or Student can join this lesson's classroom.");
 
   const data = getDataProvider();
   const lesson = await data.lessons.get(lessonId);
@@ -36,6 +37,8 @@ export async function joinClassroomAction(formData: FormData): Promise<void> {
     lessonId: lesson.id,
     name: user.name,
     role: joinRole === "TUTOR" ? "tutor" : "student",
+    // Who this is on the platform: the classroom sends it with each chat message so apps/web checks the lesson chat rules for the real person (docs/LESSON_CHAT.md).
+    uid: user.id,
     // Short-lived: this token only needs to survive the redirect, not the
     // whole lesson — the join-window check above is what actually gates access over time.
     exp: Date.now() + 5 * 60_000,

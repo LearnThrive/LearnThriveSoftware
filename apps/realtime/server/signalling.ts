@@ -16,6 +16,7 @@ import type {
   ServerToClientEvents, SfuPublication, SfuTrackInfo, SignalCandidate, SignalDescription, TimerMode, UnderstandingCheckState, UnderstandingStatus,
 } from '@learnthrive/shared/protocol';
 import { clientAddress } from './clientAddress';
+import { chatGateFromEnv, type ChatGate } from './chatGate';
 import { logOutcome } from './log';
 import { createSfuService, sfuFromEnv, type SfuApi } from './sfu';
 
@@ -94,7 +95,11 @@ interface Room {
   // honest limitation as every other role/identity check in this codebase.
   removedNames: Map<string, string>;
 }
-interface SocketData { roomId?: string }
+interface SocketData {
+  roomId?: string;
+  // Who this socket is on the platform, from the VERIFIED join token (never from the browser): the lesson and the account. Absent for a manual join.
+  chat?: { lessonId: string; userId: string };
+}
 type MeetingSocket = Socket<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>;
 
 function createRoom(): Room {
@@ -265,11 +270,16 @@ export function createSignallingServer(options?: {
   // MAX_STUDENTS (a mesh cannot carry more). `maxStudents` overrides either.
   sfu?: SfuApi | null;
   maxStudents?: number;
+  // Where lesson chat messages are checked and stored (apps/web). Left out, it is built from CLASSROOM_WEB_URL; null means no gate.
+  // With a gate every message must pass it, and only a socket that joined through a lesson link may chat. With no gate, production allows no
+  // chat at all; development and tests keep the old unsaved relay so the classroom can still be tried on its own.
+  chatGate?: ChatGate | null;
 }) {
   const disconnectGraceMs = options?.disconnectGraceMs ?? 10_000;
   const sfuApi = options?.sfu === undefined ? sfuFromEnv() : options.sfu;
   const sfuService = sfuApi ? createSfuService(sfuApi) : null;
   const maxStudents = options?.maxStudents ?? (sfuApi ? SFU_MAX_STUDENTS : MAX_STUDENTS);
+  const chatGate = options?.chatGate === undefined ? chatGateFromEnv() : options.chatGate;
   const roomMedia = { mode: sfuApi ? 'sfu' : 'mesh', maxStudents } as const;
   const app = express();
   app.disable('x-powered-by');
@@ -732,6 +742,7 @@ export function createSignallingServer(options?: {
         }
         const media = parseMedia(payload.media);
         if (!media) return fail(socket, 'Invalid microphone or camera status.');
+        if (verified.uid) socket.data.chat = { lessonId: verified.lessonId, userId: verified.uid };
         proceedWithJoin(socket, verified.roomId, verified.name.trim().slice(0, MAX_NAME_LENGTH) || 'Participant', verified.role, media);
         return;
       }
@@ -903,7 +914,7 @@ export function createSignallingServer(options?: {
         if (id !== socket.id) io.to(id).emit('participant:screen-share', { id: socket.id, sharing: payload.sharing });
       }
     });
-    socket.on('chat:message', (payload: unknown) => {
+    socket.on('chat:message', async (payload: unknown) => {
       const room = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
       const self = room?.participants.get(socket.id);
       if (!room || !self) return fail(socket, 'You are not currently in a meeting.');
@@ -912,25 +923,32 @@ export function createSignallingServer(options?: {
         return fail(socket, 'Invalid chat message.');
       }
       const text = payload.text.trim();
-      if (!text || text.length > MAX_CHAT_LENGTH) return fail(socket, `Messages must be 1–${MAX_CHAT_LENGTH} characters.`);
+      if (!text || text.length > MAX_CHAT_LENGTH) return fail(socket, `Messages must be 1\u2013${MAX_CHAT_LENGTH} characters.`);
       if (!chatRateLimiter.allow(socket.id)) return fail(socket, 'You are sending messages too quickly. Please slow down.');
       // Plain text only: no markdown/HTML is ever interpreted server-side or client-side.
-      const message: ChatMessage = { id: randomUUID(), senderId: socket.id, name: self.name, text, timestamp: Date.now() };
-      for (const id of room.participants.keys()) io.to(id).emit('chat:message', message);
+      let message: ChatMessage;
+      const identity = socket.data.chat;
+      if (chatGate) {
+        // The lesson chat (docs/LESSON_CHAT.md). Only a person who came in through their lesson link has an identity, and apps/web decides, on
+        // every message, whether they may send in that lesson now. Nothing reaches the room until it says yes.
+        if (!identity) return fail(socket, 'Chat is only available in a lesson, from your lesson page.');
+        // A gate that throws is a refusal too: nothing is relayed that apps/web did not accept.
+        const result = await chatGate.send({ lessonId: identity.lessonId, userId: identity.userId, text }).catch((): { ok: false; message: string } => ({ ok: false, message: 'The lesson chat is not available right now. Please try again.' }));
+        if (!result.ok) return fail(socket, result.message);
+        message = { id: result.message.id, senderId: socket.id, name: result.message.name, text: result.message.text, timestamp: Date.parse(result.message.createdAt) || Date.now() };
+      } else if (process.env.NODE_ENV === 'production') {
+        return fail(socket, 'Chat is not available right now.');
+      } else {
+        message = { id: randomUUID(), senderId: socket.id, name: self.name, text, timestamp: Date.now() };
+      }
+      // Whoever is in the room NOW (the sender may have left while the web app was answering).
+      const current = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
+      if (!current) return;
+      for (const id of current.participants.keys()) io.to(id).emit('chat:message', message);
     });
-    socket.on('chat:delete', (payload: unknown) => {
-      const ctx = requireTutor(socket, 'Only the tutor can delete a message.');
-      if (!ctx) return;
-      if (!isRecord(payload) || typeof payload.id !== 'string') return fail(socket, 'Invalid request.');
-      // Pure relay, matching how chat itself is never stored server-side — each client filters
-      // its own locally-held message list by id.
-      for (const id of ctx.room.participants.keys()) io.to(id).emit('chat:message-deleted', { id: payload.id });
-    });
-    socket.on('chat:clear', () => {
-      const ctx = requireTutor(socket, 'Only the tutor can clear the chat.');
-      if (!ctx) return;
-      for (const id of ctx.room.participants.keys()) io.to(id).emit('chat:cleared');
-    });
+    // Nobody edits or deletes a message, the tutor included (docs/LESSON_CHAT.md). An administrator removes one from the lesson page, and it is audit-logged.
+    socket.on('chat:delete', () => fail(socket, 'Messages cannot be deleted. Ask an administrator to remove one.'));
+    socket.on('chat:clear', () => fail(socket, 'The chat cannot be cleared. Ask an administrator to remove a message.'));
     socket.on('participant:hand', (payload: unknown) => {
       const room = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
       const self = room?.participants.get(socket.id);

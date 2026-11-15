@@ -21,7 +21,7 @@ export default async function StudyBuddyPage() {
     notFound();
   }
   const facts = await accessFactsFor(rt.store, account);
-  if (!platformAccess(account.role, facts).studyBuddy) {
+  if (!platformAccess(account.roles, facts).studyBuddy) {
     return (
       <div className={styles.center}>
         <div>

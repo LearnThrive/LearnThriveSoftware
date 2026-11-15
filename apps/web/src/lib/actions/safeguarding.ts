@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import {
   raiseConcern, updateConcern, SafeguardingError, type ConcernCategory, type ConcernStatus, type VettingKind,
 } from "@learnthrive/data/safeguarding";
-import { requireRole } from "@/lib/auth/guard";
+import { requirePermission, requireRole } from "@/lib/auth/guard";
+import { holds } from "@/lib/auth/scope";
 import { getDataProvider } from "@/lib/data/provider";
 import { logOutcome } from "@/lib/log";
 import { concernsOpen, getSafeguarding, notifyLeads, safeguardingLeads, todayInLondon } from "@/lib/safeguarding/runtime";
@@ -59,13 +60,13 @@ export async function voidVettingCheckAction(formData: FormData): Promise<void> 
 }
 
 export async function raiseConcernAction(formData: FormData): Promise<void> {
-  const user = await requireRole(["TUTOR", "ADMIN"]);
+  const user = await requirePermission("concern.raise");
   // With no lead named there is nobody to read it: refuse rather than store it (the page shows the published contact route instead).
   if (!concernsOpen()) redirect(`/dashboard/concerns?toast=${encodeURIComponent("Concerns cannot be raised here yet. Use the contact details on this page.")}`);
   await attempt("/dashboard/concerns", "", async () => {
     const immediateDanger = text(formData, "immediateDanger") === "true";
     const receipt = await raiseConcern(getSafeguarding(), {
-      raisedBy: user.id, raisedByRole: user.role === "ADMIN" ? "ADMIN" : "TUTOR", category: text(formData, "category") as ConcernCategory, about: text(formData, "about"),
+      raisedBy: user.id, raisedByRole: holds(user, "ADMIN") ? "ADMIN" : "TUTOR", category: text(formData, "category") as ConcernCategory, about: text(formData, "about"),
       studentRef: null, lessonRef: null, details: text(formData, "details"), immediateDanger,
     });
     const told = await notifyLeads(receipt, immediateDanger);

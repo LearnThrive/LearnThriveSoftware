@@ -1,6 +1,8 @@
 import type { DataProvider } from "@learnthrive/data/repositories";
 import type { LessonReport, ReportAssessmentLevel } from "@learnthrive/data/domain";
 import { logActivity } from "@/lib/activity/activityService";
+import { scopes } from "@/lib/auth/scope";
+import type { AuthenticatedUser } from "@/lib/auth/types";
 import { notifyProfile, notifyProfiles, notifyRole } from "@/lib/notifications/notificationService";
 
 export class ReportError extends Error {}
@@ -104,17 +106,36 @@ export async function returnReport(data: DataProvider, reportId: string, actorId
   return updated;
 }
 
+/** Who is looking: a signed-in person (any roles), or just `{ role, profileId }` (a test, an older caller). */
+export type ReportViewer = Pick<AuthenticatedUser, "role"> & Partial<Omit<AuthenticatedUser, "role">>;
+
+/**
+ * What this person may see of a report. A person with several roles gets the MOST each role allows on its own, never more: the full report
+ * (private notes included) only through a role that earns it (an administrator, or the tutor who wrote it), and otherwise the family's view of
+ * an approved one. A student who is also a junior tutor sees the private notes of a lesson they TEACH and only the approved family view of one
+ * they attend.
+ */
+export function visibleReportFor(viewer: ReportViewer, report: LessonReport): VisibleReport | null {
+  let limited: VisibleReport | null = null;
+  for (const scoped of scopes(viewer as AuthenticatedUser)) {
+    const seen = visibleReportForRole(scoped, report);
+    if (seen === report) return report;
+    limited ??= seen;
+  }
+  return limited;
+}
+
 export type VisibleReport = Pick<LessonReport, "id" | "lessonId" | "tutorId" | "status" | "publicSummary" | "progress" | "areasForImprovement" | "nextSteps" | "engagement" | "submittedAt" | "approvedAt">;
 
 /** The one place that decides what a Client/Student may see — everything else calls this rather
  * than reading `LessonReport` fields directly, so `internalTutorNotes`/`confidence` (Tutor-only)
  * can never leak by a caller simply forgetting to strip them (plan section 43's explicit
  * "never accidentally send internal notes to Parent/Student"). */
-export function visibleReportFor(
+function visibleReportForRole(
   viewer: { role: string; profileId?: string },
   report: LessonReport,
 ): VisibleReport | null {
-  if (viewer.role === "ADMIN" || (viewer.role === "TUTOR" && viewer.profileId === report.tutorId)) {
+  if (viewer.role === "ADMIN" || ((viewer.role === "TUTOR" || viewer.role === "JUNIOR_TUTOR") && viewer.profileId === report.tutorId)) {
     return report; // full fields, including internalTutorNotes/confidence
   }
   // Client/Student: only ever an APPROVED report, and never the Tutor-only fields.

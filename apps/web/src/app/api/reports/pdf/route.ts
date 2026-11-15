@@ -23,7 +23,7 @@ const NOT_FOUND = () => Response.json({ error: "Not found." }, { status: 404, he
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function GET(request: Request) {
-  const user = await requireRoleForApi(["ADMIN", "TUTOR", "CLIENT", "STUDENT"]);
+  const user = await requireRoleForApi(["ADMIN", "TUTOR", "JUNIOR_TUTOR", "CLIENT", "STUDENT"]);
   if (!user) return Response.json({ error: "Sign in to download reports." }, { status: 401, headers });
 
   const params = new URL(request.url).searchParams;

@@ -13,6 +13,8 @@ const { getAuthProvider } = loadTsFrom(import.meta.url, "../src/lib/auth/devProv
 const { InMemoryLibraryStore } = loadTsFrom(import.meta.url, "../../../packages/data/src/library/memory.ts");
 const { platformAccess } = loadTsFrom(import.meta.url, "../../../packages/data/src/library/access.ts");
 
+const { primaryRole, validateRoleSet } = loadTsFrom(import.meta.url, "../../../packages/data/src/roles.ts");
+
 const byEmail = (email) => dev.DEV_ACCOUNTS.find((account) => account.email === email);
 
 test("the list: unique ids and addresses, all on the reserved .dev domain, a role each, and the five staff-provider accounts unchanged", () => {
@@ -23,7 +25,10 @@ test("the list: unique ids and addresses, all on the reserved .dev domain, a rol
     assert.match(a.email, /^[a-z-]+@learnthrive\.dev$/, a.email);
     assert.equal(usernameError(a.username), undefined, a.username);
     assert.match(a.id, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/, "a real UUID shape, so nothing that validates ids refuses it");
-    assert.ok(["ADMIN", "TUTOR", "CLIENT", "STUDENT"].includes(a.role));
+    assert.ok(["ADMIN", "TUTOR", "JUNIOR_TUTOR", "CLIENT", "STUDENT"].includes(a.role));
+    assert.equal(a.role, primaryRole(a.roles), `${a.email}: role is the highest of roles`);
+    assert.ok(a.roles.includes(a.role));
+    assert.equal(validateRoleSet(a.roles).ok, true, `${a.email}: a set of roles the rules allow`);
   }
   assert.deepEqual(accounts.filter((a) => a.inDevProvider).map((a) => a.email), [
     "admin@learnthrive.dev", "tutor@learnthrive.dev", "client@learnthrive.dev", "student@learnthrive.dev", "disabled@learnthrive.dev",
@@ -45,6 +50,9 @@ test("seeding: every account signs in (the disabled one is refused as disabled) 
     "member@learnthrive.dev": "library",
     "visitor@learnthrive.dev": "none",
     "teaching-admin@learnthrive.dev": "staff",
+    "junior-parent@learnthrive.dev": "enrolled",
+    "junior@learnthrive.dev": "staff", // a junior tutor is staff: the tier is the union of the roles'
+    ...Object.fromEntries(["alvi", "tahasin", "abdurrahman", "brian"].flatMap((k) => [[`team-${k}@learnthrive.dev`, "staff"], [`team-${k}-learner@learnthrive.dev`, "staff"]])),
   };
   for (const account of dev.DEV_ACCOUNTS) {
     const result = await auth.signIn(internalEmailFor(account.username), account.password);
@@ -57,10 +65,12 @@ test("seeding: every account signs in (the disabled one is refused as disabled) 
     assert.equal(result.user.id, account.id, "the sign-in id is the list's id");
     const profile = await store.accounts.getAccount(account.id);
     assert.equal(profile.role, account.role, account.email);
+    const ORDER = ["ADMIN", "TUTOR", "JUNIOR_TUTOR", "CLIENT", "STUDENT"];
+    assert.deepEqual(profile.roles, [...account.roles].sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b)), `${account.email}: the roles seeded are the list's`);
     assert.equal(profile.adultConfirmed, true);
     // A learner's facts are their own (their own tuition, the household's Library benefit); everyone else's are the family's.
     const facts = profile.learner ? await store.access.learnerFacts(profile.learner.studentId) : profile.clientId ? await store.access.facts(profile.clientId) : { enrolled: false, subscription: false, adminGrant: false };
-    assert.equal(platformAccess(profile.role, facts).tier, expected[account.email], account.email);
+    assert.equal(platformAccess(profile.roles, facts).tier, expected[account.email], account.email);
   }
   const student = await store.accounts.getAccount(byEmail("student@learnthrive.dev").id);
   assert.equal(student.clientId, null, "the development student is a learner: no family account of their own");
@@ -100,14 +110,71 @@ test("toPlatformUser: the account's id and role, the profile's name first, and t
   const env = { NODE_ENV: "development" };
   const client = byEmail("client@learnthrive.dev");
   assert.deepEqual(
-    toPlatformUser({ email: client.email, displayName: "Signup Name" }, { profileId: client.id, role: "CLIENT", displayName: "Profile Name" }, null, env),
-    { id: client.id, email: client.email, role: "CLIENT", name: "Profile Name", profileId: "client-sarah-ahmed" },
+    toPlatformUser({ email: client.email, displayName: "Signup Name" }, { profileId: client.id, role: "CLIENT", roles: ["CLIENT"], displayName: "Profile Name" }, {}, env),
+    { id: client.id, email: client.email, role: "CLIENT", roles: ["CLIENT"], name: "Profile Name", profileId: "client-sarah-ahmed", clientId: "client-sarah-ahmed" },
   );
-  assert.equal(toPlatformUser({ email: "a@b.co", displayName: "Signup Name" }, { profileId: "x", role: "ADMIN", displayName: "" }, null, env).name, "Signup Name", "then the sign-up name");
-  assert.equal(toPlatformUser({ email: "a@b.co", displayName: "" }, { profileId: "x", role: "ADMIN", displayName: "" }, null, env).name, "a@b.co", "then the address");
-  assert.equal(toPlatformUser({ email: "a@b.co", displayName: "" }, { profileId: "x", role: "TUTOR", displayName: "T" }, null, env).profileId, "x", "no invented link for an account the development data does not know: its own id, which matches no record");
+  assert.equal(toPlatformUser({ email: "a@b.co", displayName: "Signup Name" }, { profileId: "x", role: "ADMIN", roles: ["ADMIN"], displayName: "" }, {}, env).name, "Signup Name", "then the sign-up name");
+  assert.equal(toPlatformUser({ email: "a@b.co", displayName: "" }, { profileId: "x", role: "ADMIN", roles: ["ADMIN"], displayName: "" }, {}, env).name, "a@b.co", "then the address");
+  assert.equal(toPlatformUser({ email: "a@b.co", displayName: "" }, { profileId: "x", role: "TUTOR", roles: ["TUTOR"], displayName: "T" }, {}, env).profileId, "x", "no invented link for an account the development data does not know: its own id, which matches no record");
   // Everywhere else the link is the person's real record from the database, and the development mapping never answers in production.
   const real = "11111111-1111-4111-8111-111111111111";
-  assert.equal(toPlatformUser({ email: client.email, displayName: "" }, { profileId: client.id, role: "CLIENT", displayName: "C" }, real, { NODE_ENV: "production" }).profileId, real);
-  assert.equal(toPlatformUser({ email: client.email, displayName: "" }, { profileId: client.id, role: "CLIENT", displayName: "C" }, null, { NODE_ENV: "production" }).profileId, client.id, "no development record in production, even for a development account's id");
+  assert.equal(toPlatformUser({ email: client.email, displayName: "" }, { profileId: client.id, role: "CLIENT", roles: ["CLIENT"], displayName: "C" }, { clientId: real }, { NODE_ENV: "production" }).profileId, real);
+  assert.equal(toPlatformUser({ email: client.email, displayName: "" }, { profileId: client.id, role: "CLIENT", roles: ["CLIENT"], displayName: "C" }, {}, { NODE_ENV: "production" }).profileId, client.id, "no development record in production, even for a development account's id");
+});
+
+test("the multi-role development accounts: a teaching administrator, and a 17-year-old student who is a junior tutor with their parent", () => {
+  const env = { NODE_ENV: "development" };
+  const teachingAdmin = byEmail("teaching-admin@learnthrive.dev");
+  assert.deepEqual([...teachingAdmin.roles], ["ADMIN", "TUTOR"]);
+  assert.deepEqual(dev.devRecordsFor(teachingAdmin.id, env), { tutorId: "tutor-meera-shah" });
+  const junior = byEmail("junior@learnthrive.dev");
+  const parent = byEmail("junior-parent@learnthrive.dev");
+  assert.deepEqual([...junior.roles], ["STUDENT", "JUNIOR_TUTOR"]);
+  assert.deepEqual(dev.devRecordsFor(junior.id, env), { tutorId: "tutor-junior-sam", studentId: "student-junior-sam" });
+  assert.deepEqual(dev.devRecordsFor(parent.id, env), { clientId: "client-junior-parent" });
+  assert.equal(junior.learnerOf, parent.id, "their parent's family");
+  assert.equal(dev.devRecordsFor(junior.id, { NODE_ENV: "production" }), undefined, "never in production");
+  const user = toPlatformUser({ email: junior.email, displayName: "" }, { profileId: junior.id, role: junior.role, roles: junior.roles, displayName: "S" }, {}, env);
+  assert.equal(user.tutorId, "tutor-junior-sam");
+  assert.equal(user.studentId, "student-junior-sam");
+  assert.equal(user.clientId, undefined, "a student is never also a parent");
+});
+
+test("the team: four people, two logins each, which together hold every role; no one login holds them all, because the rules forbid it", async () => {
+  const { TEAM, getDataProvider, resetDataProvider } = loadTsFrom(import.meta.url, "../../../packages/data/src/inMemoryProvider.ts");
+  const { validateRoleSet, ROLES } = loadTsFrom(import.meta.url, "../../../packages/data/src/roles.ts");
+  const names = ["Alvi Hossain", "Tahasin Hasan", "Abdurrahman Mustafa", "Brian James Khalawon"];
+  assert.deepEqual(TEAM.map((p) => p.name), names);
+  for (const person of TEAM) {
+    const main = byEmail(`team-${person.key}@learnthrive.dev`);
+    const learner = byEmail(`team-${person.key}-learner@learnthrive.dev`);
+    assert.equal(main.name, person.name);
+    assert.deepEqual([...main.roles], ["ADMIN", "TUTOR", "CLIENT"]);
+    assert.deepEqual([...learner.roles], ["STUDENT", "JUNIOR_TUTOR"]);
+    assert.deepEqual([...new Set([...main.roles, ...learner.roles])].sort(), [...ROLES].sort(), `${person.name}: the two logins together hold every role`);
+    assert.equal(validateRoleSet([...main.roles, ...learner.roles]).ok, false, "but not as one login: tutor and junior tutor, parent and student, exclude each other");
+    assert.equal(validateRoleSet(main.roles).ok, true);
+    assert.equal(validateRoleSet(learner.roles).ok, true);
+    assert.equal(learner.learnerOf, main.id, "the learner belongs to the person's own family");
+    assert.deepEqual(dev.devRecordsFor(main.id, { NODE_ENV: "development" }), { tutorId: person.tutor, clientId: person.client });
+    assert.deepEqual(dev.devRecordsFor(learner.id, { NODE_ENV: "development" }), { tutorId: person.juniorTutor, studentId: person.student });
+    assert.equal(dev.devRecordsFor(main.id, { NODE_ENV: "production" }), undefined, "never in production");
+  }
+  // Every record the logins name exists, and each person's learner is taught by the NEXT person's tutor in a lesson that is on now.
+  resetDataProvider();
+  const data = getDataProvider();
+  for (const person of TEAM) {
+    for (const id of [person.tutor, person.juniorTutor]) assert.ok(await data.tutors.get(id), id);
+    assert.ok(await data.clients.get(person.client));
+    assert.ok(await data.students.get(person.student));
+    const lesson = await data.lessons.get(`lesson-team-${person.key}-now`);
+    const teacher = TEAM.find((t) => t.key === person.taughtBy);
+    assert.equal(lesson.tutorId, teacher.tutor);
+    assert.deepEqual(lesson.studentIds, [person.student]);
+    const start = Date.parse(lesson.startAt);
+    assert.ok(start <= Date.now() && Date.now() < start + lesson.durationMinutes * 60_000, "on right now, so the lesson chat can be tried at once");
+    const juniorLesson = await data.lessons.get(`lesson-team-${person.key}-tomorrow`);
+    assert.equal(juniorLesson.tutorId, person.juniorTutor, "the junior tutor record is assigned to a learner");
+  }
+  assert.equal(new Set(TEAM.map((p) => p.taughtBy)).size, 4, "everyone teaches someone, so no one is only talking to themselves");
 });

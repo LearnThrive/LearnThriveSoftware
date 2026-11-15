@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { normaliseRoles, planRoleChange } from "../roles";
 import { deriveEntitlement, type AdminGrantRecord, type SubscriptionRecord } from "./billing";
 import { CHAT_TEXT_DAYS, CHAT_UPLOAD_DAYS, DAY_MS, type ChatExport, type ChatFileChunkRecord, type ChatFileRecord, type ChatMessageRecord, type ChatSessionRecord } from "./chat";
 import type { AcceptFailure, AccessMode, InvitationPeek, IdentityAuditEntry, IdentityRepository, InvitationRecord, LearnerContext, LinkStatus, StudentRecord } from "./identity";
@@ -9,6 +10,9 @@ import type {
   Account,
   AccountRole,
   DownloadEvent,
+  RoleChangeEntry,
+  RoleChangeResult,
+  RoleChangeStatus,
   Facet,
   FacetScope,
   Resource,
@@ -25,7 +29,9 @@ const MAX_LIMIT = 100;
 
 interface Profile {
   id: string;
+  /** The PRIMARY role: `roles[0]`. Kept because the older rules in this file read it; no authorization decision does. */
   role: AccountRole;
+  roles: AccountRole[];
   displayName: string;
   adultConfirmed: boolean;
   email: string | null;
@@ -96,11 +102,13 @@ export class InMemoryLibraryStore implements LibraryStore {
   private usage = new Map<string, number>();
   private consentRows: Array<{ profileId: string; kind: string; version: string; textSha256: string; at: Date }> = [];
 
-  seedProfile(input: { id?: string; role?: AccountRole; displayName?: string; adultConfirmed?: boolean; email?: string; username?: string; linkedEmail?: string; mustChangePassword?: boolean } = {}): string {
+  seedProfile(input: { id?: string; role?: AccountRole; roles?: readonly AccountRole[]; displayName?: string; adultConfirmed?: boolean; email?: string; username?: string; linkedEmail?: string; mustChangePassword?: boolean } = {}): string {
     const id = input.id ?? randomUUID();
+    const held = normaliseRoles(input.roles?.length ? input.roles : [input.role ?? "CLIENT"]);
     this.profiles.set(id, {
       id,
-      role: input.role ?? "CLIENT",
+      role: held[0]!,
+      roles: held,
       displayName: input.displayName ?? "",
       adultConfirmed: input.adultConfirmed ?? true,
       email: input.email ?? null,
@@ -111,6 +119,13 @@ export class InMemoryLibraryStore implements LibraryStore {
     });
     return id;
   }
+
+  /** The tutor record a seeded login teaches as (a login made through `accounts.provision` records its own). */
+  seedTutorRef(profileId: string, tutorId: string): void {
+    this.tutorRefs.set(profileId, tutorId);
+  }
+
+  private roleAudit: RoleChangeEntry[] = [];
 
   hasStudent(studentId: string): boolean {
     return this.students.has(studentId);
@@ -142,7 +157,9 @@ export class InMemoryLibraryStore implements LibraryStore {
     const student = this.students.get(studentId);
     const profile = this.profiles.get(profileId);
     if (!student || !profile) throw new Error("no such student or profile");
-    profile.role = "STUDENT";
+    // A learner login: STUDENT joins whatever else they hold, except a family account (the two cannot be held together).
+    profile.roles = normaliseRoles([...profile.roles.filter((r) => r !== "CLIENT"), "STUDENT"]);
+    profile.role = profile.roles[0]!;
     student.accessMode = "direct";
     this.identities.set(studentId, { id: randomUUID(), studentId, profileId, status: "active" });
   }
@@ -214,6 +231,7 @@ export class InMemoryLibraryStore implements LibraryStore {
   private accountOf(profile: Profile): Account {
     return {
       profileId: profile.id,
+      roles: [...profile.roles],
       role: profile.role,
       displayName: profile.displayName,
       adultConfirmed: profile.adultConfirmed,
@@ -250,6 +268,34 @@ export class InMemoryLibraryStore implements LibraryStore {
     // made on a local server is recorded here.
     domainRef: async (profileId) => this.domainRefs.get(profileId) ?? null,
     tutorRef: async (profileId) => this.tutorRefs.get(profileId) ?? null,
+    records: async (profileId) => ({
+      tutorId: this.tutorRefs.get(profileId) ?? null,
+      clientId: this.clients.get(profileId) ?? null,
+      studentId: this.learnerOf(profileId)?.studentId ?? null,
+    }),
+    listProfiles: async () =>
+      [...this.profiles.values()].map((p) => ({ profileId: p.id, displayName: p.displayName, username: p.username, roles: [...p.roles], loginDisabled: p.loginDisabled }))
+        .sort((a, b) => a.displayName.localeCompare(b.displayName) || a.profileId.localeCompare(b.profileId)),
+    changeRoles: async ({ actor, profileId, roles, now }) => {
+      // The same rules as public.set_profile_roles (migration 0025), in the same order. Nothing awaits between the checks and the write.
+      const actorProfile = this.profiles.get(actor);
+      const target = this.profiles.get(profileId);
+      const refused = (reason: RoleChangeStatus, message: string): RoleChangeResult => ({ status: "refused", reason, message });
+      if (!actorProfile?.roles.includes("ADMIN")) return refused("NOT_ADMIN", "Only an administrator can change roles.");
+      if (actor === profileId) return refused("SELF", "You cannot change your own roles. Ask another administrator.");
+      if (!target) return refused("NOT_FOUND", "There is no such person.");
+      const adminCount = [...this.profiles.values()].filter((p) => p.roles.includes("ADMIN")).length;
+      const plan = planRoleChange({ actorId: actor, actorRoles: actorProfile.roles, targetId: profileId, targetRoles: target.roles, requested: roles, adminCount });
+      if (!plan.ok) return refused(plan.reason, plan.message);
+      const needsRecord = (plan.after.includes("TUTOR") || plan.after.includes("JUNIOR_TUTOR")) && !this.tutorRefs.has(profileId)
+        || plan.after.includes("STUDENT") && !this.learnerOf(profileId);
+      if (needsRecord) return refused("NEEDS_RECORD", "That role needs the person's own record first (a tutor record, or a learner login).");
+      target.roles = plan.after;
+      target.role = plan.after[0]!;
+      this.roleAudit.unshift({ at: now ?? new Date(), actorProfileId: actor, targetProfileId: profileId, before: plan.before, after: plan.after });
+      return { status: "changed", before: plan.before, after: plan.after };
+    },
+    roleHistory: async (profileId, limit = 50) => this.roleAudit.filter((e) => !profileId || e.targetProfileId === profileId).slice(0, Math.min(Math.max(limit, 1), 500)).map((e) => ({ ...e, before: [...e.before], after: [...e.after] })),
     getEmail: async (profileId) => {
       const profile = this.profiles.get(profileId);
       return profile?.linkedEmail ?? profile?.email ?? null;
@@ -285,11 +331,14 @@ export class InMemoryLibraryStore implements LibraryStore {
         this.tutorRefs.set(profile.id, input.tutorId);
         this.domainRefs.set(profile.id, input.tutorId);
       }
+      // An administrator who teaches holds both roles (the capability is now a role).
+      const granted = normaliseRoles(input.role === "ADMIN" && input.tutorId ? ["ADMIN", "TUTOR"] : [input.role]);
       Object.assign(profile, {
         username: input.username,
         linkedEmail: input.linkedEmail.toLowerCase(),
         displayName: input.displayName.trim().slice(0, 80),
-        role: input.role,
+        role: granted[0],
+        roles: granted,
         mustChangePassword: true,
         adultConfirmed: input.role !== "STUDENT",
       });
@@ -493,6 +542,7 @@ export class InMemoryLibraryStore implements LibraryStore {
       inv.acceptedAt = input.now;
       inv.acceptedBy = input.profileId;
       this.identities.set(inv.studentId, { id: randomUUID(), studentId: inv.studentId, profileId: input.profileId, status: "active" });
+      profile.roles = ["STUDENT"]; // an accepted invitation turns a plain account into the learner, as the database function does
       profile.role = "STUDENT";
       student.accessMode = "direct";
       this.audit(input.profileId, "invitation_accepted", inv.clientId, inv.studentId, input.now);

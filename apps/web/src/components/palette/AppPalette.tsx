@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo } from "react";
 import { searchAppAction } from "@/lib/actions/search";
-import type { Role } from "@/lib/auth/types";
+import type { RoleSet } from "@/lib/navigation/appNavigation";
 import { buildAppCommands } from "@/lib/palette/appCommands";
 import { groupLabelFor, type AppSearchResult } from "@/lib/search/appSearchTypes";
 import { CommandPalette, type PaletteCommand } from "./CommandPalette";
@@ -24,7 +24,7 @@ export default function AppPalette({
   open: boolean;
   onClose: () => void;
   shortcutLabel: string;
-  role: Role;
+  role: RoleSet;
   teaches?: boolean;
   onShowShortcuts: () => void;
   onSignOut: () => void;

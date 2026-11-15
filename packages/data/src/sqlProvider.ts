@@ -9,6 +9,7 @@ import type {
 } from "./repositories";
 import { ARCHIVED_TUTOR_ID, PURGE_DELAY_DAYS, PURGE_NOTES } from "./repositories";
 import type { SqlExecutor } from "./library/ports";
+import { generatePaymentReference, PAYMENT_REFERENCE_TRIES } from "./paymentReference";
 
 /**
  * The production domain provider: the tuition data (tutors, families, students, assignments, lessons, attendance, reports, notifications)
@@ -169,6 +170,23 @@ export function createSqlDataProvider(db: SqlExecutor): DataProvider {
       const rows = isId(id) ? await db.query<Row>(`update public.clients set active = coalesce($2, active) where id = $1 returning id`, [id, patch.active ?? null]) : [];
       if (!rows[0]) throw new Error(`Client ${id} not found`);
       return toClient((await db.query<Row>(`${CLIENT_SELECT} where c.id = $1`, [id]))[0]!);
+    },
+    // Made once, by the database's own guard: only a row with no reference takes one (`where payment_reference is null`), the unique index
+    // refuses a duplicate (23505, so draw again), and a trigger refuses any later change (migration 0026).
+    ensurePaymentReference: async (clientId) => {
+      if (!isId(clientId)) return null;
+      for (let i = 0; i < PAYMENT_REFERENCE_TRIES; i += 1) {
+        const current = await db.query<Row>(`select payment_reference from public.clients where id = $1`, [clientId]);
+        if (!current[0]) return null;
+        if (current[0].payment_reference) return current[0].payment_reference as string;
+        try {
+          const made = await db.query<Row>(`update public.clients set payment_reference = $2 where id = $1 and payment_reference is null returning payment_reference`, [clientId, generatePaymentReference()]);
+          if (made[0]) return made[0].payment_reference as string;
+        } catch (error) {
+          if ((error as { code?: string }).code !== "23505") throw error; // taken by another family: draw again
+        }
+      }
+      throw new Error("Could not make a unique payment reference.");
     },
   };
 
@@ -419,7 +437,7 @@ export function createSqlDataProvider(db: SqlExecutor): DataProvider {
       return rows[0]?.id ?? null;
     },
     recipientsWithRole: async (role) =>
-      (await db.query<Row>(`select id from public.profiles where role = $1 and login_disabled_at is null`, [role])).map((row) => row.id as string),
+      (await db.query<Row>(`select p.id from public.profiles p join public.profile_roles r on r.profile_id = p.id where r.role = $1 and p.login_disabled_at is null`, [role])).map((row) => row.id as string),
   };
 
   /**

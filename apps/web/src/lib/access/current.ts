@@ -36,7 +36,7 @@ export const currentAccess = cache(async (): Promise<SignedInAccess | null> => {
   if (!account) return null;
   // A learner's facts are their own (docs/IDENTITY.md), the family's for an adult: one function for every guard.
   const facts = await accessFactsFor(rt.store, account);
-  return { rt, user: state.user, account, facts, access: platformAccess(account.role, facts) };
+  return { rt, user: state.user, account, facts, access: platformAccess(account.roles, facts) };
 });
 
 /** True when the browser holds a refresh token but no usable access token: the page should go through /api/account/refresh. */
@@ -57,6 +57,6 @@ export async function accountPlatformUser(): Promise<AuthenticatedUser | null> {
   // A guardian viewing as a learner has the learner's view, not the family's: the dashboard (the family's lessons and billing) is closed.
   if (await inSupervisedView(who.rt, await nextJar(), who.account.profileId)) return null;
   const { accounts } = who.rt.store;
-  const [domainRef, tutorRef] = await Promise.all([accounts.domainRef(who.account.profileId), who.account.role === "ADMIN" ? accounts.tutorRef(who.account.profileId) : null]);
-  return toPlatformUser(who.user, who.account, domainRef, process.env, tutorRef);
+  // Every record this person is, one per role they hold (a tutor, a family, a student): never only the first one found.
+  return toPlatformUser(who.user, who.account, await accounts.records(who.account.profileId));
 }

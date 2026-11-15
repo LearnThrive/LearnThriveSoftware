@@ -136,6 +136,8 @@ function runCheck(spec, value, context) {
     const n = Number(value);
     return Number.isInteger(n) && n >= Number(args[0]) && n <= Number(args[1]) ? null : `must be a whole number from ${args[0]} to ${args[1]}`;
   }
+  if (kind === "digits") return new RegExp(`^\\d{${args[0]}}$`).test(value) ? null : `must be exactly ${args[0]} digits, with no spaces or dashes`;
+  if (kind === "line") return value.length <= 80 && !/[\u0000-\u001f\u007f]/.test(value) ? null : "must be plain text on one line, at most 80 characters";
   if (kind === "flag") return value === args[0] ? null : `must be ${args[0]} (or unset)`;
   if (kind === "enum") return args[0].split(",").includes(value) ? null : `must be one of ${args[0]}`;
   return null;

@@ -1,5 +1,6 @@
 import type { DataProvider } from "@learnthrive/data/repositories";
 import type { Lesson } from "@learnthrive/data/domain";
+import { holds, scopes } from "@/lib/auth/scope";
 import type { AuthenticatedUser } from "@/lib/auth/types";
 import { visibleStudentsFor } from "@/lib/dashboard/queries";
 import { formatDateOnly } from "@/lib/format";
@@ -54,7 +55,10 @@ export async function searchApp(data: DataProvider, user: AuthenticatedUser, raw
   if (query.length < MIN_QUERY_LENGTH) return [];
 
   const lessons = await visibleLessonsFor(data, user);
-  const students = user.role === "STUDENT" ? [] : await visibleStudentsFor(data, user);
+  // The people this person may see by name: what each of their roles reaches, except as a learner (a student sees no one else by name).
+  // A student who is also a junior tutor sees the students they are assigned to, never the rest.
+  const peopleScopes = scopes(user).filter((scoped) => scoped.role !== "STUDENT");
+  const students = [...new Map((await Promise.all(peopleScopes.map((scoped) => visibleStudentsFor(data, scoped)))).flat().map((s) => [s.id, s])).values()];
   const studentNameById = new Map(students.map((s) => [s.id, s.name]));
   const tutorNameById = new Map((await data.tutors.list()).map((t) => [t.id, t.name]));
 
@@ -82,13 +86,14 @@ export async function searchApp(data: DataProvider, user: AuthenticatedUser, raw
   );
 
   // People.
-  if (user.role === "ADMIN") {
+  const isAdmin = holds(user, "ADMIN");
+  if (isAdmin) {
     results.push(
       ...rank(query, students.map((s) => ({ id: s.id, kind: "student" as const, title: s.name, subtitle: s.yearGroup, href: `/dashboard/admin/students/${s.id}`, keywords: s.yearGroup ? [s.yearGroup] : [] }))),
       ...rank(query, (await data.clients.list()).map((c) => ({ id: c.id, kind: "client" as const, title: c.name, subtitle: c.email, href: `/dashboard/admin/clients/${c.id}`, keywords: [c.email] }))),
       ...rank(query, (await data.tutors.list()).map((t) => ({ id: t.id, kind: "tutor" as const, title: t.name, subtitle: t.subjects.join(", "), href: `/dashboard/admin/tutors/${t.id}`, keywords: [t.email, ...t.subjects] }))),
     );
-  } else if (user.role === "TUTOR" || user.role === "CLIENT") {
+  } else if (peopleScopes.length > 0) {
     results.push(...rank(query, students.map((s) => ({ id: s.id, kind: "student" as const, title: s.name, subtitle: s.yearGroup, href: `/dashboard/progress/${s.id}`, keywords: s.yearGroup ? [s.yearGroup] : [] }))));
   }
 

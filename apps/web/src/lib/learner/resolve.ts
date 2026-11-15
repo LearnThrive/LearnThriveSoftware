@@ -48,7 +48,7 @@ export async function resolveRequestActor(
   if (!account) return null;
 
   // A learner's own login.
-  if (account.role === "STUDENT") {
+  if (account.roles.includes("STUDENT")) {
     const learner = account.learner;
     const facts = learner ? await store.access.learnerFacts(learner.studentId, options.now) : NONE;
     const consent = learner ? await store.identity.hasLearnerConsent(learner.studentId) : false;
@@ -56,7 +56,7 @@ export async function resolveRequestActor(
   }
 
   // A guardian viewing as one of their learners.
-  const token = account.role === "CLIENT" ? jar.get(SUPERVISED_COOKIE) : undefined;
+  const token = account.roles.includes("CLIENT") ? jar.get(SUPERVISED_COOKIE) : undefined;
   if (token) {
     const supervised = await store.identity.getSupervised(hashToken(token), account.profileId, options.now);
     if (supervised) {

@@ -15,6 +15,7 @@ export const GROUPS = [
   ["supabase", "Supabase"],
   ["library", "Library"],
   ["billing", "Billing (Stripe)"],
+  ["bank", "Bank transfer details for tuition fees"],
   ["assistant", "LearnThrive AI, voice and the Paper Tutor"],
   ["portal", "Portal and classroom"],
   ["tooling", "Development and tooling (never needed in production)"],
@@ -25,6 +26,8 @@ const e = (name, group, purpose, rest) => ({ name, group, purpose, secret: false
 export const REGISTRY = [
   // ---- Site and mail ----------------------------------------------------------------------------------------------
   e("NODE_ENV", "site", "Selects production behaviour everywhere (dev-only routes close, fakes are refused).", { local: "set by npm run dev", production: "set by next start", source: "set by next start / the host", fallback: "development", check: "node-env" }),
+  e("NEXT_RUNTIME", "site", "Which runtime Next.js is running a piece of code in (nodejs or edge). Next sets it; never set it yourself. instrumentation.ts runs the startup checks only on nodejs.", { local: "set by Next.js", production: "set by Next.js", source: "set by Next.js", fallback: "unset outside Next.js", check: "text" }),
+  e("NEXT_PHASE", "site", "Which phase Next.js is in (phase-production-build while building). Next sets it; never set it yourself. The startup checks are skipped while building, when the host's environment is not there.", { local: "set by Next.js", production: "set by Next.js", source: "set by Next.js", fallback: "unset outside Next.js", check: "text" }),
   e("NEXT_PUBLIC_SITE_URL", "site", "The site's own address: where Stripe sends people back, and an allowed origin.", { production: "optional", source: "your domain", fallback: "https://www.learnthrivetuition.co.uk", check: "url-https-prod" }),
   e("ALLOWED_ORIGINS", "site", "Comma-separated origins allowed to POST to the site's forms and routes.", { source: "your domain(s)", fallback: "the site's own origin (right for production)", check: "origins" }),
   e("RESEND_API_KEY", "site", "Sends the enquiry, careers, account and billing emails. Without it those routes fail closed (503).", { secret: true, production: "required", source: "Resend dashboard > API keys", check: "prefix:re_" }),
@@ -69,6 +72,12 @@ export const REGISTRY = [
   e("LIBRARY_DEV_STORAGE_DIR", "library", "Development: the folder that stands in for Supabase Storage when no Supabase settings are present.", { production: "unset", fallback: ".library-dev-storage", check: "text" }),
 
   // ---- Billing ---------------------------------------------------------------------------------------------------------
+  // Optional override of the bank details built into the site (src/lib/bank/siteBankDetails.ts), shown to signed-in parents and administrators only.
+  // Marked secret so the bundle check searches the browser's code for their names and (with made-up values) their values.
+  e("BANK_PAYEE_NAME", "bank", "The name on the company's bank account, shown to parents who pay by bank transfer. Optional: replaces the bank details built into the site. Set all four BANK_ variables together or none: the server refuses to start with some missing or malformed.", { secret: true, production: "optional", source: "the company's bank (the account name exactly as the bank holds it); only to change the built-in details", check: "line" }),
+  e("BANK_ACCOUNT_NUMBER", "bank", "The company's 8-digit account number, shown to parents who pay by bank transfer. Digits only.", { secret: true, production: "optional", source: "the company's bank; only to change the built-in details", check: "digits:8" }),
+  e("BANK_SORT_CODE", "bank", "The company's 6-digit sort code, digits only (the page writes it 12-34-56). Shown to parents who pay by bank transfer.", { secret: true, production: "optional", source: "the company's bank; only to change the built-in details", check: "digits:6" }),
+  e("BANK_NAME", "bank", "The name of the company's bank, shown to parents who pay by bank transfer.", { secret: true, production: "optional", source: "the company's bank; only to change the built-in details", check: "line" }),
   e("STRIPE_SECRET_KEY", "billing", "sk_test_... , sk_live_... or a restricted rk_... key. A test key puts the server in test mode. Server only.", { secret: true, production: "only to take payment", source: "Stripe dashboard > Developers > API keys", check: "stripe-secret" }),
   e("TUITION_REFUND_APPROVER_EMAILS", "billing", "Comma-separated LINKED emails (the address on each account, not the username) of the people who may approve a tuition refund (owner answer B11). Empty = nobody can approve one: refunds stay requested. Tuition statements and refunds are admin-only and separate from Stripe.", { source: "the owners: who decides refunds", fallback: "unset (no approver)", check: "text" }),
   e("STRIPE_WEBHOOK_SECRET", "billing", "whsec_... for /api/billing/webhook (two, comma separated, while rotating).", { secret: true, production: "only to take payment", source: "Stripe dashboard > Developers > Webhooks", check: "stripe-webhook" }),
@@ -179,6 +188,13 @@ export const REGISTRY = [
   e("CLOUDFLARE_TURN_API_TOKEN", "portal", "Classroom server: the API token of the pair above. Server only.", { secret: true, production: "required", source: "Cloudflare dashboard > Realtime > TURN", check: "min:16" }),
   e("CLOUDFLARE_SFU_APP_ID", "portal", "Classroom server: the Cloudflare Realtime SFU app that carries classroom video, so a lesson can hold a tutor and up to 10 students. Set with the secret below. Without both, rooms fall back to the peer-to-peer mesh (a tutor and 3 students).", { secret: true, production: "required", source: "Cloudflare dashboard > Realtime > SFU > your app (the App ID)", check: "min:8" }),
   e("CLOUDFLARE_SFU_APP_SECRET", "portal", "Classroom server: the SFU app's secret. Server only: the browser asks our server to make every SFU call, so this never reaches a browser or a log.", { secret: true, production: "required", source: "Cloudflare dashboard > Realtime > SFU > your app (the App Secret)", check: "min:16" }),
+  // ---- Lesson chat (docs/LESSON_CHAT.md) ----
+  e("LESSON_CHAT_ENABLED", "portal", "true opens the lesson chat (messages and files between a tutor and the students in a lesson, during it) in production. Anything but exactly true is closed. It stays closed until the chat is stored in the database, not in memory.", { production: "unset until the owner flips it", held: true, check: "true-only" }),
+  e("LESSON_FILE_URL_SECRET", "portal", "Signs the short-lived links to files shared in a lesson. At least 32 characters. In production the chat stays closed without it; a fixed development key is used locally.", { secret: true, production: "required once the chat is opened", source: "generate: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"", check: "min:32" }),
+  e("LESSON_CHAT_GRACE_BEFORE_MINUTES", "portal", "How many minutes before a lesson's scheduled start messages are accepted (0 to 60). Default 0: exactly the scheduled time, in Europe/London.", { fallback: "0", check: "int:0:60" }),
+  e("LESSON_CHAT_GRACE_AFTER_MINUTES", "portal", "How many minutes after a lesson's scheduled end messages are still accepted (0 to 60). Default 0.", { fallback: "0", check: "int:0:60" }),
+  e("LESSON_CHAT_MAX_FILE_MB", "portal", "The largest file shared in a lesson, in megabytes (1 to 25). Only png, jpg and pdf are accepted.", { fallback: "10", check: "int:1:25" }),
+  e("CLASSROOM_WEB_URL", "portal", "The web app's address, where the classroom server sends each lesson chat message to be checked and stored (https; http only for localhost). Set where the classroom server runs. With it unset the classroom allows no chat in production.", { local: "optional", production: "required where the classroom server runs", source: "your domain, e.g. https://www.example.com", check: "url" }),
   e("CLASSROOM_JOIN_SECRET", "portal", "Signs the one-time token that admits a person to a lesson's classroom (the same value must be set wherever the classroom server runs). If unset the code uses a fixed development secret, which must never run in production.", { secret: true, production: "required", source: "generate: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"", check: "min:32" }),
   e("TUNNEL_HOST", "portal", "Development: a tunnel's host name (for example for testing on a phone), added to the classroom server's allowed origins.", { production: "unset", check: "text" }),
   e("DISCONNECT_GRACE_MS", "portal", "Classroom reconnect grace period (apps/realtime and server.ts).", { check: "int:0:600000" }),

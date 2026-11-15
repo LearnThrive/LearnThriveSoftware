@@ -2,11 +2,14 @@ import type { Metadata } from "next";
 import { Receipt } from "lucide-react";
 import { formatPence, parentAccount } from "@learnthrive/data/tuitionBilling";
 import { requireRole } from "@/lib/auth/guard";
+import { recordFor } from "@/lib/auth/scope";
+import { bankTransferFor } from "@/lib/bank/handler";
 import { createMetadata } from "@/lib/metadata";
 import { getDataProvider } from "@/lib/data/provider";
 import { billingContext } from "@/lib/tuitionBilling/runtime";
 import { siteConfig } from "@/lib/site";
 import { formatDateOnly } from "@/lib/format";
+import { BankTransferPanel } from "@/components/billing/BankTransferPanel";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
@@ -29,8 +32,14 @@ const monthName = (period: string) => new Date(`${period}-01T12:00:00Z`).toLocal
 export default async function FeesPage() {
   const user = await requireRole(["CLIENT"]);
   const ctx = billingContext();
-  const family = user.profileId ? await getDataProvider().clients.get(user.profileId) : null;
+  // The family the PARENT role stands on (a person with several roles has a record for each; lib/auth/scope.ts), never one named in the address.
+  const familyId = recordFor(user, "CLIENT");
+  const family = familyId ? await getDataProvider().clients.get(familyId) : null;
   const account = family ? await parentAccount(ctx, family.id) : null;
+  // The company's bank details and THIS family's payment reference, through the same function as the endpoint (lib/bank/handler.ts). Nothing
+  // is shown where the details are not set up on this server: the older "how to pay" text below stands in.
+  const transfer = family ? await bankTransferFor(user, null, getDataProvider().clients) : null;
+  const bank = transfer?.status === 200 && transfer.body.reference ? { ...transfer.body.bank, reference: transfer.body.reference } : null;
 
   return (
     <>
@@ -54,17 +63,26 @@ export default async function FeesPage() {
             </CardBody>
           </Card>
 
+          {bank && (
+            <Card>
+              <CardBody><BankTransferPanel details={bank} /></CardBody>
+            </Card>
+          )}
+
+          {/* With the bank panel above, this card is only for what an administrator has added; without it, it is the fallback. */}
+          {(!bank || account.paymentInstructions) && (
           <Card>
-            <CardHeader title="How to pay" />
+            <CardHeader title={bank ? "More about paying" : "How to pay"} />
             <CardBody>
               {account.paymentInstructions ? (
                 <p style={{ whiteSpace: "pre-wrap", margin: 0 }}>{account.paymentInstructions}</p>
               ) : (
                 <p style={{ margin: 0 }}>Email {siteConfig.email} and we will send you the bank details to pay into.</p>
               )}
-              {account.statements[0] && <p>Quote the invoice number as your payment reference: <strong>{account.statements[0].invoiceNumber}</strong>.</p>}
+              {!bank && account.statements[0] && <p>Quote the invoice number as your payment reference: <strong>{account.statements[0].invoiceNumber}</strong>.</p>}
             </CardBody>
           </Card>
+          )}
 
           <Card>
             <CardHeader title="Statements" description="Newest first. Each lists the lessons it covers." />
