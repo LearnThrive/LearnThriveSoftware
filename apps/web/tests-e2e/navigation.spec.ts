@@ -46,15 +46,17 @@ test('Admin navigation journey: Dashboard, People (Tutor/Student profiles), Cale
 
   await nav.getByRole('link', { name: 'Tutors' }).click();
   await expect(page).toHaveURL(/\/dashboard\/admin\/people\/tutors$/);
-  await page.getByRole('link', { name: /Tahasin Hasan/ }).click();
-  await expect(page).toHaveURL(/\/dashboard\/admin\/tutors\/.+/);
+  // The seeded tutor by its record: the team dev logins (lib/dev/accounts.ts) add two more tutors named Tahasin Hasan.
+  await page.locator('a[href="/dashboard/admin/tutors/tutor-jamie-patel"]').click();
+  await expect(page).toHaveURL(/\/dashboard\/admin\/tutors\/tutor-jamie-patel$/);
   await page.getByRole('link', { name: 'Back to tutors' }).click();
   await expect(page).toHaveURL(/\/dashboard\/admin\/people\/tutors$/);
 
   await nav.getByRole('link', { name: 'Students' }).click();
   await expect(page).toHaveURL(/\/dashboard\/admin\/people\/students$/);
-  await page.getByRole('link', { name: /Brian James Khalawon/ }).click();
-  await expect(page).toHaveURL(/\/dashboard\/admin\/students\/.+/);
+  // Likewise the seeded student: the team dev logins add a second Brian James Khalawon.
+  await page.locator('a[href="/dashboard/admin/students/student-ayaan-ahmed"]').click();
+  await expect(page).toHaveURL(/\/dashboard\/admin\/students\/student-ayaan-ahmed$/);
   await page.getByRole('link', { name: 'Back to students' }).click();
   await expect(page).toHaveURL(/\/dashboard\/admin\/people\/students$/);
 
