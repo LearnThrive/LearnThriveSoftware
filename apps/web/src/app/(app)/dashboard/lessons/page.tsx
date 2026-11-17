@@ -11,6 +11,8 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LessonList, LessonRow } from "@/components/lessons/LessonRow";
+import { SelectableLessonList } from "@/components/lessons/SelectableLessonList";
+import { cancelLessonsAction } from "@/lib/actions/lessons";
 import { FilterTabs } from "@/components/ui/FilterTabs";
 import type { Lesson } from "@learnthrive/data/domain";
 
@@ -104,6 +106,14 @@ export default async function LessonsPage({ searchParams }: { searchParams: Prom
                 <Plus size={16} aria-hidden="true" />Schedule a lesson
               </Link>
             ) : undefined}
+          />
+        ) : isAdmin ? (
+          // The administrator can tick lessons (or select all) and cancel them together.
+          <SelectableLessonList
+            rows={lessons.map((lesson) => ({ lesson, subtitle: subtitleFor(lesson) }))}
+            showRelative={filter === "upcoming"}
+            filter={filter}
+            action={cancelLessonsAction}
           />
         ) : (
           <LessonList>

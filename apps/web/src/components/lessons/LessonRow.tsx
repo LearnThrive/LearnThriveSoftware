@@ -10,14 +10,17 @@ import { formatLessonDayTime, formatRelative, formatTimeRange } from "@/lib/form
  * rule). Collapses to a stacked card on narrow screens via CSS (section 83), no separate mobile
  * component to keep in sync.
  */
-export function LessonRow({ lesson, subtitle, showRelative = false }: {
+export function LessonRow({ lesson, subtitle, showRelative = false, leading }: {
   lesson: Lesson;
+  /** A tick box ahead of the row (the administrator's bulk cancel). The row stays one link; the box is a sibling, not inside it. */
+  leading?: React.ReactNode;
   /** Who it's with — resolved by the caller, which already knows the names it needs. */
   subtitle?: string;
   showRelative?: boolean;
 }) {
   return (
-    <li className="lesson-row">
+    <li className={leading ? "lesson-row lesson-row--selectable" : "lesson-row"}>
+      {leading}
       <Link href={`/dashboard/lessons/${lesson.id}`} className="lesson-row__link">
         <span className="lesson-row__when">
           <span className="lesson-row__day">{formatLessonDayTime(lesson.startAt)}</span>

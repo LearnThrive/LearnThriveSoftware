@@ -159,3 +159,34 @@ export async function cancelLessonAction(formData: FormData): Promise<void> {
   revalidatePath(`/dashboard/lessons/${lessonId}`);
   redirect(`/dashboard/lessons/${lessonId}`);
 }
+
+const LESSON_FILTERS = ["upcoming", "needs-attention", "completed", "cancelled", "all"];
+const MAX_BULK_CANCEL = 500;
+
+/**
+ * Cancels every ticked lesson on the Lessons list (administrator only, and re-checked here: a server action is a public POST endpoint).
+ * Each one goes through the same cancelLesson as the single button, so each records who, when and why and stays on record as
+ * cancelled. A lesson that is no longer planned (already cancelled, completed) is skipped, not an error, and the count says so.
+ */
+export async function cancelLessonsAction(formData: FormData): Promise<void> {
+  const user = await requireRole(["ADMIN"]);
+  const ids = [...new Set(formData.getAll("lessonId").map(String).filter(Boolean))].slice(0, MAX_BULK_CANCEL);
+  const reason = text(formData, "reason");
+  const filter = LESSON_FILTERS.includes(text(formData, "filter")) ? text(formData, "filter") : "upcoming";
+  const back = `/dashboard/lessons?filter=${filter}`;
+  if (ids.length === 0) redirect(`${back}&toast=${encodeURIComponent("Tick the lessons to cancel first.")}`);
+
+  const data = getDataProvider();
+  let cancelled = 0;
+  for (const id of ids) {
+    const lesson = await data.lessons.get(id);
+    if (!lesson || lesson.status !== "PLANNED") continue;
+    await cancelLesson(data, id, user.id, reason || undefined);
+    cancelled += 1;
+  }
+  revalidatePath("/dashboard/lessons");
+  revalidatePath("/dashboard/calendar");
+  const skipped = ids.length - cancelled;
+  const message = `${cancelled} lesson${cancelled === 1 ? "" : "s"} cancelled${skipped > 0 ? `, ${skipped} skipped because they were not planned` : ""}`;
+  redirect(`${back}&toast=${encodeURIComponent(message)}`);
+}
