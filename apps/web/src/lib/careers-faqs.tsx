@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { assessmentText, applyByEmailHref, fileLimitsSummary, internationalTutorChecksText, suitableCertificateText } from "@/lib/careers";
+import { assessmentText, applyByEmailHref, fileLimitsSummary, internationalTutorChecksText, payText, suitableCertificateText } from "@/lib/careers";
 import { careersConfig } from "@/lib/careers-config";
 import type { FaqItem } from "@/lib/faqs";
 import { siteConfig } from "@/lib/site";
@@ -30,7 +30,7 @@ export const careersFaqs: readonly FaqItem[] = [
     question: "What is the pay, and what are the hours?",
     answer: (
       <>
-        <p>Pay is £10 an hour per student. Hours depend on student availability. Tutors are self-employed.</p>
+        <p>{payText} Hours depend on student availability. Tutors are self-employed.</p>
         <p>No formal training is currently provided. Opportunities to progress may exist later; they are still being worked out, so we cannot promise anything yet.</p>
       </>
     ),

@@ -7,7 +7,7 @@ import { siteConfig } from "@/lib/site";
  *
  * EVERY STATEMENT HERE MUST BE TRUE. The only facts used are the ones the owner has confirmed (docs/
  * CAREERS_COMPLETION_REPORT.md lists them): online one-to-one tuition; the subjects and year groups already on
- * the site; tutors are self-employed; £10 an hour per student; hours depend on student availability; no formal
+ * the site; tutors are self-employed; pay is negotiated by tutor level with the hiring team; hours depend on student availability; no formal
  * training at present; progression is being worked out; hiring is run by Tahasin Hasan and Abdurrahman
  * Mustafa; the safeguarding steps and the 5-working-day reply. Anything not confirmed is left out and marked
  * `// OWNER TO CONFIRM` where a value would go.
@@ -47,6 +47,9 @@ export interface CareerRole {
   closingDate?: string;
 }
 
+/** Pay is not a fixed rate: it depends on the tutor's level and is agreed with the two people who run hiring. Shown wherever pay is mentioned. */
+export const payText = "Pay is negotiated according to tutor level and agreed with Tahasin Hasan and Abdurrahman Mustafa.";
+
 const COMMON_LOOKING = [
   "Aged 18 or over.",
   "The right to work, including for self-employed work: in the UK, or, if you are an international tutor, in your country of residence.",
@@ -63,7 +66,7 @@ const STANDARD = {
   employmentType: "Self-employed",
   location: "Online, one to one",
   hours: "Hours depend on student availability.",
-  pay: "£10 an hour per student.",
+  pay: payText,
   niceToHave: [],
 } as const;
 
@@ -133,7 +136,7 @@ export const careerRoles: readonly CareerRole[] = [
     employmentType: "Self-employed",
     location: "Online, one to one",
     hours: "Hours depend on student availability.",
-    pay: "£10 an hour per student.",
+    pay: payText,
     summary: "Not sure which role fits? Tell us which subjects you could teach, and we will be in touch.",
     doing: [
       "Tell us which of our subjects (Maths, English, Science or 11+ preparation) you could teach, and which year groups.",
@@ -164,14 +167,14 @@ export const GENERAL_ROLE_SLUG = "register-interest";
 export const quickFacts: ReadonlyArray<{ label: string; value: string }> = [
   { label: "Where", value: "Online" },
   { label: "How you work", value: "Self-employed" },
-  { label: "Pay", value: "£10 an hour per student" },
+  { label: "Pay", value: "Negotiated by tutor level" },
   { label: "Subjects and levels", value: "Maths, English and Science from Year 1 to A Level, plus 11+ preparation" },
 ];
 
 /** What to expect, said plainly. Honest rather than persuasive. */
 export const expectations: ReadonlyArray<{ title: string; text: string }> = [
   { title: "You are self-employed", text: "You work as a self-employed tutor, not as an employee." },
-  { title: "Pay", text: "£10 an hour per student." },
+  { title: "Pay", text: payText },
   { title: "Hours", text: "Hours depend on student availability." },
   { title: "Training", text: "No formal training is currently provided." },
   {

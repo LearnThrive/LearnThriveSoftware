@@ -11,11 +11,11 @@ import { siteConfig } from "@/lib/site";
  *   - applications can actually be made online right now (`applicationsOpen`),
  *   - the owner has confirmed the date it went live (`postedDate`; the markup requires one and the page shows it).
  * Everything in the markup is on the visible page: the pay, the self-employed type, the online location and
- * the right-to-work requirement. Pay is published as given ("£10 an hour per student"): the markup carries
- * 10 GBP per hour and the page and description say "per student".
+ * the right-to-work requirement. Pay is negotiated by tutor level, so there is no fixed rate to publish: the markup carries no
+ * baseSalary (optional in Google's documentation) and the description repeats the page's own pay sentence.
  *
  * Checked against Google's job posting documentation (title, description, datePosted, hiringOrganization;
- * TELECOMMUTE with applicantLocationRequirements for a fully remote role; CONTRACTOR; baseSalary with HOUR).
+ * TELECOMMUTE with applicantLocationRequirements for a fully remote role; CONTRACTOR).
  */
 export function jobPostingData(role: CareerRole, { applicationsOpen, today }: { applicationsOpen: boolean; today: string }) {
   if (role.kind !== "vacancy" || role.status !== "open" || !applicationsOpen || !role.postedDate) return null;
@@ -41,11 +41,6 @@ export function jobPostingData(role: CareerRole, { applicationsOpen, today }: { 
     hiringOrganization: { "@type": "Organization", name: siteConfig.legalName, sameAs: siteConfig.url },
     jobLocationType: "TELECOMMUTE",
     applicantLocationRequirements: { "@type": "Country", name: "GB" },
-    baseSalary: {
-      "@type": "MonetaryAmount",
-      currency: "GBP",
-      value: { "@type": "QuantitativeValue", value: 10, unitText: "HOUR" },
-    },
     directApply: true,
     url: `${siteConfig.url}/careers/${role.slug}`,
   };

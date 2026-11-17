@@ -32,7 +32,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   if (!role) return {};
   const base = createMetadata({
     title: `${role.title}: careers`,
-    description: `${role.summary} Self-employed, ${role.pay.replace(/\.$/, "")}. ${role.hours}`,
+    description: `${role.summary} Self-employed. ${role.pay} ${role.hours}`,
     path: `/careers/${role.slug}`,
   });
   // A role that is not open is not a search result.

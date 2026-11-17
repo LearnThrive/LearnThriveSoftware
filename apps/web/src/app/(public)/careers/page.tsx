@@ -32,7 +32,7 @@ import { siteConfig, testimonials } from "@/lib/site";
 export const metadata: Metadata = createMetadata({
   title: "Careers: tutor with LearnThrive",
   description:
-    "Tutor online with LearnThrive Tuition. Self-employed, £10 an hour per student. See the open roles, how hiring works and how to apply.",
+    "Tutor online with LearnThrive Tuition. Self-employed, with pay agreed by tutor level. See the open roles, how hiring works and how to apply.",
   path: "/careers",
 });
 

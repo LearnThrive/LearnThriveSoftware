@@ -25,7 +25,7 @@ test.describe('the careers hub', () => {
 
     // The confirmed facts.
     for (const fact of [
-      '£10 an hour per student',
+      'Negotiated by tutor level',
       'Hours depend on student availability.',
       'No formal training is currently provided.',
       'Self-employed',
@@ -60,7 +60,7 @@ test.describe('the careers hub', () => {
       const card = roles.filter({ has: page.getByRole('heading', { name: title }) });
       await expect(card.getByRole('link', { name: new RegExp(`View role`) })).toHaveAttribute('href', `/careers/${slug}`);
       await expect(card.getByRole('link', { name: /^Apply/ })).toHaveAttribute('href', `/careers/apply?role=${slug}`);
-      await expect(card).toContainText('£10 an hour per student.');
+      await expect(card).toContainText('Pay is negotiated according to tutor level');
     }
   });
 
@@ -147,7 +147,7 @@ test.describe('role pages', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Maths Tutor' })).toBeVisible();
     const side = page.getByRole('complementary', { name: 'Key facts about this role' });
     await expect(side).toContainText('Self-employed');
-    await expect(side).toContainText('£10 an hour per student.');
+    await expect(side).toContainText('Pay is negotiated according to tutor level');
     await expect(side).toContainText('Hours depend on student availability.');
     await expect(side).toContainText('No formal training is currently provided.');
     await expect(page.getByRole('link', { name: 'Apply for this role' }).first()).toHaveAttribute('href', '/careers/apply?role=maths-tutor');
@@ -393,7 +393,7 @@ test.describe('the open roles layout', () => {
       const card = roles.nth(i);
       await expect(card).toContainText('Self-employed');
       await expect(card).toContainText('Online, one to one');
-      await expect(card).toContainText('£10 an hour per student.');
+      await expect(card).toContainText('Pay is negotiated according to tutor level');
       await expect(card).toContainText('Hours depend on student availability.');
       await expect(card.getByRole('link', { name: /^View role/ })).toHaveAttribute('href', /^\/careers\/[a-z0-9-]+$/);
       await expect(card.getByRole('link', { name: /^Apply/ })).toBeVisible();

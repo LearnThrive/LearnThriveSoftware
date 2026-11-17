@@ -43,11 +43,12 @@ test("there are four real vacancies and one register-your-interest option, each 
   assert.ok(openRoles().length >= openVacancies().length);
 });
 
-test("every role states the confirmed terms: self-employed, online and one to one, £10 an hour per student, hours by availability", () => {
+test("every role states the confirmed terms: self-employed, online and one to one, pay negotiated by tutor level, hours by availability", () => {
   for (const role of careerRoles) {
     assert.equal(role.employmentType, "Self-employed", role.slug);
     assert.match(role.location, /Online, one to one/, role.slug);
-    assert.equal(role.pay, "£10 an hour per student.", role.slug);
+    assert.equal(role.pay, "Pay is negotiated according to tutor level and agreed with Tahasin Hasan and Abdurrahman Mustafa.", role.slug);
+    assert.doesNotMatch(role.pay, /£/, "no fixed rate is published");
     assert.equal(role.hours, "Hours depend on student availability.", role.slug);
   }
 });
@@ -78,11 +79,10 @@ test("the posting says only what the page says", () => {
   assert.equal(posting.employmentType, "CONTRACTOR");
   assert.equal(posting.jobLocationType, "TELECOMMUTE");
   assert.equal(posting.directApply, true);
-  assert.equal(posting.baseSalary.currency, "GBP");
-  assert.equal(posting.baseSalary.value.value, 10);
-  assert.equal(posting.baseSalary.value.unitText, "HOUR");
+  assert.equal(posting.baseSalary, undefined, "pay is negotiated, so the markup claims no fixed salary");
   assert.match(posting.url, /\/careers\/maths-tutor$/);
-  assert.match(posting.description, /£10 an hour per student/);
+  assert.match(posting.description, /negotiated according to tutor level/);
+  assert.doesNotMatch(posting.description, /£/);
   assert.match(posting.description, /Hours depend on student availability/);
   assert.equal(jobPostingData(vacancy, open).validThrough, undefined, "no closing date, no validThrough");
 });

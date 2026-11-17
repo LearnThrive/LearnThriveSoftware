@@ -24,7 +24,7 @@ All of it is email-only: **no database, no file storage, no cookies or browser s
 
 | Route | What it is |
 | --- | --- |
-| `/careers` | The hub: who we are looking for, what to expect (self-employed, £10 an hour per student, hours depend on student availability, no formal training, progression being worked out), the seven hiring steps exactly as you set them, the open roles, safeguarding facts, how applications are judged, 13 applicant FAQs, and a closing call to action. Indexed, in the sitemap. |
+| `/careers` | The hub: who we are looking for, what to expect (self-employed, pay negotiated according to tutor level and agreed with Tahasin Hasan and Abdurrahman Mustafa, hours depend on student availability, no formal training, progression being worked out), the seven hiring steps exactly as you set them, the open roles, safeguarding facts, how applications are judged, 13 applicant FAQs, and a closing call to action. Indexed, in the sitemap. |
 | `/careers/[slug]` | One page per role: `maths-tutor`, `english-tutor`, `science-tutor`, `11-plus-tutor`, and `register-interest` (the general option, which is never a vacancy and never carries job-posting markup). Indexed, in the sitemap. |
 | `/careers/apply` | The one-page application in eight sections, with CV, cover letter (typed or a file) and supporting-document uploads. Not indexed. Closed until the agreement is approved. |
 | `/careers/privacy` | The applicant privacy notice: what is collected, why, who sees it, the providers (IONOS, Resend, Render), retention, rights. Indexed, in the sitemap. |
