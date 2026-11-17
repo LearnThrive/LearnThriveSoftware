@@ -11,6 +11,7 @@ import { StatusBadge } from "@/components/ui/Badge";
 import { Dialog } from "@/components/ui/Dialog";
 import { Field, FormActions } from "@/components/ui/Field";
 import { SearchInput } from "@/components/ui/SearchInput";
+import { AssignmentSubjectTutorFields } from "@/components/people/AssignmentFields";
 import { matchesQuery } from "@/lib/people/peopleHelpers";
 import { RecordList, RecordRow } from "@/components/records/RecordRow";
 
@@ -52,18 +53,12 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
               <Field label="Title" htmlFor="assignment-title" required hint="How it appears throughout the product, e.g. GCSE Mathematics — Brian.">
                 <input id="assignment-title" name="title" required autoComplete="off" />
               </Field>
-              <Field label="Subject" htmlFor="assignment-subject" required>
-                <input id="assignment-subject" name="subject" required autoComplete="off" />
-              </Field>
+              {/* Inactive tutors are not offered: that includes the archived "Former tutor" row a purge uses for history (0018). */}
+              <AssignmentSubjectTutorFields
+                tutors={tutors.filter((tutor) => tutor.active).map((tutor) => ({ id: tutor.id, name: tutor.name, subjects: tutor.subjects }))}
+              />
               <Field label="Level" htmlFor="assignment-level" hint="For example GCSE or A-Level.">
                 <input id="assignment-level" name="level" autoComplete="off" />
-              </Field>
-              <Field label="Tutor" htmlFor="assignment-tutor" required>
-                <select id="assignment-tutor" name="tutorId" required defaultValue="">
-                  <option value="" disabled>Choose a tutor</option>
-                  {/* Inactive tutors are not offered: that includes the archived "Former tutor" row a purge uses for history (0018). */}
-                  {tutors.filter((tutor) => tutor.active).map((tutor) => <option key={tutor.id} value={tutor.id}>{tutor.name}</option>)}
-                </select>
               </Field>
               <Field label="Student(s)" htmlFor="assignment-students" required hint="Hold Ctrl or Cmd to choose more than one.">
                 <select id="assignment-students" name="studentIds" multiple required size={Math.min(6, Math.max(3, students.length))}>

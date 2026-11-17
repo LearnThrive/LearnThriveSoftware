@@ -27,6 +27,11 @@ export default async function ChildrenPage() {
     lessonBucketsFor(data, user),
   ]);
   const tutorNames = new Map((await data.tutors.list()).map((tutor) => [tutor.id, tutor.name]));
+  // Who teaches what comes from the assignment an administrator made, so it shows the moment the student is assigned, before any lesson is
+  // booked. Only the subject, the tutor's name and whether it is paused are shown from it.
+  const assignmentsByStudent = new Map(await Promise.all(students.map(async (student) => (
+    [student.id, (await data.assignments.forStudent(student.id)).filter((assignment) => assignment.status !== "ENDED")] as const
+  ))));
 
   return (
     <>
@@ -52,6 +57,9 @@ export default async function ChildrenPage() {
             const tutors = [...new Set(
               buckets.all.filter((lesson) => lesson.studentIds.includes(student.id)).map((lesson) => tutorNames.get(lesson.tutorId)),
             )].filter(Boolean).join(", ");
+            const assigned = (assignmentsByStudent.get(student.id) ?? []).map((assignment) =>
+              `${assignment.subject} with ${tutorNames.get(assignment.tutorId) ?? "your tutor"}${assignment.status === "PAUSED" ? " (paused)" : ""}`,
+            );
 
             return (
               <Card key={student.id}>
@@ -65,7 +73,7 @@ export default async function ChildrenPage() {
                       </span>
                     </span>
                   }
-                  description={tutors ? `Taught by ${tutors}` : "No tutor assigned yet"}
+                  description={assigned.length > 0 ? assigned.join(" · ") : tutors ? `Taught by ${tutors}` : "No tutor assigned yet"}
                   action={
                     <>
                       <Link href={`/dashboard/progress/${student.id}`} className="btn btn--secondary">See progress</Link>

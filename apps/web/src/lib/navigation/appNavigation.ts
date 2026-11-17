@@ -86,6 +86,7 @@ const TUTOR_NAV: AppNavSection[] = [
     title: "You",
     items: [
       { label: "Availability", href: "/dashboard/tutor/availability", icon: "availability" },
+      { label: "My subjects", href: "/dashboard/tutor/subjects", icon: "lessons" },
       { label: "Notifications", href: "/dashboard/notifications", icon: "notifications" },
       { label: "Raise a concern", href: "/dashboard/concerns", icon: "activity" },
       { label: "Settings", href: "/dashboard/settings", icon: "settings" },
@@ -99,6 +100,7 @@ const ADMIN_TEACHING: AppNavSection = {
   items: [
     { label: "My students", href: "/dashboard/students", icon: "students" },
     { label: "Availability", href: "/dashboard/tutor/availability", icon: "availability" },
+    { label: "My subjects", href: "/dashboard/tutor/subjects", icon: "lessons" },
   ],
 };
 

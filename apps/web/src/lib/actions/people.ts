@@ -7,6 +7,7 @@ import { getDataProvider } from "@/lib/data/provider";
 import { mirrorStudent } from "@/lib/dev/memoryMirror";
 import { requireRole } from "@/lib/auth/guard";
 import { studentCorrection, tutorCorrection } from "@/lib/people/corrections";
+import { canonicalSubject, tutorTeaches } from "@/lib/subjects";
 
 function text(formData: FormData, key: string): string {
   const value = formData.get(key);
@@ -66,8 +67,18 @@ export async function createAssignmentAction(formData: FormData): Promise<void> 
   if (!title || !subject || !tutorId || studentIds.length === 0) {
     throw new Error("Title, subject, tutor, and at least one student are required.");
   }
+  // The subject is one of ours (the form offers a list) and the tutor must teach it: tutors pick their own subjects, so an assignment
+  // never pairs a tutor with a subject they have not said they teach (lib/subjects.ts).
+  const canonical = canonicalSubject(subject);
+  const back = "/dashboard/admin/assignments";
+  if (!canonical) redirect(`${back}?toast=${encodeURIComponent("Choose one of the listed subjects.")}`);
 
   const data = getDataProvider();
+  const tutor = await data.tutors.get(tutorId);
+  if (!tutor) redirect(`${back}?toast=${encodeURIComponent("That tutor no longer exists.")}`);
+  if (!tutorTeaches(tutor.subjects, canonical)) {
+    redirect(`${back}?toast=${encodeURIComponent(`${tutor.name} does not teach ${canonical}. Choose another tutor, or add the subject on their page.`)}`);
+  }
   // clientIds is derived from the selected students' own linked clients, not entered
   // separately — an assignment's clients are exactly whoever pays for the students on it.
   const clientIdSet = new Set<string>();
@@ -77,7 +88,7 @@ export async function createAssignmentAction(formData: FormData): Promise<void> 
   }
 
   await data.assignments.create({
-    title, subject, tutorId, studentIds,
+    title, subject: canonical, tutorId, studentIds,
     clientIds: [...clientIdSet],
     status: "ACTIVE",
     ...(level ? { level } : {}),

@@ -50,7 +50,7 @@ test('a new Tuition Assignment appears in the list and on the Tutor profile', as
   await page.goto('/dashboard/admin/assignments');
   await page.getByRole('button', { name: 'Create assignment' }).click();
   await page.getByLabel('Title').fill('Year 8 Science — Brian');
-  await page.getByLabel('Subject').fill('Science');
+  await page.getByLabel('Subject').selectOption('Maths');
   await page.getByLabel('Tutor').selectOption({ label: 'Tahasin Hasan' });
   await page.getByLabel('Student(s)').selectOption({ label: 'Brian James Khalawon' });
   await page.getByRole('dialog').getByRole('button', { name: 'Create assignment' }).click();
