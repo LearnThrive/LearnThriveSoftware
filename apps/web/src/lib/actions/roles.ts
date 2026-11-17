@@ -14,9 +14,11 @@ import { changeRolesFor } from "@/lib/roles/handlers";
 export async function changeRolesAction(formData: FormData): Promise<void> {
   const admin = await requirePermission("roles.assign");
   const rt = await accountRuntime();
-  const back = (message: string): never => redirect(`/dashboard/admin/roles?toast=${encodeURIComponent(message)}`);
-  if (!rt) return back("Accounts are not available on this server.");
   const profileId = formData.get("profileId");
+  // Back to the same person, so the screen stays on whoever was just changed (the id only fills a URL; the handler validates it).
+  const person = typeof profileId === "string" && /^[A-Za-z0-9_-]{1,80}$/.test(profileId) ? `person=${encodeURIComponent(profileId)}&` : "";
+  const back = (message: string): never => redirect(`/dashboard/admin/roles?${person}toast=${encodeURIComponent(message)}`);
+  if (!rt) return back("Accounts are not available on this server.");
   const result = await changeRolesFor(admin, { profileId, roles: formData.getAll("roles") }, rt.store.accounts);
   revalidatePath("/dashboard/admin/roles");
   return back(result.body.ok ? "Roles saved." : result.body.message);

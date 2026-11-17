@@ -11,7 +11,7 @@ import { isWithinJoinWindow, JOIN_WINDOW_MINUTES } from "@/lib/scheduling/joinWi
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Card, CardBody } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { FilterTabs } from "@/components/ui/FilterTabs";
+import { SearchSelect } from "@/components/ui/SearchSelect";
 import { CalendarView, type CalendarLesson } from "@/components/CalendarView";
 
 export const metadata: Metadata = createMetadata({
@@ -76,14 +76,22 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       />
 
       {isAdmin && tutors.length > 1 && (
-        <FilterTabs
+        // A searchable dropdown, not a tab per tutor: a row of tabs stops being usable as the tutor list grows.
+        <SearchSelect
           basePath="/dashboard/calendar"
           param="tutor"
-          current={tutorFilter}
-          options={[
-            { value: "all", label: "All tutors" },
-            ...tutors.map((t) => ({ value: t.id, label: t.name })),
-          ]}
+          value={tutorFilter}
+          caption="Viewing"
+          placeholder="All tutors"
+          searchLabel="Find a tutor…"
+          all={{ label: "All tutors", count: allLessons.length }}
+          options={tutors
+            .map((t) => ({ t, count: allLessons.filter((lesson) => lesson.tutorId === t.id).length }))
+            // A former tutor (archived, inactive) is listed only while they still have lessons on the calendar.
+            .filter(({ t, count }) => t.active || count > 0)
+            .sort((a, b) => a.t.name.localeCompare(b.t.name))
+            // What they teach is the second line: it also tells two people with the same name apart.
+            .map(({ t, count }) => ({ id: t.id, name: t.name, sub: t.subjects.length > 0 ? t.subjects.join(", ") : "No subjects listed", count }))}
         />
       )}
 
