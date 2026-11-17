@@ -7,6 +7,8 @@ const nextConfig: NextConfig = {
   // the first. Unset, nothing changes.
   distDir: process.env.NEXT_DIST_DIR || ".next",
   poweredByHeader: false,
+  // Development only: Next's dev-tools button sits bottom-left by default, on top of the dashboard sidebar's expand toggle.
+  devIndicators: { position: "bottom-right" },
   // LearnThrive AI's document reader: a native module (@napi-rs/canvas loads a platform binary) and pdf.js, which loads its own worker
   // and font data at run time. Bundling breaks both, so the server requires them from node_modules as they are.
   serverExternalPackages: ["@napi-rs/canvas", "pdfjs-dist", "jpeg-js", "pngjs"],
