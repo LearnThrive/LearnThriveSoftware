@@ -44,10 +44,9 @@ export function generateRecurrenceOccurrences(
 ): Date[] {
   const firstWall = utcToZonedWallClock(firstOccurrenceUtc, timeZone);
   const firstWeekday = weekdayInZone(firstOccurrenceUtc, timeZone);
-  const targetWeekdays = new Set(
-    rule.frequency === "CUSTOM_WEEKDAYS" ? (rule.weekdays?.length ? rule.weekdays : [firstWeekday]) : [firstWeekday],
-  );
-  const weekCadence = rule.frequency === "BIWEEKLY" ? 2 : 1;
+  const targetWeekdays = new Set(rule.weekdays?.length ? rule.weekdays : [firstWeekday]);
+  // Every N weeks: an explicit interval wins; otherwise BIWEEKLY is 2 and everything else 1. Clamped so a bad value cannot stall the loop.
+  const weekCadence = Math.min(12, Math.max(1, Math.floor(rule.intervalWeeks ?? (rule.frequency === "BIWEEKLY" ? 2 : 1))));
 
   const maxOccurrences = Math.min(rule.endAfterOccurrences ?? DEFAULT_MAX_OCCURRENCES, HARD_MAX_OCCURRENCES);
   const endDate = rule.endDate ? parseIsoDate(rule.endDate) : null;

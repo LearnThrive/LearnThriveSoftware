@@ -5,6 +5,9 @@ import { AlertTriangle } from "lucide-react";
 import { Field, FieldSet, FormActions } from "@/components/ui/Field";
 import { formatLessonDateTime } from "@/lib/format";
 import { createLessonAction, type CreateLessonState } from "@/lib/actions/lessons";
+import { splitDuration } from "@/lib/scheduling/duration";
+
+const WEEKDAYS = [["1", "Mon"], ["2", "Tue"], ["3", "Wed"], ["4", "Thu"], ["5", "Fri"], ["6", "Sat"], ["0", "Sun"]] as const;
 
 interface AssignmentOption {
   id: string;
@@ -40,6 +43,7 @@ export function LessonForm({ assignments }: { assignments: AssignmentOption[] })
   }
 
   const v = state.values;
+  const defaultLength = splitDuration(60);
 
   return (
     <form action={formAction} className="form form--stacked" key={remountKey}>
@@ -74,6 +78,14 @@ export function LessonForm({ assignments }: { assignments: AssignmentOption[] })
             if (assignment && titleInput && !titleInput.value) titleInput.value = assignment.title;
             if (assignment && subjectInput) subjectInput.value = assignment.subject;
             if (assignment?.defaultLocationType) setLocationType(assignment.defaultLocationType);
+            if (assignment?.defaultDurationMinutes) {
+              // The assignment carries a usual length: fill the two length boxes from it (still editable).
+              const length = splitDuration(assignment.defaultDurationMinutes);
+              const hours = document.getElementById("lesson-duration-hours") as HTMLInputElement | null;
+              const minutes = document.getElementById("lesson-duration-minutes") as HTMLInputElement | null;
+              if (hours) hours.value = String(length.hours);
+              if (minutes) minutes.value = String(length.minutes);
+            }
           }}>
             <option value="" disabled>Choose a Tuition Assignment</option>
             {assignments.map((a) => <option key={a.id} value={a.id}>{a.title}</option>)}
@@ -95,8 +107,13 @@ export function LessonForm({ assignments }: { assignments: AssignmentOption[] })
           <Field label="Start time" htmlFor="lesson-time" required>
             <input id="lesson-time" name="time" type="time" required defaultValue={v?.time ?? ""} />
           </Field>
-          <Field label="Duration (minutes)" htmlFor="lesson-duration" required>
-            <input id="lesson-duration" name="durationMinutes" type="number" min={15} step={15} defaultValue={v?.durationMinutes ?? "60"} required />
+        </div>
+        <div className="field-row">
+          <Field label="Length: hours" htmlFor="lesson-duration-hours" required hint="For example 1 hour 30 minutes is 1 and 30.">
+            <input id="lesson-duration-hours" name="durationHours" type="number" min={0} max={8} step={1} inputMode="numeric" required defaultValue={v ? v.durationHours : String(defaultLength.hours)} />
+          </Field>
+          <Field label="Length: minutes" htmlFor="lesson-duration-minutes" required hint="Any number of minutes, 5 minutes to 8 hours in all.">
+            <input id="lesson-duration-minutes" name="durationExtra" type="number" min={0} max={59} step={1} inputMode="numeric" required defaultValue={v ? v.durationExtra : String(defaultLength.minutes)} />
           </Field>
         </div>
 
@@ -105,11 +122,31 @@ export function LessonForm({ assignments }: { assignments: AssignmentOption[] })
             <option value="NONE">Does not repeat</option>
             <option value="WEEKLY">Weekly</option>
             <option value="BIWEEKLY">Every two weeks</option>
+            <option value="CUSTOM">Custom: every few weeks, on days I choose</option>
           </select>
         </Field>
+        {frequency === "CUSTOM" && (
+          <>
+            <Field label="Repeat every (weeks)" htmlFor="lesson-interval" required hint="1 is every week, 3 is every third week, up to 12.">
+              <input id="lesson-interval" name="intervalWeeks" type="number" min={1} max={12} step={1} inputMode="numeric" defaultValue={v?.intervalWeeks || "1"} required />
+            </Field>
+            <fieldset className="field">
+              <legend className="field__label">On these days<span className="field__required" aria-hidden="true">*</span></legend>
+              <div className="field-row">
+                {WEEKDAYS.map(([value, label]) => (
+                  <label key={value} className="checkbox-row">
+                    <input type="checkbox" name="weekdays" value={value} defaultChecked={v?.weekdays?.includes(value) ?? false} />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="field__hint">The first lesson is the first chosen day on or after the date above, at the time above.</p>
+            </fieldset>
+          </>
+        )}
         {frequency !== "NONE" && (
           <div className="field-row">
-            <Field label="End after N occurrences" htmlFor="lesson-end-after" hint="Leave both blank for an open-ended series.">
+            <Field label="End after N occurrences" htmlFor="lesson-end-after" hint="Leave both blank and 52 lessons are created (104 at most).">
               <input id="lesson-end-after" name="endAfterOccurrences" type="number" min={1} max={104} placeholder="e.g. 10" defaultValue={v?.endAfterOccurrences ?? ""} />
             </Field>
             <Field label="Or end on date" htmlFor="lesson-end-date">

@@ -104,3 +104,33 @@ test("recurrence: the first occurrence is always included and is exactly the giv
   assert.equal(occurrences.length, 1);
   assert.equal(occurrences[0].getTime(), first.getTime());
 });
+
+// Tahasin sets the timetable: "every N weeks" and "these weekdays" as well as weekly and fortnightly. 6 October 2025 is a Monday.
+const localDates = (dates) => dates.map((d) => { const w = utcToZonedWallClock(d, LONDON); return `${w.year}-${String(w.month).padStart(2, "0")}-${String(w.day).padStart(2, "0")} ${String(w.hour).padStart(2, "0")}:${String(w.minute).padStart(2, "0")}`; });
+const mondayFive = zonedTimeToUtc({ year: 2025, month: 10, day: 6, hour: 17, minute: 0 }, LONDON);
+
+test("recurrence: every 3 weeks keeps the weekday and the local time across the clock change", () => {
+  const out = generateRecurrenceOccurrences(mondayFive, { frequency: "WEEKLY", intervalWeeks: 3, endAfterOccurrences: 3 }, LONDON);
+  assert.deepEqual(localDates(out), ["2025-10-06 17:00", "2025-10-27 17:00", "2025-11-17 17:00"]);
+});
+
+test("recurrence: chosen weekdays with a two-week interval (Monday and Thursday, every other week)", () => {
+  const out = generateRecurrenceOccurrences(mondayFive, { frequency: "WEEKLY", intervalWeeks: 2, weekdays: [1, 4], endAfterOccurrences: 4 }, LONDON);
+  assert.deepEqual(localDates(out), ["2025-10-06 17:00", "2025-10-09 17:00", "2025-10-20 17:00", "2025-10-23 17:00"]);
+});
+
+test("recurrence: weekdays alone repeat weekly, and the old BIWEEKLY and CUSTOM_WEEKDAYS rules mean what they did", () => {
+  assert.deepEqual(localDates(generateRecurrenceOccurrences(mondayFive, { frequency: "WEEKLY", weekdays: [1, 3], endAfterOccurrences: 4 }, LONDON)),
+    ["2025-10-06 17:00", "2025-10-08 17:00", "2025-10-13 17:00", "2025-10-15 17:00"]);
+  assert.deepEqual(localDates(generateRecurrenceOccurrences(mondayFive, { frequency: "BIWEEKLY", endAfterOccurrences: 3 }, LONDON)),
+    ["2025-10-06 17:00", "2025-10-20 17:00", "2025-11-03 17:00"]);
+  assert.deepEqual(localDates(generateRecurrenceOccurrences(mondayFive, { frequency: "CUSTOM_WEEKDAYS", weekdays: [1, 4], endAfterOccurrences: 3 }, LONDON)),
+    ["2025-10-06 17:00", "2025-10-09 17:00", "2025-10-13 17:00"]);
+});
+
+test("recurrence: an end date stops a custom series, and a silly interval is clamped rather than stalling", () => {
+  const out = generateRecurrenceOccurrences(mondayFive, { frequency: "WEEKLY", intervalWeeks: 2, endDate: "2025-11-03" }, LONDON);
+  assert.deepEqual(localDates(out), ["2025-10-06 17:00", "2025-10-20 17:00", "2025-11-03 17:00"]);
+  assert.equal(generateRecurrenceOccurrences(mondayFive, { frequency: "WEEKLY", intervalWeeks: 0, endAfterOccurrences: 2 }, LONDON).length, 2, "0 weeks is treated as 1");
+  assert.equal(generateRecurrenceOccurrences(mondayFive, { frequency: "WEEKLY", intervalWeeks: 99, endAfterOccurrences: 2 }, LONDON).length, 2, "99 weeks is clamped to 12");
+});

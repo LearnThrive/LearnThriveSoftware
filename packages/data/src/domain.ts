@@ -83,10 +83,12 @@ export type RecurrenceFrequency = "WEEKLY" | "BIWEEKLY" | "CUSTOM_WEEKDAYS";
 // This and future / Entire series" edit model — a virtual/computed series can't support that.
 export interface RecurrenceInput {
   frequency: RecurrenceFrequency;
-  // 0 (Sunday) - 6 (Saturday), in the scheduling timezone. Required (and the sole driver of
-  // which weekdays repeat) for CUSTOM_WEEKDAYS; for WEEKLY/BIWEEKLY it's derived from the first
-  // occurrence's own weekday, so it isn't needed there.
+  // 0 (Sunday) - 6 (Saturday), in the scheduling timezone. When given it decides which weekdays repeat, for any frequency (so
+  // "Monday and Thursday, every second week" is WEEKLY with intervalWeeks 2 and weekdays [1, 4]). Required for CUSTOM_WEEKDAYS; when
+  // absent the first occurrence's own weekday repeats.
   weekdays?: number[];
+  // Repeat every N weeks (1 to 12), counted from the first occurrence's week. Absent means 1, or 2 for BIWEEKLY.
+  intervalWeeks?: number;
   endAfterOccurrences?: number;
   endDate?: string; // ISO date (yyyy-mm-dd), inclusive, in the scheduling timezone
 }

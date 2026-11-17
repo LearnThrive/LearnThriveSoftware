@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/ui/Badge";
 import { formatLongDate, formatRelative, formatTimeRange } from "@/lib/format";
 import { rescheduleLessonAction, cancelLessonAction } from "@/lib/actions/lessons";
 import { LEARNTHRIVE_DEFAULT_TIMEZONE, utcToZonedWallClock, zonedTimeToUtc } from "@/lib/scheduling/timezone";
+import { splitDuration } from "@/lib/scheduling/duration";
 
 export interface PeekLesson {
   id: string;
@@ -111,7 +112,7 @@ export function LessonPeekPanel({ lesson, onClose }: { lesson: PeekLesson; onClo
               {lesson.canManage && lesson.status === "PLANNED" && (
                 <div className="lesson-peek__manage">
                   <button type="button" className="btn btn--ghost btn--sm" onClick={() => setMode("reschedule")}>
-                    <CalendarClock size={15} aria-hidden="true" />Reschedule
+                    <CalendarClock size={15} aria-hidden="true" />Change time or length
                   </button>
                   <button type="button" className="btn btn--danger btn--sm" onClick={() => setMode("cancel")}>
                     Cancel lesson
@@ -135,6 +136,16 @@ export function LessonPeekPanel({ lesson, onClose }: { lesson: PeekLesson; onClo
               <div className="field">
                 <label className="field__label" htmlFor="peek-time">Time</label>
                 <input id="peek-time" name="time" type="time" defaultValue={startLocal.time} required onChange={() => setError(null)} />
+              </div>
+            </div>
+            <div className="field-row">
+              <div className="field">
+                <label className="field__label" htmlFor="peek-hours">Length: hours</label>
+                <input id="peek-hours" name="durationHours" type="number" min={0} max={8} step={1} inputMode="numeric" defaultValue={splitDuration(lesson.durationMinutes).hours} onChange={() => setError(null)} />
+              </div>
+              <div className="field">
+                <label className="field__label" htmlFor="peek-minutes">Length: minutes</label>
+                <input id="peek-minutes" name="durationExtra" type="number" min={0} max={59} step={1} inputMode="numeric" defaultValue={splitDuration(lesson.durationMinutes).minutes} onChange={() => setError(null)} />
               </div>
             </div>
             {/* rescheduleLessonAction takes a single UTC instant, not separate date/time fields —
@@ -176,7 +187,7 @@ export function LessonPeekPanel({ lesson, onClose }: { lesson: PeekLesson; onClo
                   if (date && time && hidden) hidden.value = localLondonToUtcIso(date, time);
                 }}
               >
-                {pending ? "Saving…" : "Save new time"}
+                {pending ? "Saving…" : "Save changes"}
               </button>
             </div>
           </form>

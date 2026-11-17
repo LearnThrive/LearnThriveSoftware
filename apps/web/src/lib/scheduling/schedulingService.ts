@@ -1,6 +1,7 @@
 import type { DataProvider } from "@learnthrive/data/repositories";
 import type { Lesson, LocationType, RecurrenceInput, TuitionAssignment } from "@learnthrive/data/domain";
 import { generateRecurrenceOccurrences } from "./recurrence";
+import { formatDuration } from "./duration";
 import { formatInTimeZone, LEARNTHRIVE_DEFAULT_TIMEZONE } from "./timezone";
 import { logActivity } from "@/lib/activity/activityService";
 import { notifyProfiles } from "@/lib/notifications/notificationService";
@@ -101,6 +102,8 @@ export async function rescheduleLesson(
   newStartAt: string,
   scope: RescheduleScope,
   actorId?: string,
+  /** A new length in minutes for the same lessons (the admin changed "how long", not only "when"). Omitted: lengths stay as they are. */
+  newDurationMinutes?: number,
 ): Promise<Lesson[]> {
   const lesson = await data.lessons.get(lessonId);
   if (!lesson) throw new Error(`Lesson ${lessonId} not found`);
@@ -108,10 +111,16 @@ export async function rescheduleLesson(
   // "Changed from Tuesday 17:00 to Thursday 18:00" (plan section 65) — recorded once per
   // request, against the lesson the Admin actually edited, even when the change cascades to
   // other occurrences in the series.
-  const changeMessage = `Rescheduled from ${formatInTimeZone(lesson.startAt, LEARNTHRIVE_DEFAULT_TIMEZONE, { weekday: "long", hour: "2-digit", minute: "2-digit" })} to ${formatInTimeZone(newStartAt, LEARNTHRIVE_DEFAULT_TIMEZONE, { weekday: "long", hour: "2-digit", minute: "2-digit" })}`;
+  const lengthChanged = newDurationMinutes !== undefined && newDurationMinutes !== lesson.durationMinutes;
+  // To the minute: the side panel's time box has no seconds, so a lesson whose stored time has some is not "moved" by saving a new length.
+  const timeChanged = Math.floor(new Date(newStartAt).getTime() / 60_000) !== Math.floor(new Date(lesson.startAt).getTime() / 60_000);
+  const lengthPatch = lengthChanged ? { durationMinutes: newDurationMinutes } : {};
+  const timeMessage = `Rescheduled from ${formatInTimeZone(lesson.startAt, LEARNTHRIVE_DEFAULT_TIMEZONE, { weekday: "long", hour: "2-digit", minute: "2-digit" })} to ${formatInTimeZone(newStartAt, LEARNTHRIVE_DEFAULT_TIMEZONE, { weekday: "long", hour: "2-digit", minute: "2-digit" })}`;
+  const lengthMessage = lengthChanged ? `Length changed from ${formatDuration(lesson.durationMinutes)} to ${formatDuration(newDurationMinutes)}` : "";
+  const changeMessage = [timeChanged ? timeMessage : "", lengthMessage].filter(Boolean).join(". ") || timeMessage;
 
   if (scope === "THIS_ONLY" || !lesson.recurrenceId) {
-    const updated = await data.lessons.update(lessonId, { startAt: newStartAt });
+    const updated = await data.lessons.update(lessonId, { startAt: newStartAt, ...lengthPatch });
     await logActivity(data, lessonId, "RESCHEDULED", changeMessage, actorId);
     await notifyProfiles(data, lesson.clientIds, "LESSON_RESCHEDULED", `${lesson.title}: ${changeMessage}`, `/dashboard/lessons/${lessonId}`);
     return [updated];
@@ -124,7 +133,7 @@ export async function rescheduleLesson(
   const updated: Lesson[] = [];
   for (const target of targets) {
     const shifted = new Date(new Date(target.startAt).getTime() + deltaMs).toISOString();
-    updated.push(await data.lessons.update(target.id, { startAt: shifted }));
+    updated.push(await data.lessons.update(target.id, { startAt: shifted, ...lengthPatch }));
   }
   await logActivity(data, lessonId, "RESCHEDULED", `${changeMessage} (${scope === "ENTIRE_SERIES" ? "entire series" : "this and future lessons"})`, actorId);
   await notifyProfiles(data, lesson.clientIds, "LESSON_RESCHEDULED", `${lesson.title}: ${changeMessage} (${scope === "ENTIRE_SERIES" ? "entire series" : "this and future lessons"})`, `/dashboard/lessons/${lessonId}`);

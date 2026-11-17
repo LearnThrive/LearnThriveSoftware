@@ -8,6 +8,7 @@ import { cancelLesson, createLessonOrSeries, detectConflicts, rescheduleLesson, 
 import { zonedTimeToUtc } from "@/lib/scheduling/timezone";
 import { notifyRole } from "@/lib/notifications/notificationService";
 import type { RecurrenceFrequency } from "@learnthrive/data/domain";
+import { parseDuration } from "@/lib/scheduling/duration";
 
 function text(formData: FormData, key: string): string {
   const value = formData.get(key);
@@ -16,8 +17,10 @@ function text(formData: FormData, key: string): string {
 
 export interface CreateLessonFieldValues {
   assignmentId: string; title: string; subject: string; date: string; time: string;
-  durationMinutes: string; locationType: string; location: string; notes: string;
+  durationHours: string; durationExtra: string; locationType: string; location: string; notes: string;
   reportRequired: boolean; frequency: string; endAfterOccurrences: string; endDate: string;
+  /** "Repeat every N weeks" and the weekdays (0 Sunday to 6 Saturday), for the custom repeat. */
+  intervalWeeks: string; weekdays: string[];
 }
 
 export interface CreateLessonState {
@@ -41,7 +44,11 @@ export async function createLessonAction(_prevState: CreateLessonState, formData
   const subject = text(formData, "subject");
   const dateStr = text(formData, "date"); // yyyy-mm-dd
   const timeStr = text(formData, "time"); // HH:mm
-  const durationMinutes = Number(text(formData, "durationMinutes") || "60");
+  // The length is hours and minutes (two boxes). A plain "durationMinutes" is still understood, for anything that posts the older field.
+  const durationHours = text(formData, "durationHours");
+  const durationExtra = text(formData, "durationExtra");
+  const legacyMinutes = text(formData, "durationMinutes");
+  const duration = legacyMinutes && !durationHours && !durationExtra ? parseDuration("0", legacyMinutes) : parseDuration(durationHours, durationExtra);
   const locationType = text(formData, "locationType") === "IN_PERSON" ? "IN_PERSON" as const : "ONLINE" as const;
   const location = text(formData, "location");
   const notes = text(formData, "notes");
@@ -51,16 +58,21 @@ export async function createLessonAction(_prevState: CreateLessonState, formData
   const frequency = text(formData, "frequency");
   const endAfterOccurrences = text(formData, "endAfterOccurrences");
   const endDate = text(formData, "endDate");
+  const intervalWeeksText = text(formData, "intervalWeeks");
+  const weekdayValues = formData.getAll("weekdays").map(String);
 
   const values: CreateLessonFieldValues = {
     assignmentId, title, subject, date: dateStr, time: timeStr,
-    durationMinutes: text(formData, "durationMinutes"), locationType, location, notes,
+    durationHours, durationExtra, locationType, location, notes,
     reportRequired, frequency: frequency || "NONE", endAfterOccurrences, endDate,
+    intervalWeeks: intervalWeeksText, weekdays: weekdayValues,
   };
 
   if (!assignmentId || !title || !subject || !dateStr || !timeStr) {
     return { error: "Assignment, title, subject, date, and time are all required.", values };
   }
+  if (!duration.ok) return { error: duration.message, values };
+  const durationMinutes = duration.minutes;
   const assignment = await data.assignments.get(assignmentId);
   if (!assignment) return { error: "That Tuition Assignment no longer exists.", values };
   // A paused (for example an overdue family) or ended assignment gets no new lessons until it is resumed.
@@ -70,13 +82,21 @@ export async function createLessonAction(_prevState: CreateLessonState, formData
   const [hour, minute] = timeStr.split(":").map(Number);
   const startAt = zonedTimeToUtc({ year, month, day, hour, minute }, "Europe/London").toISOString();
 
-  const recurrence = frequency && frequency !== "NONE"
-    ? {
-        frequency: frequency as RecurrenceFrequency,
-        ...(endAfterOccurrences ? { endAfterOccurrences: Number(endAfterOccurrences) } : {}),
-        ...(endDate ? { endDate } : {}),
-      }
-    : undefined;
+  // How it repeats: not at all, every week, every two weeks, or a custom pattern (every N weeks, on the days chosen).
+  const endAfter = endAfterOccurrences ? Number(endAfterOccurrences) : undefined;
+  if (frequency && frequency !== "NONE" && endAfter !== undefined && (!Number.isInteger(endAfter) || endAfter < 1 || endAfter > 104)) {
+    return { error: "End after a whole number of lessons, from 1 to 104.", values };
+  }
+  let recurrence: { frequency: RecurrenceFrequency; weekdays?: number[]; intervalWeeks?: number; endAfterOccurrences?: number; endDate?: string } | undefined;
+  if (frequency === "CUSTOM") {
+    const intervalWeeks = Number(intervalWeeksText || "1");
+    const weekdays = [...new Set(weekdayValues.map(Number).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))].sort((a, b) => a - b);
+    if (!Number.isInteger(intervalWeeks) || intervalWeeks < 1 || intervalWeeks > 12) return { error: "Repeat every a whole number of weeks, from 1 to 12.", values };
+    if (weekdays.length === 0) return { error: "Choose at least one day of the week for the repeat.", values };
+    recurrence = { frequency: "CUSTOM_WEEKDAYS", weekdays, intervalWeeks, ...(endAfter ? { endAfterOccurrences: endAfter } : {}), ...(endDate ? { endDate } : {}) };
+  } else if (frequency === "WEEKLY" || frequency === "BIWEEKLY") {
+    recurrence = { frequency, ...(endAfter ? { endAfterOccurrences: endAfter } : {}), ...(endDate ? { endDate } : {}) };
+  }
 
   const conflicts = await detectConflicts(data, {
     tutorId: assignment.tutorId, studentIds: assignment.studentIds, startAt, durationMinutes,
@@ -112,7 +132,17 @@ export async function rescheduleLessonAction(formData: FormData): Promise<void> 
   const lesson = await data.lessons.get(lessonId);
   if (!lesson) throw new Error("Lesson not found.");
 
-  await rescheduleLesson(data, lessonId, newStartAtIso, scope, user.id);
+  // The side panel can also change the length (hours and minutes). The calendar's drag-to-move sends neither box, and leaves lengths alone.
+  const hours = text(formData, "durationHours");
+  const extra = text(formData, "durationExtra");
+  let newDurationMinutes: number | undefined;
+  if (hours !== "" || extra !== "") {
+    const parsed = parseDuration(hours, extra);
+    if (!parsed.ok) throw new Error(parsed.message);
+    newDurationMinutes = parsed.minutes;
+  }
+
+  await rescheduleLesson(data, lessonId, newStartAtIso, scope, user.id, newDurationMinutes);
   revalidatePath("/dashboard/calendar");
   revalidatePath(`/dashboard/lessons/${lessonId}`);
 }

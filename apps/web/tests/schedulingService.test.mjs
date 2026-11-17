@@ -163,3 +163,60 @@ test("cancelLesson: records who/when/why and marks CANCELLED without deleting th
   const stillThere = await data.lessons.get(lesson.id);
   assert.ok(stillThere, "cancelling must not delete the lesson row");
 });
+
+test("createLessonOrSeries: a custom series (every 2 weeks, Monday and Thursday) makes real rows with the chosen length", async () => {
+  const data = getDataProvider();
+  const assignment = await freshAssignment(data);
+  const lessons = await createLessonOrSeries(data, {
+    assignment, title: assignment.title, subject: assignment.subject,
+    startAt: "2025-10-06T16:00:00.000Z", durationMinutes: 90, locationType: "ONLINE", reportRequired: true,
+    recurrence: { frequency: "CUSTOM_WEEKDAYS", weekdays: [1, 4], intervalWeeks: 2, endAfterOccurrences: 4 },
+  });
+  assert.deepEqual(lessons.map((l) => l.startAt.slice(0, 10)), ["2025-10-06", "2025-10-09", "2025-10-20", "2025-10-23"]);
+  assert.ok(lessons.every((l) => l.durationMinutes === 90 && l.recurrenceId === lessons[0].recurrenceId));
+});
+
+test("rescheduleLesson: a new length alone changes the length and not the time, for one lesson or the whole series", async () => {
+  const data = getDataProvider();
+  const assignment = await freshAssignment(data);
+  const series = await createLessonOrSeries(data, {
+    assignment, title: assignment.title, subject: assignment.subject,
+    startAt: "2025-10-06T16:00:00.000Z", durationMinutes: 60, locationType: "ONLINE", reportRequired: true,
+    recurrence: { frequency: "WEEKLY", endAfterOccurrences: 3 },
+  });
+  await rescheduleLesson(data, series[1].id, series[1].startAt, "THIS_ONLY", undefined, 90);
+  const afterOne = await data.lessons.forRecurrence(series[0].recurrenceId);
+  assert.deepEqual(afterOne.map((l) => l.durationMinutes), [60, 90, 60], "only the chosen lesson is longer");
+  assert.deepEqual(afterOne.map((l) => l.startAt), series.map((l) => l.startAt), "no time moved");
+
+  await rescheduleLesson(data, series[0].id, series[0].startAt, "ENTIRE_SERIES", undefined, 45);
+  const afterAll = await data.lessons.forRecurrence(series[0].recurrenceId);
+  assert.ok(afterAll.every((l) => l.durationMinutes === 45), "the whole series is now 45 minutes");
+});
+
+test("rescheduleLesson: moving a lesson without naming a length leaves its length alone", async () => {
+  const data = getDataProvider();
+  const assignment = await freshAssignment(data);
+  const [lesson] = await createLessonOrSeries(data, {
+    assignment, title: assignment.title, subject: assignment.subject,
+    startAt: "2025-10-06T16:00:00.000Z", durationMinutes: 75, locationType: "ONLINE", reportRequired: true,
+  });
+  const [moved] = await rescheduleLesson(data, lesson.id, "2025-10-07T16:00:00.000Z", "THIS_ONLY");
+  assert.equal(moved.durationMinutes, 75);
+  assert.equal(moved.startAt, "2025-10-07T16:00:00.000Z");
+});
+
+test("rescheduleLesson: saving only a new length is logged as a length change, not as a move to the same time", async () => {
+  const data = getDataProvider();
+  const assignment = await freshAssignment(data);
+  const [lesson] = await createLessonOrSeries(data, {
+    assignment, title: assignment.title, subject: assignment.subject,
+    startAt: "2025-10-06T16:00:37.000Z", durationMinutes: 60, locationType: "ONLINE", reportRequired: true,
+  });
+  // the panel's time box has no seconds
+  await rescheduleLesson(data, lesson.id, "2025-10-06T16:00:00.000Z", "THIS_ONLY", undefined, 75);
+  const log = await data.activity.forLesson(lesson.id);
+  const message = log.map((entry) => entry.message).find((m) => /Length changed/.test(m));
+  assert.ok(message, "a length change is recorded");
+  assert.ok(!/Rescheduled/.test(message), "and it is not described as a reschedule");
+});
