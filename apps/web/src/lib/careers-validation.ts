@@ -295,7 +295,7 @@ export function validateApplication(f: ApplicationFields, context: ValidationCon
   }
   if (!f.privateSpace) e.privateSpace = "Tick the box to confirm you can teach from a quiet, private space with reliable internet, a working camera and a working microphone.";
   if (!f.rightToWork) e.rightToWork = "Choose an option.";
-  else if (f.rightToWork === "no") e.rightToWork = "You need the right to work in the UK, including for self-employed work, to tutor with LearnThrive. If you are not sure, choose “Not sure”.";
+  else if (f.rightToWork === "no") e.rightToWork = "You need the right to work, including for self-employed work, to tutor with LearnThrive: in the UK, or in your country of residence if you live abroad. If you are not sure, choose “Not sure”.";
   else if (!RIGHT_TO_WORK_CHOICES.some((choice) => choice.value === f.rightToWork)) e.rightToWork = "Choose from the options listed.";
   for (const key of ["dbsCertificate", "dbsUpdateService"] as const) {
     if (f[key] && !DBS_STATUS_CHOICES.some((choice) => choice.value === f[key])) e[key] = "Choose from the options listed.";

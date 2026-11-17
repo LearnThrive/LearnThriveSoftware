@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { assessmentText, applyByEmailHref, fileLimitsSummary, suitableCertificateText } from "@/lib/careers";
+import { assessmentText, applyByEmailHref, fileLimitsSummary, internationalTutorChecksText, suitableCertificateText } from "@/lib/careers";
 import { careersConfig } from "@/lib/careers-config";
 import type { FaqItem } from "@/lib/faqs";
 import { siteConfig } from "@/lib/site";
@@ -18,10 +18,10 @@ export const careersFaqs: readonly FaqItem[] = [
     answer: (
       <>
         <p>
-          You must be {careersConfig.minimumAge} or over, have the right to work in the UK (including for self-employed work), and be
+          You must be {careersConfig.minimumAge} or over, have the right to work, including for self-employed work (in the UK, or in your country of residence if you are an international tutor), and be
           confident in the subject you want to teach.
         </p>
-        <p>We teach online and one to one, in Maths, English and Science from Year 3 to A Level, and in 11+ preparation.</p>
+        <p>We teach online and one to one, in Maths, English and Science from Year 1 to A Level, and in 11+ preparation.</p>
       </>
     ),
   },
@@ -108,6 +108,7 @@ export const careersFaqs: readonly FaqItem[] = [
           Any start is subject to the outcome.
         </p>
         <p>{suitableCertificateText}</p>
+        <p>{internationalTutorChecksText}</p>
         <p>The application asks only whether you hold a certificate and whether you use the Update Service. Please do not upload a certificate or send any DBS information through the form.</p>
       </>
     ),

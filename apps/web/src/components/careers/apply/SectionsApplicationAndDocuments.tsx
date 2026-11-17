@@ -90,7 +90,7 @@ export function SupportingDocuments({ items, errors, totalBytes, totalError, onA
         </p>
         <p>
           Only upload what is needed, and do not send bank details, health information or anything else personal. We use identity and right-to-work
-          documents to verify who you are and that you can work in the UK. The hiring team handles them. If you work with LearnThrive they are kept
+          documents to verify who you are and that you have the right to work, in the UK or in your country of residence. The hiring team handles them. If you work with LearnThrive they are kept
           while you do and for 12 months after, so you do not have to start again if you return, then deleted; if your application is unsuccessful they
           are deleted {careersConfig.unsuccessfulRetentionMonths} months after the decision.
         </p>

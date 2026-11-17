@@ -99,7 +99,7 @@ export default function CareersPage() {
             <p className="eyebrow">The work</p>
             <h2 id="work-heading">Online, one to one</h2>
             <p>
-              Lessons are online and one to one. You would teach learners from Year 3 to A Level in Maths, English or Science, or help pupils
+              Lessons are online and one to one. You would teach learners from Year 1 to A Level in Maths, English or Science, or help pupils
               prepare for the 11+, in the subject you are confident in.
             </p>
           </Reveal>

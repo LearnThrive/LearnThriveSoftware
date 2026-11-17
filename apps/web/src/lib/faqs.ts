@@ -103,7 +103,7 @@ export const faqSections: readonly FaqSection[] = [
         id: "stages-supported",
         question: "Which school stages are supported?",
         answer:
-          "Maths, English and Science support is available from KS2 to A Level. LearnThrive also offers separate 11+ preparation for pupils working towards relevant entrance assessments.",
+          "Maths, English and Science support is available from Year 1 to A Level. LearnThrive also offers separate 11+ preparation for pupils working towards relevant entrance assessments.",
       },
       {
         id: "eleven-plus",

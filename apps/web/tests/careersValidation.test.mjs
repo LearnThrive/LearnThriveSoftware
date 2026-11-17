@@ -57,7 +57,7 @@ test("the applicant must confirm they are 18 or over", () => {
 test("the right to work in the UK: yes and not sure continue, no is stopped with an explanation", () => {
   assert.equal(errors({ rightToWork: "yes" }).rightToWork, undefined);
   assert.equal(errors({ rightToWork: "not-sure" }).rightToWork, undefined);
-  assert.match(errors({ rightToWork: "no" }).rightToWork, /right to work in the UK/);
+  assert.match(errors({ rightToWork: "no" }).rightToWork, /You need the right to work/);
   assert.ok(errors({ rightToWork: "maybe" }).rightToWork);
 });
 
@@ -151,7 +151,7 @@ test("parseApplication drops unknown keys, repairs wrong types and removes line 
 
 test("the choices offered match what the server accepts", () => {
   assert.deepEqual([...v.SUBJECT_CHOICES], ["Maths", "English", "Science", "11+ Preparation"]);
-  assert.equal(v.YEAR_GROUP_CHOICES[0], "Year 3");
+  assert.equal(v.YEAR_GROUP_CHOICES[0], "Year 1");
   assert.equal(v.YEAR_GROUP_CHOICES.at(-1), "Year 13");
-  assert.equal(v.YEAR_GROUP_CHOICES.length, 11);
+  assert.equal(v.YEAR_GROUP_CHOICES.length, 13);
 });

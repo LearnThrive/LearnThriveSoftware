@@ -49,7 +49,7 @@ export interface CareerRole {
 
 const COMMON_LOOKING = [
   "Aged 18 or over.",
-  "The right to work in the UK, including for self-employed work.",
+  "The right to work, including for self-employed work: in the UK, or, if you are an international tutor, in your country of residence.",
   "A quiet, private space to teach from, with reliable internet, a working camera and a working microphone.",
   "Willingness to read and agree to the safeguarding agreement as part of your application, and to agree to an Enhanced DBS check including the Children’s Barred List.",
 ] as const;
@@ -73,12 +73,12 @@ export const careerRoles: readonly CareerRole[] = [
     slug: "maths-tutor",
     title: "Maths Tutor",
     subject: "Maths",
-    yearGroups: "Year 3 to A Level",
-    summary: "Teach Maths online, one to one, to learners from Year 3 to A Level.",
+    yearGroups: "Year 1 to A Level",
+    summary: "Teach Maths online, one to one, to learners from Year 1 to A Level.",
     doing: [
-      "Teach online, one-to-one Maths lessons for learners from Year 3 to A Level.",
+      "Teach online, one-to-one Maths lessons for learners from Year 1 to A Level.",
       "Build secure understanding, clearer methods and confidence, shaped around each learner.",
-      "Work on the topics and questions in front of the learner, from number skills at Key Stage 2 to GCSE and A Level Maths.",
+      "Work on the topics and questions in front of the learner, from early number skills in Primary to GCSE and A Level Maths.",
     ],
     looking: ["Confidence in Maths at the levels you want to teach.", ...COMMON_LOOKING],
   },
@@ -87,10 +87,10 @@ export const careerRoles: readonly CareerRole[] = [
     slug: "english-tutor",
     title: "English Tutor",
     subject: "English",
-    yearGroups: "Year 3 to A Level",
-    summary: "Teach English online, one to one, to learners from Year 3 to A Level.",
+    yearGroups: "Year 1 to A Level",
+    summary: "Teach English online, one to one, to learners from Year 1 to A Level.",
     doing: [
-      "Teach online, one-to-one English lessons for learners from Year 3 to A Level.",
+      "Teach online, one-to-one English lessons for learners from Year 1 to A Level.",
       "Support reading, writing, communication and confidence, shaped around each learner.",
       "Work on the skills in front of the learner, from comprehension and grammar to analysis and essay writing.",
     ],
@@ -101,10 +101,10 @@ export const careerRoles: readonly CareerRole[] = [
     slug: "science-tutor",
     title: "Science Tutor",
     subject: "Science",
-    yearGroups: "Year 3 to A Level",
-    summary: "Teach Science online, one to one, to learners from Year 3 to A Level.",
+    yearGroups: "Year 1 to A Level",
+    summary: "Teach Science online, one to one, to learners from Year 1 to A Level.",
     doing: [
-      "Teach online, one-to-one Science lessons for learners from Year 3 to A Level.",
+      "Teach online, one-to-one Science lessons for learners from Year 1 to A Level.",
       "Make scientific ideas easier to understand and apply across Biology, Chemistry and Physics, according to the learner’s stage.",
       "Work on the concepts and questions in front of the learner, from foundations to GCSE and A Level.",
     ],
@@ -129,7 +129,7 @@ export const careerRoles: readonly CareerRole[] = [
     kind: "general",
     status: "open",
     subject: "Any of our subjects",
-    yearGroups: "Year 3 to A Level",
+    yearGroups: "Year 1 to A Level",
     employmentType: "Self-employed",
     location: "Online, one to one",
     hours: "Hours depend on student availability.",
@@ -165,7 +165,7 @@ export const quickFacts: ReadonlyArray<{ label: string; value: string }> = [
   { label: "Where", value: "Online" },
   { label: "How you work", value: "Self-employed" },
   { label: "Pay", value: "£10 an hour per student" },
-  { label: "Subjects and levels", value: "Maths, English and Science from Year 3 to A Level, plus 11+ preparation" },
+  { label: "Subjects and levels", value: "Maths, English and Science from Year 1 to A Level, plus 11+ preparation" },
 ];
 
 /** What to expect, said plainly. Honest rather than persuasive. */
@@ -189,11 +189,16 @@ export const assessmentText =
 /** Confirmed by the owner: the safeguarding lead and the deputy. Named in the agreement, the FAQ and the safeguarding page. */
 export const safeguardingTeam = { lead: "Tahasin Hasan", deputy: "Abdurrahman Mustafa" } as const;
 
+/** International tutors: the owners' rule, shown in the careers FAQ and on the safeguarding page. */
+export const internationalTutorChecksText =
+  "International tutors who wish to work with LearnThrive must pay for a UK Enhanced DBS check including the Children’s Barred List, as well as the equivalent check in their country of residence or their home country.";
+
 /** The safeguarding facts that are confirmed, always shown. */
 export const confirmedSafeguardingFacts: readonly string[] = [
   `Our safeguarding lead is ${safeguardingTeam.lead} and our deputy safeguarding lead is ${safeguardingTeam.deputy}.`,
   "Every applicant must read and agree to the safeguarding agreement as part of applying.",
   "Every tutor must agree to an Enhanced DBS check including the Children’s Barred List. Tutors pay for their own check to begin with, unless they already hold a suitable certificate. LearnThrive may reimburse the cost at a later date, subject to approval.",
+  internationalTutorChecksText,
   "No tutor teaches any student, or has any contact with one, until every check is complete.",
   "Tutors reconfirm the safeguarding agreement every year, and whenever a new version is issued.",
 ];

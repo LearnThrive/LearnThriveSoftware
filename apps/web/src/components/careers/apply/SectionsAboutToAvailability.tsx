@@ -173,7 +173,7 @@ export function AvailabilityAndSetup({ values, set, errors, today }: SectionProp
       />
       <RadioGroup
         name="rightToWork"
-        legend="Are you legally able to work in the UK, including for self-employed work?"
+        legend="Are you legally able to work in the UK, including for self-employed work? If you live outside the UK, answer for the country where you live."
         options={RIGHT_TO_WORK_CHOICES.map((choice) => ({ value: choice.value, label: choice.label }))}
         value={values.rightToWork}
         onChange={(v) => set("rightToWork", v)}

@@ -64,10 +64,10 @@ const subjectCards: {
     title: "Maths",
     subject: "maths",
     slug: "maths-tuition",
-    description: "From number confidence at KS2 to calculus, statistics and mechanics at A-Level.",
+    description: "From early number confidence to calculus, statistics and mechanics at A-Level.",
     image: "/images/subject-maths.jpg",
     imageAlt: "Maths equations being worked through on a whiteboard",
-    range: "KS2 – A-LEVEL",
+    range: "YEAR 1 – A-LEVEL",
   },
   {
     title: "English",
@@ -76,7 +76,7 @@ const subjectCards: {
     description: "Reading, writing and analysis that build clear, confident communicators.",
     image: "/images/subject-english.jpg",
     imageAlt: "Student reading and taking notes on a text",
-    range: "KS2 – A-LEVEL",
+    range: "YEAR 1 – A-LEVEL",
   },
   {
     title: "Science",
@@ -85,7 +85,7 @@ const subjectCards: {
     description: "Biology, chemistry and physics — curious, hands-on and clearly explained.",
     image: "/images/subject-science.jpg",
     imageAlt: "Children carrying out a science experiment in class",
-    range: "KS2 – A-LEVEL",
+    range: "YEAR 1 – A-LEVEL",
   },
   {
     title: "11+ Preparation",
@@ -255,7 +255,7 @@ export default function HomePage() {
         <Reveal variant="mask">
           <div className={styles.subjectsSectionHeader}>
             <h2>Four subjects, every stage</h2>
-            <span className={styles.subjectsSectionRange}>KS2 &rarr; A-LEVEL</span>
+            <span className={styles.subjectsSectionRange}>YEAR 1 &rarr; A-LEVEL</span>
           </div>
         </Reveal>
         <div className={styles.subjectsGrid}>

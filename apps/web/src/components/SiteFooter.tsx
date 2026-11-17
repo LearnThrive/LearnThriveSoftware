@@ -5,7 +5,6 @@ import { PhoneContacts } from "@/components/PhoneContacts";
 import { MotionToggle } from "@/components/MotionToggle";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Reveal } from "@/components/motion/primitives/Reveal";
-import { PORTAL_ENABLED } from "@/lib/portal";
 import { siteConfig, subjects } from "@/lib/site";
 
 // Kept "Privacy" ahead of the requested Cookies/Website Terms/Tuition Terms/Safeguarding/
@@ -114,14 +113,6 @@ export function SiteFooter() {
                   LinkedIn<span className="sr-only"> (opens in a new tab)</span>
                 </a>
               </div>
-              {PORTAL_ENABLED ? (
-                <Link
-                  className="footer-login"
-                  href={siteConfig.tutorLoginUrl}
-                >
-                  Tutor login
-                </Link>
-              ) : null}
             </div>
           </div>
           <div className="footer-bottom">

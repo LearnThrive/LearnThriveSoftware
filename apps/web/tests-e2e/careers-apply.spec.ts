@@ -238,7 +238,7 @@ test.describe('completing and sending it', () => {
     await page.goto('/careers/apply');
     await group(page, /Are you legally able to work in the UK/).getByRole('radio', { name: 'No', exact: true }).check();
     await submit(page).click();
-    await expect(page.locator('#field-rightToWork-error')).toContainText('You need the right to work in the UK');
+    await expect(page.locator('#field-rightToWork-error')).toContainText('You need the right to work');
     await group(page, /Are you legally able to work in the UK/).getByRole('radio', { name: 'Not sure', exact: true }).check();
     await expect(page.locator('#field-rightToWork-error')).toHaveCount(0);
   });

@@ -71,7 +71,7 @@ export default function CareersPrivacyPage() {
                 <li>the role and subjects you are applying for, and your availability;</li>
                 <li>your qualifications and results at GCSE, A Level and degree level, your experience, and your answers to our short questions;</li>
                 <li>your CV, your cover letter if you send one, and any supporting documents you choose to upload;</li>
-                <li>whether you are {careersConfig.minimumAge} or over, whether you can work in the UK, and whether you hold an Enhanced DBS certificate and use the Update Service;</li>
+                <li>whether you are {careersConfig.minimumAge} or over, whether you have the right to work (in the UK, or in your country of residence), and whether you hold an Enhanced DBS certificate and use the Update Service;</li>
                 <li>the record of the safeguarding agreement: the version, the name you typed, which parts you confirmed, that you passed the short questions, and when we received it.</li>
               </ul>
               <p>

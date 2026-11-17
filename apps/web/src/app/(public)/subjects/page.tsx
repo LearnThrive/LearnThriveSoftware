@@ -22,7 +22,7 @@ import { motionStagger, staggerDelay } from "@/lib/motion/tokens";
 export const metadata: Metadata = createMetadata({
   title: "Subjects We Cover",
   description:
-    "Maths, English, Science and 11+ preparation — supported from Key Stage 2 through to A-Level. See what LearnThrive Tuition covers at each stage.",
+    "Maths, English, Science and 11+ preparation — supported from Year 1 through to A-Level. See what LearnThrive Tuition covers at each stage.",
   path: "/subjects",
 });
 
@@ -31,7 +31,7 @@ const marqueeItems = [
   "ENGLISH",
   "SCIENCE",
   "11+ PREPARATION",
-  "KEY STAGE 2 → A-LEVEL",
+  "YEAR 1 → A-LEVEL",
 ];
 
 const jumpLinks = [
@@ -63,14 +63,14 @@ const subjects: SubjectSection[] = [
   {
     id: "maths",
     title: "Maths",
-    range: "Key Stage 2 → A-Level",
+    range: "Year 1 → A-Level",
     description:
       "We help students build strong mathematical understanding from an early age — turning confusion into confidence, and confidence into results.",
     image: "/images/subject-maths.jpg",
     imageAlt: "Maths equations being worked through on a whiteboard",
     icon: "calculator",
     levels: [
-      { name: "Key Stage 2", text: "Strengthening number skills and problem-solving confidence through creativity and clarity." },
+      { name: "Primary (Years 1–6)", text: "Strengthening number skills and problem-solving confidence through creativity and clarity." },
       { name: "Key Stage 3", text: "Making maths logical and engaging, building confidence in algebra, geometry and reasoning." },
       { name: "GCSE", text: "Simplifying complex topics, approaching every question strategically, and building lasting exam confidence." },
       { name: "A-Level", text: "Mastering calculus, statistics and mechanics, with the analytical precision needed for STEM and university.", dark: true },
@@ -79,7 +79,7 @@ const subjects: SubjectSection[] = [
   {
     id: "english",
     title: "English",
-    range: "Key Stage 2 → A-Level",
+    range: "Year 1 → A-Level",
     description:
       "Our English tutoring develops clear, confident communicators and thoughtful readers — at every stage of the journey.",
     image: "/images/subject-english.jpg",
@@ -87,7 +87,7 @@ const subjects: SubjectSection[] = [
     reverse: true,
     icon: "book",
     levels: [
-      { name: "Key Stage 2", text: "Building imagination, grammar and vocabulary through fun, creative writing and comprehension." },
+      { name: "Primary (Years 1–6)", text: "Building imagination, grammar and vocabulary through fun, creative writing and comprehension." },
       { name: "Key Stage 3", text: "Shifting the focus to structure, analysis and fluent expression, ready for GCSE." },
       { name: "GCSE", text: "Refining language analysis and essay writing to approach exams with clarity and confidence." },
       { name: "A-Level", text: "Exploring complex literary texts and themes, crafting sophisticated, nuanced essays for university-level study.", dark: true },
@@ -96,14 +96,14 @@ const subjects: SubjectSection[] = [
   {
     id: "science",
     title: "Science",
-    range: "Key Stage 2 → A-Level",
+    range: "Year 1 → A-Level",
     description:
       "We bring science to life through curiosity, clarity and hands-on learning — then go deep where it counts.",
     image: "/images/subject-science.jpg",
     imageAlt: "Children carrying out a science experiment in class",
     icon: "flask",
     levels: [
-      { name: "Key Stage 2", text: "Exploring the world around them and discovering how things work." },
+      { name: "Primary (Years 1–6)", text: "Exploring the world around them and discovering how things work." },
       { name: "Key Stage 3", text: "Building understanding across biology, chemistry and physics through structured, enjoyable lessons." },
       {
         name: "GCSE",
@@ -165,7 +165,7 @@ export default function SubjectsPage() {
           </span>
         </h1>
         <p className={styles.heroLead}>
-          Maths, English and Science from Key Stage 2 through to A-Level,
+          Maths, English and Science from Year 1 through to A-Level,
           plus dedicated 11+ preparation. Here&apos;s how the support grows
           with your child at each stage.
         </p>
@@ -195,10 +195,9 @@ export default function SubjectsPage() {
               <path d="M12 11v5M12 8h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
             <p>
-              Just starting out? We also support{" "}
-              <strong style={{ color: "var(--fg-strong)" }}>early years and Key Stage 1 (Year 1&ndash;2)</strong>.
-              The stages below begin at Key Stage 2 &mdash; for younger learners,{" "}
-              <Link href="/#enquire">get in touch</Link> and we&apos;ll tailor
+              Just starting out? Our Primary support begins in{" "}
+              <strong style={{ color: "var(--fg-strong)" }}>Year 1</strong>. Not sure where your child fits?{" "}
+              <Link href="/#enquire">Get in touch</Link> and we&apos;ll tailor
               sessions to where your child is.
             </p>
           </div>

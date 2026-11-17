@@ -94,7 +94,7 @@ export const careersConfig = {
     { title: "Apply online", text: "Fill in the application, including reading and agreeing to the safeguarding agreement." },
     { title: "We review your application", text: "The team reviews your CV, your experience and your results." },
     { title: "We contact you", text: "We get in touch about next steps." },
-    { title: "Identity and right-to-work checks", text: "We check who you are and that you can work in the UK." },
+    { title: "Identity and right-to-work checks", text: "We check who you are and that you have the right to work, in the UK or in your country of residence." },
     { title: "Enhanced DBS check", text: "An Enhanced DBS check including the Children’s Barred List, arranged by LearnThrive." },
     { title: "You sign the tutor agreement", text: "It includes the safeguarding expectations you agreed to when you applied." },
     { title: "You start teaching", text: "Once every check is complete. No tutor teaches any student before then." },

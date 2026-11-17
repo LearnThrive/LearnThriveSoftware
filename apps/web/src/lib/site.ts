@@ -17,7 +17,7 @@ export const siteConfig = {
     },
   ],
   description:
-    "Personalised online tuition in Maths, English and Science from KS2 to A Level, plus 11+ preparation.",
+    "Personalised online tuition in Maths, English and Science from Year 1 to A Level, plus 11+ preparation.",
   social: {
     instagram: "https://www.instagram.com/learnthrivetuition/",
     linkedin: "https://www.linkedin.com/company/learnthrive-tuition/",
@@ -185,22 +185,22 @@ export const subjectLandingPages: Record<
   maths: {
     slug: "maths",
     title: "Maths",
-    stage: "KS2 to A Level",
+    stage: "Year 1 to A Level",
     icon: "maths",
     summary:
       "Build secure understanding, sharper problem-solving and the confidence to approach unfamiliar questions.",
     detail:
-      "Support develops from number skills and reasoning at KS2 through algebra, geometry and exam technique at KS3 and GCSE. At A Level, lessons can cover advanced areas including calculus, statistics and mechanics.",
+      "Support develops from number skills and reasoning in Primary (Years 1–6) through algebra, geometry and exam technique at KS3 and GCSE. At A Level, lessons can cover advanced areas including calculus, statistics and mechanics.",
     focus: ["Core understanding", "Problem-solving", "Exam confidence"],
     path: "/maths-tuition",
     ctaLabel: "Explore Maths Tuition",
     seo: {
       title: "Online Maths Tuition",
       description:
-        "Personalised one-to-one online Maths tuition from KS2 to A Level, with clear explanations and focused support shaped around each learner.",
+        "Personalised one-to-one online Maths tuition from Year 1 to A Level, with clear explanations and focused support shaped around each learner.",
     },
     hero: {
-      eyebrow: "Online Maths tuition · KS2 to A Level",
+      eyebrow: "Online Maths tuition · Year 1 to A Level",
       title: "Personalised Maths Tuition",
       intro:
         "One-to-one online Maths tuition shaped around the learner’s current understanding, areas of difficulty and academic priorities. Clear explanations and focused practice give students time to work through concepts at an appropriate pace.",
@@ -243,7 +243,7 @@ export const subjectLandingPages: Record<
       itemLabel: "Stage",
       items: [
         {
-          title: "KS2",
+          title: "Primary (Years 1–6)",
           text: "Strengthen number skills, arithmetic, fractions and mathematical reasoning, with clear support around core concepts and problem-solving.",
         },
         {
@@ -291,7 +291,7 @@ export const subjectLandingPages: Record<
   english: {
     slug: "english",
     title: "English",
-    stage: "KS2 to A Level",
+    stage: "Year 1 to A Level",
     icon: "english",
     summary:
       "Become a more confident reader, writer and communicator through clear, purposeful teaching.",
@@ -303,10 +303,10 @@ export const subjectLandingPages: Record<
     seo: {
       title: "Online English Tuition",
       description:
-        "Personalised one-to-one online English tuition from KS2 to A Level, supporting reading, writing, communication and confidence.",
+        "Personalised one-to-one online English tuition from Year 1 to A Level, supporting reading, writing, communication and confidence.",
     },
     hero: {
-      eyebrow: "Online English tuition · KS2 to A Level",
+      eyebrow: "Online English tuition · Year 1 to A Level",
       title: "Personalised English Tuition",
       intro:
         "Personalised English lessons take place online and one-to-one, adapting to the student’s reading, writing and communication needs. Tuition can strengthen comprehension, develop clearer written expression and build confidence with the work they meet at school.",
@@ -349,7 +349,7 @@ export const subjectLandingPages: Record<
       itemLabel: "Stage",
       items: [
         {
-          title: "KS2",
+          title: "Primary (Years 1–6)",
           text: "Strengthen comprehension, vocabulary, grammar and purposeful writing while building confidence with English.",
         },
         {
@@ -397,7 +397,7 @@ export const subjectLandingPages: Record<
   science: {
     slug: "science",
     title: "Science",
-    stage: "KS2 to A Level",
+    stage: "Year 1 to A Level",
     icon: "science",
     summary:
       "Make scientific ideas easier to understand and apply across biology, chemistry and physics.",
@@ -409,10 +409,10 @@ export const subjectLandingPages: Record<
     seo: {
       title: "Online Science Tuition",
       description:
-        "Personalised one-to-one online Science tuition from KS2 to A Level, helping students understand concepts and apply scientific reasoning.",
+        "Personalised one-to-one online Science tuition from Year 1 to A Level, helping students understand concepts and apply scientific reasoning.",
     },
     hero: {
-      eyebrow: "Online Science tuition · KS2 to A Level",
+      eyebrow: "Online Science tuition · Year 1 to A Level",
       title: "Personalised Science Tuition",
       intro:
         "Clear, structured explanations are central to one-to-one online Science tuition, making difficult ideas easier to understand. Support connects key concepts with questions, reasoning and the student’s current priorities.",
@@ -455,7 +455,7 @@ export const subjectLandingPages: Record<
       itemLabel: "Stage",
       items: [
         {
-          title: "KS2",
+          title: "Primary (Years 1–6)",
           text: "Build foundational scientific understanding and confidence explaining core ideas in clear terms.",
         },
         {
@@ -698,6 +698,8 @@ export const values: Array<{
 ];
 
 export const yearGroups = [
+  "Year 1",
+  "Year 2",
   "Year 3",
   "Year 4",
   "Year 5",

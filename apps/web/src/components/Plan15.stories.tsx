@@ -48,7 +48,7 @@ const COMMANDS: PaletteCommand[] = [
   { id: "p1", title: "Home", group: "Pages", href: "/", hint: "/" },
   { id: "p2", title: "About", group: "Pages", href: "/about", hint: "/about" },
   { id: "p3", title: "Safeguarding", group: "Pages", href: "/safeguarding", keywords: ["dbs", "safe"] },
-  { id: "s1", title: "Maths tuition", group: "Subjects", href: "/maths-tuition", hint: "KS2 to A Level" },
+  { id: "s1", title: "Maths tuition", group: "Subjects", href: "/maths-tuition", hint: "Year 1 to A Level" },
   { id: "a1", title: "Send an enquiry", group: "Actions", href: "/book" },
   { id: "t1", title: "Switch to the dark theme", group: "Appearance", run: () => undefined },
 ];

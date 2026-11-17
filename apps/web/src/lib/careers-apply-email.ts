@@ -92,7 +92,7 @@ export function applicationSections(input: ApplicationEmailInput): Section[] {
         ["Hours a week", f.hoursPerWeek],
         ["Earliest start date", f.startDate],
         ["Private space, internet, camera and microphone", yes(f.privateSpace)],
-        ["Right to work in the UK (including self-employed work)", labelOf(RIGHT_TO_WORK_CHOICES, f.rightToWork)],
+        ["Right to work in the UK, or in the country of residence for an international tutor (including self-employed work)", labelOf(RIGHT_TO_WORK_CHOICES, f.rightToWork)],
         ["Holds an Enhanced DBS certificate including the Children’s Barred List", labelOf(DBS_STATUS_CHOICES, f.dbsCertificate)],
         ["Subscribed to the DBS Update Service", labelOf(DBS_STATUS_CHOICES, f.dbsUpdateService)],
       ],

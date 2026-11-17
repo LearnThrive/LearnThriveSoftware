@@ -3695,13 +3695,6 @@ img[src*="%2Fimages%2F"] {
   margin-top: 0.8rem;
 }
 
-.footer-login {
-  width: fit-content;
-  margin-top: 0.45rem;
-  color: var(--fg-accent-on-inverse) !important;
-  font-weight: 700;
-}
-
 .footer-bottom {
   display: flex;
   align-items: center;

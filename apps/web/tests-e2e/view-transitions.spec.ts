@@ -12,7 +12,7 @@ import { test, expect } from '@playwright/test';
 test.describe('subject card -> subject page transition', () => {
   test('direct click navigates and the destination page is immediately interactive', async ({ page }) => {
     await page.goto('/');
-    await page.locator('#subjects').getByRole('link', { name: /Maths.*KS2.*A-LEVEL/ }).click();
+    await page.locator('#subjects').getByRole('link', { name: /Maths.*YEAR 1.*A-LEVEL/ }).click();
     await expect(page).toHaveURL(/\/maths-tuition$/);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     // Immediately clickable — the actual regression this task guards against.
@@ -22,7 +22,7 @@ test.describe('subject card -> subject page transition', () => {
 
   test('browser back returns to the homepage in a normal, interactive state', async ({ page }) => {
     await page.goto('/');
-    await page.locator('#subjects').getByRole('link', { name: /English.*KS2.*A-LEVEL/ }).click();
+    await page.locator('#subjects').getByRole('link', { name: /English.*YEAR 1.*A-LEVEL/ }).click();
     await expect(page).toHaveURL(/\/english-tuition$/);
 
     await page.goBack();
@@ -34,7 +34,7 @@ test.describe('subject card -> subject page transition', () => {
 
   test('keyboard activation (Enter on a focused card) navigates correctly', async ({ page }) => {
     await page.goto('/');
-    const card = page.locator('#subjects').getByRole('link', { name: /Science.*KS2.*A-LEVEL/ });
+    const card = page.locator('#subjects').getByRole('link', { name: /Science.*YEAR 1.*A-LEVEL/ });
     await card.focus();
     await expect(card).toBeFocused();
     await page.keyboard.press('Enter');
@@ -49,7 +49,7 @@ test.describe('subject card -> subject page transition', () => {
     // the realistic version of "repeated clicks", and it exercises the same in-flight-transition
     // path without that unrelated race.
     await page.goto('/');
-    const card = page.locator('#subjects').getByRole('link', { name: /Maths.*KS2.*A-LEVEL/ });
+    const card = page.locator('#subjects').getByRole('link', { name: /Maths.*YEAR 1.*A-LEVEL/ });
     await card.dblclick();
     await expect(page).toHaveURL(/\/maths-tuition$/);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
@@ -67,7 +67,7 @@ test.describe('subject card -> subject page transition', () => {
       });
       page.on('pageerror', (err) => errors.push(String(err)));
       await page.goto('/');
-      await page.locator('#subjects').getByRole('link', { name: /Maths.*KS2.*A-LEVEL/ }).click();
+      await page.locator('#subjects').getByRole('link', { name: /Maths.*YEAR 1.*A-LEVEL/ }).click();
       await expect(page).toHaveURL(/\/maths-tuition$/);
       await page.waitForTimeout(400); // let any transition fully settle
       expect(errors, `console/page errors (reduced=${reduced}): ${JSON.stringify(errors, null, 2)}`).toEqual([]);

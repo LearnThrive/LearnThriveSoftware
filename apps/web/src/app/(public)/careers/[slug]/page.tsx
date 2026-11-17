@@ -189,7 +189,7 @@ export default async function RolePage({ params }: { params: Promise<{ slug: str
                 </div>
               ) : null}
             </dl>
-            <p style={{ fontSize: "0.9rem" }}>No formal training is currently provided. You need the right to work in the UK, including for self-employed work.</p>
+            <p style={{ fontSize: "0.9rem" }}>No formal training is currently provided. You need the right to work, including for self-employed work: in the UK, or in your country of residence if you are an international tutor.</p>
             {isOpen ? <ApplyLink slug={role.slug} open={open} label={open ? "Apply for this role" : "Apply by email"} /> : null}
             <p style={{ fontSize: "0.9rem" }}>
               Questions? <a href={`mailto:${siteConfig.email}`}>{siteConfig.email}</a>
