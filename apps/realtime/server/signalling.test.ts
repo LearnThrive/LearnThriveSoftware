@@ -1554,7 +1554,8 @@ describe('chat in a staff meeting versus a lesson, with the lesson chat gate on'
     const client: Client = io(url, { transports: ['websocket'], reconnection: false });
     clients.push(client);
     await new Promise<void>((resolve, reject) => { client.once('connect', () => resolve()); client.once('connect_error', reject); });
-    client.emit('room:join', { token, media });
+    // The token decides the room, name and role; the type still asks for these, and the server ignores them when a token is present.
+    client.emit('room:join', { roomId: 'ignored-by-the-server', name: 'Ignored', role: 'student', media, token });
     await new Promise<JoinedRoom>((resolve) => client.once('room:joined', resolve));
     return client;
   }
