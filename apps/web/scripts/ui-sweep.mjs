@@ -200,11 +200,14 @@ try {
           })).catch(() => ({}));
           let axe;
           if (vp.name === "1440" || vp.name === "375") axe = await runAxe(page).catch((e) => [{ id: "axe-failed", help: String(e).slice(0, 200) }]);
-          await page.evaluate(maskInPage, MASKS).catch(() => {});
-          const leaked = await page.evaluate((words) => {
+          const findLeak = () => page.evaluate((words) => {
             const text = `${document.body.innerText} ${[...document.querySelectorAll("input, textarea")].map((el) => el.value).join(" ")}`;
             return words.some((w) => new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(text));
           }, FORBIDDEN).catch(() => true);
+          await page.evaluate(maskInPage, MASKS).catch(() => {});
+          let leaked = await findLeak();
+          // A late re-render (hydration, a client fetch) can put a name back after masking: settle, mask again, check again.
+          if (leaked) { await page.waitForTimeout(800); await page.evaluate(maskInPage, MASKS).catch(() => {}); leaked = await findLeak(); }
           const file = `${role}__${name}__${vp.name}__${theme}.jpg`;
           if (leaked) errors.push("screenshot skipped: a real name or bank detail survived masking");
           if (!axeOnly && !leaked) {

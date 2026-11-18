@@ -15,7 +15,7 @@ function TemporaryPassword({ username, password }: { username: string; password:
       <p>
         <strong>Give these to the person by a secure route.</strong> The password is shown only here, once. They must choose their own the first time they sign in.
       </p>
-      <dl className="detail-list" style={{ marginTop: 0 }}>
+      <dl className="detail-list">
         <div><dt>Username</dt><dd>{username}</dd></div>
         <div><dt>Temporary password</dt><dd><code data-testid="temporary-password">{password}</code></dd></div>
       </dl>

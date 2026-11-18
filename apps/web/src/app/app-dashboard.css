@@ -440,6 +440,12 @@
   .calendar-wrap .fc-toolbar-chunk { display: flex; justify-content: center; }
   .calendar-wrap .fc-daygrid-event-dot { display: none; }
   .calendar-wrap .fc-daygrid-event { padding: 1px 3px; }
+  /* A phone's day cell is ~45px: room for the start time, not the time and a title each cut to one letter. The title is still the
+     event's accessible text and opens in the peek panel on tap; the week, day and list views show it in full. */
+  .calendar-wrap .fc-daygrid-event .fc-event-title {
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+  .calendar-wrap .fc-daygrid-event .fc-event-time { margin: 0; font-size: var(--text-label); text-overflow: clip; }
 }
 @media (max-width: 40rem), (pointer: coarse) {
   .calendar-wrap .fc-button { min-height: 2.75rem; min-width: 2.75rem; }

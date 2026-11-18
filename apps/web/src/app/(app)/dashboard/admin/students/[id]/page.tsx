@@ -159,7 +159,7 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
           <Card>
             <CardHeader title="Details" />
             <CardBody>
-              <dl className="detail-list" style={{ marginTop: 0 }}>
+              <dl className="detail-list">
                 <div>
                   <dt>Parent</dt>
                   <dd>

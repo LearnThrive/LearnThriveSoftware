@@ -91,3 +91,4 @@ docs/RUNNING_COSTS.md
 # UI sweep screenshots and manifests (apps/web/scripts/ui-sweep.mjs): local artifacts from the dev seed, never committed.
 docs/ui-sweep/before/
 docs/ui-sweep/after/
+docs/ui-sweep/compare/

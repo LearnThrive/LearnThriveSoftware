@@ -571,7 +571,9 @@ body.has-dialog { overflow: hidden; }
 
 /* ============================================================ Detail lists, timeline, misc */
 
-.detail-list { display: grid; gap: var(--space-3); margin: var(--space-4) 0 0; }
+/* Spaced from whatever comes before it, never from the top of its card (five pages used to patch that with an inline style). */
+.detail-list { display: grid; gap: var(--space-3); margin: 0; }
+* + .detail-list { margin-top: var(--space-4); }
 .detail-list > div { display: grid; grid-template-columns: 9rem minmax(0, 1fr); gap: var(--space-4); align-items: baseline; }
 .detail-list dt { font-size: var(--text-small); font-weight: 650; color: var(--app-muted); }
 .detail-list dd { margin: 0; font-size: var(--text-body); color: var(--app-ink); }

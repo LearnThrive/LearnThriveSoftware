@@ -210,7 +210,7 @@ export default async function AssignmentDetailPage({ params }: { params: Promise
           <Card>
             <CardHeader title="Schedule defaults" />
             <CardBody>
-              <dl className="detail-list" style={{ marginTop: 0 }}>
+              <dl className="detail-list">
                 <div><dt>Duration</dt><dd>{assignment.defaultDurationMinutes ?? 60} minutes</dd></div>
                 <div><dt>Location</dt><dd>{assignment.defaultLocationType === "IN_PERSON" ? "In person" : "Online"}</dd></div>
                 <div><dt>Report approval</dt><dd>{reportApprovalRequired ? "Required" : "Not required"}{assignment.requireReportApproval == null ? " (platform default)" : ""}</dd></div>

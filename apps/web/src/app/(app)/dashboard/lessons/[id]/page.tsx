@@ -370,7 +370,7 @@ export default async function LessonDetailPage({
           <Card>
             <CardHeader title="Details" />
             <CardBody>
-              <dl className="detail-list" style={{ marginTop: 0 }}>
+              <dl className="detail-list">
                 <div><dt>Tutor</dt><dd>{tutor?.name ?? "Unassigned"}</dd></div>
                 <div><dt>{namedStudents.length === 1 ? "Student" : "Students"}</dt><dd>{namedStudents.map((student) => student.name).join(", ") || "None"}</dd></div>
                 <div><dt>Subject</dt><dd>{lesson.subject}</dd></div>
