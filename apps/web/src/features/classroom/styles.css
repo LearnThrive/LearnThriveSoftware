@@ -283,3 +283,7 @@
 .chat-attachment--image img{display:block;max-width:100%;max-height:220px;border-radius:7px;object-fit:contain;background:#f0f4ee}
 .chat-attachment--image span{font-size:10px;color:#667b6d;overflow-wrap:anywhere}
 .chat-message.own .chat-attachment{margin-left:auto}
+
+/* On a phone the controls and the device status share one row: the status takes what is left rather than a fixed 155px, so "Camera &
+   mic are off" fits on one or two lines instead of three beside an empty meter (docs/ui-sweep/FINDINGS.md, F24). */
+@media(max-width:620px){.device-status{max-width:none;min-width:0}}
