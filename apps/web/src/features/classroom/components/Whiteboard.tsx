@@ -44,7 +44,6 @@ interface WhiteboardProps {
   onReorderPages: (pageIds: string[]) => void;
   onBackground: (pageId: string, background: BoardPage['background']) => void;
   onSetStudentsCanDraw: (value: boolean) => void;
-  onClearPage: (pageId: string) => void;
   onFollowMe: () => void;
   onImport: (pageId: string, elements: BoardElement[]) => void;
 }
@@ -58,14 +57,13 @@ const TUTORING_SHORTCUTS = [
 export function Whiteboard({
   role, pages, activePageId, elementsByPage, studentsCanDraw, subscribeBoardPointers, getBoardPointersSnapshot, followMeSeq,
   onUpdate, onCursor, onLaser, onCommitLocal, onSwitchPage, onCreatePage, onRenamePage, onDuplicatePage,
-  onDeletePage, onReorderPages, onBackground, onSetStudentsCanDraw, onClearPage, onFollowMe, onImport,
+  onDeletePage, onReorderPages, onBackground, onSetStudentsCanDraw, onFollowMe, onImport,
 }: WhiteboardProps) {
   const pointers = useSyncExternalStore(subscribeBoardPointers, getBoardPointersSnapshot);
   const isTutor = role === 'tutor';
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
   const [viewedPageId, setViewedPageId] = useState(activePageId || pages[0]?.id || '');
   const [following, setFollowing] = useState(true);
-  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [equationOpen, setEquationOpen] = useState(false);
   const [apiReady, setApiReady] = useState(false);
@@ -264,7 +262,6 @@ export function Whiteboard({
                   </div>
                 )}
               </div>
-              <button type="button" className="inline-action" onClick={() => setClearConfirmOpen(true)}>Clear page</button>
               <button type="button" className="inline-action" onClick={() => fileInputRef.current?.click()}>Import</button>
               <input ref={fileInputRef} type="file" accept=".excalidraw,application/json" className="sr-only"
                 onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleImportFile(file); event.target.value = ''; }} />
@@ -274,15 +271,6 @@ export function Whiteboard({
           <button type="button" className="inline-action" onClick={exportJson}>Export JSON</button>
         </div>
       </div>
-      {clearConfirmOpen && (
-        <div className="board-clear-confirm" role="alertdialog" aria-label="Confirm clearing the whiteboard page">
-          <p>Clear this whiteboard page for everyone? This can&apos;t be undone.</p>
-          <div className="poll-creator-actions">
-            <button type="button" className="button-secondary" onClick={() => setClearConfirmOpen(false)}>Cancel</button>
-            <button type="button" className="button-danger" onClick={() => { onClearPage(viewedPageId); setClearConfirmOpen(false); }}>Clear page</button>
-          </div>
-        </div>
-      )}
       <div className="whiteboard-canvas" style={boardBackgroundStyle(currentPage?.background ?? 'blank')}>
         <Excalidraw
           excalidrawAPI={(api) => { apiRef.current = api; setApiReady(true); }}

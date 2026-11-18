@@ -21,6 +21,10 @@ interface ParticipantTileProps {
   // Whether to play this person is no longer decided here: a tile only shows the picture (its <video> is always muted). Their sound, including
   // the tutor's lock on it (forceMuted), is played by components/RemoteAudio.tsx, which stays mounted when the stage changes.
   forceMuted?: boolean;
+  /** This person's hand is up: the tile gets a coloured outline so the tutor sees who it is without opening the People list. */
+  handRaised?: boolean;
+  /** Given only to the tutor, for someone with a hand up: lowers it ("Lower hand", for when they have been helped). */
+  onLowerHand?: () => void;
 }
 
 function initials(name: string) {
@@ -29,7 +33,7 @@ function initials(name: string) {
 
 export function ParticipantTile({
   stream, name, audio, video, screenSharing = false, local = false, compact = false, preview = false, focused, onFocus, role = null,
-  quality,
+  quality, handRaised = false, onLowerHand,
 }: ParticipantTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [needsPlayback, setNeedsPlayback] = useState(false);
@@ -73,7 +77,7 @@ export function ParticipantTile({
 
   return (
     <section
-      className={`participant-tile ${local ? 'local-tile' : 'remote-tile'} ${compact ? 'compact-tile' : ''} ${preview ? 'preview-tile' : ''} ${screenSharing ? 'screen-share-tile' : ''} ${clickable ? 'focusable-tile' : ''} ${focused ? 'is-focused' : ''}`}
+      className={`participant-tile ${local ? 'local-tile' : 'remote-tile'} ${compact ? 'compact-tile' : ''} ${preview ? 'preview-tile' : ''} ${screenSharing ? 'screen-share-tile' : ''} ${clickable ? 'focusable-tile' : ''} ${focused ? 'is-focused' : ''} ${handRaised ? 'hand-raised' : ''}`}
       aria-label={clickable ? `Make ${local ? 'your' : `${name}'s`} view the main view` : local ? 'Your camera preview' : `${name}'s video`}
       role={clickable ? 'button' : undefined}
       tabIndex={clickable ? 0 : undefined}
@@ -89,6 +93,12 @@ export function ParticipantTile({
         {!compact && <><h2>{preview ? 'Your space to get ready' : name}{!preview && <RoleBadge role={role} />}</h2><p>{local ? 'Your camera is off' : videoTrackMuted && video ? 'Video is paused' : 'Camera is off'}</p></>}
       </div>}
       {preview && <div className="preview-tag"><span /> Camera preview</div>}
+      {handRaised && (
+        <div className="hand-badge">
+          <span className="hand-badge__label"><Icon name="hand" size={13} />{local ? 'Your hand is up' : 'Hand raised'}</span>
+          {onLowerHand && <button type="button" className="hand-badge__lower" onClick={(event) => { event.stopPropagation(); onLowerHand(); }}>Lower hand</button>}
+        </div>
+      )}
       {screenSharing && <div className="screen-share-badge"><Icon name="screen" size={14} />{local ? 'You are presenting' : `${name} is presenting`}</div>}
       {(quality === 'poor' || quality === 'fair') && (
         <div className={`connection-quality-badge connection-quality-${quality}`} role="status">

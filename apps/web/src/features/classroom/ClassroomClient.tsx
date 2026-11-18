@@ -11,6 +11,6 @@ const ClassroomApp = dynamic(() => import('./App').then((mod) => mod.ClassroomAp
   ),
 });
 
-export function ClassroomClient(props: { lessonId?: string; initialToken?: string; isDevRoute?: boolean; returnHref?: string }) {
+export function ClassroomClient(props: { lessonId?: string; meetingId?: string; initialToken?: string; isDevRoute?: boolean; returnHref?: string }) {
   return <ClassroomApp {...props} />;
 }

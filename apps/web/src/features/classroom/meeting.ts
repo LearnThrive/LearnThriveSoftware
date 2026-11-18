@@ -6,6 +6,7 @@ import {
   type ReactionEmoji, type RoomSettings, type RoomTimerState, type ServerToClientEvents, type TimerMode,
   type UnderstandingCheckState, type UnderstandingStatus, type WaitingParticipant,
 } from '@learnthrive/shared/protocol';
+import { chatFileProblem, contentTypeFor, isInlineImage } from '@learnthrive/shared/chatFiles';
 import { aggregateConnectionStatus } from './callStatus';
 import { reconcileBoardElements } from './board';
 import { ensureFreshTurnCredentials, getIceConfiguration } from './ice';
@@ -121,7 +122,9 @@ export interface MeetingSnapshot {
 // "own" is resolved once, at the moment each message arrives, against the socket id live at
 // that instant — re-deriving it later from a stored senderId would misattribute older messages
 // if a non-recovered reconnect ever assigns this client a new socket id mid-meeting.
-export interface DisplayChatMessage extends ChatMessage { own: boolean }
+/** A file that came in with a chat message, ready to show: a link to the bytes held in this browser only (made here from what the room server relayed). */
+export interface ChatAttachment { name: string; size: number; url: string; image: boolean }
+export interface DisplayChatMessage extends Omit<ChatMessage, 'file'> { own: boolean; attachment?: ChatAttachment }
 
 function defaultRemotePeer(participant: Participant): RemotePeer {
   return {
@@ -172,6 +175,10 @@ export class MeetingController {
   // doesn't touch, and it can outlive a single Socket across reconnects — so this handler is
   // tracked explicitly and unregistered by hand in closeSocket().
   private reconnectFailedHandler: (() => void) | undefined;
+  // Fetches a fresh join link when this room was entered with one (a meeting or a lesson). Join links only last five minutes, so every REconnection
+  // (a drop, a server restart, the Reconnect button) needs a new one; see join() and the 'connect' handler.
+  private refreshToken: (() => Promise<string>) | undefined;
+  private connectedBefore = false;
   private readonly handleDeviceChange = () => { void this.refreshDevices(true); };
 
   constructor() {
@@ -399,6 +406,22 @@ export class MeetingController {
     this.socket.emit('chat:message', { text: trimmed });
   };
 
+  /**
+   * Shares a file in a staff meeting's chat. Resolves with a message to show if it could not be sent (a type that is not allowed, too big, not
+   * connected), or null once it is on its way. The same rules are checked again by the room server.
+   */
+  sendChatFile = async (file: File, caption?: string): Promise<string | null> => {
+    const problem = chatFileProblem(file.name, file.size);
+    if (problem) return problem;
+    if (!this.active || !this.socket?.connected) return 'You are not connected to the meeting right now.';
+    try {
+      this.socket.emit('chat:file', { name: file.name, data: await file.arrayBuffer(), ...(caption?.trim() ? { caption: caption.trim().slice(0, MAX_CHAT_LENGTH) } : {}) });
+      return null;
+    } catch {
+      return 'That file could not be read.';
+    }
+  };
+
   toggleHand = () => {
     if (!this.active || !this.socket?.connected) return;
     const raised = !this.snapshot.handRaised;
@@ -532,8 +555,10 @@ export class MeetingController {
   // A platform-issued token (see @learnthrive/shared/classroomToken) carries its own roomId,
   // name and role, verified server-side — the client never needs to know or validate them itself,
   // so the usual name/room-code checks are skipped entirely for a token join.
-  join = (name: string, roomId: string, role: ParticipantRole, token?: string) => {
+  join = (name: string, roomId: string, role: ParticipantRole, token?: string, refreshToken?: () => Promise<string>) => {
     if (this.active) return;
+    if (refreshToken) this.refreshToken = refreshToken;
+    this.connectedBefore = false;
     name = name.trim();
     roomId = roomId.trim().toLowerCase();
     const support = browserSupportError();
@@ -571,13 +596,29 @@ export class MeetingController {
     window.history.replaceState(null, '', url);
     // Intentionally no URL: HTTPS tunnels and localhost use the current origin.
     const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io({
-      autoConnect: false, reconnection: true, reconnectionAttempts: 10, reconnectionDelayMax: 5000,
+      // Keep trying for about five minutes (60 tries, at most 5 s apart) before asking the person to press Reconnect: a wifi drop or a restart of the
+      // classroom server that lasts a minute should heal by itself, not strand them on an "Unable to reconnect" screen.
+      autoConnect: false, reconnection: true, reconnectionAttempts: 60, reconnectionDelayMax: 5000,
     });
     this.socket = socket;
     socket.on('connect', () => {
       if (!this.active) return;
       this.update({ signalling: 'connected', error: null, reconnectFailed: false });
-      socket.emit('room:join', { roomId, name, media: this.media.state(), role, ...(token ? { token } : {}) });
+      const again = this.connectedBefore;
+      this.connectedBefore = true;
+      const sendJoin = (joinToken?: string) => socket.emit('room:join', { roomId, name, media: this.media.state(), role, ...(joinToken ? { token: joinToken } : {}) });
+      // The first connection uses the link the page was opened with. Every later one is a REconnection, and a join link only lasts five minutes, so
+      // ask the website for a fresh link before rejoining: a long meeting never fails to rejoin with an old, expired one. Always rejoin, even when the
+      // connection layer says it restored the session: the room may have let go of this person meanwhile, and a repeat join is harmless (the server
+      // sends the room state again, or seats them afresh).
+      if (!again || !token || !this.refreshToken) { sendJoin(token); return; }
+      this.refreshToken().then((fresh) => { if (this.active && socket.connected) sendJoin(fresh); }).catch((error: unknown) => {
+        if (!this.active) return;
+        this.update({
+          reconnectFailed: true, status: 'Unable to rejoin',
+          error: error instanceof Error ? error.message : 'We could not rejoin the meeting. Open it again from your dashboard.',
+        });
+      });
     });
     socket.on('disconnect', () => {
       // The signalling channel dropping doesn't mean the WebRTC media connections have: leave
@@ -667,10 +708,16 @@ export class MeetingController {
       this.announce(sharing ? `${peer.participant.name} started sharing their screen` : `${peer.participant.name} stopped sharing their screen`);
       this.updatePeer(id, { participant: { ...peer.participant, screenSharing: sharing } });
     });
-    socket.on('chat:message', (message) => {
+    socket.on('chat:message', ({ file, ...message }) => {
       const own = message.senderId === this.socket?.id;
       const unread = this.snapshot.chatOpen || own ? this.snapshot.unreadCount : this.snapshot.unreadCount + 1;
-      this.update({ messages: [...this.snapshot.messages, { ...message, own }].slice(-MAX_CHAT_HISTORY), unreadCount: unread });
+      // A shared file arrives as bytes. The type it is given comes from its extension (never from the sender), and it is held only in this browser.
+      const attachment: ChatAttachment | undefined = file
+        ? { name: file.name, size: file.size, image: isInlineImage(file.name), url: URL.createObjectURL(new Blob([file.data as BlobPart], { type: contentTypeFor(file.name) })) }
+        : undefined;
+      const kept = [...this.snapshot.messages, { ...message, own, ...(attachment ? { attachment } : {}) }];
+      for (const dropped of kept.slice(0, -MAX_CHAT_HISTORY)) if (dropped.attachment) URL.revokeObjectURL(dropped.attachment.url);
+      this.update({ messages: kept.slice(-MAX_CHAT_HISTORY), unreadCount: unread });
     });
     socket.on('participant:hand', ({ id, raised }) => {
       // A self-report (raising/lowering your own hand) never echoes back to its own sender, so
@@ -706,7 +753,7 @@ export class MeetingController {
     socket.on('chat:message-deleted', ({ id }) => {
       this.update({ messages: this.snapshot.messages.filter((message) => message.id !== id) });
     });
-    socket.on('chat:cleared', () => this.update({ messages: [] }));
+    socket.on('chat:cleared', () => { this.revokeAttachments(); this.update({ messages: [] }); });
     socket.on('poll:update', (poll) => this.update({ poll }));
     socket.on('understanding:update', (understandingCheck) => this.update({ understandingCheck }));
     socket.on('timer:update', (timer) => this.update({ timer }));
@@ -908,14 +955,24 @@ export class MeetingController {
     if (!this.active || !role) return;
     this.active = false;
     this.closeSocket();
-    this.join(name, roomId, role);
+    void this.joinAgain(name, roomId, role);
   };
+
+  /** Joins again: with a fresh link from the website when this room was entered with one (a meeting or lesson link), else by room code and name. */
+  private async joinAgain(name: string, roomId: string, role: ParticipantRole) {
+    if (!this.refreshToken) { this.join(name, roomId, role); return; }
+    try {
+      this.join(name, roomId, role, await this.refreshToken());
+    } catch (error) {
+      this.update({ error: error instanceof Error ? error.message : 'We could not rejoin. Open the meeting again from your dashboard.', reconnectFailed: true });
+    }
+  }
 
   /** Rejoins the same room under the same name and role from the ended screen, skipping pre-join. */
   rejoin = () => {
     const { name, roomId, role } = this.snapshot;
     if (this.active || !name || !role || !ROOM_PATTERN.test(roomId)) return;
-    this.join(name, roomId, role);
+    void this.joinAgain(name, roomId, role);
   };
 
   leave = () => this.endMeeting('left', 'Meeting ended');
@@ -956,7 +1013,13 @@ export class MeetingController {
     }
   };
 
+  /** Lets go of the memory held for files shared in the chat (they exist only in this browser, for as long as the meeting). */
+  private revokeAttachments() {
+    for (const message of this.snapshot.messages) if (message.attachment) URL.revokeObjectURL(message.attachment.url);
+  }
+
   dispose = () => {
+    this.revokeAttachments();
     this.active = false;
     this.actionVersion += 1;
     clearTimeout(this.copyTimeout);

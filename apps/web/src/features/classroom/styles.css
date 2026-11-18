@@ -249,3 +249,37 @@
 /* Viewers (and the tutor when not drawing) see only the marks, none of the drawing tool's own buttons. */
 .screen-annotations:not(.is-drawing) .layer-ui__wrapper{display:none}
 .screen-annotations .main-menu-trigger,.screen-annotations .help-icon,.screen-annotations .layer-ui__wrapper__footer-right{display:none}
+
+/* A raised hand: an amber outline round the camera (so the tutor sees who it is at a glance, whatever the layout) and, for the tutor, a Lower hand
+   button on that camera for when they have been helped. */
+.participant-tile.hand-raised{box-shadow:inset 0 0 0 4px #f5a623,0 0 0 2px #f5a62366}
+.participant-tile.hand-raised::after{content:"";position:absolute;inset:0;z-index:3;border-radius:inherit;box-shadow:inset 0 0 0 7px #ffc766;pointer-events:none;animation:hand-pulse 1.8s ease-in-out infinite}
+.hand-badge{position:absolute;top:10px;left:56px;right:56px;z-index:4;display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;pointer-events:none}
+.hand-badge__label{display:inline-flex;align-items:center;gap:5px;background:#f5a623;color:#3a2400;font-size:11px;font-weight:700;padding:4px 9px;border-radius:999px}
+.hand-badge__lower{pointer-events:auto;background:#fff;color:#3a2400;border:1px solid #f5a623;border-radius:999px;font-size:11px;font-weight:700;padding:4px 10px;min-height:28px;cursor:pointer}
+.hand-badge__lower:hover{background:#fff4de}
+.compact-tile .hand-badge{top:6px;left:6px;right:6px}
+.compact-tile .hand-badge__label{font-size:10px;padding:3px 7px}
+.compact-tile .hand-badge__lower{font-size:10px;padding:3px 8px;min-height:24px}
+@keyframes hand-pulse{0%,100%{opacity:0}50%{opacity:.85}}
+@media(prefers-reduced-motion:reduce){.participant-tile.hand-raised::after{animation:none;opacity:0}}
+
+/* Files and links in a staff meeting's chat */
+.chat-panel{position:relative}
+.chat-panel.is-dragging{outline:3px dashed #087363;outline-offset:-6px}
+.chat-drop-hint{position:absolute;inset:0;display:grid;place-items:center;background:#e0eee7e6;color:#075f52;font-weight:650;font-size:14px;border-radius:16px;pointer-events:none}
+.chat-attach{width:40px;height:40px;flex-shrink:0;display:grid;place-items:center;border-radius:50%;background:#fff;color:#075f52;border:1px solid #d6dfd5}
+.chat-attach:hover:not(:disabled){background:#f0f4ef;border-color:#9fcdb5}
+.chat-file-problem,.chat-file-sending{margin:0;padding:8px 14px;font-size:11px;line-height:1.45}
+.chat-file-problem{color:#933f35;background:#fff1ee;border-top:1px solid #efd5cd}
+.chat-file-sending{color:#3d5262;background:#f4f7f2;border-top:1px solid #e3e8df}
+.chat-link{color:#075f52;text-decoration:underline;text-underline-offset:2px;overflow-wrap:anywhere}
+.chat-message .chat-attachment{display:flex;align-items:center;gap:10px;margin:0 0 4px;padding:9px 11px;border:1px solid #d6dfd5;border-radius:11px;background:#fff;color:#16293d;text-decoration:none}
+.chat-message .chat-attachment:hover{border-color:#9fcdb5;background:#f7faf6}
+.chat-attachment__text{display:flex;flex-direction:column;min-width:0;flex:1}
+.chat-attachment__text strong{font-size:12px;font-weight:650;overflow-wrap:anywhere}
+.chat-attachment__text small{font-size:10px;color:#667b6d}
+.chat-message .chat-attachment--image{flex-direction:column;align-items:flex-start;gap:6px;padding:6px}
+.chat-attachment--image img{display:block;max-width:100%;max-height:220px;border-radius:7px;object-fit:contain;background:#f0f4ee}
+.chat-attachment--image span{font-size:10px;color:#667b6d;overflow-wrap:anywhere}
+.chat-message.own .chat-attachment{margin-left:auto}

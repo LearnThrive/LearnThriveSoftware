@@ -201,6 +201,7 @@ export function EquationDialog({ open, onClose, onInsert, initial = '' }: {
           <div className="equation-dialog__preview" aria-live="polite">
             <span>Preview</span>
             <div className="equation-dialog__preview-box">
+              {/* eslint-disable-next-line @next/next/no-img-element -- a data: URL made in this browser: next/image cannot optimise it */}
               {preview ? <img src={preview.dataUrl} alt={`Preview of ${tex.trim()}`} /> : problem ? <p className="equation-dialog__problem" role="alert">{problem}</p> : <p className="equation-dialog__hint">Your equation appears here.</p>}
             </div>
           </div>

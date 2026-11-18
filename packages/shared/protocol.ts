@@ -103,7 +103,10 @@ export interface PeerJoined { peer: Participant; sessionId: string; initiator: b
 export interface SignalDescription { sessionId: string; description: RTCSessionDescriptionInit }
 export interface SignalCandidate { sessionId: string; candidate: RTCIceCandidateInit }
 export interface MeetingError { message: string }
-export interface ChatMessage { id: string; senderId: string; name: string; text: string; timestamp: number }
+// A file shared in a staff meeting's chat (see chatFiles.ts for what is allowed). The bytes travel through the room server to everyone present and are
+// never stored: the file exists only in the browsers of the people who were there. `data` is binary (a Buffer from the server, an ArrayBuffer in a browser).
+export interface ChatFileShare { name: string; size: number; data: ArrayBuffer | Uint8Array }
+export interface ChatMessage { id: string; senderId: string; name: string; text: string; timestamp: number; file?: ChatFileShare }
 export const REACTION_EMOJIS = ['👍', '❤️', '😂', '🎉', '👏', '❓'] as const;
 export type ReactionEmoji = typeof REACTION_EMOJIS[number];
 export interface ClientToServerEvents {
@@ -128,6 +131,8 @@ export interface ClientToServerEvents {
   'participant:hand': (payload: { raised: boolean }) => void;
   'participant:reaction': (payload: { emoji: string }) => void;
   'chat:message': (payload: { text: string }) => void;
+  // A file in a staff meeting's chat. Refused in a lesson (a lesson's files go through its own, stored and safeguarded, lesson chat).
+  'chat:file': (payload: { name: string; data: ArrayBuffer | Uint8Array; caption?: string }) => void;
   'chat:delete': (payload: { id: string }) => void;
   'chat:clear': () => void;
   'poll:create': (payload: { question: string; options: string[]; anonymous: boolean; resultsVisible: PollVisibility }) => void;

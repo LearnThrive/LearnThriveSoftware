@@ -17,6 +17,7 @@ export function useMeeting() {
     toggleScreenShare: controller.toggleScreenShare,
     toggleChat: controller.toggleChat,
     sendChatMessage: controller.sendChatMessage,
+    sendChatFile: controller.sendChatFile,
     switchCamera: controller.switchCamera,
     switchMicrophone: controller.switchMicrophone,
     flipCamera: controller.flipCamera,

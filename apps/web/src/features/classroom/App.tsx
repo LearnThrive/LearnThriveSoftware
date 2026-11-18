@@ -35,7 +35,6 @@ const Whiteboard = lazy(() => import('./components/Whiteboard').then((module) =>
 // The drawing layer over a shared screen uses the same drawing tool, so it is loaded the same way: only when a screen is being shared.
 const ScreenAnnotations = lazy(() => import('./components/ScreenAnnotations').then((module) => ({ default: module.ScreenAnnotations })));
 import { AnnouncementBanner } from './components/AnnouncementBanner';
-import { HelpQueuePanel } from './components/HelpQueuePanel';
 
 type FocusTarget = 'local' | string; // string = a peer's participant id
 type LayoutMode = 'focus' | 'sideBySide' | 'gallery';
@@ -66,13 +65,15 @@ function trackLabel(track: TrackSnapshot | null) {
 
 export interface ClassroomAppProps {
   lessonId?: string;
+  /** A staff meeting's id, so the room can ask for a fresh join link when it has to rejoin. */
+  meetingId?: string;
   initialToken?: string;
   isDevRoute?: boolean;
   /** Where the end screen sends people back to when there is no lesson (a staff meeting: its list). */
   returnHref?: string;
 }
 
-export function App({ lessonId, initialToken, isDevRoute, returnHref }: ClassroomAppProps = {}) {
+export function App({ lessonId, meetingId, initialToken, isDevRoute, returnHref }: ClassroomAppProps = {}) {
   const {
     snapshot, prepareMedia, toggleAudio, toggleVideo, toggleScreenShare, toggleChat, sendChatMessage,
     switchCamera, switchMicrophone, flipCamera, toggleHand, sendReaction, admitOne, admitAll, denyOne,
@@ -80,9 +81,9 @@ export function App({ lessonId, initialToken, isDevRoute, returnHref }: Classroo
     removeParticipant, stopShare, lowerHand, deleteChatMessage, clearChat, createPoll, closePoll, clearPoll,
     votePoll, startUnderstandingCheck, endUnderstandingCheck, respondUnderstanding, startTimer, pauseTimer,
     resumeTimer, stopTimer, sendBoardUpdate, sendBoardCursor, sendBoardLaser, createBoardPage, renameBoardPage,
-    deleteBoardPage, reorderBoardPages, switchBoardPage, setBoardBackground, setStudentsCanDraw, clearBoardPage,
+    deleteBoardPage, reorderBoardPages, switchBoardPage, setBoardBackground, setStudentsCanDraw,
     followMe, importBoard, duplicateBoardPage, commitLocalPageElements, sendAnnouncement, setDataSaver, allowRejoin,
-    sendAnnotationUpdate, clearAnnotations, commitLocalAnnotations,
+    sendAnnotationUpdate, clearAnnotations, commitLocalAnnotations, sendChatFile,
     join, leave, reset, rejoin, copyInvite, retryConnection, subscribeBoardPointers, getBoardPointersSnapshot,
   } = useMeeting();
   const [name, setName] = useState('');
@@ -171,7 +172,16 @@ export function App({ lessonId, initialToken, isDevRoute, returnHref }: Classroo
   // rehearsal's aborted attempt get cleanly retried by the mount that actually sticks.
   useEffect(() => {
     if (!autoJoinToken) return;
-    void join('', '', 'student', autoJoinToken);
+    // A join link only lasts five minutes, so whenever the room has to be rejoined (a dropped connection, the server restarting) a fresh one is asked
+    // for here. The website re-checks that this person is still allowed in (app/api/classroom/token).
+    const target = meetingId ? { kind: 'meeting', id: meetingId } : lessonId ? { kind: 'lesson', id: lessonId } : null;
+    const freshLink = target ? async () => {
+      const response = await fetch('/api/classroom/token', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(target) });
+      const data = await response.json().catch(() => ({})) as { token?: unknown; message?: unknown };
+      if (!response.ok || typeof data.token !== 'string') throw new Error(typeof data.message === 'string' ? data.message : 'We could not rejoin. Open the meeting again from your dashboard.');
+      return data.token;
+    } : undefined;
+    void join('', '', 'student', autoJoinToken, freshLink);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoJoinToken]);
 
@@ -245,11 +255,13 @@ export function App({ lessonId, initialToken, isDevRoute, returnHref }: Classroo
     video={peer.participant.media.video} screenSharing={peer.participant.screenSharing} compact={compact} role={peer.participant.role}
     focused={canFocusToggle && effectiveFocus === peer.participant.id} onFocus={canFocusToggle ? () => setFocusTarget(peer.participant.id) : undefined}
     quality={peer.quality} forceMuted={peer.participant.forceMuted}
+    handRaised={peer.participant.handRaised}
+    onLowerHand={snapshot.role === 'tutor' && peer.participant.handRaised ? () => lowerHand(peer.participant.id) : undefined}
   />;
   const selfTile = (compact: boolean) => <ParticipantTile
     key="local"
     stream={snapshot.localStream} name={snapshot.name || name || 'You'} audio={snapshot.audio} video={snapshot.video}
-    screenSharing={snapshot.screenSharing} local compact={compact} role={snapshot.role}
+    screenSharing={snapshot.screenSharing} local compact={compact} role={snapshot.role} handRaised={snapshot.handRaised}
     focused={canFocusToggle && effectiveFocus === 'local'} onFocus={canFocusToggle ? () => setFocusTarget('local') : undefined}
   />;
   const waitingTile = <section className="waiting-tile" aria-label="Waiting for other participants">
@@ -272,9 +284,6 @@ export function App({ lessonId, initialToken, isDevRoute, returnHref }: Classroo
     ...snapshot.peers.map((peer) => ({ key: peer.participant.id, role: peer.participant.role, tile: peerTile(peer, true) })),
   ];
   const reconnectingPeers = snapshot.peers.filter((peer) => peer.reconnecting);
-  const helpQueueEntries = snapshot.peers
-    .filter((peer) => peer.participant.role === 'student' && peer.participant.handRaised && peer.participant.handRaisedAt != null)
-    .map((peer) => ({ id: peer.participant.id, name: peer.participant.name, handRaisedAt: peer.participant.handRaisedAt! }));
   const mainPeer = effectiveFocus !== 'local' ? snapshot.peers.find((peer) => peer.participant.id === effectiveFocus) : undefined;
   const otherTiles = () => {
     const tiles: ReactElement[] = [];
@@ -354,7 +363,6 @@ export function App({ lessonId, initialToken, isDevRoute, returnHref }: Classroo
         {snapshot.announcement && <AnnouncementBanner announcement={snapshot.announcement} />}
         {snapshot.poll && <PollPanel poll={snapshot.poll} isTutor={snapshot.role === 'tutor'} onVote={votePoll} onClose={closePoll} onClear={clearPoll} />}
         {snapshot.understandingCheck && <UnderstandingCheckPanel check={snapshot.understandingCheck} isTutor={snapshot.role === 'tutor'} onRespond={respondUnderstanding} onEnd={endUnderstandingCheck} />}
-        {snapshot.role === 'tutor' && helpQueueEntries.length > 0 && <HelpQueuePanel entries={helpQueueEntries} onMarkHelped={lowerHand} />}
         {snapshot.peers.map((peer) => (
           <RemoteAudio
             key={peer.participant.id} stream={peer.stream} muted={peer.participant.forceMuted} resume={audioResume}
@@ -378,7 +386,7 @@ export function App({ lessonId, initialToken, isDevRoute, returnHref }: Classroo
                 onUpdate={sendBoardUpdate} onCursor={sendBoardCursor} onLaser={sendBoardLaser} onCommitLocal={commitLocalPageElements}
                 onSwitchPage={switchBoardPage} onCreatePage={createBoardPage} onRenamePage={renameBoardPage}
                 onDuplicatePage={duplicateBoardPage} onDeletePage={deleteBoardPage} onReorderPages={reorderBoardPages}
-                onBackground={setBoardBackground} onSetStudentsCanDraw={setStudentsCanDraw} onClearPage={clearBoardPage}
+                onBackground={setBoardBackground} onSetStudentsCanDraw={setStudentsCanDraw}
                 onFollowMe={followMe} onImport={importBoard}
               />
             </Suspense>
@@ -420,6 +428,7 @@ export function App({ lessonId, initialToken, isDevRoute, returnHref }: Classroo
             messages={snapshot.messages} open={snapshot.chatOpen} onClose={toggleChat} onSend={sendChatMessage} triggerRef={chatTriggerRef}
             isTutor={snapshot.role === 'tutor'} onDeleteMessage={deleteChatMessage} onClearChat={clearChat}
             canChat={snapshot.role === 'tutor' || snapshot.roomSettings.studentsCanChat}
+            onSendFile={isStaffMeeting ? sendChatFile : undefined} linkifyMessages={isStaffMeeting}
           />
         </div>
         {(snapshot.error || snapshot.mediaError) && <div className="notice notice-error" role="alert"><Icon name="info" /><span>{snapshot.error || snapshot.mediaError}</span>{snapshot.reconnectFailed && <button className="inline-action" type="button" onClick={retryConnection}>Reconnect</button>}</div>}

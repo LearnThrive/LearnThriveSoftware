@@ -21,7 +21,7 @@ export default async function MeetingClassroomPage({ params }: { params: Promise
   if (!entry.ok) redirect(`/dashboard/meetings?toast=${encodeURIComponent(entry.message)}`);
   return (
     <div className="classroom-page-container">
-      <ClassroomClient initialToken={entry.token} returnHref="/dashboard/meetings" />
+      <ClassroomClient initialToken={entry.token} meetingId={id} returnHref="/dashboard/meetings" />
     </div>
   );
 }

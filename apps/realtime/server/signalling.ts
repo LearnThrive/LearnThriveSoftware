@@ -4,6 +4,7 @@ import express from 'express';
 import { Server, type Socket } from 'socket.io';
 import { isDevTunnelHost } from '@learnthrive/shared/allowedHosts';
 import { verifyClassroomJoinToken } from '@learnthrive/shared/classroomToken';
+import { chatFileProblem, MAX_CHAT_FILE_BYTES, safeFileName } from '@learnthrive/shared/chatFiles';
 import {
   ANNOUNCEMENT_TTL_MS, MAX_ANNOUNCEMENT_LENGTH, MAX_BOARD_ELEMENT_BYTES, MAX_BOARD_ELEMENTS_PER_PAGE,
   MAX_BOARD_IMPORT_BYTES, MAX_BOARD_PAGE_NAME_LENGTH, MAX_BOARD_PAGES, MAX_BOARD_UPDATE_BATCH, MAX_CHAT_LENGTH,
@@ -341,7 +342,8 @@ export function createSignallingServer(options?: {
     // This process never handles media streams, but a whiteboard JSON import can legitimately be
     // a few MB — raised from the prototype's original 100KB (fine for pure signalling messages)
     // to comfortably fit MAX_BOARD_IMPORT_BYTES plus JSON/Socket.IO framing overhead.
-    maxHttpBufferSize: 6_000_000,
+    // Room for the largest chat file (MAX_CHAT_FILE_BYTES) plus framing; a whiteboard import (MAX_BOARD_IMPORT_BYTES) is smaller still.
+    maxHttpBufferSize: MAX_CHAT_FILE_BYTES + 500_000,
     cors: { origin: (origin, callback) => callback(null, acceptsOrigin(origin)) },
     allowRequest: (request, callback) => callback(null, acceptsOrigin(request.headers.origin)),
     pingInterval: 10_000,
@@ -353,6 +355,8 @@ export function createSignallingServer(options?: {
   const rooms = new Map<string, Room>();
   const pendingDisconnects = new Map<string, { roomId: string; timer: ReturnType<typeof setTimeout> }>();
   const chatRateLimiter = createRateLimiter(CHAT_RATE_WINDOW_MS, CHAT_RATE_MAX_MESSAGES);
+  // Files are heavy (each goes to everyone in the room), so they have a much tighter limit of their own: at most 6 a minute from one person.
+  const chatFileRateLimiter = createRateLimiter(60_000, 6);
   const reactionRateLimiter = createRateLimiter(REACTION_RATE_WINDOW_MS, REACTION_RATE_MAX);
   const pollVoteRateLimiter = createRateLimiter(POLL_VOTE_RATE_WINDOW_MS, POLL_VOTE_RATE_MAX);
   const understandingRateLimiter = createRateLimiter(UNDERSTANDING_RATE_WINDOW_MS, UNDERSTANDING_RATE_MAX);
@@ -577,9 +581,12 @@ export function createSignallingServer(options?: {
     if (socket.data.roomId) {
       if (socket.data.roomId !== roomId) return fail(socket, 'Leave your current meeting before joining another.');
       const existing = rooms.get(roomId);
-      if (existing?.participants.has(socket.id)) resendJoinedState(socket, roomId, existing);
-      else if (existing?.waiting.has(socket.id)) socket.emit('room:waiting', { roomId });
-      return;
+      if (existing?.participants.has(socket.id)) { resendJoinedState(socket, roomId, existing); return; }
+      if (existing?.waiting.has(socket.id)) { socket.emit('room:waiting', { roomId }); return; }
+      // The connection layer restored this socket's old session (a drop shorter than its recovery window) but the room had already let go of the
+      // person (their reconnect grace ran out, or the room was ended and made again). They are in no room, so this is a fresh join, not a repeat:
+      // carry on below. Staying silent here (as this once did) left them looking connected while every action failed "not currently in a class".
+      delete socket.data.roomId;
     }
 
     const room = rooms.get(roomId) ?? createRoom(meeting);
@@ -632,6 +639,7 @@ export function createSignallingServer(options?: {
     room.participants.delete(staleId);
     clearPending(staleId);
     chatRateLimiter.clear(staleId);
+    chatFileRateLimiter.clear(staleId);
     reactionRateLimiter.clear(staleId);
     pollVoteRateLimiter.clear(staleId);
     understandingRateLimiter.clear(staleId);
@@ -674,6 +682,7 @@ export function createSignallingServer(options?: {
     }
 
     chatRateLimiter.clear(socket.id);
+    chatFileRateLimiter.clear(socket.id);
     reactionRateLimiter.clear(socket.id);
     pollVoteRateLimiter.clear(socket.id);
     understandingRateLimiter.clear(socket.id);
@@ -762,6 +771,10 @@ export function createSignallingServer(options?: {
       if (isRecord(payload) && typeof payload.token === 'string' && payload.token) {
         const verified = verifyClassroomJoinToken(payload.token);
         if (!verified || !ROOM_PATTERN.test(verified.roomId)) {
+          // A connection the server restored after a blip is already in its room and has nothing to prove again: a join link is only good for a
+          // few minutes, so an old one here is expected and harmless. Send the room state it may have missed instead of an error.
+          const current = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
+          if (socket.data.roomId && current?.participants.has(socket.id)) { resendJoinedState(socket, socket.data.roomId, current); return; }
           return fail(socket, 'Your classroom link has expired or is invalid. Return to your lesson and try again.');
         }
         const media = parseMedia(payload.media);
@@ -975,6 +988,29 @@ export function createSignallingServer(options?: {
         message = { id: randomUUID(), senderId: socket.id, name: self.name, text, timestamp: Date.now() };
       }
       // Whoever is in the room NOW (the sender may have left while the web app was answering).
+      const current = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
+      if (!current) return;
+      for (const id of current.participants.keys()) io.to(id).emit('chat:message', message);
+    });
+    // A file in a STAFF MEETING's chat (docs/STAFF_MEETINGS.md): relayed to everyone present, never stored. The rules (type, size, name) are the shared
+    // ones in chatFiles.ts, enforced here whatever the browser claims. A lesson is refused: its files go through the stored, safeguarded lesson chat.
+    socket.on('chat:file', (payload: unknown) => {
+      const room = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
+      const self = room?.participants.get(socket.id);
+      if (!room || !self) return fail(socket, 'You are not currently in a meeting.');
+      if (!room.meeting) return fail(socket, 'Files in a lesson are shared from the lesson page.');
+      if (self.role === 'student' && !room.settings.studentsCanChat) return fail(socket, 'The host has turned off chat.');
+      if (!isRecord(payload) || typeof payload.name !== 'string') return fail(socket, 'Invalid file.');
+      const bytes = payload.data instanceof Uint8Array ? payload.data : payload.data instanceof ArrayBuffer ? new Uint8Array(payload.data) : null;
+      if (!bytes) return fail(socket, 'Invalid file.');
+      const problem = chatFileProblem(payload.name, bytes.byteLength);
+      if (problem) return fail(socket, problem);
+      if (!chatFileRateLimiter.allow(socket.id)) return fail(socket, 'You are sharing files too quickly. Please wait a moment.');
+      const caption = typeof payload.caption === 'string' ? payload.caption.trim().slice(0, MAX_CHAT_LENGTH) : '';
+      const message: ChatMessage = {
+        id: randomUUID(), senderId: socket.id, name: self.name, text: caption, timestamp: Date.now(),
+        file: { name: safeFileName(payload.name), size: bytes.byteLength, data: bytes },
+      };
       const current = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
       if (!current) return;
       for (const id of current.participants.keys()) io.to(id).emit('chat:message', message);

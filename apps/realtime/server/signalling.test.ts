@@ -235,6 +235,24 @@ describe('signalling through real Socket.IO clients', () => {
     expect(await left).toEqual({ id: studentId, name: 'Bob' });
   });
 
+  it('a connection restored AFTER the room let go of the person is seated afresh when they rejoin, not ignored', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    // Reconnects after the room's grace period (DISCONNECT_GRACE_MS) but inside the connection layer's recovery window: the session comes back
+    // (recovered), yet the room has already dropped this person.
+    const student = await connect(undefined, { reconnection: true, reconnectionDelay: 900, reconnectionDelayMax: 900 });
+    await admit(tutor, student);
+    const left = new Promise<{ id: string }>((resolve) => tutor.once('room:participant-left', resolve));
+    student.io.engine.close();
+    await left;
+    await new Promise<void>((resolve) => student.once('connect', () => resolve()));
+    expect(student.recovered).toBe(true);
+    // Before the fix the server said nothing here and the person looked connected while every action failed "not currently in a class".
+    const seated = new Promise<{ roomId: string }>((resolve) => student.once('room:waiting', resolve));
+    requestJoin(student, 'Sam', 'student');
+    expect((await seated).roomId).toBe('room-one');
+  });
+
   it('recovers a briefly dropped connection without losing the pairing or notifying a departure', async () => {
     const tutor = await connect();
     await joinTutor(tutor, 'Alice');
@@ -1785,5 +1803,91 @@ describe('a staff meeting in production mode', () => {
     const waiting = new Promise((resolve) => student.once('room:waiting', resolve));
     student.emit('room:join', { roomId: 'lesson-room-prod', name: 'Student', role: 'student', media });
     await waiting;
+  });
+
+  // ---- files in a staff meeting's chat ----
+  async function guestInRoom(host: Client) {
+    const guest = await connected();
+    const waiting = new Promise((resolve) => guest.once('room:waiting', resolve));
+    const inRoom = new Promise<JoinedRoom>((resolve) => guest.once('room:joined', resolve));
+    guest.emit('room:join', { roomId: 'x', name: 'x', role: 'student', media, token: tokenFor('student', 'Guest') });
+    await waiting;
+    host.emit('room:admit', { id: guest.id! });
+    await inRoom;
+    return guest;
+  }
+  const fileSeenBy = (client: Client, name?: string) => new Promise<ChatMessage>((resolve) => client.on('chat:message', (message) => { if (message.file && (!name || message.file.name === name)) resolve(message); }));
+  const errorOf = (client: Client) => new Promise<{ message: string }>((resolve) => client.once('room:error', resolve));
+  const bytes = (n: number, fill = 7) => new Uint8Array(n).fill(fill);
+
+  it('a file shared in a meeting reaches everyone in it, the sender too, with a safe name, and is not stored anywhere', async () => {
+    const host = await hostInRoom();
+    const guest = await guestInRoom(host);
+    const seenByHost = fileSeenBy(host);
+    const seenByGuest = fileSeenBy(guest);
+    guest.emit('chat:file', { name: '..\\..\\folder/Past Paper 1.pdf', data: bytes(2048), caption: 'for Friday' });
+    const [a, b] = await Promise.all([seenByHost, seenByGuest]);
+    for (const message of [a, b]) {
+      expect(message.file?.name).toBe('Past Paper 1.pdf');
+      expect(message.file?.size).toBe(2048);
+      expect(message.text).toBe('for Friday');
+      expect(message.name).toBe('Guest');
+      expect(Buffer.from(message.file!.data as ArrayBuffer).equals(Buffer.alloc(2048, 7))).toBe(true);
+    }
+  });
+
+  it('documents, images, spreadsheets, slides, text and zip files are accepted; programs, scripts and macro files are refused', async () => {
+    const host = await hostInRoom();
+    const guest = await guestInRoom(host);
+    // Taking turns, so no one person goes over the six-a-minute limit.
+    const accepted = ['a.docx', 'b.pptx', 'c.xlsx', 'd.png', 'e.jpg', 'f.pdf', 'g.txt', 'h.zip', 'i.mp4', 'j.csv', 'k.tex'];
+    for (const [index, name] of accepted.entries()) {
+      const [sender, receiver] = index % 2 === 0 ? [guest, host] : [host, guest];
+      const seen = fileSeenBy(receiver, name);
+      sender.emit('chat:file', { name, data: bytes(10) });
+      expect((await seen).file?.name).toBe(name);
+    }
+    for (const name of ['virus.exe', 'run.bat', 'x.js', 'x.sh', 'setup.msi', 'macro.docm', 'sheet.xlsm', 'report.pdf.exe', 'noextension', '.hidden', 'link.lnk']) {
+      const refused = errorOf(guest);
+      guest.emit('chat:file', { name, data: bytes(10) });
+      expect((await refused).message, name).toMatch(/cannot be shared|That file/i);
+    }
+  });
+
+  it('an empty file, one over the size limit, and something that is not a file are refused', async () => {
+    const host = await hostInRoom();
+    const guest = await guestInRoom(host);
+    const empty = errorOf(guest);
+    guest.emit('chat:file', { name: 'a.pdf', data: bytes(0) });
+    expect((await empty).message).toMatch(/empty/i);
+    const big = errorOf(guest);
+    guest.emit('chat:file', { name: 'a.pdf', data: bytes(10_000_001) });
+    expect((await big).message).toMatch(/over 10 MB/);
+    const junk = errorOf(guest);
+    (guest as unknown as { emit: (event: string, payload: unknown) => void }).emit('chat:file', { name: 'a.pdf', data: 'not bytes' });
+    expect((await junk).message).toMatch(/Invalid file/);
+  });
+
+  it('files are limited to six a minute from one person', async () => {
+    const host = await hostInRoom();
+    const guest = await guestInRoom(host);
+    for (let i = 0; i < 6; i += 1) {
+      const seen = fileSeenBy(host, `n${i}.txt`);
+      guest.emit('chat:file', { name: `n${i}.txt`, data: bytes(5) });
+      await seen;
+    }
+    const refused = errorOf(guest);
+    guest.emit('chat:file', { name: 'seventh.txt', data: bytes(5) });
+    expect((await refused).message).toMatch(/too quickly/i);
+  });
+
+  it('a lesson room refuses a file: its files go through the stored, safeguarded lesson chat', async () => {
+    const lessonToken = (role: 'tutor' | 'student', name: string) => signClassroomJoinToken({ roomId: 'lesson-files-1', lessonId: 'lesson-9', name, role, uid: name, exp: Date.now() + 60_000 });
+    const tutor = await connected();
+    tutor.emit('room:join', { roomId: 'x', name: 'x', role: 'student', media, token: lessonToken('tutor', 'Tutor') });
+    await new Promise<JoinedRoom>((resolve) => tutor.once('room:joined', resolve));
+    const refused = errorOf(tutor);
+    tutor.emit('chat:file', { name: 'a.pdf', data: bytes(10) });
+    expect((await refused).message).toMatch(/lesson page/i);
   });
 });

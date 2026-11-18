@@ -6,6 +6,7 @@
   "exports": {
     "./protocol": "./protocol.ts",
     "./allowedHosts": "./allowedHosts.ts",
-    "./classroomToken": "./classroomToken.ts"
+    "./classroomToken": "./classroomToken.ts",
+    "./chatFiles": "./chatFiles.ts"
   }
 }
