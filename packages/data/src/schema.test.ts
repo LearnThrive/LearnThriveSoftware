@@ -47,6 +47,8 @@ const EXPECTED_TABLES = [
   "role_changes",
   "safeguarding_concern_events",
   "safeguarding_concerns",
+  "staff_meeting_invitees",
+  "staff_meetings",
   "stripe_webhook_events",
   "students",
   "subscriptions",
@@ -104,6 +106,8 @@ const FORCED_TABLES = [
   "role_changes",
   "safeguarding_concern_events",
   "safeguarding_concerns",
+  "staff_meeting_invitees",
+  "staff_meetings",
   "stripe_webhook_events",
   "subscriptions",
   "supervised_contexts",
@@ -199,6 +203,7 @@ describe("migrations", () => {
       "0025_roles.sql",
       "0026_payment_reference.sql",
       "0027_lesson_chat.sql",
+      "0028_staff_meetings.sql",
     ]);
     assert.deepEqual(
       applied.map((f) => Number(f.slice(0, 4))),

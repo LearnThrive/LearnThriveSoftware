@@ -99,6 +99,8 @@ interface SocketData {
   roomId?: string;
   // Who this socket is on the platform, from the VERIFIED join token (never from the browser): the lesson and the account. Absent for a manual join.
   chat?: { lessonId: string; userId: string };
+  // True when the VERIFIED join token is for a staff meeting (kind "meeting"), not a lesson. Its chat is an unsaved relay: there is no lesson to check.
+  meeting?: true;
 }
 type MeetingSocket = Socket<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>;
 
@@ -742,7 +744,8 @@ export function createSignallingServer(options?: {
         }
         const media = parseMedia(payload.media);
         if (!media) return fail(socket, 'Invalid microphone or camera status.');
-        if (verified.uid) socket.data.chat = { lessonId: verified.lessonId, userId: verified.uid };
+        if (verified.kind === 'meeting') socket.data.meeting = true;
+        else if (verified.uid) socket.data.chat = { lessonId: verified.lessonId, userId: verified.uid };
         proceedWithJoin(socket, verified.roomId, verified.name.trim().slice(0, MAX_NAME_LENGTH) || 'Participant', verified.role, media);
         return;
       }
@@ -928,7 +931,10 @@ export function createSignallingServer(options?: {
       // Plain text only: no markdown/HTML is ever interpreted server-side or client-side.
       let message: ChatMessage;
       const identity = socket.data.chat;
-      if (chatGate) {
+      if (socket.data.meeting) {
+        // A staff meeting (docs/STAFF_MEETINGS.md): everyone in the room was let in by the web app as staff, and nothing is stored.
+        message = { id: randomUUID(), senderId: socket.id, name: self.name, text, timestamp: Date.now() };
+      } else if (chatGate) {
         // The lesson chat (docs/LESSON_CHAT.md). Only a person who came in through their lesson link has an identity, and apps/web decides, on
         // every message, whether they may send in that lesson now. Nothing reaches the room until it says yes.
         if (!identity) return fail(socket, 'Chat is only available in a lesson, from your lesson page.');

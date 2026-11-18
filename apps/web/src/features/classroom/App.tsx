@@ -63,9 +63,11 @@ export interface ClassroomAppProps {
   lessonId?: string;
   initialToken?: string;
   isDevRoute?: boolean;
+  /** Where the end screen sends people back to when there is no lesson (a staff meeting: its list). */
+  returnHref?: string;
 }
 
-export function App({ lessonId, initialToken, isDevRoute }: ClassroomAppProps = {}) {
+export function App({ lessonId, initialToken, isDevRoute, returnHref }: ClassroomAppProps = {}) {
   const {
     snapshot, prepareMedia, toggleAudio, toggleVideo, toggleScreenShare, toggleChat, sendChatMessage,
     switchCamera, switchMicrophone, flipCamera, toggleHand, sendReaction, admitOne, admitAll, denyOne,
@@ -286,6 +288,8 @@ export function App({ lessonId, initialToken, isDevRoute }: ClassroomAppProps = 
             >
               Return to Lesson {snapshot.role === 'tutor' ? '(mark attendance & report)' : ''}
             </a>
+          ) : returnHref ? (
+            <a href={returnHref} className="button button-primary" style={{ textDecoration: 'none' }}>Back to meetings</a>
           ) : null}
           {snapshot.endedReason === 'left' && <button className="button button-primary" type="button" onClick={rejoin}>Rejoin this meeting<Icon name="arrow" /></button>}
           <button className="button button-secondary" type="button" onClick={reset}>{lessonId ? 'Classroom setup' : 'Return to meeting setup'}</button>

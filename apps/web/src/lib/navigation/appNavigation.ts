@@ -36,6 +36,7 @@ const ADMIN_NAV: AppNavSection[] = [
       { label: "Overview", href: "/dashboard", icon: "home" },
       { label: "Calendar", href: "/dashboard/calendar", icon: "calendar" },
       { label: "Lessons", href: "/dashboard/lessons", icon: "lessons", matchPrefix: "/dashboard/lessons" },
+      { label: "Meetings", href: "/dashboard/meetings", icon: "calendar", matchPrefix: "/dashboard/meetings" },
     ],
   },
   {
@@ -80,6 +81,7 @@ const TUTOR_NAV: AppNavSection[] = [
       { label: "Lessons", href: "/dashboard/lessons", icon: "lessons", matchPrefix: "/dashboard/lessons" },
       { label: "Students", href: "/dashboard/students", icon: "students" },
       { label: "Reports", href: "/dashboard/reports", icon: "reports" },
+      { label: "Meetings", href: "/dashboard/meetings", icon: "calendar", matchPrefix: "/dashboard/meetings" },
     ],
   },
   {

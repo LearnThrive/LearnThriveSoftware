@@ -1526,3 +1526,54 @@ describe('signalling through real Socket.IO clients', () => {
     });
   });
 });
+
+// A staff meeting (kind "meeting" in the verified join token) has no lesson, so its chat is not sent through the lesson chat gate. A lesson's still is.
+describe('chat in a staff meeting versus a lesson, with the lesson chat gate on', () => {
+  let server: ReturnType<typeof createSignallingServer>;
+  let url: string;
+  let clients: Client[];
+  const asked: string[] = [];
+
+  beforeEach(async () => {
+    asked.length = 0;
+    server = createSignallingServer({
+      disconnectGraceMs: DISCONNECT_GRACE_MS,
+      chatGate: { send: async (request) => { asked.push(request.lessonId); return { ok: false, message: 'Not allowed right now.' }; } },
+    });
+    clients = [];
+    server.httpServer.listen(0, '127.0.0.1');
+    await once(server.httpServer, 'listening');
+    url = `http://127.0.0.1:${(server.httpServer.address() as AddressInfo).port}`;
+  });
+  afterEach(async () => {
+    clients.forEach((client) => client.disconnect());
+    await new Promise<void>((resolve) => server.io.close(() => resolve()));
+  });
+
+  async function joinWith(token: string) {
+    const client: Client = io(url, { transports: ['websocket'], reconnection: false });
+    clients.push(client);
+    await new Promise<void>((resolve, reject) => { client.once('connect', () => resolve()); client.once('connect_error', reject); });
+    client.emit('room:join', { token, media });
+    await new Promise<JoinedRoom>((resolve) => client.once('room:joined', resolve));
+    return client;
+  }
+
+  it('relays a meeting message to the room without asking the lesson chat gate', async () => {
+    const host = await joinWith(signClassroomJoinToken({ roomId: 'meeting-room-1', lessonId: 'meeting-1', name: 'Host', role: 'tutor', uid: 'u1', kind: 'meeting', exp: Date.now() + 60_000 }));
+    const received = new Promise<ChatMessage>((resolve) => host.once('chat:message', resolve));
+    host.emit('chat:message', { text: 'Agenda first' });
+    const message = await received;
+    expect(message.text).toBe('Agenda first');
+    expect(message.name).toBe('Host');
+    expect(asked).toEqual([]);
+  });
+
+  it('still sends a lesson message through the gate, and relays nothing it refuses', async () => {
+    const tutor = await joinWith(signClassroomJoinToken({ roomId: 'lesson-room-1', lessonId: 'lesson-1', name: 'Tutor', role: 'tutor', uid: 'u2', exp: Date.now() + 60_000 }));
+    const refused = new Promise((resolve) => tutor.once('room:error', resolve));
+    tutor.emit('chat:message', { text: 'Hello' });
+    expect(await refused).toEqual({ message: 'Not allowed right now.' });
+    expect(asked).toEqual(['lesson-1']);
+  });
+});

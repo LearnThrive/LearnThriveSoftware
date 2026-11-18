@@ -45,6 +45,11 @@ export interface ClassroomJoinTokenPayload {
    * roles and records looked up fresh, never from anything the browser sent. Optional so older tokens still verify.
    */
   uid?: string;
+  /**
+   * "meeting": a staff meeting, not a lesson. Its `lessonId` is only a label (the meeting's id). The room has no lesson chat to check, so its chat is a
+   * plain, unsaved relay between the people in the room, who are all staff the web app has already let in. Absent for a lesson.
+   */
+  kind?: "meeting";
 }
 
 function base64UrlEncode(input: string): string {
@@ -79,6 +84,7 @@ export function verifyClassroomJoinToken(token: string): ClassroomJoinTokenPaylo
       typeof payload.exp !== "number"
     ) return null;
     if (payload.uid !== undefined && (typeof payload.uid !== "string" || payload.uid.length > 100)) return null;
+    if (payload.kind !== undefined && payload.kind !== "meeting") return null;
     if (payload.exp < Date.now()) return null;
     return payload as ClassroomJoinTokenPayload;
   } catch {
