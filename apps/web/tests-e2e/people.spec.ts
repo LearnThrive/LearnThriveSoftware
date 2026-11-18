@@ -52,11 +52,42 @@ test('a new Tuition Assignment appears in the list and on the Tutor profile', as
   await page.getByLabel('Title').fill('Year 8 Science — Brian');
   await page.locator('#assignment-subject').selectOption('Maths');
   await page.getByLabel('Tutor').selectOption({ label: 'Tahasin Hasan' });
-  await page.getByLabel('Student(s)').selectOption({ label: 'Brian James Khalawon' });
+  await page.getByRole('dialog').getByRole('checkbox', { name: /^Brian James Khalawon(?! \(learner\))/ }).check();
   await page.getByRole('dialog').getByRole('button', { name: 'Create assignment' }).click();
 
   await expect(page).toHaveURL(/\/dashboard\/admin\/assignments/);
   await expect(page.locator('.record-list')).toContainText('Year 8 Science — Brian');
+});
+
+test('the assignment form picks students with search and chips: a chosen student who is filtered out is still sent, and none is refused', async ({ page }) => {
+  await loginAsAdmin(page);
+  await page.goto('/dashboard/admin/assignments');
+  await page.getByRole('button', { name: 'Create assignment' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Title').fill('Picker check — Brian and Sam');
+  await page.locator('#assignment-subject').selectOption('Maths');
+  await page.getByLabel('Tutor').selectOption({ label: 'Tahasin Hasan' });
+
+  // Nobody chosen: the browser refuses, with a message that fits a list of students.
+  await dialog.getByRole('button', { name: 'Create assignment' }).click();
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('checkbox').first()).toHaveJSProperty('validationMessage', 'Choose at least one student.');
+
+  await dialog.getByRole('checkbox', { name: /^Brian James Khalawon(?! \(learner\))/ }).check();
+  await dialog.getByRole('checkbox', { name: /^Sam Junior-Test/ }).check();
+  await expect(dialog.locator('.student-pick__chip')).toHaveCount(2);
+
+  // Search for someone else: both chosen students leave the visible list but stay chosen, as chips and as submitted fields.
+  await dialog.getByLabel('Search students').fill('Robin');
+  await expect(dialog.getByRole('checkbox')).toHaveCount(1);
+  await expect(dialog.locator('.student-pick__chip')).toHaveCount(2);
+  await expect(dialog.locator('input[type="hidden"][name="studentIds"]')).toHaveCount(2);
+
+  await dialog.getByRole('button', { name: 'Create assignment' }).click();
+  await expect(page).toHaveURL(/\/dashboard\/admin\/assignments/);
+  const row = page.locator('.record-list__item', { hasText: 'Picker check — Brian and Sam' });
+  await expect(row).toContainText('Brian James Khalawon');
+  await expect(row).toContainText('Sam Junior-Test');
 });
 
 test('a Tutor cannot reach /dashboard/admin/people — redirected to /403', async ({ page }) => {

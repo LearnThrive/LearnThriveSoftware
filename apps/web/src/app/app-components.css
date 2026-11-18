@@ -485,8 +485,9 @@ body.has-dialog { overflow: hidden; }
 
 .dialog { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: var(--space-4); }
 .dialog__scrim {
-  /* A static, mild blur behind a modal (plan15 Wave 7): painted once while the dialog is open, never animated. */
-  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+  /* No backdrop-filter. A full-screen blur re-samples the whole page behind the modal and measurably dropped frames (about 52 fps on opening,
+     50 ms hitches, and choppy hover inside the dialog; a locked 60 without it), on every dialog in the app. The overlay is already
+     56% (72% in dark) navy, so the blur added almost nothing a person could see. */
   position: absolute; inset: 0; border: 0; background: var(--overlay); cursor: pointer;
   animation: dialog-scrim-in var(--duration-medium) var(--app-ease);
 }
@@ -500,6 +501,8 @@ body.has-dialog { overflow: hidden; }
   animation: dialog-in var(--duration-medium) var(--ease-gentle);
 }
 .dialog__panel.is-closing { animation: dialog-out var(--duration-fast) var(--app-ease) forwards; }
+/* A longer form (the assignment form) gets room for two columns. */
+.dialog__panel--wide { width: min(44rem, 100%); }
 /* A destructive confirmation gets a touch more visual weight than title/description colour alone
    would give it — plan8 section 27's "slightly stronger emphasis", read literally rather than as
    licence for anything louder (no shake, no red flash — section 69 is explicit that destructive
@@ -620,3 +623,38 @@ body.has-dialog { overflow: hidden; }
 .meeting-row__title { display: flex; align-items: center; gap: var(--space-2); margin: 0; font-weight: 600; color: var(--app-text); }
 .meeting-row__meta { margin: var(--space-1) 0 0; font-size: var(--text-small); color: var(--app-muted); }
 .meeting-row__actions { display: flex; align-items: center; gap: var(--space-2); }
+
+/* Create assignment form (components/people/AssignmentFields.tsx) */
+.assignment-form { display: flex; flex-direction: column; gap: var(--space-4); }
+.assignment-form__row { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); }
+.assignment-form__actions {
+  position: sticky; bottom: 0; z-index: 1;
+  display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); flex-wrap: wrap;
+  margin: 0 calc(var(--space-5) * -1) calc(var(--space-5) * -1); padding: var(--space-3) var(--space-5);
+  background: var(--app-surface); border-top: 1px solid var(--app-border);
+}
+.student-pick__chips { list-style: none; margin: 0 0 var(--space-2); padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.student-pick__chip {
+  display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.15rem 0.3rem 0.15rem 0.7rem; border-radius: 999px;
+  background: var(--app-accent-soft); color: var(--app-accent-text); font-size: var(--text-small); font-weight: 600;
+}
+.student-pick__chip button {
+  display: inline-grid; place-items: center; width: 1.4rem; height: 1.4rem; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer;
+}
+.student-pick__chip button:hover { background: color-mix(in srgb, currentColor 16%, transparent); }
+.student-pick__chip button:focus-visible { outline: none; box-shadow: var(--app-focus-ring); }
+.student-pick__box { border: 1px solid var(--app-border-strong); border-radius: var(--app-radius); background: var(--app-surface); overflow: hidden; }
+.student-pick__box:focus-within { border-color: var(--app-accent); box-shadow: var(--app-focus-ring); }
+.student-pick__search { display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-3); border-bottom: 1px solid var(--app-border); color: var(--app-muted); }
+/* The search box lives inside the list box, which draws the border and the focus ring: the generic field styles must not add a second one. */
+.student-pick .student-pick__search input { flex: 1; min-width: 0; height: auto; border: 0 !important; border-radius: 0; background: transparent !important; box-shadow: none !important; outline: none; padding: 0.6rem 0; color: var(--app-ink); }
+.student-pick__list { list-style: none; margin: 0; padding: var(--space-1); max-height: 12.5rem; overflow-y: auto; }
+.student-pick__row {
+  display: flex; align-items: center; gap: var(--space-3); min-height: 2.5rem; padding: 0 var(--space-3); border-radius: var(--app-radius-sm, 0.5rem);
+  cursor: pointer; color: var(--app-ink);
+}
+.student-pick__row:hover { background: var(--app-surface-sunken); }
+.student-pick__row:has(input:checked) { background: var(--app-accent-soft); }
+.student-pick__row input { width: 1.05rem; height: 1.05rem; accent-color: var(--app-accent); flex: none; }
+.student-pick__sub { margin-left: auto; font-size: var(--text-small); color: var(--app-muted); }
+.student-pick__none { margin: 0; padding: var(--space-4) var(--space-3); text-align: center; font-size: var(--text-small); color: var(--app-muted); }

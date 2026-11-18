@@ -14,9 +14,9 @@ import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { StatusBadge } from "@/components/ui/Badge";
 import { Dialog } from "@/components/ui/Dialog";
-import { Field, FormActions } from "@/components/ui/Field";
+import { Field } from "@/components/ui/Field";
 import { SearchInput } from "@/components/ui/SearchInput";
-import { AssignmentSubjectTutorFields } from "@/components/people/AssignmentFields";
+import { AssignmentStudentPicker, AssignmentSubjectTutorFields } from "@/components/people/AssignmentFields";
 import { matchesQuery } from "@/lib/people/peopleHelpers";
 import { RecordList, RecordRow } from "@/components/records/RecordRow";
 
@@ -91,8 +91,9 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
             trigger={<><Plus size={16} aria-hidden="true" />Create assignment</>}
             title="Create a tuition assignment"
             description="Pair a tutor with one or more students for a subject."
+            size="wide"
           >
-            <form action={createAssignmentAction} className="form">
+            <form action={createAssignmentAction} className="assignment-form">
               <Field label="Title" htmlFor="assignment-title" required hint="How it appears throughout the product, e.g. GCSE Mathematics — Brian.">
                 <input id="assignment-title" name="title" required autoComplete="off" />
               </Field>
@@ -100,17 +101,10 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
               <AssignmentSubjectTutorFields
                 tutors={tutors.filter((tutor) => tutor.active).map((tutor) => ({ id: tutor.id, name: tutor.name, subjects: tutor.subjects }))}
               />
-              <Field label="Level" htmlFor="assignment-level" hint="For example GCSE or A-Level.">
-                <input id="assignment-level" name="level" autoComplete="off" />
-              </Field>
-              <Field label="Student(s)" htmlFor="assignment-students" required hint="Hold Ctrl or Cmd to choose more than one.">
-                <select id="assignment-students" name="studentIds" multiple required size={Math.min(6, Math.max(3, students.length))}>
-                  {students.map((student) => <option key={student.id} value={student.id}>{student.name}</option>)}
-                </select>
-              </Field>
-              <FormActions>
+              <AssignmentStudentPicker students={students.map((student) => ({ id: student.id, name: student.name, yearGroup: student.yearGroup }))} />
+              <div className="assignment-form__actions">
                 <button type="submit" className="btn btn--primary">Create assignment</button>
-              </FormActions>
+              </div>
             </form>
           </Dialog>
         }

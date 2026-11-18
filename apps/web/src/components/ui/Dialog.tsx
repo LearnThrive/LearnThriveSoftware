@@ -12,7 +12,7 @@ import { useDelayedUnmount } from "@/lib/motion/useDelayedUnmount";
  * focus moves into the dialog on open, is trapped inside while it's open, and returns to the
  * trigger on close. Escape and a click on the backdrop both close it.
  */
-export function Dialog({ trigger, title, description, children, id, tone = "primary" }: {
+export function Dialog({ trigger, title, description, children, id, tone = "primary", size = "default" }: {
   /** Rendered as the opening control; receives no props, so style it however the page needs. */
   trigger: ReactNode;
   title: string;
@@ -23,6 +23,8 @@ export function Dialog({ trigger, title, description, children, id, tone = "prim
    * cancels a lesson shouldn't present itself as the same green primary action as one that
    * creates a student. */
   tone?: "primary" | "danger" | "secondary";
+  /** "wide" for a longer form that lays its fields out in columns. */
+  size?: "default" | "wide";
 }) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -80,7 +82,7 @@ export function Dialog({ trigger, title, description, children, id, tone = "prim
         <div className={`dialog ${dialog.closing ? "is-closing" : ""}`}>
           <button type="button" className="dialog__scrim" aria-label="Close dialog" onClick={close} />
           <div
-            className={`dialog__panel dialog__panel--${tone} ${dialog.closing ? "is-closing" : ""}`}
+            className={`dialog__panel dialog__panel--${tone} ${size === "wide" ? "dialog__panel--wide" : ""} ${dialog.closing ? "is-closing" : ""}`}
             role="dialog"
             aria-modal="true"
             aria-labelledby={`${dialogId}-title`}
