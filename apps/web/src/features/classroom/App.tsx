@@ -83,7 +83,7 @@ export function App({ lessonId, meetingId, initialToken, isDevRoute, returnHref 
     resumeTimer, stopTimer, sendBoardUpdate, sendBoardCursor, sendBoardLaser, createBoardPage, renameBoardPage,
     deleteBoardPage, reorderBoardPages, switchBoardPage, setBoardBackground, setStudentsCanDraw,
     followMe, importBoard, duplicateBoardPage, commitLocalPageElements, sendAnnouncement, setDataSaver, allowRejoin,
-    sendAnnotationUpdate, clearAnnotations, commitLocalAnnotations, sendChatFile,
+    sendAnnotationUpdate, clearAnnotations, commitLocalAnnotations, sendChatFile, detectDevices,
     join, leave, reset, rejoin, copyInvite, retryConnection, subscribeBoardPointers, getBoardPointersSnapshot,
   } = useMeeting();
   const [name, setName] = useState('');
@@ -95,6 +95,8 @@ export function App({ lessonId, meetingId, initialToken, isDevRoute, returnHref 
   // join() uses it, so a later re-render must not pick a fresh (now-absent) value back up.
   const [autoJoinToken] = useState(() => initialToken || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('token') : null));
   const [deviceMenuOpen, setDeviceMenuOpen] = useState(false);
+  // Opening Settings refreshes the camera and microphone lists, and asks the browser for them once if it has not shared them yet.
+  useEffect(() => { if (deviceMenuOpen) void detectDevices(true); }, [deviceMenuOpen, detectDevices]);
   const [participantPanelOpen, setParticipantPanelOpen] = useState(false);
   const [waitingRoomPanelOpen, setWaitingRoomPanelOpen] = useState(false);
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);

@@ -54,6 +54,9 @@ async function startServer() {
   realtime = createSignallingServer({
     httpServer: server,
     disconnectGraceMs: process.env.DISCONNECT_GRACE_MS ? Number(process.env.DISCONNECT_GRACE_MS) : undefined,
+    // The classroom lives inside this process, so on the live site its lesson chat checks every message with the website right here (no address to
+    // configure; CLASSROOM_WEB_URL still overrides). Development keeps the unsaved relay so the classroom can be tried alone.
+    webUrl: dev ? undefined : `http://localhost:${port}`,
   });
 
   // The readiness check (/api/health/ready) looks for this: a plain `next start` would serve the site with no classroom at all.

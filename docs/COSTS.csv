@@ -1,0 +1,14 @@
+Item,Supplier,What it is,Billing,Currency,Cost per month,Cost per year,Status,Notes
+Supabase Pro,Supabase,"Database, sign-in and file storage (project learnthrive-prod, London region)",Monthly,USD,25,"=IF(F2="""","""",F2*12)",Confirmed,"Pro plan. Extra compute or usage over the plan is billed on top; check the Billing page in Supabase"
+Render web service,Render,"The live site and classroom server (LearnThriveSoftware, 1 CPU and 2 GB, one instance, Frankfurt)",Monthly,USD,25,"=IF(F3="""","""",F3*12)",Confirmed,"Bandwidth over the included amount is billed on top"
+Render workspace plan,Render,"Team seats or workspace plan, if the workspace is on a paid plan",Monthly,USD,,"=IF(F4="""","""",F4*12)",To confirm,"Check Billing in the Render dashboard; leave blank if there is no separate charge"
+Google Workspace,Google,"Team email and documents",Monthly,GBP,,"=IF(F5="""","""",F5*12)",Tahasin to add,"If billed yearly, enter the yearly price divided by 12 in the monthly column"
+IONOS,IONOS,"Domain learnthrivetuition.co.uk (plus any hosting or email on the account)",Yearly,GBP,,"=IF(F6="""","""",F6*12)",Tahasin to add,"Domains are usually billed yearly: enter the yearly price divided by 12 in the monthly column"
+Cloudflare (DNS and proxy),Cloudflare,"DNS and protection in front of the site",Monthly,USD,,"=IF(F7="""","""",F7*12)",To confirm,"Enter 0 if on the free plan"
+Cloudflare Realtime,Cloudflare,"Classroom video and relay (SFU and TURN keys)",Usage-based,USD,,"=IF(F8="""","""",F8*12)",To confirm,"Has a monthly free allowance; the cost depends on lesson hours, so estimate once real lessons start"
+Resend,Resend,"Email sent by the site (enquiries, password resets)",Monthly,USD,,"=IF(F9="""","""",F9*12)",To confirm,"A free tier may cover launch volume; enter 0 if on it"
+Stripe,Stripe,"Card payments",None,USD,0,"=IF(F10="""","""",F10*12)",Not in use,"Payments are by bank transfer only; Stripe fees apply only if card payments are switched on later"
+Old Render services,Render,"Suspended LearnThrive and LearnThriveMarketing, and the old LearnThriveTuition static site",None,USD,,"=IF(F11="""","""",F11*12)",To confirm,"Suspended services should cost nothing; deleting the old ones removes any doubt"
+,,,,,,,,
+Total (USD),,,,,"=SUMIF($E$2:$E$11,""USD"",$F$2:$F$11)","=SUMIF($E$2:$E$11,""USD"",$G$2:$G$11)",,"Only the rows with an amount filled in are counted"
+Total (GBP),,,,,"=SUMIF($E$2:$E$11,""GBP"",$F$2:$F$11)","=SUMIF($E$2:$E$11,""GBP"",$G$2:$G$11)",,"Fills in as Tahasin adds the Google Workspace and IONOS amounts"

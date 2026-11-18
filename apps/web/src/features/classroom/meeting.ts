@@ -269,6 +269,28 @@ export class MeetingController {
     if (this.active && this.socket?.connected) this.socket.emit('participant:media', state);
   }
 
+  /**
+   * Fills the camera and microphone lists. Joining from a link skips the pre-join step that used to do it, so it is also done on joining and every
+   * time the Settings menu opens. If the browser has not yet shared the devices with this page (none listed, or listed without names) and
+   * `askPermission` is set, it asks once with a brief probe that is stopped at once: nothing is switched on or sent, it only lets the browser name them.
+   */
+  detectDevices = async (askPermission = false) => {
+    let found = await listDevices();
+    const hidden = found.unlabelled || (found.cameras.length === 0 && found.microphones.length === 0);
+    if (hidden && askPermission && navigator.mediaDevices?.getUserMedia) {
+      for (const constraints of [{ audio: true, video: true }, { video: true }, { audio: true }]) {
+        try {
+          (await navigator.mediaDevices.getUserMedia(constraints)).getTracks().forEach((track) => track.stop());
+          break;
+        } catch (error) {
+          devicesLog.warn('Device permission probe failed', error);
+        }
+      }
+      found = await listDevices();
+    }
+    this.update({ cameras: found.cameras, microphones: found.microphones });
+  };
+
   refreshDevices = async (checkSelection = false) => {
     const { cameras, microphones } = await listDevices();
     this.update({ cameras, microphones });
@@ -568,6 +590,7 @@ export class MeetingController {
       return;
     }
     this.active = true;
+    void this.detectDevices(); // joining from a link skips the pre-join step, so list the devices now (no prompt: that happens when Settings opens)
     // Invalidates any in-flight prepareMedia()/toggle() continuation from the pre-join screen —
     // without this, a device-enable callback that resolves just after "Start class" is clicked
     // could clobber the 'Connecting…' status this update sets below back to 'Ready to join',

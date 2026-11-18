@@ -22,6 +22,7 @@ export function useMeeting() {
     switchMicrophone: controller.switchMicrophone,
     flipCamera: controller.flipCamera,
     refreshDevices: controller.refreshDevices,
+    detectDevices: controller.detectDevices,
     toggleHand: controller.toggleHand,
     sendReaction: controller.sendReaction,
     admitOne: controller.admitOne,

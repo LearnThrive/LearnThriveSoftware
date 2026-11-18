@@ -49,6 +49,9 @@ export function DeviceMenu({
           {microphones.map((mic) => <option key={mic.deviceId} value={mic.deviceId}>{mic.label}</option>)}
         </select>
       </div>
+      {cameras.length === 0 && microphones.length === 0 && (
+        <p className="device-menu-hint" role="status">Your browser has not listed any devices yet. Allow camera and microphone access for this site (the padlock beside the address), then open this menu again.</p>
+      )}
       {canFlip && <button type="button" className="device-menu-flip" onClick={onFlip}><Icon name="flip" size={16} />Switch front/rear camera</button>}
       <div className="device-menu-group">
         <button type="button" className="device-menu-flip" aria-pressed={dataSaver} onClick={() => onDataSaver(!dataSaver)}>

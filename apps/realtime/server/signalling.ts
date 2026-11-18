@@ -282,12 +282,17 @@ export function createSignallingServer(options?: {
   // With a gate every message must pass it, and only a socket that joined through a lesson link may chat. With no gate, production allows no
   // chat at all; development and tests keep the old unsaved relay so the classroom can still be tried on its own.
   chatGate?: ChatGate | null;
+  // The web app's address when it runs in THIS process (the unified server on the live site). Used for the lesson chat gate when CLASSROOM_WEB_URL is not
+  // set, so a lesson's chat needs no setting there: this server simply asks the website it lives inside. An explicit CLASSROOM_WEB_URL still wins.
+  webUrl?: string;
 }) {
   const disconnectGraceMs = options?.disconnectGraceMs ?? 10_000;
   const sfuApi = options?.sfu === undefined ? sfuFromEnv() : options.sfu;
   const sfuService = sfuApi ? createSfuService(sfuApi) : null;
   const maxStudents = options?.maxStudents ?? (sfuApi ? SFU_MAX_STUDENTS : MAX_STUDENTS);
-  const chatGate = options?.chatGate === undefined ? chatGateFromEnv() : options.chatGate;
+  const chatGate = options?.chatGate === undefined
+    ? chatGateFromEnv({ ...process.env, CLASSROOM_WEB_URL: process.env.CLASSROOM_WEB_URL?.trim() || options?.webUrl })
+    : options.chatGate;
   const roomMedia = { mode: sfuApi ? 'sfu' : 'mesh', maxStudents } as const;
   const app = express();
   app.disable('x-powered-by');

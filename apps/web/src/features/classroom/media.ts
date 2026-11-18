@@ -27,15 +27,18 @@ export function canEnumerateDevices(): boolean {
   return typeof navigator.mediaDevices?.enumerateDevices === 'function';
 }
 
-export async function listDevices(): Promise<{ cameras: DeviceOption[]; microphones: DeviceOption[] }> {
-  if (!canEnumerateDevices()) return { cameras: [], microphones: [] };
+export async function listDevices(): Promise<{ cameras: DeviceOption[]; microphones: DeviceOption[]; unlabelled: boolean }> {
+  if (!canEnumerateDevices()) return { cameras: [], microphones: [], unlabelled: false };
   const devices = await navigator.mediaDevices.enumerateDevices();
+  // Until a page has been given camera or microphone access, a browser lists devices with no names (or hides them): that is what "unlabelled" means.
+  const unlabelled = devices.some((device) => (device.kind === 'videoinput' || device.kind === 'audioinput') && (!device.label || !device.deviceId));
   const label = (kind: string, index: number) => `${kind} ${index + 1}`;
   return {
     cameras: devices.filter((device) => device.kind === 'videoinput')
       .map((device, index) => ({ deviceId: device.deviceId, label: device.label || label('Camera', index) })),
     microphones: devices.filter((device) => device.kind === 'audioinput')
       .map((device, index) => ({ deviceId: device.deviceId, label: device.label || label('Microphone', index) })),
+    unlabelled,
   };
 }
 
