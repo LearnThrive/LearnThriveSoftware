@@ -168,21 +168,21 @@ export default async function LessonDetailPage({
       />
 
       {joinError && (
-        <div className="alert alert--error" role="alert" style={{ marginBottom: "var(--space-4)" }}>
+        <div className="alert alert--error" role="alert">
           <AlertCircle size={17} aria-hidden="true" />
           <p>{joinError}</p>
         </div>
       )}
 
       {postClass === "1" && canManage && (
-        <div className="alert alert--info" style={{ marginBottom: "var(--space-4)" }}>
+        <div className="alert alert--info">
           <CheckCircle2 size={17} aria-hidden="true" />
           <p>Class ended. Mark attendance and write the report below to close this lesson out.</p>
         </div>
       )}
 
       {lesson.status === "CANCELLED" && (
-        <div className="alert alert--warning" style={{ marginBottom: "var(--space-4)" }}>
+        <div className="alert alert--warning">
           <AlertCircle size={17} aria-hidden="true" />
           <p>
             This lesson was cancelled

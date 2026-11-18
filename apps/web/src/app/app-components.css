@@ -49,7 +49,8 @@
 .btn--danger { background: var(--app-surface); border-color: var(--tone-critical-border); color: var(--fg-error); }
 .btn--danger:hover:not(:disabled) { background: var(--error-bg); border-color: var(--fg-error); }
 
-.btn--sm { min-height: 2rem; padding: 0 var(--space-3); font-size: var(--text-label); }
+/* Smaller box, same readable text size: an 11px label in a button was smaller than the text around it. */
+.btn--sm { min-height: 2rem; padding: 0 var(--space-3); font-size: var(--text-small); }
 .btn--block { width: 100%; }
 
 /* The dialog trigger is a button that opens a modal. It carries the tone of whatever the dialog
@@ -470,7 +471,7 @@
 .card--form { max-width: 46rem; }
 
 /* The app's own message tone overrides the marketing-page .form-message spacing. */
-.app-content .form-message { margin-bottom: 0; padding: var(--space-4); border-radius: var(--app-radius-md); box-shadow: none; }
+.app-content .form-message { margin-bottom: 0; padding: var(--space-4); border-radius: var(--app-radius); box-shadow: none; }
 .form-message--warning {
   border: 1px solid var(--tone-warning-soft-border); border-left-width: 4px !important;
   background: var(--tone-warning-soft-bg); color: var(--app-ink);
@@ -658,3 +659,67 @@ body.has-dialog { overflow: hidden; }
 .student-pick__row input { width: 1.05rem; height: 1.05rem; accent-color: var(--app-accent); flex: none; }
 .student-pick__sub { margin-left: auto; font-size: var(--text-small); color: var(--app-muted); }
 .student-pick__none { margin: 0; padding: var(--space-4) var(--space-3); text-align: center; font-size: var(--text-small); color: var(--app-muted); }
+
+/* ============================================================ Shared text and control fixes (docs/ui-sweep/FINDINGS.md) */
+
+/* Secondary text: hints, notes and "nothing here" lines inside panels. Used across the app but never defined, so those lines rendered
+   at full body size and ink colour beside the small muted text around them (F01). */
+.muted { margin: 0; font-size: var(--text-small); color: var(--app-muted); line-height: 1.5; }
+span.muted, small.muted { margin: 0; }
+
+/* A checkbox with its label, in a list of choices (who to invite, subjects, repeat days): sized and spaced like every other control
+   instead of a bare browser checkbox (F02). */
+.checkbox-row {
+  display: flex; align-items: center; gap: var(--space-2);
+  min-height: 2.25rem; font-size: var(--text-body); color: var(--app-ink); cursor: pointer;
+}
+.checkbox-row input { flex: none; width: 1.15rem; height: 1.15rem; margin: 0; accent-color: var(--app-accent); cursor: pointer; }
+.checkbox-row:has(input:disabled) { cursor: default; opacity: 0.6; }
+
+/* A group of choices marked up as a field: no browser fieldset border, and the legend styled as the field's label (F02). */
+fieldset.field { margin: 0; padding: 0; border: 0; min-width: 0; }
+legend.field__label { padding: 0; margin-bottom: 0.35rem; }
+
+/* The marketing site's .form-actions (globals.css) adds a 1.75rem top margin and, on a phone, stacks and centres the buttons. In the
+   product a form's actions are a left-aligned row that wraps, at every width (F03). */
+.app-shell .form-actions { flex-direction: row; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-1); }
+
+/* A select or text input outside .field/.form (the attendance select on a lesson) gets the same control styling (F06). */
+.app-content select:not([class]) {
+  min-height: 2.375rem; padding: 0.4rem var(--space-3);
+  border: 1px solid var(--app-border-strong); border-radius: var(--app-radius-sm);
+  background-color: var(--app-surface); color: var(--app-ink); font: inherit; font-size: var(--text-body);
+}
+.app-content select:not([class]):focus { outline: none; border-color: var(--app-accent); box-shadow: var(--app-focus-ring); }
+
+/* Settings: two columns until there is genuinely room for three, so values do not wrap to three lines (F22). */
+.settings-grid { grid-template-columns: repeat(auto-fit, minmax(min(26rem, 100%), 1fr)); }
+
+.meeting-row__main { min-width: 0; flex: 1 1 18rem; }
+/* Taller (44px) rows on a phone: room for six names before the list scrolls, so the last invitee is not hidden below the fold. */
+@media (max-width: 40rem), (pointer: coarse) { .meeting-people { max-height: 21rem; } }
+.child-heading__year { margin-top: 0.15rem; line-height: 1.3; }
+
+/* Narrow screens: a tab strip scrolls sideways instead of wrapping onto three rows (F17). The hairline moves to an inset shadow so the
+   active tab's underline still sits on it inside a scrolling box. */
+@media (max-width: 40rem) {
+  .filter-tabs {
+    flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
+    border-bottom: 0; box-shadow: inset 0 -1px 0 var(--app-border);
+  }
+  .filter-tabs::-webkit-scrollbar { display: none; }
+  .filter-tab { flex: none; margin-bottom: 0; }
+}
+
+/* 44px touch targets on a phone or a coarse pointer (F18): buttons, tabs, inputs and checkboxes. */
+@media (max-width: 40rem), (pointer: coarse) {
+  .btn, .btn--sm, .dialog-trigger, .filter-tab, .search-select__trigger { min-height: 2.75rem; }
+  .search-input input, .search-select__search input { height: 2.75rem; }
+  .field input:not([type="checkbox"]):not([type="radio"]), .field select,
+  .form input:not([type="checkbox"]):not([type="radio"]), .form select,
+  .app-content select:not([class]) { min-height: 2.75rem; }
+  .checkbox-row, .student-pick__row, .search-select__option, .quick-create__item { min-height: 2.75rem; }
+  .checkbox-row input, .checkbox-field input { width: 1.375rem; height: 1.375rem; }
+  .toast__dismiss { min-width: 2.75rem; min-height: 2.75rem; }
+  .student-pick__chip button { width: 2rem; height: 2rem; }
+}
