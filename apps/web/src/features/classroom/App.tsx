@@ -120,6 +120,8 @@ export function App({ lessonId, initialToken, isDevRoute, returnHref }: Classroo
   const leaveTriggerRef = useRef<HTMLButtonElement>(null);
   const classControlsTriggerRef = useRef<HTMLButtonElement>(null);
   const setFocusTarget = (target: FocusTarget) => setFocusTargetState(target);
+  // A staff meeting (it comes back to the meetings list, not to a lesson). Its room cannot be entered with a shared link, so no invite link is offered.
+  const isStaffMeeting = Boolean(returnHref);
   const inCall = snapshot.phase === 'meeting';
   const waitingForAdmission = snapshot.phase === 'waiting';
   const ended = snapshot.phase === 'ended';
@@ -253,8 +255,12 @@ export function App({ lessonId, initialToken, isDevRoute, returnHref }: Classroo
   const waitingTile = <section className="waiting-tile" aria-label="Waiting for other participants">
     <div className="waiting-orbit"><div className="waiting-icon"><Icon name="people" size={34} /></div></div>
     <p className="eyebrow">YOUR CLASSROOM IS READY</p><h2>A little company,<br />a lot of possibility.</h2>
-    <p className="waiting-description">Share your invite link to bring<br className="desktop-break" /> others into the meeting.</p>
-    <button className="button button-mint" type="button" onClick={() => void copyInvite()} aria-label="Copy invite link"><Icon name={snapshot.copied ? 'check' : 'link'} />{snapshot.copied ? 'Invite link copied' : 'Copy invite link'}</button>
+    {isStaffMeeting
+      ? <p className="waiting-description">The people you invited join from their<br className="desktop-break" /> Meetings page. You let each one in.</p>
+      : <>
+        <p className="waiting-description">Share your invite link to bring<br className="desktop-break" /> others into the meeting.</p>
+        <button className="button button-mint" type="button" onClick={() => void copyInvite()} aria-label="Copy invite link"><Icon name={snapshot.copied ? 'check' : 'link'} />{snapshot.copied ? 'Invite link copied' : 'Copy invite link'}</button>
+      </>}
   </section>;
 
   // The shared screen and who is sharing it, and the cameras that sit beside the screen or the whiteboard (students on top, the tutor below).
@@ -310,7 +316,7 @@ export function App({ lessonId, initialToken, isDevRoute, returnHref }: Classroo
           ) : null}
           {snapshot.endedReason === 'left' && <button className="button button-primary" type="button" onClick={rejoin}>Rejoin this meeting<Icon name="arrow" /></button>}
           <button className="button button-secondary" type="button" onClick={reset}>{lessonId ? 'Classroom setup' : 'Return to meeting setup'}</button>
-          {snapshot.endedReason === 'left' && <button className="button button-secondary" type="button" onClick={() => void copyInvite()}><Icon name={snapshot.copied ? 'check' : 'link'} size={16} />{snapshot.copied ? 'Link copied' : 'Copy meeting link'}</button>}
+          {snapshot.endedReason === 'left' && !isStaffMeeting && <button className="button button-secondary" type="button" onClick={() => void copyInvite()}><Icon name={snapshot.copied ? 'check' : 'link'} size={16} />{snapshot.copied ? 'Link copied' : 'Copy meeting link'}</button>}
         </div>
         <div className="ended-footer">A little learning. A little growing. LearnThrive.</div>
       </section> : waitingForAdmission ? <section className="waiting-admission-panel">
@@ -481,7 +487,7 @@ export function App({ lessonId, initialToken, isDevRoute, returnHref }: Classroo
             </div>
             <div className="control-item"><button type="button" className={`media-button ${snapshot.handRaised ? 'is-on' : ''}`} onClick={toggleHand} aria-pressed={snapshot.handRaised} aria-label={snapshot.handRaised ? 'Lower your hand' : 'Raise your hand'}><Icon name="hand" size={20} /></button><span>{snapshot.handRaised ? 'Lower hand' : 'Raise hand'}</span></div>
             <span className="controls-divider" />
-            {snapshot.peers.length === 0 && <div className="control-item"><button type="button" className="media-button invite-control" onClick={() => void copyInvite()} aria-label="Copy invite link"><Icon name={snapshot.copied ? 'check' : 'link'} size={22} /></button><span>{snapshot.copied ? 'Copied' : 'Invite'}</span></div>}
+            {snapshot.peers.length === 0 && !isStaffMeeting && <div className="control-item"><button type="button" className="media-button invite-control" onClick={() => void copyInvite()} aria-label="Copy invite link"><Icon name={snapshot.copied ? 'check' : 'link'} size={22} /></button><span>{snapshot.copied ? 'Copied' : 'Invite'}</span></div>}
             <div className="control-item popover-anchor">
               <button ref={leaveTriggerRef} type="button" className="media-button leave-control" onClick={() => setLeaveConfirmOpen(true)} aria-label={snapshot.role === 'tutor' ? 'End class' : 'Leave meeting'}><Icon name="leave" size={23} /></button><span>{snapshot.role === 'tutor' ? 'End class' : 'Leave'}</span>
               <LeaveConfirm open={leaveConfirmOpen} onClose={() => setLeaveConfirmOpen(false)} onConfirm={() => { setLeaveConfirmOpen(false); leave(); }} triggerRef={leaveTriggerRef} isTutor={snapshot.role === 'tutor'} />

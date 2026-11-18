@@ -784,6 +784,8 @@ export function createSignallingServer(options?: {
       if (!media) return fail(socket, 'Invalid microphone or camera status.');
       const role = parseRole(payload.role);
       if (!role) return fail(socket, 'Invalid role.');
+      // A staff meeting is for the people the web app let in with a signed link. The room code alone (the "invite link") never opens one.
+      if (rooms.get(payload.roomId)?.meeting) return fail(socket, 'This is a staff meeting. Open it from Meetings in your dashboard.');
       proceedWithJoin(socket, payload.roomId, payload.name.trim(), role, media);
     });
 

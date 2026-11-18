@@ -1709,3 +1709,81 @@ describe('annotations on a shared screen', () => {
     await endedWithShare;
   });
 });
+
+// The server as it runs on the live site: production mode and no lesson chat gate configured. Here an unrecognised room has NO chat ("Chat is not
+// available right now."), so a meeting must be recognised as one however its people arrived.
+describe('a staff meeting in production mode', () => {
+  let server: ReturnType<typeof createSignallingServer>;
+  let url: string;
+  let clients: Client[];
+  let previousEnv: string | undefined;
+  let previousSecret: string | undefined;
+
+  beforeEach(async () => {
+    previousEnv = process.env.NODE_ENV;
+    previousSecret = process.env.CLASSROOM_JOIN_SECRET;
+    process.env.NODE_ENV = 'production';
+    process.env.CLASSROOM_JOIN_SECRET = 'a-secret-for-this-test-only'; // production refuses the built-in development secret
+    server = createSignallingServer({ disconnectGraceMs: DISCONNECT_GRACE_MS, chatGate: null });
+    clients = [];
+    server.httpServer.listen(0, '127.0.0.1');
+    await once(server.httpServer, 'listening');
+    url = `http://127.0.0.1:${(server.httpServer.address() as AddressInfo).port}`;
+  });
+  afterEach(async () => {
+    clients.forEach((client) => client.disconnect());
+    await new Promise<void>((resolve) => server.io.close(() => resolve()));
+    if (previousEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previousEnv;
+    if (previousSecret === undefined) delete process.env.CLASSROOM_JOIN_SECRET; else process.env.CLASSROOM_JOIN_SECRET = previousSecret;
+  });
+
+  const tokenFor = (role: 'tutor' | 'student', name: string) => signClassroomJoinToken({ roomId: 'meeting-prod-1', lessonId: 'meeting:prod', name, role, uid: name, kind: 'meeting', exp: Date.now() + 60_000 });
+  async function connected() {
+    const client: Client = io(url, { transports: ['websocket'], reconnection: false });
+    clients.push(client);
+    await new Promise<void>((resolve, reject) => { client.once('connect', () => resolve()); client.once('connect_error', reject); });
+    return client;
+  }
+  async function hostInRoom() {
+    const host = await connected();
+    host.emit('room:join', { roomId: 'x', name: 'x', role: 'student', media, token: tokenFor('tutor', 'Host') });
+    await new Promise<JoinedRoom>((resolve) => host.once('room:joined', resolve));
+    return host;
+  }
+  const hears = (client: Client, text: string) => new Promise<ChatMessage>((resolve) => client.on('chat:message', (message) => { if (message.text === text) resolve(message); }));
+
+  it('chat works for a guest who came in with a signed link', async () => {
+    const host = await hostInRoom();
+    const guest = await connected();
+    const waiting = new Promise((resolve) => guest.once('room:waiting', resolve));
+    const inRoom = new Promise<JoinedRoom>((resolve) => guest.once('room:joined', resolve));
+    guest.emit('room:join', { roomId: 'x', name: 'x', role: 'student', media, token: tokenFor('student', 'Guest') });
+    await waiting;
+    host.emit('room:admit', { id: guest.id! });
+    await inRoom;
+    const toHost = hears(host, 'hello host');
+    guest.emit('chat:message', { text: 'hello host' });
+    expect((await toHost).name).toBe('Guest');
+    const toGuest = hears(guest, 'hello guest');
+    host.emit('chat:message', { text: 'hello guest' });
+    expect((await toGuest).name).toBe('Host');
+  });
+
+  it('someone who tries to enter a meeting with just its room code (the invite link) is turned away', async () => {
+    await hostInRoom();
+    const stranger = await connected();
+    const refused = new Promise<{ message: string }>((resolve) => stranger.once('room:error', resolve));
+    stranger.emit('room:join', { roomId: 'meeting-prod-1', name: 'Stranger', role: 'student', media });
+    expect((await refused).message).toMatch(/staff meeting/i);
+  });
+
+  it('a lesson room still lets a manual join in (a development convenience that exists today)', async () => {
+    const tutor = await connected();
+    tutor.emit('room:join', { roomId: 'lesson-room-prod', name: 'Tutor', role: 'tutor', media });
+    await new Promise<JoinedRoom>((resolve) => tutor.once('room:joined', resolve));
+    const student = await connected();
+    const waiting = new Promise((resolve) => student.once('room:waiting', resolve));
+    student.emit('room:join', { roomId: 'lesson-room-prod', name: 'Student', role: 'student', media });
+    await waiting;
+  });
+});
