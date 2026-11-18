@@ -24,10 +24,8 @@ function text(formData: FormData, key: string): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-/** The browser's classroom address for this meeting, or the separately hosted classroom when one is configured (the same rule as a lesson's). */
+/** The room is part of this site (a single server): there is no separately hosted classroom to send people to. */
 function classroomUrl(meetingId: string, token: string): string {
-  const external = process.env.NEXT_PUBLIC_CLASSROOM_URL;
-  if (external && !external.includes("localhost:5173") && !external.includes("127.0.0.1:5173")) return `${external}/?token=${encodeURIComponent(token)}`;
   return `/dashboard/meetings/${meetingId}/classroom?token=${encodeURIComponent(token)}`;
 }
 

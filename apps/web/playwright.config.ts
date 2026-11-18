@@ -3,6 +3,11 @@ import { defineConfig, devices } from '@playwright/test';
 // Separate from apps/classroom's Playwright suite (different app, different port, different
 // concerns — this covers auth/session/role-guard behaviour that genuinely needs a real running
 // Next.js server and real cookies, not just unit-testable pure functions).
+
+// The dev servers below inherit this. Next's dev-tools button (a <nextjs-portal> overlay) would otherwise sit on top of buttons the tests click
+// (toast dismiss, enquiry bar, library menu) and swallow the click until the test times out. next.config.ts reads it.
+process.env.NEXT_DEV_INDICATORS = 'off';
+
 export default defineConfig({
   testDir: './tests-e2e',
   // Compiles the routes this suite only ever reaches by clicking, once per dev server, before any

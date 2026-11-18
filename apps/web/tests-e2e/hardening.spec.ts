@@ -59,7 +59,7 @@ test('lesson detail IDOR: a Tutor cannot view a lesson they are not assigned to'
   await page.goto('/dashboard/admin/assignments');
   await page.getByRole('button', { name: 'Create assignment' }).click();
   await page.getByLabel('Title').fill(assignmentTitle);
-  await page.getByLabel('Subject').selectOption('Science');
+  await page.locator('#assignment-subject').selectOption('Science');
   await page.getByLabel('Tutor').selectOption({ label: tutorName });
   await page.getByLabel('Student(s)').selectOption({ label: studentName });
   await page.getByRole('dialog').getByRole('button', { name: 'Create assignment' }).click();
