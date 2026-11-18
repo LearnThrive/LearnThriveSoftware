@@ -287,3 +287,8 @@
 /* On a phone the controls and the device status share one row: the status takes what is left rather than a fixed 155px, so "Camera &
    mic are off" fits on one or two lines instead of three beside an empty meter (docs/ui-sweep/FINDINGS.md, F24). */
 @media(max-width:620px){.device-status{max-width:none;min-width:0}}
+
+/* The product's generic `.field input` rule (app-components.css, higher specificity) also matched the classroom's own `.field`, so in
+   the dark theme the join form's inputs turned navy on the classroom's light page. The classroom keeps its own look in both themes. */
+.app .field input:not([type="checkbox"]):not([type="radio"]){height:47px;min-height:0;border:1px solid #d8dfdb;border-radius:7px;padding:0 13px;font-size:13px;color:var(--navy);background:#fefefd}
+.app .field input:not([type="checkbox"]):not([type="radio"]):focus{border-color:#087363}

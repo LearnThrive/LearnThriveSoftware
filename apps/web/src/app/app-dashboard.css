@@ -428,7 +428,8 @@
 /* An event stays inside its own day: clipped with an ellipsis, never spilling over the next cell. */
 .calendar-wrap .fc-daygrid-event-harness { min-width: 0; }
 .calendar-wrap .fc-daygrid-event { overflow: hidden; }
-.calendar-wrap .fc-event-title, .calendar-wrap .fc-event-time { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.calendar-wrap .fc-daygrid-event .fc-event-time { flex: none; }
+.calendar-wrap .fc-daygrid-event .fc-event-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* The loading skeleton's cards, without inline styles (F25). */
 .skeleton-card { padding: var(--space-5); }
