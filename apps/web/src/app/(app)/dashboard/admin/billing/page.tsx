@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Receipt } from "lucide-react";
+import { ReceiptPoundSterling } from "lucide-react";
 import { familyBalances, formatPence } from "@learnthrive/data/tuitionBilling";
 import { requireRole } from "@/lib/auth/guard";
 import { createMetadata } from "@/lib/metadata";
@@ -47,7 +47,7 @@ export default async function BillingPage() {
         <CardHeader title="Families" description="Balance is what the family owes now. A negative balance means they are in credit." />
         <CardBody className="card__body--flush">
           {rows.length === 0 ? (
-            <EmptyState title="No families yet" icon={<Receipt size={20} />} description="A family appears here once it exists as a client." />
+            <EmptyState title="No families yet" icon={<ReceiptPoundSterling size={20} />} description="A family appears here once it exists as a client." />
           ) : (
             <RecordList>
               {rows.map((r) => (

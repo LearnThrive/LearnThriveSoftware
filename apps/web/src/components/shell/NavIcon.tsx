@@ -1,6 +1,7 @@
 import {
   Activity, BookOpen, CalendarDays, ClipboardList, Cog, GraduationCap,
   Home, Users, UserRound, Bell, CalendarClock, FileText, Library, MessagesSquare, Search, Inbox,
+  Video, ShieldCheck, KeyRound, ReceiptPoundSterling, ShieldAlert, Shapes,
 } from "lucide-react";
 import type { AppNavIcon } from "@/lib/navigation/appNavigation";
 
@@ -24,6 +25,13 @@ const ICONS: Record<AppNavIcon, typeof Home> = {
   search: Search,
   account: UserRound,
   applications: Inbox,
+  // One glyph per destination: Meetings, Tutor checks, Roles, Billing/Fees, Concerns and My subjects used to borrow another item's icon.
+  meetings: Video,
+  vetting: ShieldCheck,
+  roles: KeyRound,
+  billing: ReceiptPoundSterling,
+  concerns: ShieldAlert,
+  subjects: Shapes,
 };
 
 export function NavIcon({ name, size = 18 }: { name: AppNavIcon; size?: number }) {
