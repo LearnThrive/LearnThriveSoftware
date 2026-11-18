@@ -289,7 +289,7 @@ export class InMemoryLibraryStore implements LibraryStore {
       if (!plan.ok) return refused(plan.reason, plan.message);
       const needsRecord = (plan.after.includes("TUTOR") || plan.after.includes("JUNIOR_TUTOR")) && !this.tutorRefs.has(profileId)
         || plan.after.includes("STUDENT") && !this.learnerOf(profileId);
-      if (needsRecord) return refused("NEEDS_RECORD", "That role needs the person's own record first (a tutor record, or a learner login).");
+      if (needsRecord) return refused("NEEDS_RECORD", "That role needs the person's own record first (a tutor record, or a learner login). A tutor needs one under People, Tutors (Create login, or Link login); a student under People, Students (Link login).");
       target.roles = plan.after;
       target.role = plan.after[0]!;
       this.roleAudit.unshift({ at: now ?? new Date(), actorProfileId: actor, targetProfileId: profileId, before: plan.before, after: plan.after });

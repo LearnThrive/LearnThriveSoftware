@@ -49,6 +49,12 @@ export interface StudentRepository {
   clientsFor(studentId: string): Promise<Client[]>;
   studentsFor(clientId: string): Promise<Student[]>;
   allLinks(): Promise<ClientStudentLink[]>;
+  /**
+   * Makes an EXISTING login this student's own learner login: a tutor who is also a student signs in once and has both. The student must belong
+   * to a family and have no learner login yet; the login must not own a family or already be a learner. Production database only; the caller
+   * then adds the STUDENT role (a role needs its record first). Answers why not only so an administrator can be told.
+   */
+  linkLogin(studentId: string, username: string, actor: string): Promise<"ok" | "no_student" | "no_account" | "not_eligible" | "unsupported">;
 }
 
 export interface AssignmentRepository {

@@ -143,6 +143,7 @@ class InMemoryStudentRepository implements StudentRepository {
     if (this.links.some((l) => l.clientId === clientId && l.studentId === studentId)) return;
     this.links.push({ clientId, studentId });
   }
+  async linkLogin() { return "unsupported" as const; } // development learners are linked by the seed (lib/dev/accounts.ts)
   async unlinkClient(clientId: string, studentId: string) {
     const index = this.links.findIndex((l) => l.clientId === clientId && l.studentId === studentId);
     if (index !== -1) this.links.splice(index, 1);

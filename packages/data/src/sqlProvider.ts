@@ -217,6 +217,30 @@ export function createSqlDataProvider(db: SqlExecutor): DataProvider {
       // it stays as it is (the guardian relationship is changed only by the identity operations, which are audited).
       await db.query(`insert into public.client_students (client_id, student_id) values ($1, $2) on conflict (client_id, student_id) do nothing`, [clientId, studentId]);
     },
+    linkLogin: async (studentId, username, actor) => {
+      if (!isId(studentId)) return "no_student";
+      const name = username.trim().toLowerCase();
+      const done = await db.query<Row>(
+        `with target as (select p.id from public.profiles p where p.username = $2),
+              ok as (
+                select s.id as student_id, s.client_id, tg.id as profile_id
+                  from public.students s, target tg
+                 where s.id = $1 and s.active
+                   and exists (select 1 from public.client_students cs where cs.student_id = s.id and cs.status = 'active')
+                   and not exists (select 1 from public.learner_identities l where l.student_id = s.id)
+                   and not exists (select 1 from public.learner_identities l where l.profile_id = tg.id)
+                   and not exists (select 1 from public.clients c where c.owner_profile_id = tg.id)
+                   and not exists (select 1 from public.profile_roles r where r.profile_id = tg.id and r.role = 'CLIENT'))
+            , ins as (insert into public.learner_identities (student_id, profile_id) select student_id, profile_id from ok returning student_id)
+            , audit as (insert into public.identity_audit (actor_profile_id, action, client_id, student_id) select $3, 'learner_login_linked', ok.client_id, ok.student_id from ok returning 1)
+            select count(*)::int as n from ins`,
+        [studentId, name, isId(actor) ? actor : null],
+      );
+      if ((done[0]?.n ?? 0) > 0) return "ok";
+      // Why not: told apart only so the admin can be told, never to guess.
+      if (!(await db.query<Row>(`select id from public.students where id = $1`, [studentId]))[0]) return "no_student";
+      return (await db.query<Row>(`select id from public.profiles where username = $1`, [name]))[0] ? "not_eligible" : "no_account";
+    },
     unlinkClient: async (clientId, studentId) => {
       if (!isId(clientId) || !isId(studentId)) return;
       // The owning family's link is not removable here; any other link is revoked (kept for the audit trail), not deleted.

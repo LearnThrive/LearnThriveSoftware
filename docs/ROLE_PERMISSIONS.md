@@ -37,6 +37,7 @@ are answered in two different ways, and the code keeps them apart on purpose:
   | Administrator who teaches | `ADMIN`, `TUTOR` | a tutor record | everything (administrator), and their own teaching tools |
   | Student who is also a junior tutor (17) | `STUDENT`, `JUNIOR_TUTOR` | a student and a tutor record | their own lessons and reports as a student; the lessons and students they are assigned as a junior tutor |
   | Tutor who is also a parent | `TUTOR`, `CLIENT` | a tutor record and a family | their own taught lessons and their own family's |
+  | Tutor who is also a student | `TUTOR`, `STUDENT` | a tutor record and a learner login | their own taught lessons, and their own lessons and reports as a student. Made by linking the tutor's login to the student record (Admin, People, Students, the student's page, Link login), which adds `STUDENT` |
 
 - **Each role keeps its own view of a report.** Private tutor notes are shown only through a role
   that earns them (an administrator, or the tutor who wrote the report); the same person as a student

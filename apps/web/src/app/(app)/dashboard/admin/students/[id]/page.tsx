@@ -17,6 +17,8 @@ import { LoginCard } from "@/components/people/LoginCard";
 import { CreateLoginForm, UsernameField } from "@/components/people/LoginForms";
 import { PurgePanel } from "@/components/people/PurgePanel";
 import { createLearnerLoginAction } from "@/lib/actions/accounts";
+import { linkLearnerLoginAction } from "@/lib/actions/enrolment";
+import { Field, FormActions } from "@/components/ui/Field";
 import { learnerLogin } from "@/lib/account/loginDetails";
 import { purgeStudentAction } from "@/lib/actions/purge";
 import { EditStudentDialog } from "@/components/people/EditDetails";
@@ -160,14 +162,31 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
             childLinked
             learner={login && !removed ? { studentId: student.id, status: login.status } : undefined}
             noLogin={
-              <CreateLoginForm
-                action={createLearnerLoginAction}
-                hidden={{ studentId: student.id }}
-                submitLabel="Create login"
-                intro={`${removed ? "This student's last login was removed." : "This student has no login of their own."} A new one will be linked to their parent, whose email receives its password resets.`}
-              >
-                <UsernameField id="student-login-username" required={false} hint="Leave empty to generate one. Never use a child's name or school." />
-              </CreateLoginForm>
+              <>
+                <CreateLoginForm
+                  action={createLearnerLoginAction}
+                  hidden={{ studentId: student.id }}
+                  submitLabel="Create login"
+                  intro={`${removed ? "This student's last login was removed." : "This student has no login of their own."} A new one will be linked to their parent, whose email receives its password resets.`}
+                >
+                  <UsernameField id="student-login-username" required={false} hint="Leave empty to generate one. Never use a child's name or school." />
+                </CreateLoginForm>
+                {!removed && (
+                  <form action={linkLearnerLoginAction} className="form">
+                    <p className="muted">
+                      Or link a login they already have, such as a tutor who is also a student: they sign in once and have both, and keep every role they hold.
+                      A login that owns a family account cannot be linked.
+                    </p>
+                    <input type="hidden" name="studentId" value={student.id} />
+                    <Field label="Username of their login" htmlFor="student-link-username" required>
+                      <input id="student-link-username" name="username" required autoComplete="off" autoCapitalize="none" spellCheck={false} />
+                    </Field>
+                    <FormActions>
+                      <button type="submit" className="btn btn--secondary">Link login</button>
+                    </FormActions>
+                  </form>
+                )}
+              </>
             }
           />
 

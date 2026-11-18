@@ -244,7 +244,7 @@ export class SqlLibraryStore implements LibraryStore {
         case "unknown_role": return refused("UNKNOWN_ROLE", "That is not a role.");
         case "exclusive": return refused("EXCLUSIVE", "Those roles cannot be held together.");
         case "last_admin": return refused("LAST_ADMIN", "This is the last administrator. Make someone else an administrator first.");
-        case "needs_record": return refused("NEEDS_RECORD", "That role needs the person's own record first (a tutor record, or a learner login).");
+        case "needs_record": return refused("NEEDS_RECORD", "That role needs the person's own record first (a tutor record, or a learner login). A tutor needs one under People, Tutors (Create login, or Link login); a student under People, Students (Link login).");
         case "unchanged": return refused("UNCHANGED", "Nothing would change.");
         default: return refused("UNKNOWN_ROLE", "That change was not accepted.");
       }

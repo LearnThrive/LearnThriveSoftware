@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { accountRuntime } from "@/lib/account/runtime";
 import { parseUsername, usernameFormatError } from "@/lib/account/username";
 import { requireRole } from "@/lib/auth/guard";
+import { changeRolesFor } from "@/lib/roles/handlers";
 import { getDataProvider } from "@/lib/data/provider";
 
 /**
@@ -123,4 +124,36 @@ export async function linkTutorLoginAction(formData: FormData): Promise<void> {
     unsupported: "Logins are linked in the production database only.",
   };
   back(path, message[result]);
+}
+
+/**
+ * A tutor who is also a student: the student's own login becomes an EXISTING login (the tutor's), so one sign-in holds both. Two steps: the
+ * login is bound to the student record, then the STUDENT role is added to it (a role needs its record first; the Roles screen can finish the
+ * second step by hand if it is refused). Nothing is taken from the person: they keep every role and record they had.
+ */
+export async function linkLearnerLoginAction(formData: FormData): Promise<void> {
+  const admin = await requireRole(["ADMIN"]);
+  const studentId = field(formData, "studentId");
+  const username = parseUsername(formData.get("username"));
+  if (!ID.test(studentId) || usernameFormatError(username)) throw new Error("Enter the username of their login.");
+  const path = `/dashboard/admin/students/${studentId}`;
+  const result = await getDataProvider().students.linkLogin(studentId, username, admin.id);
+  if (result !== "ok") {
+    const refusal: Record<Exclude<typeof result, "ok">, string> = {
+      no_student: "There is no such student.",
+      no_account: "There is no login with that username.",
+      not_eligible: "That login cannot be this student's (it owns a family account, holds the parent role or is a learner already), or this student already has a login or no parent linked.",
+      unsupported: "Logins are linked in the production database only.",
+    };
+    back(path, refusal[result]);
+  }
+  const rt = await accountRuntime();
+  const person = rt ? (await rt.store.accounts.listProfiles()).find((p) => p.username?.toLowerCase() === username.toLowerCase()) : undefined;
+  if (!rt || !person) back(path, "Login linked. Add the Student role on the Roles screen to finish.");
+  const roles = person!.roles.includes("STUDENT") ? person!.roles : [...person!.roles, "STUDENT" as const];
+  // Through the role handler, like the Roles screen: it is the only code that changes roles (tests/multiRole.test.mjs checks that).
+  const changed = await changeRolesFor(admin, { profileId: person!.profileId, roles }, rt!.store.accounts);
+  back(path, changed.body.ok
+    ? "Login linked. They now have their student side on the same sign-in as their other roles."
+    : `Login linked, but the Student role could not be added (${changed.body.message}). Add it on the Roles screen.`);
 }
