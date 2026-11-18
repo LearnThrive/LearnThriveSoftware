@@ -104,52 +104,6 @@ export default async function TutorProfilePage({ params }: { params: Promise<{ i
         </div>
       </div>
 
-      <LoginCard
-        profileId={tutor.userId}
-        returnTo={`/dashboard/admin/tutors/${tutor.id}`}
-        noLogin={
-          <>
-            <CreateLoginForm
-              action={createTutorLoginAction}
-              hidden={{ tutorId: tutor.id }}
-              submitLabel="Create login"
-              intro="This tutor has no login yet. This makes one and gives you a temporary password to hand over."
-            >
-              <UsernameField id="tutor-login-username" />
-              <Field label="Linked email" htmlFor="tutor-login-email" hint={`Leave empty to use ${tutor.email || "the address on this record"}.`}>
-                <input id="tutor-login-email" name="email" type="email" autoComplete="off" />
-              </Field>
-            </CreateLoginForm>
-            <form action={linkTutorLoginAction} className="form">
-              <p className="muted">
-                Or link a login they already have, such as an administrator who also teaches: they stay an administrator and gain the tutor tools. A login that belongs to a family or a
-                learner cannot be linked.
-              </p>
-              <input type="hidden" name="tutorId" value={tutor.id} />
-              <Field label="Username of their login" htmlFor="tutor-link-username" required>
-                <input id="tutor-link-username" name="username" required autoComplete="off" autoCapitalize="none" spellCheck={false} />
-              </Field>
-              <FormActions>
-                <button type="submit" className="btn btn--secondary">Link login</button>
-              </FormActions>
-            </form>
-          </>
-        }
-      />
-
-      {purge && (
-        <PurgePanel
-          preview={purge}
-          kind="TUTOR"
-          action={purgeTutorAction}
-          id={tutor.id}
-          returnTo={`/dashboard/admin/tutors/${tutor.id}`}
-          confirmation="PURGE TUTOR"
-          title="Purge this tutor"
-          description="For a tutor who has stopped working with us. Their lessons and reports stay, without their name on them."
-        />
-      )}
-
       <div className="stat-grid">
         <StatTile label="Active students" value={studentIds.length} />
         <StatTile label="Upcoming lessons" value={upcoming.length} />
@@ -264,6 +218,52 @@ export default async function TutorProfilePage({ params }: { params: Promise<{ i
           </Card>
         </div>
       </div>
+
+      <LoginCard
+        profileId={tutor.userId}
+        returnTo={`/dashboard/admin/tutors/${tutor.id}`}
+        noLogin={
+          <>
+            <CreateLoginForm
+              action={createTutorLoginAction}
+              hidden={{ tutorId: tutor.id }}
+              submitLabel="Create login"
+              intro="This tutor has no login yet. This makes one and gives you a temporary password to hand over."
+            >
+              <UsernameField id="tutor-login-username" />
+              <Field label="Linked email" htmlFor="tutor-login-email" hint={`Leave empty to use ${tutor.email || "the address on this record"}.`}>
+                <input id="tutor-login-email" name="email" type="email" autoComplete="off" />
+              </Field>
+            </CreateLoginForm>
+            <form action={linkTutorLoginAction} className="form">
+              <p className="muted">
+                Or link a login they already have, such as an administrator who also teaches: they stay an administrator and gain the tutor tools. A login that belongs to a family or a
+                learner cannot be linked.
+              </p>
+              <input type="hidden" name="tutorId" value={tutor.id} />
+              <Field label="Username of their login" htmlFor="tutor-link-username" required>
+                <input id="tutor-link-username" name="username" required autoComplete="off" autoCapitalize="none" spellCheck={false} />
+              </Field>
+              <FormActions>
+                <button type="submit" className="btn btn--secondary">Link login</button>
+              </FormActions>
+            </form>
+          </>
+        }
+      />
+
+      {purge && (
+        <PurgePanel
+          preview={purge}
+          kind="TUTOR"
+          action={purgeTutorAction}
+          id={tutor.id}
+          returnTo={`/dashboard/admin/tutors/${tutor.id}`}
+          confirmation="PURGE TUTOR"
+          title="Purge this tutor"
+          description="For a tutor who has stopped working with us. Their lessons and reports stay, without their name on them."
+        />
+      )}
     </>
   );
 }

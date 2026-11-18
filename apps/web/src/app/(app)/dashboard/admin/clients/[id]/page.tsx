@@ -86,22 +86,6 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
         <StatTile label="Approved reports" value={reports.length} />
       </div>
 
-      <LoginCard profileId={client.userId} returnTo={`/dashboard/admin/clients/${client.id}`} noLogin={<p className="muted">This client has no login.</p>} />
-
-      {/* 3.7.1: the family record and the parent's login are only offered once no child is left on it. */}
-      {children.length === 0 && purge && (
-        <PurgePanel
-          preview={purge}
-          kind="FAMILY"
-          action={purgeFamilyAction}
-          id={client.id}
-          returnTo={`/dashboard/admin/clients/${client.id}`}
-          confirmation="PURGE FAMILY"
-          title="Purge this family"
-          description="For a family that has left. Every child must already be purged; this removes the family account and the parent's login."
-        />
-      )}
-
       <div className="profile-grid">
         <div className="stack">
           <Card>
@@ -176,6 +160,22 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
           </CardBody>
         </Card>
       </div>
+
+      <LoginCard profileId={client.userId} returnTo={`/dashboard/admin/clients/${client.id}`} noLogin={<p className="muted">This client has no login.</p>} />
+
+      {/* 3.7.1: the family record and the parent's login are only offered once no child is left on it. */}
+      {children.length === 0 && purge && (
+        <PurgePanel
+          preview={purge}
+          kind="FAMILY"
+          action={purgeFamilyAction}
+          id={client.id}
+          returnTo={`/dashboard/admin/clients/${client.id}`}
+          confirmation="PURGE FAMILY"
+          title="Purge this family"
+          description="For a family that has left. Every child must already be purged; this removes the family account and the parent's login."
+        />
+      )}
     </>
   );
 }
