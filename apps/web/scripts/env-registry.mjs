@@ -201,6 +201,7 @@ export const REGISTRY = [
 
   // ---- Development and tooling ----------------------------------------------------------------------------------------------
   e("NEXT_DIST_DIR", "tooling", "A separate Next build folder, so more than one dev server can run (the Playwright servers set it).", { production: "unset", check: "text" }),
+  e("NEXT_DEV_INDICATORS", "tooling", "Set to off to hide Next's dev-tools button in development (the Playwright run sets it, so the button cannot cover what the tests click).", { production: "unset", check: "text" }),
   e("CHROME_PATH", "tooling", "Browser path for scripts/profile-motion.mjs and browser-check.mjs.", { production: "unset", check: "text" }),
   e("CI", "tooling", "Set by CI: Playwright retries and forbidOnly; scripts/dev-services.mjs skips Docker.", { check: "text" }),
 ];
