@@ -33,6 +33,8 @@ export interface SfuTransport {
 export interface SfuCallbacks {
   /** A participant's stream. The SAME object is updated as their tracks arrive, so a <video> attached to it keeps playing. */
   stream: (participantId: string, stream: MediaStream | null) => void;
+  /** A participant's shared screen, as its own stream (it travels beside their camera, never instead of it). null when they stop or leave. */
+  screen?: (participantId: string, stream: MediaStream | null) => void;
   connection: (state: SfuConnection) => void;
   error: (error: unknown) => void;
 }
@@ -46,17 +48,19 @@ export interface SfuDeps {
   ready?: Promise<unknown>;
   createPeerConnection?: (configuration: RTCConfiguration) => RTCPeerConnection;
   createStream?: () => MediaStream;
-  placeholder?: (kind: 'audio' | 'video') => { track: MediaStreamTrack; stop: () => void };
+  placeholder?: (kind: 'audio' | 'video' | 'screen') => { track: MediaStreamTrack; stop: () => void };
   retryDelayMs?: number;
 }
 
 const AUDIO: SfuTrackInfo = { trackName: 'audio', kind: 'audio' };
 const VIDEO: SfuTrackInfo = { trackName: 'video', kind: 'video' };
+/** The shared screen. Always published (a black placeholder until someone shares) so that sharing never renegotiates, like the camera swap. */
+const SCREEN: SfuTrackInfo = { trackName: 'screen', kind: 'video' };
 const MAX_RESTARTS = 3;
 
-/** A track that always sends something. Used only when there is no real camera or microphone. */
-export function createPlaceholderTrack(kind: 'audio' | 'video'): { track: MediaStreamTrack; stop: () => void } {
-  if (kind === 'video') {
+/** A track that always sends something. Used only when there is no real camera or microphone (or, for 'screen', nothing is being shared). */
+export function createPlaceholderTrack(kind: 'audio' | 'video' | 'screen'): { track: MediaStreamTrack; stop: () => void } {
+  if (kind === 'video' || kind === 'screen') {
     const canvas = document.createElement('canvas');
     canvas.width = 64;
     canvas.height = 48;
@@ -84,7 +88,7 @@ export function createPlaceholderTrack(kind: 'audio' | 'video'): { track: MediaS
   return { track, stop: () => { track.stop(); void context.close(); } };
 }
 
-interface Publisher { pc: RTCPeerConnection; sessionId: string; audio: RTCRtpSender; video: RTCRtpSender }
+interface Publisher { pc: RTCPeerConnection; sessionId: string; audio: RTCRtpSender; video: RTCRtpSender; screen: RTCRtpSender }
 interface Subscriber { pc: RTCPeerConnection; sessionId: string }
 
 export class SfuMedia {
@@ -93,13 +97,14 @@ export class SfuMedia {
   private subscriberReady: Promise<Subscriber> | null = null;
   private readonly wanted = new Map<string, SfuPublication>();
   private readonly pulledMids = new Map<string, string[]>();
-  private readonly midOwner = new Map<string, { participantId: string; kind: 'audio' | 'video' }>();
+  private readonly midOwner = new Map<string, { participantId: string; kind: 'audio' | 'video'; trackName: string }>();
   private readonly streams = new Map<string, MediaStream>();
-  private readonly placeholders = new Map<'audio' | 'video', { track: MediaStreamTrack; stop: () => void }>();
+  private readonly screenStreams = new Map<string, MediaStream>();
+  private readonly placeholders = new Map<'audio' | 'video' | 'screen', { track: MediaStreamTrack; stop: () => void }>();
   private publisherQueue: Promise<unknown> = Promise.resolve();
   private subscriberQueue: Promise<unknown> = Promise.resolve();
   private audioOverride: MediaStreamTrack | null = null;
-  private videoOverride: MediaStreamTrack | null = null;
+  private screenOverride: MediaStreamTrack | null = null;
   private maxBitrateKbps: number | null = null;
   private publisherState: SfuConnection = 'connecting';
   private subscriberState: SfuConnection | null = null;
@@ -139,7 +144,7 @@ export class SfuMedia {
     return data.sessionId;
   }
 
-  private placeholderFor(kind: 'audio' | 'video'): MediaStreamTrack {
+  private placeholderFor(kind: 'audio' | 'video' | 'screen'): MediaStreamTrack {
     let entry = this.placeholders.get(kind);
     if (!entry) {
       entry = (this.deps.placeholder ?? createPlaceholderTrack)(kind);
@@ -148,8 +153,9 @@ export class SfuMedia {
     return entry.track;
   }
 
-  private outgoing(kind: 'audio' | 'video'): MediaStreamTrack {
-    const override = kind === 'audio' ? this.audioOverride : this.videoOverride;
+  private outgoing(kind: 'audio' | 'video' | 'screen'): MediaStreamTrack {
+    if (kind === 'screen') return this.screenOverride ?? this.placeholderFor('screen');
+    const override = kind === 'audio' ? this.audioOverride : null;
     return override ?? this.media.track(kind) ?? this.placeholderFor(kind);
   }
 
@@ -167,14 +173,19 @@ export class SfuMedia {
     try {
       const audio = pc.addTransceiver(this.outgoing('audio'), { direction: 'sendonly' });
       const video = pc.addTransceiver(this.outgoing('video'), { direction: 'sendonly' });
+      const screen = pc.addTransceiver(this.outgoing('screen'), { direction: 'sendonly' });
       await pc.setLocalDescription(await pc.createOffer());
       const offer = pc.localDescription;
-      if (!offer || audio.mid == null || video.mid == null) throw new Error('Your browser could not prepare its media connection.');
+      if (!offer || audio.mid == null || video.mid == null || screen.mid == null) throw new Error('Your browser could not prepare its media connection.');
       const result = await this.transport.request({
         op: 'tracks.new', sessionId,
         body: {
           sessionDescription: { type: 'offer', sdp: offer.sdp },
-          tracks: [{ location: 'local', mid: audio.mid, trackName: AUDIO.trackName }, { location: 'local', mid: video.mid, trackName: VIDEO.trackName }],
+          tracks: [
+            { location: 'local', mid: audio.mid, trackName: AUDIO.trackName },
+            { location: 'local', mid: video.mid, trackName: VIDEO.trackName },
+            { location: 'local', mid: screen.mid, trackName: SCREEN.trackName },
+          ],
         },
       });
       const failed = firstTrackError(result);
@@ -182,9 +193,9 @@ export class SfuMedia {
       if (failed || !answer) throw new Error(failed ?? 'The media service did not accept your camera and microphone.');
       await pc.setRemoteDescription(answer);
       pc.onconnectionstatechange = () => this.onPublisherState(pc);
-      this.publisher = { pc, sessionId, audio: audio.sender, video: video.sender };
+      this.publisher = { pc, sessionId, audio: audio.sender, video: video.sender, screen: screen.sender };
       await this.applyBitrate();
-      await this.transport.publish(sessionId, [AUDIO, VIDEO]);
+      await this.transport.publish(sessionId, [AUDIO, VIDEO, SCREEN]);
       this.onPublisherState(pc);
     } catch (error) {
       pc.close();
@@ -212,10 +223,11 @@ export class SfuMedia {
     await this.enqueue('publisher', () => this.publish()).catch(() => { if (!this.closed) this.setPublisherState('failed'); });
   }
 
-  /** Swaps the outgoing tracks in place (camera on/off, a device switch, a screen share starting or stopping). No renegotiation. */
-  syncTracks(overrides?: { audio?: MediaStreamTrack | null; video?: MediaStreamTrack | null }) {
+  /** Swaps the outgoing tracks in place (camera on/off, a device switch, a screen share starting or stopping). No renegotiation. The shared
+   * screen goes out on its own track; the camera keeps going beside it. */
+  syncTracks(overrides?: { audio?: MediaStreamTrack | null; screen?: MediaStreamTrack | null }) {
     if (overrides && 'audio' in overrides) this.audioOverride = overrides.audio ?? null;
-    if (overrides && 'video' in overrides) this.videoOverride = overrides.video ?? null;
+    if (overrides && 'screen' in overrides) this.screenOverride = overrides.screen ?? null;
     void this.enqueue('publisher', async () => {
       const publisher = this.publisher;
       if (!publisher) return;
@@ -223,6 +235,8 @@ export class SfuMedia {
       const video = this.outgoing('video');
       if (publisher.audio.track !== audio) await publisher.audio.replaceTrack(audio);
       if (publisher.video.track !== video) await publisher.video.replaceTrack(video);
+      const screen = this.outgoing('screen');
+      if (publisher.screen.track !== screen) await publisher.screen.replaceTrack(screen);
     });
   }
 
@@ -284,8 +298,8 @@ export class SfuMedia {
     if (wanted.length === 0) return;
     const subscriber = await this.ensureSubscriber();
     const tracks = wanted.flatMap((publication) => publication.tracks.map((track) => ({ location: 'remote', sessionId: publication.sessionId, trackName: track.trackName })));
-    const owners = new Map<string, { participantId: string; kind: 'audio' | 'video' }>();
-    for (const publication of wanted) for (const track of publication.tracks) owners.set(`${publication.sessionId}/${track.trackName}`, { participantId: publication.participantId, kind: track.kind });
+    const owners = new Map<string, { participantId: string; kind: 'audio' | 'video'; trackName: string }>();
+    for (const publication of wanted) for (const track of publication.tracks) owners.set(`${publication.sessionId}/${track.trackName}`, { participantId: publication.participantId, kind: track.kind, trackName: track.trackName });
 
     const result = await this.transport.request({ op: 'tracks.new', sessionId: subscriber.sessionId, body: { tracks } });
     const returned = Array.isArray(result.tracks) ? result.tracks as Array<Record<string, unknown>> : [];
@@ -328,6 +342,18 @@ export class SfuMedia {
     const mid = event.transceiver.mid;
     const owner = mid ? this.midOwner.get(mid) : undefined;
     if (!owner || this.closed) return;
+    if (owner.trackName === SCREEN.trackName) {
+      // The shared screen is a stream of its own: it must never replace the person's camera in their camera stream.
+      let screen = this.screenStreams.get(owner.participantId);
+      if (!screen) {
+        screen = this.deps.createStream ? this.deps.createStream() : new MediaStream();
+        this.screenStreams.set(owner.participantId, screen);
+      }
+      for (const old of screen.getTracks()) screen.removeTrack(old);
+      screen.addTrack(event.track);
+      this.callbacks.screen?.(owner.participantId, screen);
+      return;
+    }
     let stream = this.streams.get(owner.participantId);
     if (!stream) {
       stream = this.deps.createStream ? this.deps.createStream() : new MediaStream();
@@ -346,6 +372,10 @@ export class SfuMedia {
     if (stream) for (const track of stream.getTracks()) stream.removeTrack(track);
     this.streams.delete(participantId);
     this.callbacks.stream(participantId, null);
+    const screen = this.screenStreams.get(participantId);
+    if (screen) for (const track of screen.getTracks()) screen.removeTrack(track);
+    this.screenStreams.delete(participantId);
+    this.callbacks.screen?.(participantId, null);
     const subscriber = this.subscriber;
     if (!mids?.length || !subscriber) return;
     try {
@@ -377,7 +407,9 @@ export class SfuMedia {
       for (const participantId of [...this.pulledMids.keys()]) {
         this.pulledMids.delete(participantId);
         this.streams.delete(participantId);
+        this.screenStreams.delete(participantId);
         this.callbacks.stream(participantId, null);
+        this.callbacks.screen?.(participantId, null);
       }
       this.midOwner.clear();
       await this.pull(everyone);
@@ -406,6 +438,7 @@ export class SfuMedia {
     for (const entry of this.placeholders.values()) entry.stop();
     this.placeholders.clear();
     this.streams.clear();
+    this.screenStreams.clear();
     this.wanted.clear();
     this.pulledMids.clear();
     this.midOwner.clear();

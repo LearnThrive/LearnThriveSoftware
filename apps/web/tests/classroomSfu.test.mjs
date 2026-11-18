@@ -93,12 +93,18 @@ function world(options = {}) {
     async publish(sessionId, tracks) { log.push(`publish ${sessionId}`); published.push({ sessionId, tracks }); },
   };
   const streams = new Map();
+  const screens = new Map();
   const events = [];
   const callbacks = {
     stream: (id, stream) => {
       events.push(`stream ${id} ${stream ? stream.getTracks().length : "none"}`);
       if (stream) streams.set(id, stream);
       else streams.delete(id);
+    },
+    screen: (id, stream) => {
+      events.push(`screen ${id} ${stream ? stream.getTracks().length : "none"}`);
+      if (stream) screens.set(id, stream);
+      else screens.delete(id);
     },
     connection: (state) => events.push(`connection ${state}`),
     error: (error) => events.push(`error ${error.message}`),
@@ -116,11 +122,12 @@ function world(options = {}) {
   };
   const local = { audio: options.audio, video: options.video };
   const media = new SfuMedia(transport, { track: (kind) => local[kind] }, callbacks, deps);
-  return { media, log, events, streams, published, placeholders, local, maxInFlight: () => maxInFlight };
+  return { media, log, events, streams, screens, published, placeholders, local, maxInFlight: () => maxInFlight };
 }
 
 const real = () => ({ audio: { kind: "audio", real: true }, video: { kind: "video", real: true } });
-const pub = (participantId, sessionId) => ({ participantId, sessionId, tracks: [{ trackName: "audio", kind: "audio" }, { trackName: "video", kind: "video" }] });
+// Everyone publishes three tracks: the microphone, the camera, and a screen line that carries nothing until they share.
+const pub = (participantId, sessionId) => ({ participantId, sessionId, tracks: [{ trackName: "audio", kind: "audio" }, { trackName: "video", kind: "video" }, { trackName: "screen", kind: "video" }] });
 const settle = (ms = 40) => new Promise((resolve) => setTimeout(resolve, ms));
 // Waits until `done()` is true or `ms` passes, then returns either way, so the assertions after it judge the result. A fixed wait
 // was not enough on a loaded Windows machine (timers tick at about 15 ms there), where three joiners queued one call at a time
@@ -130,21 +137,21 @@ const settleUntil = async (done, ms = 3000) => {
   while (!done() && Date.now() < deadline) await settle(10);
 };
 
-test("start: one send-only audio and one send-only video, offered with the browser's mids, then announced to the room", async () => {
+test("start: send-only audio, camera and screen lines, offered with the browser's mids, then announced to the room", async () => {
   const w = world(real());
   await w.media.start();
   assert.deepEqual(w.log, ["session.new", "tracks.new session-1", "publish session-1"]);
   const [pc] = FakePc.all;
   assert.equal(pc.configuration.bundlePolicy, "max-bundle");
-  assert.deepEqual(pc.transceivers.map((t) => [t.direction, t.mid, t.sender.track.real]), [["sendonly", "0", true], ["sendonly", "1", true]]);
-  assert.deepEqual(w.published, [{ sessionId: "session-1", tracks: [{ trackName: "audio", kind: "audio" }, { trackName: "video", kind: "video" }] }]);
-  assert.equal(w.placeholders.length, 0, "a real camera and microphone need no placeholder");
+  assert.deepEqual(pc.transceivers.map((t) => [t.direction, t.mid, Boolean(t.sender.track.real)]), [["sendonly", "0", true], ["sendonly", "1", true], ["sendonly", "2", false]]);
+  assert.deepEqual(w.published, [{ sessionId: "session-1", tracks: [{ trackName: "audio", kind: "audio" }, { trackName: "video", kind: "video" }, { trackName: "screen", kind: "video" }] }]);
+  assert.deepEqual(w.placeholders.map((t) => t.kind), ["screen"], "a real camera and microphone need no placeholder; the idle screen line has one");
 });
 
 test("with no camera or microphone it publishes placeholders so Cloudflare does not collect the tracks, and a real track replaces one in place", async () => {
   const w = world();
   await w.media.start();
-  assert.deepEqual(w.placeholders.map((t) => t.kind).sort(), ["audio", "video"]);
+  assert.deepEqual(w.placeholders.map((t) => t.kind).sort(), ["audio", "screen", "video"]);
   const [pc] = FakePc.all;
   assert.ok(pc.transceivers.every((t) => t.sender.track.placeholder));
   const camera = { kind: "video", real: true };
@@ -156,18 +163,38 @@ test("with no camera or microphone it publishes placeholders so Cloudflare does 
   assert.equal(FakePc.all.length, 1, "no renegotiation, no new connection");
 });
 
-test("a screen share replaces the outgoing video in place and ending it restores the camera", async () => {
+test("a screen share goes out on its own line in place, the camera keeps going beside it, and ending it puts the idle placeholder back", async () => {
   const camera = { kind: "video", id: "camera" };
   const w = world({ audio: { kind: "audio" }, video: camera });
   await w.media.start();
   const [pc] = FakePc.all;
   const screen = { kind: "video", id: "screen" };
-  w.media.syncTracks({ video: screen });
+  w.media.syncTracks({ screen });
   await settle();
-  assert.equal(pc.transceivers[1].sender.track, screen);
-  w.media.syncTracks({ video: null });
+  assert.equal(pc.transceivers[2].sender.track, screen, "the screen is on the third line");
+  assert.equal(pc.transceivers[1].sender.track, camera, "the camera is NOT replaced");
+  w.media.syncTracks({ screen: null });
   await settle();
+  assert.equal(pc.transceivers[2].sender.track.placeholder, true, "back to the idle placeholder");
   assert.equal(pc.transceivers[1].sender.track, camera);
+  assert.equal(FakePc.all.length, 1, "no renegotiation");
+});
+
+test("a pulled screen arrives as its own stream and never replaces that person's camera in their camera stream", async () => {
+  const w = world(real());
+  await w.media.start();
+  w.media.subscribe(pub("tutor", "tutor-session"));
+  await settle();
+  assert.deepEqual(w.streams.get("tutor").getTracks().map((t) => t.kind).sort(), ["audio", "video"], "the camera stream is the voice and the camera only");
+  const screen = w.screens.get("tutor");
+  assert.ok(screen, "the shared screen has a stream of its own");
+  assert.equal(screen.getTracks().length, 1);
+  assert.equal(screen.getTracks()[0].kind, "screen");
+  // When they leave, both go away.
+  w.media.unsubscribe("tutor");
+  await settle();
+  assert.equal(w.streams.has("tutor"), false);
+  assert.equal(w.screens.has("tutor"), false);
 });
 
 test("subscribe: pulls the other participant's tracks into a receive-only session and answers Cloudflare's offer", async () => {

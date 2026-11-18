@@ -94,6 +94,11 @@ interface Room {
   // app has no accounts, so it's trivially bypassed by rejoining under a different name, same
   // honest limitation as every other role/identity check in this codebase.
   removedNames: Map<string, string>;
+  // A staff meeting's room, not a lesson's (set from a VERIFIED join token of kind "meeting"). Its chat is an unsaved relay, and the host's
+  // mute is a one-time mute that people can undo themselves, because everyone in it is an adult colleague.
+  meeting: boolean;
+  // The tutor's drawing on the shared screen, by element id. Lives only while a screen is being shared (cleared whenever a share starts or ends).
+  annotations: Map<string, BoardElement>;
 }
 interface SocketData {
   roomId?: string;
@@ -104,7 +109,7 @@ interface SocketData {
 }
 type MeetingSocket = Socket<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>;
 
-function createRoom(): Room {
+function createRoom(meeting = false): Room {
   const firstPageId = randomUUID();
   return {
     participants: new Map(), waiting: new Map(), edges: new Map(), publications: new Map(),
@@ -114,7 +119,7 @@ function createRoom(): Room {
       pages: [{ id: firstPageId, name: 'Board 1', background: 'blank', elements: new Map() }],
       activePageId: firstPageId, studentsCanDraw: true,
     },
-    announcement: null, announcementTimer: null, removedNames: new Map(),
+    announcement: null, announcementTimer: null, removedNames: new Map(), meeting, annotations: new Map(),
   };
 }
 
@@ -488,9 +493,24 @@ export function createSignallingServer(options?: {
     };
   }
 
+  /** Wipes the drawing on the shared screen and tells everyone, if there was any. Whenever a share starts or ends, its drawing goes with it. */
+  function clearAnnotations(room: Room) {
+    if (room.annotations.size === 0) return;
+    room.annotations.clear();
+    for (const id of room.participants.keys()) io.to(id).emit('annotation:cleared');
+  }
+
   function broadcastBoardPages(room: Room) {
     const pages = room.board.pages.map((page): BoardPage => ({ id: page.id, name: page.name, background: page.background }));
     for (const id of room.participants.keys()) io.to(id).emit('board:pages-update', { pages, activePageId: room.board.activePageId });
+  }
+
+  // The host's mute. In a lesson it is locked until the tutor allows an unmute (children are muted for the lesson's sake). In a staff meeting it
+  // turns the microphone off once and leaves them free to turn it back on: a colleague is never locked out of speaking.
+  function muteBy(room: Room, target: Participant) {
+    if (!room.meeting) { setForceMuted(room, target, true); return; }
+    target.forceMuted = false;
+    for (const id of room.participants.keys()) io.to(id).emit('participant:force-muted', { id: target.id, forceMuted: false, soft: true });
   }
 
   function setForceMuted(room: Room, target: Participant, forceMuted: boolean) {
@@ -520,7 +540,7 @@ export function createSignallingServer(options?: {
     socket.data.roomId = roomId;
     void socket.join(`meeting:${roomId}`);
     const waiting = self.role === 'tutor' ? [...room.waiting.entries()].map(([id, entry]) => ({ id, name: entry.name })) : [];
-    socket.emit('room:joined', { roomId, self, peers, waiting, media: roomMedia, ...personalizedExtras(room, self.id, self.role), board: buildBoardState(room), announcement: room.announcement });
+    socket.emit('room:joined', { roomId, self, peers, waiting, media: roomMedia, ...personalizedExtras(room, self.id, self.role), board: buildBoardState(room), announcement: room.announcement, annotations: [...room.annotations.values()] });
     if (sfuService) socket.emit('sfu:publications', { publications: [...room.publications.values()] });
     if (self.role === 'tutor') socket.emit('room:removed-list-update', { names: [...room.removedNames.values()] });
   }
@@ -544,7 +564,7 @@ export function createSignallingServer(options?: {
       }
     }
     const waiting = self.role === 'tutor' ? [...room.waiting.entries()].map(([id, entry]) => ({ id, name: entry.name })) : [];
-    socket.emit('room:joined', { roomId, self, peers, waiting, media: roomMedia, ...personalizedExtras(room, self.id, self.role), board: buildBoardState(room), announcement: room.announcement });
+    socket.emit('room:joined', { roomId, self, peers, waiting, media: roomMedia, ...personalizedExtras(room, self.id, self.role), board: buildBoardState(room), announcement: room.announcement, annotations: [...room.annotations.values()] });
     if (sfuService) socket.emit('sfu:publications', { publications: [...room.publications.values()] });
     if (self.role === 'tutor') socket.emit('room:removed-list-update', { names: [...room.removedNames.values()] });
   }
@@ -553,7 +573,7 @@ export function createSignallingServer(options?: {
   // room:join handler below) — everything from here on treats a verified-token identity and a
   // manually-entered one identically, since by this point both have already been validated as
   // trustworthy by their own respective path.
-  function proceedWithJoin(socket: MeetingSocket, roomId: string, name: string, role: ParticipantRole, media: MediaState) {
+  function proceedWithJoin(socket: MeetingSocket, roomId: string, name: string, role: ParticipantRole, media: MediaState, meeting = false) {
     if (socket.data.roomId) {
       if (socket.data.roomId !== roomId) return fail(socket, 'Leave your current meeting before joining another.');
       const existing = rooms.get(roomId);
@@ -562,7 +582,9 @@ export function createSignallingServer(options?: {
       return;
     }
 
-    const room = rooms.get(roomId) ?? createRoom();
+    const room = rooms.get(roomId) ?? createRoom(meeting);
+    // Only ever raised, by a verified token: a manual join cannot turn a lesson's room into a meeting's, or back.
+    if (meeting) room.meeting = true;
 
     if (role === 'tutor') {
       const existingTutor = tutorOf(room);
@@ -615,7 +637,7 @@ export function createSignallingServer(options?: {
     understandingRateLimiter.clear(staleId);
     boardPointerRateLimiter.clear(staleId);
     boardUpdateRateLimiter.clear(staleId);
-    if (room.activeScreenShareId === staleId) room.activeScreenShareId = null;
+    if (room.activeScreenShareId === staleId) { room.activeScreenShareId = null; clearAnnotations(room); }
     for (const [sessionId, edge] of room.edges) {
       if (edge.participantIds.includes(staleId)) room.edges.delete(sessionId);
     }
@@ -657,7 +679,7 @@ export function createSignallingServer(options?: {
     understandingRateLimiter.clear(socket.id);
     boardPointerRateLimiter.clear(socket.id);
     boardUpdateRateLimiter.clear(socket.id);
-    if (room.activeScreenShareId === socket.id) room.activeScreenShareId = null;
+    if (room.activeScreenShareId === socket.id) { room.activeScreenShareId = null; clearAnnotations(room); }
     const departing = room.participants.get(socket.id) ?? null;
     if (!room.participants.delete(socket.id)) return;
     const remainingIds = new Set<string>(peerIdsOf(room, socket.id));
@@ -746,7 +768,7 @@ export function createSignallingServer(options?: {
         if (!media) return fail(socket, 'Invalid microphone or camera status.');
         if (verified.kind === 'meeting') socket.data.meeting = true;
         else if (verified.uid) socket.data.chat = { lessonId: verified.lessonId, userId: verified.uid };
-        proceedWithJoin(socket, verified.roomId, verified.name.trim().slice(0, MAX_NAME_LENGTH) || 'Participant', verified.role, media);
+        proceedWithJoin(socket, verified.roomId, verified.name.trim().slice(0, MAX_NAME_LENGTH) || 'Participant', verified.role, media, verified.kind === 'meeting');
         return;
       }
       // The pre-existing manual name/role entry path — kept working unchanged for direct
@@ -815,14 +837,14 @@ export function createSignallingServer(options?: {
       if (!isRecord(payload) || typeof payload.id !== 'string') return fail(socket, 'Invalid request.');
       const target = ctx.room.participants.get(payload.id);
       if (!target || target.role !== 'student') return fail(socket, 'That student is not currently in the class.');
-      setForceMuted(ctx.room, target, true);
+      muteBy(ctx.room, target);
     });
 
     socket.on('room:mute-all', () => {
       const ctx = requireTutor(socket, 'Only the tutor can mute students.');
       if (!ctx) return;
       for (const participant of ctx.room.participants.values()) {
-        if (participant.role === 'student') setForceMuted(ctx.room, participant, true);
+        if (participant.role === 'student') muteBy(ctx.room, participant);
       }
     });
 
@@ -866,6 +888,7 @@ export function createSignallingServer(options?: {
       if (!isRecord(payload) || typeof payload.id !== 'string') return fail(socket, 'Invalid request.');
       if (ctx.room.activeScreenShareId !== payload.id) return fail(socket, 'That participant is not currently sharing.');
       ctx.room.activeScreenShareId = null;
+      clearAnnotations(ctx.room);
       const target = ctx.room.participants.get(payload.id);
       if (target) target.screenSharing = false;
       for (const id of ctx.room.participants.keys()) io.to(id).emit('participant:screen-share', { id: payload.id, sharing: false });
@@ -908,9 +931,11 @@ export function createSignallingServer(options?: {
         if (self.role === 'student' && !room.settings.studentsCanShareScreen) {
           return fail(socket, 'The tutor has turned off screen sharing for students.');
         }
+        if (room.activeScreenShareId !== socket.id) clearAnnotations(room); // a new share starts with a clean slate
         room.activeScreenShareId = socket.id;
       } else if (room.activeScreenShareId === socket.id) {
         room.activeScreenShareId = null;
+        clearAnnotations(room);
       }
       self.screenSharing = payload.sharing;
       for (const id of room.participants.keys()) {
@@ -931,7 +956,7 @@ export function createSignallingServer(options?: {
       // Plain text only: no markdown/HTML is ever interpreted server-side or client-side.
       let message: ChatMessage;
       const identity = socket.data.chat;
-      if (socket.data.meeting) {
+      if (socket.data.meeting || room.meeting) {
         // A staff meeting (docs/STAFF_MEETINGS.md): everyone in the room was let in by the web app as staff, and nothing is stored.
         message = { id: randomUUID(), senderId: socket.id, name: self.name, text, timestamp: Date.now() };
       } else if (chatGate) {
@@ -1105,6 +1130,36 @@ export function createSignallingServer(options?: {
       for (const id of room.participants.keys()) {
         if (id !== socket.id) io.to(id).emit('board:update', { pageId: parsed.pageId, elements: accepted });
       }
+    });
+    // The tutor drawing on a shared screen. Tutor only, only while someone is sharing, and held only as long as the share lasts.
+    socket.on('annotation:update', (payload: unknown) => {
+      const room = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
+      const self = room?.participants.get(socket.id);
+      if (!room || !self) return fail(socket, 'You are not currently in a class.');
+      if (self.role !== 'tutor') return fail(socket, 'Only the tutor can draw on a shared screen.');
+      if (!room.activeScreenShareId) return fail(socket, 'There is no shared screen to draw on.');
+      if (!boardUpdateRateLimiter.allow(socket.id)) return fail(socket, 'You are drawing too fast — please slow down.');
+      if (!isRecord(payload) || !Array.isArray(payload.elements) || payload.elements.length === 0 || payload.elements.length > MAX_BOARD_UPDATE_BATCH) return fail(socket, 'Invalid drawing update.');
+      const accepted: BoardElement[] = [];
+      for (const raw of payload.elements) {
+        const element = parseBoardElement(raw);
+        if (!element) return fail(socket, 'Invalid drawing update.');
+        const existing = room.annotations.get(element.id);
+        if (!existing && !element.isDeleted && room.annotations.size >= MAX_BOARD_ELEMENTS_PER_PAGE) continue;
+        if (shouldAcceptElement(existing, element)) {
+          room.annotations.set(element.id, element);
+          accepted.push(element);
+        }
+      }
+      if (accepted.length === 0) return;
+      for (const id of room.participants.keys()) {
+        if (id !== socket.id) io.to(id).emit('annotation:update', { elements: accepted });
+      }
+    });
+    socket.on('annotation:clear', () => {
+      const ctx = requireTutor(socket, 'Only the tutor can clear the drawing on a shared screen.');
+      if (!ctx) return;
+      clearAnnotations(ctx.room);
     });
     socket.on('board:cursor', (payload: unknown) => {
       const room = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;

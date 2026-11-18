@@ -34,6 +34,8 @@ export interface DirectionDiagnostics {
 
 interface PeerCallbacks {
   stream: (stream: MediaStream) => void;
+  /** The other person's shared screen, as its own stream: it arrives beside their camera on a second video line, never in place of it. */
+  screen?: (stream: MediaStream) => void;
   state: (connection: RTCPeerConnectionState, ice: RTCIceConnectionState, signalling: RTCSignalingState) => void;
   error: (error: unknown) => void;
   stats?: (stats: CallStats) => void;
@@ -43,14 +45,17 @@ interface PeerCallbacks {
 export class PeerSession {
   private readonly pc = new RTCPeerConnection(getIceConfiguration());
   private readonly remote = new MediaStream();
-  private readonly senders = new Map<'audio' | 'video', RTCRtpSender>();
+  private readonly remoteScreen = new MediaStream();
+  // Three lines are negotiated, always, in this order: audio, camera video, screen video. The screen line carries nothing until someone shares
+  // (replaceTrack then starts it without renegotiating), so a share never replaces the camera and the cameras can stay on screen beside it.
+  private readonly senders = new Map<'audio' | 'video' | 'screen', RTCRtpSender>();
   private pendingIce: RTCIceCandidateInit[] = [];
   private queue: Promise<void> = Promise.resolve();
   private closed = false;
   private negotiationTimer: ReturnType<typeof setTimeout> | undefined;
   private negotiationAttempts = 0;
   private iceRestarts = 0;
-  private videoOverride: MediaStreamTrack | null = null;
+  private screenOverride: MediaStreamTrack | null = null;
   private audioOverride: MediaStreamTrack | null = null;
   private statsTimer: ReturnType<typeof setInterval> | undefined;
   private lastStatsSample: StatsSample | null = null;
@@ -77,11 +82,21 @@ export class PeerSession {
         const transceiver = this.pc.addTransceiver(track ?? kind, { direction: 'sendrecv', streams: media.stream ? [media.stream] : [] });
         this.senders.set(kind, transceiver.sender);
       }
+      // The third line, for a shared screen. If a share is already running (a reconnect) it starts at once.
+      const screen = this.pc.addTransceiver(this.screenOverride ?? 'video', { direction: 'sendrecv' });
+      this.senders.set('screen', screen.sender);
     }
     this.pc.onicecandidate = ({ candidate }) => {
       if (candidate && !this.closed) this.socket.emit('webrtc:ice-candidate', { sessionId, candidate: candidate.toJSON() });
     };
-    this.pc.ontrack = ({ track }) => {
+    this.pc.ontrack = ({ track, transceiver }) => {
+      // The second video line is the shared screen; the first is the camera. Lines keep their order for the life of the connection.
+      const videoLines = this.pc.getTransceivers().filter((line) => line.receiver.track.kind === 'video');
+      if (track.kind === 'video' && videoLines.indexOf(transceiver) === 1) {
+        if (!this.remoteScreen.getTrackById(track.id)) this.remoteScreen.addTrack(track);
+        callbacks.screen?.(this.remoteScreen);
+        return;
+      }
       if (!this.remote.getTrackById(track.id)) this.remote.addTrack(track);
       callbacks.stream(this.remote);
     };
@@ -148,9 +163,9 @@ export class PeerSession {
     };
   }
 
-  /** Overrides the outgoing video track (screen share) without renegotiating; null restores the camera. */
-  setVideoOverride(track: MediaStreamTrack | null) {
-    this.videoOverride = track;
+  /** Sends a shared screen on its own line, beside the camera, without renegotiating; null stops it. */
+  setScreenTrack(track: MediaStreamTrack | null) {
+    this.screenOverride = track;
     this.syncTracks();
   }
 
@@ -218,13 +233,15 @@ export class PeerSession {
   /** Attaches the answerer's own tracks to the transceivers Chrome auto-created while applying
    * the initiator's offer (see the constructor comment for why we can't pre-add our own). */
   private attachAnswererTracks() {
+    // The offer's lines come in the order audio, camera, screen: the first video line is the camera and the second is the screen.
     for (const transceiver of this.pc.getTransceivers()) {
       const kind = transceiver.receiver.track?.kind as 'audio' | 'video' | undefined;
-      if (!kind || this.senders.has(kind)) continue;
+      const slot = kind === 'audio' ? 'audio' : kind === 'video' ? (this.senders.has('video') ? 'screen' : 'video') : null;
+      if (!slot || this.senders.has(slot)) continue;
       transceiver.direction = 'sendrecv';
-      const track = this.media.track(kind);
+      const track = slot === 'screen' ? this.screenOverride : this.media.track(slot);
       if (track) void transceiver.sender.replaceTrack(track);
-      this.senders.set(kind, transceiver.sender);
+      this.senders.set(slot, transceiver.sender);
     }
   }
 
@@ -245,8 +262,11 @@ export class PeerSession {
       if (audioSender && audioSender.track !== audioTrack) await audioSender.replaceTrack(audioTrack);
 
       const videoSender = this.senders.get('video');
-      const videoTrack = this.videoOverride ?? this.media.track('video') ?? null;
+      const videoTrack = this.media.track('video') ?? null;
       if (videoSender && videoSender.track !== videoTrack) await videoSender.replaceTrack(videoTrack);
+
+      const screenSender = this.senders.get('screen');
+      if (screenSender && screenSender.track !== this.screenOverride) await screenSender.replaceTrack(this.screenOverride);
     });
   }
 
@@ -280,5 +300,6 @@ export class PeerSession {
     this.pc.onsignalingstatechange = null;
     this.pc.close();
     this.remote.getTracks().forEach((track) => track.stop());
+    this.remoteScreen.getTracks().forEach((track) => track.stop());
   }
 }

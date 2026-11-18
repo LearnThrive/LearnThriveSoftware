@@ -114,6 +114,7 @@ describe('signalling through real Socket.IO clients', () => {
         activePageId: firstPageId, elementsByPage: { [firstPageId]: [] }, studentsCanDraw: true,
       },
       announcement: null,
+      annotations: [],
     });
 
     const waitingUpdate = new Promise<{ waiting: WaitingParticipant[] }>((resolve) => tutor.once('room:waiting-update', resolve));
@@ -1570,11 +1571,141 @@ describe('chat in a staff meeting versus a lesson, with the lesson chat gate on'
     expect(asked).toEqual([]);
   });
 
+  /** A guest arrives with their own token, waits, and is admitted by the host. Resolves once they are in the room. */
+  async function admittedGuest(host: Client, token: string) {
+    const guest: Client = io(url, { transports: ['websocket'], reconnection: false });
+    clients.push(guest);
+    await new Promise<void>((resolve, reject) => { guest.once('connect', () => resolve()); guest.once('connect_error', reject); });
+    const waiting = new Promise((resolve) => guest.once('room:waiting', resolve));
+    const inRoom = new Promise<JoinedRoom>((resolve) => guest.once('room:joined', resolve));
+    guest.emit('room:join', { roomId: 'ignored-by-the-server', name: 'Ignored', role: 'student', media, token });
+    await waiting;
+    host.emit('room:admit', { id: guest.id! });
+    await inRoom;
+    return guest;
+  }
+
+  it('a guest in a meeting can chat with the host too, and the lesson chat gate is never asked', async () => {
+    const roomId = 'meeting-room-2';
+    const host = await joinWith(signClassroomJoinToken({ roomId, lessonId: 'meeting:2', name: 'Host', role: 'tutor', uid: 'h', kind: 'meeting', exp: Date.now() + 60_000 }));
+    const guest = await admittedGuest(host, signClassroomJoinToken({ roomId, lessonId: 'meeting:2', name: 'Guest', role: 'student', uid: 'g', kind: 'meeting', exp: Date.now() + 60_000 }));
+    // Everyone in the room gets every message (the sender's own comes back too), so each side waits for the one it is after.
+    const hears = (client: Client, text: string) => new Promise<ChatMessage>((resolve) => client.on('chat:message', (message) => { if (message.text === text) resolve(message); }));
+    const toHost = hears(host, 'Can you hear me?');
+    guest.emit('chat:message', { text: 'Can you hear me?' });
+    expect((await toHost).name).toBe('Guest');
+    const toGuest = hears(guest, 'Yes, go ahead');
+    host.emit('chat:message', { text: 'Yes, go ahead' });
+    expect((await toGuest).name).toBe('Host');
+    expect(asked).toEqual([]);
+  });
+
+  it('a host mute in a meeting switches the guest off once and does not lock them; in a lesson it still locks', async () => {
+    const meetingRoom = 'meeting-room-3';
+    const host = await joinWith(signClassroomJoinToken({ roomId: meetingRoom, lessonId: 'meeting:3', name: 'Host', role: 'tutor', uid: 'h', kind: 'meeting', exp: Date.now() + 60_000 }));
+    const guest = await admittedGuest(host, signClassroomJoinToken({ roomId: meetingRoom, lessonId: 'meeting:3', name: 'Guest', role: 'student', uid: 'g', kind: 'meeting', exp: Date.now() + 60_000 }));
+    const soft = new Promise<{ id: string; forceMuted: boolean; soft?: boolean }>((resolve) => guest.once('participant:force-muted', resolve));
+    host.emit('room:mute-participant', { id: guest.id! });
+    expect(await soft).toEqual({ id: guest.id, forceMuted: false, soft: true });
+
+    const lessonRoom = 'lesson-room-3';
+    const tutor = await joinWith(signClassroomJoinToken({ roomId: lessonRoom, lessonId: 'lesson-3', name: 'Tutor', role: 'tutor', uid: 't', exp: Date.now() + 60_000 }));
+    const student = await admittedGuest(tutor, signClassroomJoinToken({ roomId: lessonRoom, lessonId: 'lesson-3', name: 'Student', role: 'student', uid: 's', exp: Date.now() + 60_000 }));
+    const locked = new Promise<{ id: string; forceMuted: boolean; soft?: boolean }>((resolve) => student.once('participant:force-muted', resolve));
+    tutor.emit('room:mute-participant', { id: student.id! });
+    expect(await locked).toEqual({ id: student.id, forceMuted: true });
+  });
+
   it('still sends a lesson message through the gate, and relays nothing it refuses', async () => {
     const tutor = await joinWith(signClassroomJoinToken({ roomId: 'lesson-room-1', lessonId: 'lesson-1', name: 'Tutor', role: 'tutor', uid: 'u2', exp: Date.now() + 60_000 }));
     const refused = new Promise((resolve) => tutor.once('room:error', resolve));
     tutor.emit('chat:message', { text: 'Hello' });
     expect(await refused).toEqual({ message: 'Not allowed right now.' });
     expect(asked).toEqual(['lesson-1']);
+  });
+});
+
+// Drawing on a shared screen: the tutor's, only while a screen is shared, shared with everyone, and gone when the share ends.
+describe('annotations on a shared screen', () => {
+  let server: ReturnType<typeof createSignallingServer>;
+  let url: string;
+  let clients: Client[];
+
+  beforeEach(async () => {
+    server = createSignallingServer({ disconnectGraceMs: DISCONNECT_GRACE_MS, chatGate: null });
+    clients = [];
+    server.httpServer.listen(0, '127.0.0.1');
+    await once(server.httpServer, 'listening');
+    url = `http://127.0.0.1:${(server.httpServer.address() as AddressInfo).port}`;
+  });
+  afterEach(async () => {
+    clients.forEach((client) => client.disconnect());
+    await new Promise<void>((resolve) => server.io.close(() => resolve()));
+  });
+
+  async function connected() {
+    const client: Client = io(url, { transports: ['websocket'], reconnection: false });
+    clients.push(client);
+    await new Promise<void>((resolve, reject) => { client.once('connect', () => resolve()); client.once('connect_error', reject); });
+    return client;
+  }
+  async function tutorAndStudent() {
+    const tutor = await connected();
+    tutor.emit('room:join', { roomId: 'annotate-room', name: 'Tutor', role: 'tutor', media });
+    await new Promise<JoinedRoom>((resolve) => tutor.once('room:joined', resolve));
+    const student = await connected();
+    const waiting = new Promise((resolve) => student.once('room:waiting', resolve));
+    const inRoom = new Promise<JoinedRoom>((resolve) => student.once('room:joined', resolve));
+    student.emit('room:join', { roomId: 'annotate-room', name: 'Student', role: 'student', media });
+    await waiting;
+    tutor.emit('room:admit', { id: student.id! });
+    await inRoom;
+    return { tutor, student };
+  }
+  const stroke = (id: string, version = 1) => ({ id, version, versionNonce: version * 7, type: 'freedraw', x: 10, y: 10 });
+  const errorOf = (client: Client) => new Promise<{ message: string }>((resolve) => client.once('room:error', resolve));
+
+  it('the tutor can draw while a screen is shared, and the student sees it; a latecomer is given what is already there', async () => {
+    const { tutor, student } = await tutorAndStudent();
+    tutor.emit('participant:screen-share', { sharing: true });
+    const seen = new Promise<{ elements: Array<{ id: string }> }>((resolve) => student.once('annotation:update', resolve));
+    tutor.emit('annotation:update', { elements: [stroke('a')] });
+    expect((await seen).elements.map((e) => e.id)).toEqual(['a']);
+
+    const late = await connected();
+    const waiting = new Promise((resolve) => late.once('room:waiting', resolve));
+    const joined = new Promise<JoinedRoom>((resolve) => late.once('room:joined', resolve));
+    late.emit('room:join', { roomId: 'annotate-room', name: 'Late', role: 'student', media });
+    await waiting;
+    tutor.emit('room:admit', { id: late.id! });
+    expect((await joined).annotations?.map((e) => e.id)).toEqual(['a']);
+  });
+
+  it('a student cannot draw on it, and nobody can when nothing is shared', async () => {
+    const { tutor, student } = await tutorAndStudent();
+    const refusedNothing = errorOf(tutor);
+    tutor.emit('annotation:update', { elements: [stroke('x')] });
+    expect((await refusedNothing).message).toMatch(/no shared screen/i);
+
+    tutor.emit('participant:screen-share', { sharing: true });
+    const refusedStudent = errorOf(student);
+    student.emit('annotation:update', { elements: [stroke('y')] });
+    expect((await refusedStudent).message).toMatch(/only the tutor/i);
+  });
+
+  it('the drawing is cleared for everyone when the share ends, and the tutor can clear it by hand', async () => {
+    const { tutor, student } = await tutorAndStudent();
+    tutor.emit('participant:screen-share', { sharing: true });
+    tutor.emit('annotation:update', { elements: [stroke('a'), stroke('b')] });
+    await new Promise((resolve) => student.once('annotation:update', resolve));
+    const cleared = new Promise<void>((resolve) => student.once('annotation:cleared', () => resolve()));
+    tutor.emit('annotation:clear');
+    await cleared;
+
+    tutor.emit('annotation:update', { elements: [stroke('c')] });
+    await new Promise((resolve) => student.once('annotation:update', resolve));
+    const endedWithShare = new Promise<void>((resolve) => student.once('annotation:cleared', () => resolve()));
+    tutor.emit('participant:screen-share', { sharing: false });
+    await endedWithShare;
   });
 });

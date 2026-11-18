@@ -191,3 +191,61 @@
   .class-timer.is-expired{animation:none}
   .meeting-stage,.whiteboard{animation:none}
 }
+
+/* Stage with a camera rail: the whiteboard or a shared screen takes the main area, the cameras stack on the right at one size
+   (students above, the tutor below). The same layout for both, so the room does not rearrange when the stage changes. */
+.stage-with-rail{display:flex;gap:14px;flex:1;min-width:0;min-height:0}
+.stage-with-rail__main{position:relative;flex:1;min-width:0;min-height:0;display:flex;flex-direction:column}
+.stage-with-rail__main>.whiteboard,.stage-with-rail__main>.whiteboard-loading{flex:1;min-height:0}
+.stage-rail{flex:0 0 clamp(190px,19vw,300px);display:flex;flex-direction:column;gap:12px;min-height:0;overflow-y:auto}
+.stage-rail__item{flex:0 0 auto;width:100%;aspect-ratio:4/3;position:relative;border-radius:12px;overflow:hidden;border:1px solid #91abaf5e;box-shadow:0 8px 28px #0003;background:#234553}
+.stage-rail__item>.participant-tile{width:100%;height:100%;border-radius:0}
+.screen-stage{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:14px;background:#0b1b2b;border-radius:17px;overflow:hidden}
+.screen-stage__label{position:absolute;top:12px;left:14px;z-index:3;display:flex;align-items:center;gap:7px;font-size:11px;color:#d6e4ea;background:#091d31b3;padding:6px 10px;border-radius:6px;pointer-events:none}
+.screen-stage__frame{position:relative;max-width:100%;max-height:100%;background:#000}
+.screen-stage__frame>video{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;display:block}
+.screen-stage__loading{position:absolute;inset:0;display:grid;place-items:center;color:#aabec8;font-size:13px}
+.audio-enable{position:fixed;top:92px;left:50%;transform:translateX(-50%);z-index:60}
+.audio-enable:active:not(:disabled){transform:translateX(-50%)}
+.remote-audio{position:absolute;width:0;height:0;opacity:0;pointer-events:none}
+@media(max-width:800px){.stage-with-rail{flex-direction:column}.stage-rail{flex:0 0 auto;flex-direction:row;overflow-x:auto;overflow-y:hidden}.stage-rail__item{flex:0 0 clamp(130px,38vw,200px);width:auto}}
+
+/* Drawing over a shared screen, and the equation tool. The layer is exactly as big as the picture; it only takes the mouse while someone is drawing. */
+.screen-annotations{position:absolute;inset:0;z-index:2;pointer-events:none}
+.screen-annotations.is-drawing{pointer-events:auto}
+.screen-annotations .excalidraw{--color-surface-lowest:transparent;background:transparent}
+.screen-annotations .excalidraw .zoom-actions,.screen-annotations .excalidraw .undo-redo-buttons{display:none}
+.screen-tools{position:absolute;top:10px;right:10px;z-index:5;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.screen-tools button{min-height:34px;padding:6px 12px;border-radius:8px;border:1px solid #ffffff33;background:#091d31cc;color:#e9f1f4;font-size:12px;font-weight:600}
+.screen-tools button:hover:not(:disabled){background:#0e2a47}
+.screen-tools .screen-tools__main.is-on{background:#087363;border-color:#087363}
+.equation-dialog{position:fixed;inset:0;z-index:90;display:grid;place-items:center;padding:16px}
+.equation-dialog__scrim{position:absolute;inset:0;border:0;background:#091d31a6;cursor:pointer}
+.equation-dialog__panel{position:relative;z-index:1;width:min(760px,100%);max-height:min(92dvh,760px);overflow-y:auto;background:#fff;border-radius:16px;box-shadow:0 24px 70px #0006;padding:20px 22px;display:flex;flex-direction:column;gap:14px}
+.equation-dialog__header{display:flex;align-items:center;justify-content:space-between}
+.equation-dialog__header h2{font-size:19px;font-weight:620;letter-spacing:-.4px}
+.equation-dialog__edit{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+.equation-dialog__field,.equation-dialog__preview{display:flex;flex-direction:column;gap:6px;min-width:0}
+.equation-dialog__field>span,.equation-dialog__preview>span{font-size:12px;font-weight:600;color:#3d5262}
+.equation-dialog__field textarea{width:100%;min-height:118px;resize:vertical;border:1px solid #d3dcd8;border-radius:9px;padding:10px 12px;font-family:ui-monospace,Consolas,monospace;font-size:14px;color:#0e2a47;background:#fefefd}
+.equation-dialog__field textarea:focus{outline:none;border-color:#087363;box-shadow:0 0 0 3px #08736322}
+.equation-dialog__preview-box{flex:1;min-height:118px;display:grid;place-items:center;border:1px dashed #cbd6d1;border-radius:9px;background:#fafbf8;padding:10px;overflow:auto}
+.equation-dialog__preview-box img{max-width:100%;height:auto}
+.equation-dialog__hint{font-size:12px;color:#8a969a}
+.equation-dialog__problem{font-size:12px;color:#933f35;background:#fff1ee;border:1px solid #efd5cd;border-radius:7px;padding:8px 10px}
+.equation-dialog__tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px}
+.equation-dialog__tabs button{border:1px solid #d6dfd5;background:#f6f8f3;border-radius:7px;padding:6px 11px;font-size:12px;color:#3d5262}
+.equation-dialog__tabs button[aria-selected="true"]{background:#e0eee7;border-color:#9fcdb5;color:#075f52;font-weight:600}
+.equation-dialog__symbols{display:flex;flex-wrap:wrap;gap:6px}
+.equation-dialog__symbols button{min-width:42px;height:38px;padding:0 9px;border:1px solid #d8e0df;background:#fff;border-radius:8px;font-size:16px;color:#0e2a47}
+.equation-dialog__symbols button:hover{background:#f0f4ef;border-color:#9fcdb5}
+.equation-dialog__templates summary{cursor:pointer;font-size:13px;font-weight:600;color:#075f52}
+.equation-dialog__templates>div{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.equation-dialog__templates button{border:1px solid #d6dfd5;background:#f6f8f3;border-radius:999px;padding:6px 12px;font-size:12px;color:#284737}
+.equation-dialog__templates button:hover{background:#e6efe9}
+.equation-dialog__footer{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding-top:4px}
+.equation-dialog__footer p{margin-right:auto;font-size:11px;color:#7a8a80}
+@media(max-width:620px){.equation-dialog__edit{grid-template-columns:1fr}}
+/* Viewers (and the tutor when not drawing) see only the marks, none of the drawing tool's own buttons. */
+.screen-annotations:not(.is-drawing) .layer-ui__wrapper{display:none}
+.screen-annotations .main-menu-trigger,.screen-annotations .help-icon,.screen-annotations .layer-ui__wrapper__footer-right{display:none}

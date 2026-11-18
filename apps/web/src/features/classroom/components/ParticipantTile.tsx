@@ -18,12 +18,8 @@ interface ParticipantTileProps {
   role?: ParticipantRole | null;
   // Only ever passed for remote peers — a local tile has no connection to rate.
   quality?: ConnectionQuality;
-  // Server/tutor-authoritative directive, distinct from `audio` (that peer's own self-reported
-  // mic state). Muting playback here — not just trusting the target's own client to stop sending
-  // — means a modified/hostile client that keeps transmitting despite a force-mute still can't be
-  // heard by any *compliant* client. It cannot stop the hostile client from transmitting at all
-  // (that needs an SFU the server controls — see PRODUCTION_GAPS.md); this only raises the bar
-  // for every other participant in the mesh, which is the honest limit of a pure P2P architecture.
+  // Whether to play this person is no longer decided here: a tile only shows the picture (its <video> is always muted). Their sound, including
+  // the tutor's lock on it (forceMuted), is played by components/RemoteAudio.tsx, which stays mounted when the stage changes.
   forceMuted?: boolean;
 }
 
@@ -33,7 +29,7 @@ function initials(name: string) {
 
 export function ParticipantTile({
   stream, name, audio, video, screenSharing = false, local = false, compact = false, preview = false, focused, onFocus, role = null,
-  quality, forceMuted = false,
+  quality,
 }: ParticipantTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [needsPlayback, setNeedsPlayback] = useState(false);
@@ -41,9 +37,9 @@ export function ParticipantTile({
   // mid-negotiation or a transient network gap) — that shows nothing, so it must not be treated
   // as displayable video, or the tile would look broken instead of falling back to the placeholder.
   const [videoTrackMuted, setVideoTrackMuted] = useState(false);
-  // While sharing, the arriving track is the screen, not the camera, so camera-off must not hide it.
+  // A shared screen travels on its own track and is shown by the stage (components/ScreenStage.tsx), so this tile is always the camera.
   const liveVideoTrack = stream?.getVideoTracks().find(track => track.readyState === 'live');
-  const hasVideo = (screenSharing || video) && Boolean(liveVideoTrack) && !videoTrackMuted;
+  const hasVideo = video && Boolean(liveVideoTrack) && !videoTrackMuted;
 
   useEffect(() => {
     const element = videoRef.current;
@@ -85,8 +81,8 @@ export function ParticipantTile({
       onKeyDown={onKeyDown}
     >
       <video
-        ref={videoRef} className={`${local && !screenSharing ? 'mirrored' : ''} ${hasVideo ? '' : 'video-hidden'}`}
-        autoPlay playsInline muted={local || forceMuted} aria-label={local ? 'Your video' : `${name}'s video stream`}
+        ref={videoRef} className={`${local ? 'mirrored' : ''} ${hasVideo ? '' : 'video-hidden'}`}
+        autoPlay playsInline muted aria-label={local ? 'Your video' : `${name}'s video stream`}
       />
       {!hasVideo && <div className="camera-placeholder">
         <div className="avatar">{initials(name)}</div>

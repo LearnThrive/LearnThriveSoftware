@@ -11,6 +11,8 @@ import type { BoardPointer } from '../meeting';
 import { boardBackgroundStyle, trailingThrottle } from '../board';
 import { usePopoverDismiss } from '../usePopoverDismiss';
 import { BoardPageTabs } from './BoardPageTabs';
+import { EquationDialog } from './EquationDialog';
+import { insertEquation, useEquationImages } from './equations';
 import { Icon } from './Icon';
 
 const AS_BOARD_ELEMENTS = (elements: readonly OrderedExcalidrawElement[]) => elements as unknown as BoardElement[];
@@ -65,6 +67,8 @@ export function Whiteboard({
   const [following, setFollowing] = useState(true);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [equationOpen, setEquationOpen] = useState(false);
+  const [apiReady, setApiReady] = useState(false);
   const prevViewedRef = useRef<string | null>(null);
   const lastSentRef = useRef(new Map<string, { version: number; versionNonce: number }>());
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -89,6 +93,15 @@ export function Whiteboard({
   const currentPage = pages.find((page) => page.id === viewedPageId) ?? null;
   const pageElements = useMemo(() => elementsByPage[viewedPageId] ?? [], [elementsByPage, viewedPageId]);
   const viewOnly = !isTutor && !studentsCanDraw;
+  // Equations typeset by someone else arrive as elements carrying their LaTeX; this makes the picture for each one here.
+  useEquationImages(apiRef, pageElements, apiReady);
+
+  const addEquation = async (latex: string) => {
+    const api = apiRef.current;
+    if (!api) throw new Error('The whiteboard is not ready yet.');
+    const { scrollX, scrollY, width, height, zoom } = api.getAppState();
+    await insertEquation(api, latex, { x: width / 2 / zoom.value - scrollX, y: height / 2 / zoom.value - scrollY }, 32);
+  };
 
   // One effect, keyed on both which page is being viewed and that page's at-rest element cache:
   // fires on an explicit page switch (local or tutor-driven) and on any remote update to the
@@ -244,6 +257,7 @@ export function Whiteboard({
                 </button>
                 {shortcutsOpen && (
                   <div className="board-shortcuts-menu" role="menu">
+                    <button type="button" role="menuitem" onClick={() => { setShortcutsOpen(false); setEquationOpen(true); }}>Equation…</button>
                     {TUTORING_SHORTCUTS.map((shortcut) => (
                       <button key={shortcut.id} type="button" role="menuitem" onClick={() => { insertShortcut(shortcut.id); setShortcutsOpen(false); }}>{shortcut.label}</button>
                     ))}
@@ -271,7 +285,7 @@ export function Whiteboard({
       )}
       <div className="whiteboard-canvas" style={boardBackgroundStyle(currentPage?.background ?? 'blank')}>
         <Excalidraw
-          excalidrawAPI={(api) => { apiRef.current = api; }}
+          excalidrawAPI={(api) => { apiRef.current = api; setApiReady(true); }}
           initialData={{ elements: AS_EXCALIDRAW_ELEMENTS(pageElements), appState: { viewBackgroundColor: 'transparent' } }}
           onChange={handleChange}
           onPointerUpdate={({ pointer }) => cursorThrottled(pointer.x, pointer.y, pointer.tool)}
@@ -283,6 +297,7 @@ export function Whiteboard({
         />
         {viewOnly && <div className="whiteboard-view-only-badge"><Icon name="lock" size={13} />View only — the tutor has turned off drawing</div>}
       </div>
+      {isTutor && <EquationDialog open={equationOpen} onClose={() => setEquationOpen(false)} onInsert={addEquation} />}
     </div>
   );
 }

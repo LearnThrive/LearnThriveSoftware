@@ -50,6 +50,8 @@ export interface BoardPointer { id: string; name: string; x: number; y: number; 
 export interface RemotePeer {
   participant: Participant;
   stream: MediaStream | null;
+  /** Their shared screen, while they share: its own stream, beside the camera in `stream`. */
+  screenStream: MediaStream | null;
   connection: RTCPeerConnectionState;
   ice: RTCIceConnectionState;
   rtcSignalling: RTCSignalingState;
@@ -69,6 +71,10 @@ export interface MeetingSnapshot {
   audio: boolean;
   video: boolean;
   screenSharing: boolean;
+  /** Your own shared screen, for the preview you annotate; null when you are not sharing. */
+  screenStream: MediaStream | null;
+  /** The tutor's drawing on the shared screen (the screen's own pixel coordinates), kept for as long as the share lasts. */
+  annotations: BoardElement[];
   screenShareAudio: boolean;
   screenSharePending: boolean;
   preparing: boolean;
@@ -119,7 +125,7 @@ export interface DisplayChatMessage extends ChatMessage { own: boolean }
 
 function defaultRemotePeer(participant: Participant): RemotePeer {
   return {
-    participant, stream: null, connection: 'new', ice: 'new', rtcSignalling: 'stable',
+    participant, stream: null, screenStream: null, connection: 'new', ice: 'new', rtcSignalling: 'stable',
     stats: null, direction: null, quality: 'unknown', connectedAt: null, reconnecting: false,
   };
 }
@@ -137,7 +143,7 @@ function sfuPeerState(state: SfuConnection): Pick<RemotePeer, 'connection' | 'ic
 export class MeetingController {
   private snapshot: MeetingSnapshot = {
     phase: 'prejoin', status: 'Ready to join', error: null, mediaError: null,
-    localStream: null, audio: false, video: false, screenSharing: false, screenShareAudio: false, screenSharePending: false, preparing: false,
+    localStream: null, audio: false, video: false, screenSharing: false, screenStream: null, annotations: [], screenShareAudio: false, screenSharePending: false, preparing: false,
     peers: [], maxParticipants: MAX_PARTICIPANTS, mediaMode: 'mesh', role: null, waiting: [], roomId: '', name: '', signalling: 'disconnected', copied: false,
     reconnectFailed: false,
     cameras: [], microphones: [], selectedCamera: undefined, selectedMicrophone: undefined, notice: null,
@@ -213,13 +219,13 @@ export class MeetingController {
   // overrides the mesh-size heuristic with a single conservative cap regardless of peer count.
   private applyVideoBandwidthPolicy() {
     const peerCount = this.snapshot.peers.length;
-    const kbps = this.snapshot.screenSharing ? null
-      : this.snapshot.dataSaver ? 250
-        : peerCount >= 3 ? 500
-          : peerCount === 2 ? 700
-            : null;
+    // The cap is for the camera only. A shared screen now travels on its own line, uncapped, so it stays legible while the camera is still sent.
+    const kbps = this.snapshot.dataSaver ? 250
+      : peerCount >= 3 ? 500
+        : peerCount === 2 ? 700
+          : null;
     if (this.sfu) {
-      void this.sfu.setVideoSendBitrate(this.snapshot.screenSharing ? null : this.snapshot.dataSaver ? 250 : SFU_CAMERA_KBPS);
+      void this.sfu.setVideoSendBitrate(this.snapshot.dataSaver ? 250 : SFU_CAMERA_KBPS);
       return;
     }
     for (const session of this.peers.values()) void session.setVideoSendBitrate(kbps);
@@ -348,15 +354,17 @@ export class MeetingController {
     this.update({ screenSharePending: true });
     try {
       const { video, audio } = await this.screenShare.start(this.media.track('audio') ?? null);
+      // A shared screen is mostly text and diagrams (a past paper): ask the encoder to keep it sharp rather than smooth.
+      video.contentHint = 'detail';
       if (version !== this.actionVersion || !this.active) {
         video.stop();
         audio?.stop();
         this.screenShare.stop();
         return;
       }
-      for (const session of this.peers.values()) { session.setVideoOverride(video); session.setAudioOverride(audio); }
-      this.sfu?.syncTracks({ video, audio });
-      this.update({ screenSharing: true, screenShareAudio: this.screenShare.hasAudio, error: null });
+      for (const session of this.peers.values()) { session.setScreenTrack(video); session.setAudioOverride(audio); }
+      this.sfu?.syncTracks({ screen: video, audio });
+      this.update({ screenSharing: true, screenStream: this.screenShare.stream, screenShareAudio: this.screenShare.hasAudio, error: null });
       this.applyVideoBandwidthPolicy();
       this.emitScreenShare(true);
     } catch (error) {
@@ -369,9 +377,9 @@ export class MeetingController {
 
   private endScreenShare() {
     this.screenShare.stop();
-    for (const session of this.peers.values()) { session.setVideoOverride(null); session.setAudioOverride(null); }
-    this.sfu?.syncTracks({ video: null, audio: null });
-    this.update({ screenSharing: false, screenShareAudio: false });
+    for (const session of this.peers.values()) { session.setScreenTrack(null); session.setAudioOverride(null); }
+    this.sfu?.syncTracks({ screen: null, audio: null });
+    this.update({ screenSharing: false, screenStream: null, screenShareAudio: false });
     this.applyVideoBandwidthPolicy();
     this.emitScreenShare(false);
   }
@@ -512,6 +520,15 @@ export class MeetingController {
     this.update({ board: { ...this.snapshot.board, elementsByPage: { ...this.snapshot.board.elementsByPage, [pageId]: elements } } });
   };
 
+  // Drawing on a shared screen. The tutor's strokes go to everyone (and are kept here, so the layer can be remounted without losing them);
+  // everyone else only receives. The server refuses anyone else, and clears it all when the share ends.
+  sendAnnotationUpdate = (elements: BoardElement[]) => {
+    if (!this.active || !this.socket?.connected || elements.length === 0) return;
+    this.socket.emit('annotation:update', { elements });
+  };
+  clearAnnotations = () => this.tutorEmit('annotation:clear');
+  commitLocalAnnotations = (elements: BoardElement[]) => this.update({ annotations: reconcileBoardElements(this.snapshot.annotations, elements) });
+
   // A platform-issued token (see @learnthrive/shared/classroomToken) carries its own roomId,
   // name and role, verified server-side — the client never needs to know or validate them itself,
   // so the usual name/room-code checks are skipped entirely for a token join.
@@ -590,7 +607,7 @@ export class MeetingController {
         maxParticipants: payload.media ? payload.media.maxStudents + 1 : MAX_PARTICIPANTS, mediaMode: payload.media?.mode ?? 'mesh',
         forceMuted: payload.self.forceMuted, roomSettings: payload.settings,
         poll: payload.poll, understandingCheck: payload.understandingCheck, timer: payload.timer,
-        board: payload.board, announcement: payload.announcement,
+        board: payload.board, announcement: payload.announcement, annotations: payload.annotations ?? [],
         // Unlike media/screen-share (whose local source of truth is the live track/capture, not
         // the server), hand-raise has no other local record — a reconnect must restore it from
         // the resync or a participant who reconnects mid-raise would silently show as lowered.
@@ -674,12 +691,13 @@ export class MeetingController {
       if (!this.snapshot.peers.some((entry) => entry.participant.id === id)) return;
       this.showReaction(emoji, false);
     });
-    socket.on('participant:force-muted', ({ id, forceMuted }) => {
+    socket.on('participant:force-muted', ({ id, forceMuted, soft }) => {
       if (id === this.socket?.id) {
         this.update({ forceMuted });
-        if (forceMuted && this.media.track('audio')?.enabled) this.media.disable('audio');
-        this.announce(forceMuted ? 'The tutor muted your microphone.' : 'The tutor allowed you to unmute.');
-      } else {
+        if ((forceMuted || soft) && this.media.track('audio')?.enabled) this.media.disable('audio');
+        // A soft mute (a staff meeting) switches the microphone off once and leaves it theirs to turn back on.
+        this.announce(soft ? 'The host muted your microphone. Turn it back on when you are ready.' : forceMuted ? 'The tutor muted your microphone.' : 'The tutor allowed you to unmute.');
+      } else if (!soft) {
         const peer = this.snapshot.peers.find((entry) => entry.participant.id === id);
         if (peer) this.updatePeer(id, { participant: { ...peer.participant, forceMuted } });
       }
@@ -705,6 +723,8 @@ export class MeetingController {
         if (elements.length) this.socket?.emit('board:update', { pageId: activePageId, elements });
       }
     });
+    socket.on('annotation:update', ({ elements }) => this.update({ annotations: reconcileBoardElements(this.snapshot.annotations, elements) }));
+    socket.on('annotation:cleared', () => this.update({ annotations: [] }));
     socket.on('board:permission-update', ({ studentsCanDraw }) => this.update({ board: { ...this.snapshot.board, studentsCanDraw } }));
     socket.on('board:cleared', ({ pageId }) => {
       this.update({ board: { ...this.snapshot.board, elementsByPage: { ...this.snapshot.board.elementsByPage, [pageId]: [] } } });
@@ -765,6 +785,7 @@ export class MeetingController {
     // room:joined. SfuMedia holds all its work until the TURN credentials have been fetched (deps.ready), so nothing is lost.
     const sfu = new SfuMedia(transport, this.media, {
       stream: (participantId, stream) => this.updatePeer(participantId, { stream }),
+      screen: (participantId, screenStream) => this.updatePeer(participantId, { screenStream }),
       connection: (state) => this.onSfuConnection(state),
       error: (error) => {
         peerLog.warn('SFU media failed', error);
@@ -773,7 +794,7 @@ export class MeetingController {
     }, { iceConfiguration: getIceConfiguration, ready: ensureFreshTurnCredentials().catch(() => undefined) });
     this.sfu = sfu;
     // Carry an active screen share (and any shared audio) across a re-join.
-    if (this.snapshot.screenSharing) sfu.syncTracks({ video: this.screenShare.stream?.getVideoTracks()[0] ?? null, audio: this.screenShare.outgoingAudioTrack });
+    if (this.snapshot.screenSharing) sfu.syncTracks({ screen: this.screenShare.stream?.getVideoTracks()[0] ?? null, audio: this.screenShare.outgoingAudioTrack });
     this.applyVideoBandwidthPolicy();
     void sfu.start().catch(() => undefined); // failures are reported through the error callback above
   }
@@ -803,6 +824,7 @@ export class MeetingController {
     try {
       const session = new PeerSession(sessionId, initiator, this.socket, this.media, {
         stream: (stream) => this.updatePeer(peerId, { stream }),
+        screen: (screenStream) => this.updatePeer(peerId, { screenStream }),
         state: (connection, ice, rtcSignalling) => {
           this.updatePeer(peerId, { connection, ice, rtcSignalling });
           if (connection === 'failed') this.announce('A media connection failed. Restrictive networks may need a TURN relay.');
@@ -819,7 +841,7 @@ export class MeetingController {
       // A reconnect/replacement creates a fresh PeerSession, which otherwise wouldn't know we
       // were already sharing our screen (and any shared/mixed audio) before the interruption.
       if (this.snapshot.screenSharing) {
-        session.setVideoOverride(this.screenShare.stream?.getVideoTracks()[0] ?? null);
+        session.setScreenTrack(this.screenShare.stream?.getVideoTracks()[0] ?? null);
         session.setAudioOverride(this.screenShare.outgoingAudioTrack);
       }
       this.peers.set(peerId, session);
@@ -834,7 +856,7 @@ export class MeetingController {
     this.peers.delete(peerId);
     if (options?.keepDisplay) {
       this.updatePeer(peerId, {
-        stream: null, connection: 'new', ice: 'new', rtcSignalling: 'stable',
+        stream: null, screenStream: null, connection: 'new', ice: 'new', rtcSignalling: 'stable',
         stats: null, direction: null, quality: 'unknown', connectedAt: null,
       });
     } else {
@@ -877,7 +899,7 @@ export class MeetingController {
     this.screenShare.stop();
     this.update({
       phase: 'prejoin', status: 'Ready to join', signalling: 'disconnected', error: message,
-      waiting: [], reconnectFailed: false, screenSharing: false, screenShareAudio: false, handRaised: false, reactions: [],
+      waiting: [], reconnectFailed: false, screenSharing: false, screenStream: null, annotations: [], screenShareAudio: false, handRaised: false, reactions: [],
     });
   }
 
@@ -909,7 +931,7 @@ export class MeetingController {
     clearTimeout(this.noticeTimeout);
     this.update({
       phase: 'ended', status, signalling: 'disconnected', preparing: false, error: null, mediaError: null,
-      reconnectFailed: false, screenSharing: false, screenShareAudio: false, waiting: [],
+      reconnectFailed: false, screenSharing: false, screenStream: null, annotations: [], screenShareAudio: false, waiting: [],
       chatOpen: false, messages: [], unreadCount: 0, notice: null, handRaised: false, reactions: [],
       endedReason: reason, board: DEFAULT_BOARD_STATE, boardPointers: {}, announcement: null,
     });

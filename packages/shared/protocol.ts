@@ -96,6 +96,8 @@ export interface JoinedRoom {
   media?: RoomMedia;
   settings: RoomSettings; poll: PollState | null; understandingCheck: UnderstandingCheckState | null; timer: RoomTimerState | null;
   board: BoardState; announcement: Announcement | null;
+  // The tutor's drawing on top of a shared screen (separate from the whiteboard's pages). Empty unless a screen is being shared and drawn on.
+  annotations?: BoardElement[];
 }
 export interface PeerJoined { peer: Participant; sessionId: string; initiator: boolean }
 export interface SignalDescription { sessionId: string; description: RTCSessionDescriptionInit }
@@ -152,6 +154,10 @@ export interface ClientToServerEvents {
   'board:clear': (payload: { pageId: string }) => void;
   'board:follow-me': () => void;
   'board:import': (payload: { pageId: string; elements: BoardElement[] }) => void;
+  // Drawing on a shared screen (tutor only, and only while a screen is shared). Elements use the whiteboard's own format, and their
+  // coordinates are the shared screen's own pixels, so the drawing lines up whatever size each person's window is.
+  'annotation:update': (payload: { elements: BoardElement[] }) => void;
+  'annotation:clear': () => void;
   'announce:send': (payload: { text: string }) => void;
   'webrtc:offer': (payload: SignalDescription) => void;
   'webrtc:answer': (payload: SignalDescription) => void;
@@ -198,7 +204,9 @@ export interface ServerToClientEvents {
   // Broadcast to everyone including the target, unlike the self-report events above — the tutor
   // (the actor) and the target (the subject) are different people here, so neither side updates
   // optimistically; both wait for this, same as any other room-state broadcast.
-  'participant:force-muted': (payload: { id: string; forceMuted: boolean }) => void;
+  // `soft`: a one-time mute with no lock (a staff meeting's host muting someone). The person's microphone is turned off, and they may turn it
+  // back on themselves; `forceMuted` is false so nobody's playback of them is muted either. A lesson's mute is the locked kind (no `soft`).
+  'participant:force-muted': (payload: { id: string; forceMuted: boolean; soft?: boolean }) => void;
   'chat:message': (payload: ChatMessage) => void;
   'chat:message-deleted': (payload: { id: string }) => void;
   'chat:cleared': () => void;
@@ -216,6 +224,8 @@ export interface ServerToClientEvents {
   'board:pages-update': (payload: { pages: BoardPage[]; activePageId: string }) => void;
   'board:permission-update': (payload: { studentsCanDraw: boolean }) => void;
   'board:cleared': (payload: { pageId: string }) => void;
+  'annotation:update': (payload: { elements: BoardElement[] }) => void;
+  'annotation:cleared': () => void;
   'board:follow-me': () => void;
   'announce:update': (payload: Announcement | null) => void;
   'webrtc:offer': (payload: SignalDescription) => void;

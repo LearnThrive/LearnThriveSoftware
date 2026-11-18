@@ -12,6 +12,9 @@ import type { DirectionDiagnostics, TrackSnapshot } from './peer';
 import { Icon } from './components/Icon';
 import { MediaControls } from './components/MediaControls';
 import { ParticipantTile } from './components/ParticipantTile';
+import { RemoteAudio } from './components/RemoteAudio';
+import { ScreenStage } from './components/ScreenStage';
+import { StageRail, type RailEntry } from './components/StageRail';
 import { ChatPanel } from './components/ChatPanel';
 import { DeviceMenu } from './components/DeviceMenu';
 import { ParticipantPanel } from './components/ParticipantPanel';
@@ -29,6 +32,8 @@ import { ClassTimer } from './components/ClassTimer';
 // uses); lazy-loading it means opening the ordinary Call workspace never pays that cost —
 // see PRODUCTION_GAPS.md's bundle-size note and the before/after sizes recorded there.
 const Whiteboard = lazy(() => import('./components/Whiteboard').then((module) => ({ default: module.Whiteboard })));
+// The drawing layer over a shared screen uses the same drawing tool, so it is loaded the same way: only when a screen is being shared.
+const ScreenAnnotations = lazy(() => import('./components/ScreenAnnotations').then((module) => ({ default: module.ScreenAnnotations })));
 import { AnnouncementBanner } from './components/AnnouncementBanner';
 import { HelpQueuePanel } from './components/HelpQueuePanel';
 
@@ -77,6 +82,7 @@ export function App({ lessonId, initialToken, isDevRoute, returnHref }: Classroo
     resumeTimer, stopTimer, sendBoardUpdate, sendBoardCursor, sendBoardLaser, createBoardPage, renameBoardPage,
     deleteBoardPage, reorderBoardPages, switchBoardPage, setBoardBackground, setStudentsCanDraw, clearBoardPage,
     followMe, importBoard, duplicateBoardPage, commitLocalPageElements, sendAnnouncement, setDataSaver, allowRejoin,
+    sendAnnotationUpdate, clearAnnotations, commitLocalAnnotations,
     join, leave, reset, rejoin, copyInvite, retryConnection, subscribeBoardPointers, getBoardPointersSnapshot,
   } = useMeeting();
   const [name, setName] = useState('');
@@ -92,6 +98,10 @@ export function App({ lessonId, initialToken, isDevRoute, returnHref }: Classroo
   const [waitingRoomPanelOpen, setWaitingRoomPanelOpen] = useState(false);
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
+  // Sound is played by RemoteAudio for every participant, all the time (not by the tiles, which come and go with the stage). If the browser
+  // blocks it until the page has been clicked, this shows the "Turn on sound" prompt.
+  const [audioBlocked, setAudioBlocked] = useState(false);
+  const [audioResume, setAudioResume] = useState(0);
   const [classControlsOpen, setClassControlsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   // null = no explicit choice yet — the render logic auto-picks the first peer as main.
@@ -247,6 +257,14 @@ export function App({ lessonId, initialToken, isDevRoute, returnHref }: Classroo
     <button className="button button-mint" type="button" onClick={() => void copyInvite()} aria-label="Copy invite link"><Icon name={snapshot.copied ? 'check' : 'link'} />{snapshot.copied ? 'Invite link copied' : 'Copy invite link'}</button>
   </section>;
 
+  // The shared screen and who is sharing it, and the cameras that sit beside the screen or the whiteboard (students on top, the tutor below).
+  const sharingPeer = snapshot.peers.find((peer) => peer.participant.screenSharing);
+  const sharedStream = snapshot.screenSharing ? snapshot.screenStream : sharingPeer?.screenStream ?? null;
+  const presenterName = snapshot.screenSharing ? 'You' : sharingPeer?.participant.name ?? '';
+  const railEntries: RailEntry[] = [
+    { key: 'local', role: snapshot.role, tile: selfTile(true) },
+    ...snapshot.peers.map((peer) => ({ key: peer.participant.id, role: peer.participant.role, tile: peerTile(peer, true) })),
+  ];
   const reconnectingPeers = snapshot.peers.filter((peer) => peer.reconnecting);
   const helpQueueEntries = snapshot.peers
     .filter((peer) => peer.participant.role === 'student' && peer.participant.handRaised && peer.participant.handRaisedAt != null)
@@ -264,7 +282,6 @@ export function App({ lessonId, initialToken, isDevRoute, returnHref }: Classroo
     <header className="site-header">
       <Brand />
       <div className="header-context"><span className="header-divider" />{inCall ? 'Your classroom' : 'Online classroom'}<span className="prototype-badge">Preview</span></div>
-      <div className="header-note"><Icon name="people" size={17} /><span>A classroom for up to 4</span></div>
     </header>
 
     <main id="main-content" className={inCall || waitingForAdmission ? 'call-main' : 'prejoin-main'}>
@@ -332,8 +349,20 @@ export function App({ lessonId, initialToken, isDevRoute, returnHref }: Classroo
         {snapshot.poll && <PollPanel poll={snapshot.poll} isTutor={snapshot.role === 'tutor'} onVote={votePoll} onClose={closePoll} onClear={clearPoll} />}
         {snapshot.understandingCheck && <UnderstandingCheckPanel check={snapshot.understandingCheck} isTutor={snapshot.role === 'tutor'} onRespond={respondUnderstanding} onEnd={endUnderstandingCheck} />}
         {snapshot.role === 'tutor' && helpQueueEntries.length > 0 && <HelpQueuePanel entries={helpQueueEntries} onMarkHelped={lowerHand} />}
+        {snapshot.peers.map((peer) => (
+          <RemoteAudio
+            key={peer.participant.id} stream={peer.stream} muted={peer.participant.forceMuted} resume={audioResume}
+            onBlocked={() => setAudioBlocked(true)} onPlaying={() => setAudioBlocked(false)}
+          />
+        ))}
+        {audioBlocked && snapshot.peers.length > 0 && (
+          <button type="button" className="button playback-button audio-enable" onClick={() => setAudioResume((n) => n + 1)}>
+            <Icon name="volume" />Turn on sound
+          </button>
+        )}
         <div className="call-body">
           {workspaceMode === 'board' ? (
+            <div className="stage-with-rail"><div className="stage-with-rail__main">
             <Suspense fallback={<div className="whiteboard-loading" role="status"><Icon name="poll" size={20} />Loading whiteboard…</div>}>
               <Whiteboard
                 role={snapshot.role ?? 'student'} pages={snapshot.board.pages} activePageId={snapshot.board.activePageId}
@@ -347,6 +376,24 @@ export function App({ lessonId, initialToken, isDevRoute, returnHref }: Classroo
                 onFollowMe={followMe} onImport={importBoard}
               />
             </Suspense>
+            </div><StageRail entries={railEntries} /></div>
+          ) : workspaceMode === 'present' && someoneIsSharing ? (
+            <div className="stage-with-rail">
+              <div className="stage-with-rail__main">
+                <ScreenStage
+                  stream={sharedStream} presenter={presenterName} local={snapshot.screenSharing}
+                  overlay={snapshot.role === 'tutor' || snapshot.annotations.length > 0 ? (frame) => (
+                    <Suspense fallback={null}>
+                      <ScreenAnnotations
+                        frame={frame} canDraw={snapshot.role === 'tutor'} elements={snapshot.annotations}
+                        onUpdate={sendAnnotationUpdate} onCommit={commitLocalAnnotations} onClear={clearAnnotations}
+                      />
+                    </Suspense>
+                  ) : undefined}
+                />
+              </div>
+              <StageRail entries={railEntries} />
+            </div>
           ) : (
             <div className="meeting-stage" ref={stageRef}>
               {layoutMode === 'gallery' && snapshot.peers.length > 0 ? (
