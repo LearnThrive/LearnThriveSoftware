@@ -329,6 +329,13 @@ test("the join token carries the account (uid) and an old token without one stil
 
 // ---- availability and wiring --------------------------------------------------------------------------------------------------------------
 
+test("every place that signs a lesson join token names the signed-in person (uid), or the classroom refuses their chat", () => {
+  for (const file of [["app", "(classroom)", "dashboard", "lessons", "[id]", "classroom", "page.tsx"], ["lib", "actions", "classroom.ts"], ["lib", "classroom", "lessonEntry.ts"]]) {
+    const source = readFileSync(join(import.meta.dirname, "..", "src", ...file), "utf8");
+    assert.match(source, /uid: user\.id/, file.join("/"));
+  }
+});
+
 test("in production the chat is open when the database is set up, switched off by LESSON_CHAT_ENABLED=false, and in development it is open", () => {
   const prod = { NODE_ENV: "production" };
   const db = { ...prod, SUPABASE_URL: "https://x.supabase.co", SUPABASE_ANON_KEY: "k", DATABASE_URL: "postgres://x" };

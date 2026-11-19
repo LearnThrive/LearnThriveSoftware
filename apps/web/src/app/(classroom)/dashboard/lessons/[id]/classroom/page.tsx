@@ -55,6 +55,8 @@ export default async function LessonClassroomPage({
     lessonId: lesson.id,
     name: user.name,
     role: joinRole === "TUTOR" ? "tutor" : "student",
+    // Names the signed-in person: without it the classroom has no identity for them and refuses their chat ("only available in a lesson").
+    uid: user.id,
     // A Server Component renders once per request on the server, with no client
     // reconciliation/memoization to destabilize; a short-lived token expiry genuinely needs the
     // real current time, same as lib/actions/classroom.ts's identical exp calculation (not
