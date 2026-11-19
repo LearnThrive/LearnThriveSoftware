@@ -41,7 +41,7 @@
   grid-area: value;
   margin: 0;
   color: var(--fg-strong);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   font-size: var(--text-large, 1.125rem);
   /* Digits and letters line up and read one at a time: an account number is copied by eye as often as by button. */
   font-variant-numeric: tabular-nums;
