@@ -39,6 +39,7 @@ describe("lesson chat carries over between the occurrences of one assignment (Po
       files: createSqlFileStore(executor),
       scanner: allowAllScanner,
       config: DEFAULT_LESSON_CHAT_CONFIG,
+      otherTypes: { docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", gif: "image/gif", csv: "text/csv" },
       urlSecret: "x".repeat(40),
     });
     const tutorActor: ChatActor = { accountId: tutorUser, name: "Tutor", roles: ["TUTOR"], tutorId: tutor.id, studentId: null, clientId: null, isSafeguardingLead: false };
@@ -49,10 +50,26 @@ describe("lesson chat carries over between the occurrences of one assignment (Po
     const sent = await service.sendFile(tutorActor, week1.id, { name: "worksheet.pdf", declaredType: "application/pdf", bytes: pdf });
     assert.ok(sent.ok, JSON.stringify(sent));
 
+    // Other document and image types are stored and read back too (migration 0030): a Word file and a gif, as downloads.
+    const docx = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 1, 2, 3, 4]);
+    const word = await service.sendFile(tutorActor, week1.id, { name: "notes.docx", declaredType: "", bytes: docx });
+    assert.ok(word.ok, JSON.stringify(word));
+    const gif = await service.sendFile(tutorActor, week1.id, { name: "diagram.gif", declaredType: "image/gif", bytes: new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 1, 0, 1, 0]) });
+    assert.ok(gif.ok, JSON.stringify(gif));
+    for (const [name, bytes] of [["run.exe", new Uint8Array([1, 2, 3])], ["fake.csv", new Uint8Array([0x4d, 0x5a, 0x90, 0])], ["noext", new Uint8Array([1])]] as const) {
+      const refused = await service.sendFile(tutorActor, week1.id, { name, declaredType: "", bytes });
+      assert.equal(refused.ok, false, name);
+    }
+
     // Next week's lesson shows the same conversation, and the student can open the file from it.
     const next = await service.list(studentActor, week2.id);
     assert.ok(next.ok);
-    assert.deepEqual(next.messages.map((m) => m.text || m.file?.displayName), ["Bring your homework next week", "worksheet.pdf"]);
+    assert.deepEqual(next.messages.map((m) => m.text || m.file?.displayName), ["Bring your homework next week", "worksheet.pdf", "notes.docx", "diagram.gif"]);
+    const wordRead = next.messages[2]!.file!;
+    const wordUrl = new URL(wordRead.url, "http://x");
+    const wordOpened = await service.openFile(studentActor, week2.id, wordRead.id, { u: wordUrl.searchParams.get("u")!, exp: wordUrl.searchParams.get("exp")!, sig: wordUrl.searchParams.get("sig")! });
+    assert.ok(wordOpened.ok);
+    assert.deepEqual([...wordOpened.bytes], [...docx]);
     const url = new URL(next.messages[1]!.file!.url, "http://x");
     assert.ok(url.pathname.startsWith(`/api/lessons/${week2.id}/files/`));
     const opened = await service.openFile(studentActor, week2.id, next.messages[1]!.file!.id, { u: url.searchParams.get("u")!, exp: url.searchParams.get("exp")!, sig: url.searchParams.get("sig")! });

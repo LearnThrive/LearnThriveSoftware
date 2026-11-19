@@ -450,7 +450,7 @@ export class MeetingController {
       const messages: DisplayChatMessage[] = (data.messages ?? []).filter((m) => !m.removed).map((m) => ({
         id: m.id, senderId: '', name: m.senderName, text: m.text, timestamp: Date.parse(m.createdAt) || Date.now(),
         own: m.senderParty === role && m.senderName === myName,
-        ...(m.file ? { attachment: { name: m.file.displayName, size: m.file.size, image: m.file.contentType.startsWith('image/'), url: m.file.url } } : {}),
+        ...(m.file ? { attachment: { name: m.file.displayName, size: m.file.size, image: isInlineImage(m.file.displayName), url: m.file.url } } : {}),
       }));
       if (lessonId !== this.lessonChatId) return;
       const fresh = messages.slice(known).filter((m) => !m.own).length;
@@ -460,7 +460,8 @@ export class MeetingController {
 
   /** Saves a file in the lesson's chat (png, jpg or pdf). Returns a message to show if it could not be sent, or null once it is saved. */
   private sendLessonFile = async (file: File, caption?: string): Promise<string | null> => {
-    if (!/\.(png|jpe?g|pdf)$/i.test(file.name)) return 'Only PNG, JPG and PDF files can be shared in a lesson.';
+    const problem = chatFileProblem(file.name, file.size);
+    if (problem) return problem;
     const form = new FormData();
     form.set('file', file);
     if (caption?.trim()) form.set('caption', caption.trim().slice(0, MAX_CHAT_LENGTH));

@@ -9,7 +9,8 @@
 export type ChatParty = "tutor" | "student";
 
 export const LESSON_FILE_TYPES = ["image/png", "image/jpeg", "application/pdf"] as const;
-export type LessonFileType = (typeof LESSON_FILE_TYPES)[number];
+/** The content type a file is served as. The three in LESSON_FILE_TYPES are checked by their bytes; any other allowed type comes from its extension. */
+export type LessonFileType = string;
 
 /** What a message says about its file. The bytes are in private storage and are reached only through a short-lived signed URL. */
 export interface LessonFileRef {

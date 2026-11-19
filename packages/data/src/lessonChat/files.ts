@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import type { LessonFileType } from "./types";
 
 /**
  * What may be uploaded to a lesson, and what happens to it first (docs/LESSON_CHAT.md).
@@ -19,18 +18,18 @@ export const ALLOWED = {
   "image/png": { ext: "png", names: ["png"] },
   "image/jpeg": { ext: "jpg", names: ["jpg", "jpeg"] },
   "application/pdf": { ext: "pdf", names: ["pdf"] },
-} as const satisfies Record<LessonFileType, { ext: string; names: readonly string[] }>;
+} as const satisfies Record<string, { ext: string; names: readonly string[] }>;
 
 export type UploadRefusal = "FILE_EMPTY" | "FILE_TOO_LARGE" | "FILE_TYPE_NOT_ALLOWED" | "FILE_NAME_NOT_ALLOWED" | "FILE_CORRUPT" | "FILE_UNSAFE";
 
 export type UploadCheck =
-  | { ok: true; contentType: LessonFileType; ext: string; bytes: Uint8Array; displayName: string }
+  | { ok: true; contentType: string; ext: string; bytes: Uint8Array; displayName: string }
   | { ok: false; code: UploadRefusal; message: string };
 
 const MESSAGES: Record<UploadRefusal, string> = {
   FILE_EMPTY: "That file is empty.",
   FILE_TOO_LARGE: "That file is too large.",
-  FILE_TYPE_NOT_ALLOWED: "Only PNG, JPG and PDF files can be shared.",
+  FILE_TYPE_NOT_ALLOWED: "That type of file cannot be shared here. Documents, spreadsheets, slides, images, audio, video, text and zip files can.",
   FILE_NAME_NOT_ALLOWED: "That file name is not allowed.",
   FILE_CORRUPT: "That file could not be read. Try saving it again.",
   FILE_UNSAFE: "That file contains content that cannot be shared.",
@@ -61,7 +60,7 @@ export function cleanDisplayName(raw: unknown): string | null {
 
 // ---- type ----------------------------------------------------------------------------------------------------------------------------------
 
-export function sniffType(bytes: Uint8Array): LessonFileType | null {
+export function sniffType(bytes: Uint8Array): keyof typeof ALLOWED | null {
   const at = (i: number) => bytes[i];
   if (bytes.length >= 8 && at(0) === 0x89 && at(1) === 0x50 && at(2) === 0x4e && at(3) === 0x47 && at(4) === 0x0d && at(5) === 0x0a && at(6) === 0x1a && at(7) === 0x0a) return "image/png";
   if (bytes.length >= 3 && at(0) === 0xff && at(1) === 0xd8 && at(2) === 0xff) return "image/jpeg";
@@ -190,7 +189,22 @@ export interface UploadInput {
 }
 
 /** Validates an upload and returns the bytes to store (metadata stripped). Every refusal says why, and nothing is stored on a refusal. */
-export function checkUpload(input: UploadInput, maxBytes: number): UploadCheck {
+/** Starts of programs on every platform: whatever the name says, a file that begins like one is refused. */
+function looksExecutable(b: Uint8Array): boolean {
+  const at = (i: number) => b[i];
+  return (at(0) === 0x4d && at(1) === 0x5a) // Windows (MZ)
+    || (at(0) === 0x7f && at(1) === 0x45 && at(2) === 0x4c && at(3) === 0x46) // ELF
+    || (at(0) === 0x23 && at(1) === 0x21) // #! script
+    || (at(0) === 0xcf && at(1) === 0xfa && at(2) === 0xed && at(3) === 0xfe) // Mach-O
+    || (at(0) === 0xca && at(1) === 0xfe && at(2) === 0xba && at(3) === 0xbe); // Mach-O universal / Java class
+}
+
+/**
+ * Validates an upload and returns the bytes to store. PNG, JPEG and PDF are judged by their own bytes (with metadata stripped, PDFs checked for
+ * active content). Every other type in `otherTypes` (extension to content type: documents, images, slides, audio, video, text, zip) is judged by its
+ * extension, kept as sent, and served only as a download; a file that begins like a program is refused whatever it is called.
+ */
+export function checkUpload(input: UploadInput, maxBytes: number, otherTypes: Readonly<Record<string, string>> = {}): UploadCheck {
   const displayName = cleanDisplayName(input.name);
   if (displayName === null) return no("FILE_NAME_NOT_ALLOWED");
   if (input.bytes.length === 0) return no("FILE_EMPTY");
@@ -198,6 +212,13 @@ export function checkUpload(input: UploadInput, maxBytes: number): UploadCheck {
 
   const sniffed = sniffType(input.bytes);
   const ext = extensionOf(displayName);
+  const strictNames = Object.values(ALLOWED).flatMap((a) => a.names as readonly string[]);
+  if (ext !== null && !strictNames.includes(ext)) {
+    const type = Object.hasOwn(otherTypes, ext) ? otherTypes[ext] : undefined;
+    if (!type) return no("FILE_TYPE_NOT_ALLOWED");
+    if (looksExecutable(input.bytes)) return no("FILE_UNSAFE");
+    return { ok: true, contentType: type, ext: "bin", bytes: input.bytes, displayName };
+  }
   const declared = typeof input.declaredType === "string" ? input.declaredType.split(";")[0]!.trim().toLowerCase() : "";
   // The bytes, the name's extension and the claimed type must all say the same allowed thing.
   if (sniffed === null || declared !== sniffed || ext === null || !(ALLOWED[sniffed].names as readonly string[]).includes(ext)) return no("FILE_TYPE_NOT_ALLOWED");

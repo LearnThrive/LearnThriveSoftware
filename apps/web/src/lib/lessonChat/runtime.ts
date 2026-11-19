@@ -1,4 +1,5 @@
-import { randomBytes } from "node:crypto";
+import { createHmac } from "node:crypto";
+import { CHAT_FILE_TYPES } from "@learnthrive/shared/chatFiles";
 import {
   allowAllScanner, createLessonChatService, createSqlFileStore, createSqlLessonChatRepository, InMemoryFileStore, InMemoryLessonChatRepository, readLessonChatConfig,
   type LessonChatConfig, type LessonChatService,
@@ -14,8 +15,8 @@ import { getDataProvider } from "@/lib/data/provider";
  *   memory    development and tests: in memory, lost on restart. Always open.
  *   off       production without the database: closed.
  *
- * File links are signed with LESSON_FILE_URL_SECRET (32+ characters). In development there is a fallback so a local run works. In production without
- * the secret, text chat still opens but every upload is refused: nothing is ever signed with a key that is public in the source.
+ * File links are signed with LESSON_FILE_URL_SECRET when set, else a key derived from CLASSROOM_JOIN_SECRET (see urlSecretFor). With neither in
+ * production, text chat still opens but every upload is refused: nothing is ever signed with a key that is public in the source.
  */
 type Env = Record<string, string | undefined>;
 
@@ -32,12 +33,21 @@ export function chatAvailability(env: Env = process.env): { open: true } | ChatC
   return { open: true };
 }
 
-/** The signing key for file links: the configured secret, or in development the fallback. In production without a real secret there is no key (null). */
+/**
+ * The signing key for file links: LESSON_FILE_URL_SECRET when set (32+ characters). Otherwise in production a key derived from the secret the
+ * website and classroom already share (CLASSROOM_JOIN_SECRET), under its own label so it is not that secret and cannot be used for anything else.
+ * In development a fixed fallback. null only when production has neither (then uploads are refused).
+ */
 function urlSecretFor(env: Env): string | null {
   const configured = env.LESSON_FILE_URL_SECRET?.trim();
   if (configured && configured.length >= 32) return configured;
+  const shared = env.CLASSROOM_JOIN_SECRET?.trim();
+  if (shared && shared.length >= 16) return createHmac("sha256", shared).update("learnthrive:lesson-file-url:v1").digest("hex");
   return env.NODE_ENV === "production" ? null : DEV_SECRET;
 }
+
+/** Every file type the meetings chat allows, as extension to content type. */
+const OTHER_TYPES: Record<string, string> = Object.fromEntries(Object.entries(CHAT_FILE_TYPES).map(([ext, k]) => [ext, k.type]));
 
 type ChatState = { service: LessonChatService; config: LessonChatConfig };
 const globalForChat = globalThis as unknown as { __learnthriveLessonChat?: ChatState };
@@ -73,7 +83,8 @@ export function lessonChat(env: Env = process.env): ChatOpen | ChatClosed {
       // TODO(malware-scan): the scanner hook. Replace `allowAllScanner` with a real scanner here (FileScanner in @learnthrive/data/lessonChat).
       scanner: secret ? allowAllScanner : { scan: async () => ({ status: "error", detail: "no signing key" }) },
       config,
-      urlSecret: secret ?? randomBytes(32).toString("hex"),
+      otherTypes: OTHER_TYPES,
+      urlSecret: secret ?? createHmac("sha256", "no-key").update(String(process.pid)).digest("hex"),
     });
     globalForChat.__learnthriveLessonChat = { service, config };
   }

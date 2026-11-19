@@ -32,6 +32,8 @@ export interface ChatServiceDeps {
   files: FileStore;
   scanner: FileScanner;
   config: LessonChatConfig;
+  /** Other allowed file types, extension to content type (documents, images, slides, audio, video, text, zip), beyond the three checked by their bytes. */
+  otherTypes?: Readonly<Record<string, string>>;
   /** Signs file URLs. Required: there is no default, so no URL is ever signed with a made-up key. */
   urlSecret: string;
   now?: () => Date;
@@ -125,7 +127,7 @@ export function createLessonChatService(deps: ChatServiceDeps) {
       if (!allowed.ok) return allowed;
       const caption = upload.caption === undefined || upload.caption === null ? "" : cleanText(upload.caption, config.maxCaptionLength, true);
       if (caption === null) return refuse(400, "BAD_MESSAGE", `A caption is at most ${config.maxCaptionLength} characters.`);
-      const checked = checkUpload({ name: upload.name, declaredType: upload.declaredType, bytes: upload.bytes }, config.maxFileBytes);
+      const checked = checkUpload({ name: upload.name, declaredType: upload.declaredType, bytes: upload.bytes }, config.maxFileBytes, deps.otherTypes);
       if (!checked.ok) return refuse(STATUS_FOR_UPLOAD[checked.code] ?? 400, checked.code, checked.message);
       const scan = await scanner.scan(checked.bytes, { contentType: checked.contentType, lessonId }).catch((): { status: "error"; detail: string } => ({ status: "error", detail: "scanner failed" }));
       if (scan.status !== "clean") return refuse(415, "FILE_SCAN_FAILED", "That file could not be checked, so it was not shared.");

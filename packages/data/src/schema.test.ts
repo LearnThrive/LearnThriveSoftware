@@ -207,6 +207,7 @@ describe("migrations", () => {
       "0027_lesson_chat.sql",
       "0028_staff_meetings.sql",
       "0029_lesson_chat_threads.sql",
+      "0030_lesson_chat_file_types.sql",
     ]);
     assert.deepEqual(
       applied.map((f) => Number(f.slice(0, 4))),

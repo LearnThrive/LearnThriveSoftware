@@ -148,10 +148,10 @@ export function ChatPanel({
         {onSendFile && (
           <>
             <input
-              ref={fileRef} type="file" className="sr-only" tabIndex={-1} accept={lessonChat ? '.png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf' : CHAT_FILE_ACCEPT} aria-label="Choose a file to share"
+              ref={fileRef} type="file" className="sr-only" tabIndex={-1} accept={CHAT_FILE_ACCEPT} aria-label="Choose a file to share"
               onChange={(event) => { void share(event.target.files?.[0]); event.target.value = ''; }}
             />
-            <button type="button" className="chat-attach" onClick={() => fileRef.current?.click()} disabled={!canChat || Boolean(sending)} aria-label="Share a file" title={lessonChat ? 'Share a PNG, JPG or PDF (up to 10 MB)' : 'Share a file: documents, images, slides, spreadsheets, audio, video, zip (up to 10 MB)'}>
+            <button type="button" className="chat-attach" onClick={() => fileRef.current?.click()} disabled={!canChat || Boolean(sending)} aria-label="Share a file" title="Share a file: documents, images, slides, spreadsheets, audio, video, zip (up to 10 MB)">
               <Icon name="attach" size={18} />
             </button>
           </>

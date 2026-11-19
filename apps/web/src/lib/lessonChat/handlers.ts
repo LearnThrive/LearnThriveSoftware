@@ -97,7 +97,8 @@ export async function removeMessage(user: AuthenticatedUser | null, lessonId: st
   return result.ok ? jsonResponse(200, { ok: true }) : refusal(result);
 }
 
-const SAFE_EXT = { "image/png": "png", "image/jpeg": "jpg", "application/pdf": "pdf" } as const;
+/** Only these are drawn in the browser itself; everything else (SVG, Office files, archives, media) is a download. */
+const INLINE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 
 /** Serves a file from a signed link. The lesson in the address must be the file's own; the person must be the one the link was made for. */
 export async function openFile(user: AuthenticatedUser | null, lessonId: string, fileId: string, url: URL, deps: ChatHttpDeps): Promise<Response> {
@@ -110,12 +111,13 @@ export async function openFile(user: AuthenticatedUser | null, lessonId: string,
     sig: url.searchParams.get("sig") ?? "",
   });
   if (!result.ok) return refusal(result);
-  const ext = SAFE_EXT[result.contentType as keyof typeof SAFE_EXT] ?? "bin";
-  const inline = result.contentType !== "application/pdf";
+  const dot = result.displayName.lastIndexOf(".");
+  const ext = dot > 0 ? result.displayName.slice(dot + 1).replace(/[^A-Za-z0-9]/g, "").slice(0, 8) || "bin" : "bin";
+  const inline = INLINE_TYPES.has(result.contentType);
   return new Response(result.bytes as BodyInit, {
     status: 200,
     headers: {
-      "Content-Type": result.contentType,
+      "Content-Type": INLINE_TYPES.has(result.contentType) ? result.contentType : result.contentType === "application/pdf" ? "application/pdf" : "application/octet-stream",
       "Content-Length": String(result.bytes.length),
       // A file name for the browser's download box: cleaned at upload, and encoded here. The stored name is never used to find the file.
       "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="lesson-file.${ext}"; filename*=UTF-8''${encodeURIComponent(result.displayName)}`,
