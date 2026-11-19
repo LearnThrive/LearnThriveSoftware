@@ -403,6 +403,10 @@
    sections. */
 
 /* One focused working area (LearnThrive AI's conversation): the whole content column, no padding or width limit, height owned by the page. */
+/* Vertical rhythm for a page's top-level blocks. Pages render fragments straight into <main>, so two cards in a row used to touch
+   unless each remembered its own margin. Zero specificity: a block's own margin (the page header's, a stat grid's) still wins, and in
+   this block-flow column neighbouring margins collapse to the larger, never add. */
+:where(.app-content:not(.app-content--flush)) > :where(* + *) { margin-top: var(--space-4); }
 .app-content.app-content--flush { max-width: none; padding: 0; display: flex; flex-direction: column; }
 .app-content--flush > * { flex: 1; min-height: 0; }
 
@@ -463,15 +467,21 @@
   box-shadow: var(--app-shadow-sm);
 }
 
+/* The action is centred on the title block, so it lines up with a title whether or not a description follows, and it wraps beneath the
+   title when the card is too narrow for both (two actions ran off the card at 375px). */
 .card__header {
-  display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4);
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2) var(--space-4);
   padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--app-border);
 }
+.card__header > div:first-child { flex: 1 1 12rem; min-width: 0; }
 .card__title { margin: 0; font-family: var(--font-heading); font-size: var(--text-h2); font-weight: 700; color: var(--app-ink); }
 .card__description { margin: var(--space-1) 0 0; font-size: var(--text-small); color: var(--app-muted); }
-.card__action { flex: none; }
+.card__action { flex: none; display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); max-width: 100%; }
 .card__body { padding: var(--space-5); }
+/* Flow spacing inside a card: a paragraph, then a form or a button, never touch. Zero specificity, so any component that sets its own
+   margin still wins, and adjacent vertical margins collapse rather than add up. */
+:where(.card__body) > :where(* + *) { margin-top: var(--space-3); }
 .card__body--flush { padding: 0; }
 
 /* 9.5rem, not 11rem: a tile holds one number and a two-word label, and at 11rem two of them need
@@ -529,7 +539,9 @@
 .stat-tile--link:focus-visible { outline: none; box-shadow: var(--app-focus-ring); }
 .stat-tile__value { font-family: var(--font-heading); font-size: 1.75rem; font-weight: 700; color: var(--app-ink); line-height: 1.1; }
 .stat-tile__label { font-size: var(--text-small); color: var(--app-muted); }
-.stat-tile__hint { font-size: var(--text-label); color: var(--app-accent-text); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+/* A hint is often a whole sentence ("A required check missing, or any check expired…"): sentence case at the small size reads; a
+   letter-spaced uppercase label did not. */
+.stat-tile__hint { margin-top: 0.15rem; font-size: var(--text-small); color: var(--app-accent-text); font-weight: 600; line-height: 1.35; }
 
 @keyframes stat-tile-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .stat-grid .stat-tile:nth-child(2) { animation-delay: 40ms; }
@@ -605,10 +617,10 @@
 .empty-state__description { margin: 0; max-width: 42ch; font-size: var(--text-small); color: var(--app-muted); }
 .empty-state__action { margin-top: var(--space-3); }
 
-/* A card holding nothing but an empty state: constrained and centred, so the message reads as a
-   deliberate answer rather than a small note stranded in a very wide white box. Full width is
-   right when a card holds a list; it is not right when a card holds one sentence. */
-.card--empty { max-width: 40rem; margin-inline: auto; }
+/* A card holding nothing but an empty state keeps the full width of the list it stands in for, so it lines up with the tabs, filters
+   and heading above it; the message itself is centred and capped (.empty-state__description's 42ch). A 40rem card centred under
+   left-aligned tabs read as off-centre (docs/ui-sweep/FINDINGS.md, F19). */
+.card--empty { width: 100%; }
 
 /* ============================================================ Responsive */
 
@@ -667,4 +679,15 @@
 .app-usermenu__who .app-usermenu__role { display: block; max-width: 11rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 30rem) {
   .app-usermenu__who { display: none; }
+}
+
+/* ============================================================ Touch targets */
+
+/* 44px targets on a phone or any coarse pointer (WCAG 2.5.5 / Apple HIG), one rule for every control family rather than per page.
+   The desktop sizes above stay as they are for a mouse. */
+@media (max-width: 40rem), (pointer: coarse) {
+  .icon-button, .app-usermenu__trigger { min-width: 2.75rem; min-height: 2.75rem; }
+  .icon-button { width: 2.75rem; height: 2.75rem; }
+  .app-nav__link, .app-usermenu__item, .app-sidebar__collapse { min-height: 2.75rem; }
+  .back-link { min-height: 2.75rem; }
 }

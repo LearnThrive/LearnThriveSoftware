@@ -13,8 +13,8 @@ export default function DashboardLoading() {
       </div>
       <div className="grid-2">
         {[0, 1].map((column) => (
-          <div className="card" key={column} style={{ padding: "var(--space-5)" }}>
-            <div className="skeleton skeleton--text" style={{ width: "35%", height: "1.1rem", marginBottom: "var(--space-4)" }} />
+          <div className="card skeleton-card" key={column}>
+            <div className="skeleton skeleton--text" />
             {[0, 1, 2].map((row) => <div className="skeleton skeleton--row" key={row} />)}
           </div>
         ))}

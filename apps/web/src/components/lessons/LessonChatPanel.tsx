@@ -121,6 +121,7 @@ export function LessonChatPanel({ lessonId, isAdmin = false }: { lessonId: strin
   return (
     <div className={styles.wrap}>
       {problem && !data ? <p className={styles.notice} role="status">{problem}</p> : null}
+      {!problem && !data ? <p className={styles.notice} role="status">Loading messages…</p> : null}
       {data ? (
         <ul className={styles.log} aria-label="Lesson messages" aria-live="polite">
           {data.messages.length === 0 ? <li className={styles.notice}>No messages yet.</li> : null}

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Receipt } from "lucide-react";
+import { ReceiptPoundSterling } from "lucide-react";
 import { formatPence, parentAccount } from "@learnthrive/data/tuitionBilling";
 import { requireRole } from "@/lib/auth/guard";
 import { recordFor } from "@/lib/auth/scope";
@@ -50,7 +50,7 @@ export default async function FeesPage() {
       />
 
       {!account ? (
-        <Card><CardBody><EmptyState icon={<Receipt size={20} />} title="No fees to show yet" description={`If you think this is wrong, email ${siteConfig.email}.`} /></CardBody></Card>
+        <Card><CardBody><EmptyState icon={<ReceiptPoundSterling size={20} />} title="No fees to show yet" description={`If you think this is wrong, email ${siteConfig.email}.`} /></CardBody></Card>
       ) : (
         <>
           <Card>
@@ -88,7 +88,7 @@ export default async function FeesPage() {
             <CardHeader title="Statements" description="Newest first. Each lists the lessons it covers." />
             <CardBody>
               {account.statements.length === 0 ? (
-                <EmptyState icon={<Receipt size={20} />} title="No statement yet" description="Your first statement is sent after the end of the first month of lessons." />
+                <EmptyState icon={<ReceiptPoundSterling size={20} />} title="No statement yet" description="Your first statement is sent after the end of the first month of lessons." />
               ) : (
                 account.statements.map((s) => (
                   <details key={s.invoiceNumber} className="stack">

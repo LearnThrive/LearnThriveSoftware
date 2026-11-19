@@ -87,7 +87,8 @@
   border-radius: var(--app-radius); box-shadow: var(--app-shadow-sm);
   margin-bottom: var(--space-4);
 }
-.profile-header__identity { display: flex; align-items: center; gap: var(--space-4); min-width: 0; flex: 1; }
+/* A real basis, so on a narrow screen the actions wrap below the name instead of being drawn over it (F11). */
+.profile-header__identity { display: flex; align-items: center; gap: var(--space-4); min-width: 0; flex: 1 1 18rem; }
 .profile-header__names { min-width: 0; }
 .profile-header__name { margin: 0; font-family: var(--font-heading); font-size: var(--text-h1); font-weight: 700; color: var(--app-ink); }
 .profile-header__meta { margin: 0.25rem 0 0; display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; font-size: var(--text-small); color: var(--app-muted); }
@@ -414,3 +415,39 @@
 .getting-started__title { display: flex; align-items: center; gap: var(--space-2); margin: 0; font-size: 1rem; color: var(--app-ink); }
 .getting-started__list { margin: 0 0 var(--space-3); padding-left: 1.2rem; color: var(--app-text); }
 .getting-started__list li { margin-bottom: var(--space-1); }
+
+/* ============================================================ Calendar layout fixes (docs/ui-sweep/FINDINGS.md, F07) */
+
+/* Button groups (prev/next, Month/Week/Day/List) read as one segmented control: only the outer corners are rounded and the shared
+   border is drawn once. The per-button radius above stays for buttons on their own (Today). */
+.calendar-wrap .fc-button-group > .fc-button:not(:first-child) { margin-left: -1px; border-top-left-radius: 0 !important; border-bottom-left-radius: 0 !important; }
+.calendar-wrap .fc-button-group > .fc-button:not(:last-child) { border-top-right-radius: 0 !important; border-bottom-right-radius: 0 !important; }
+.calendar-wrap .fc-button-group > .fc-button:hover, .calendar-wrap .fc-button-group > .fc-button:focus-visible,
+.calendar-wrap .fc-button-group > .fc-button.fc-button-active { position: relative; z-index: 1; }
+
+/* An event stays inside its own day: clipped with an ellipsis, never spilling over the next cell. */
+.calendar-wrap .fc-daygrid-event-harness { min-width: 0; }
+.calendar-wrap .fc-daygrid-event { overflow: hidden; }
+.calendar-wrap .fc-daygrid-event .fc-event-time { flex: none; }
+.calendar-wrap .fc-daygrid-event .fc-event-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The loading skeleton's cards, without inline styles (F25). */
+.skeleton-card { padding: var(--space-5); }
+.skeleton-card .skeleton--text { width: 35%; height: 1.1rem; margin-bottom: var(--space-4); }
+
+@media (max-width: 40rem) {
+  .calendar-wrap { padding: var(--space-3); }
+  .calendar-wrap .fc-toolbar.fc-header-toolbar { margin-bottom: var(--space-3); }
+  .calendar-wrap .fc-toolbar-chunk { display: flex; justify-content: center; }
+  .calendar-wrap .fc-daygrid-event-dot { display: none; }
+  .calendar-wrap .fc-daygrid-event { padding: 1px 3px; }
+  /* A phone's day cell is ~45px: room for the start time, not the time and a title each cut to one letter. The title is still the
+     event's accessible text and opens in the peek panel on tap; the week, day and list views show it in full. */
+  .calendar-wrap .fc-daygrid-event .fc-event-title {
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+  .calendar-wrap .fc-daygrid-event .fc-event-time { margin: 0; font-size: var(--text-label); text-overflow: clip; }
+}
+@media (max-width: 40rem), (pointer: coarse) {
+  .calendar-wrap .fc-button { min-height: 2.75rem; min-width: 2.75rem; }
+}

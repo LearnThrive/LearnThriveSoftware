@@ -13,7 +13,8 @@ import type { Role } from "@/lib/auth/types";
 export type AppNavIcon =
   | "home" | "calendar" | "lessons" | "students" | "clients" | "tutors"
   | "assignments" | "reports" | "notifications" | "activity" | "settings" | "availability"
-  | "study-buddy" | "library" | "search" | "account" | "applications";
+  | "study-buddy" | "library" | "search" | "account" | "applications"
+  | "meetings" | "vetting" | "roles" | "billing" | "concerns" | "subjects";
 
 export interface AppNavItem {
   label: string;
@@ -36,7 +37,7 @@ const ADMIN_NAV: AppNavSection[] = [
       { label: "Overview", href: "/dashboard", icon: "home" },
       { label: "Calendar", href: "/dashboard/calendar", icon: "calendar" },
       { label: "Lessons", href: "/dashboard/lessons", icon: "lessons", matchPrefix: "/dashboard/lessons" },
-      { label: "Meetings", href: "/dashboard/meetings", icon: "calendar", matchPrefix: "/dashboard/meetings" },
+      { label: "Meetings", href: "/dashboard/meetings", icon: "meetings", matchPrefix: "/dashboard/meetings" },
     ],
   },
   {
@@ -45,8 +46,8 @@ const ADMIN_NAV: AppNavSection[] = [
       { label: "Students", href: "/dashboard/admin/people/students", icon: "students", matchPrefix: "/dashboard/admin/students" },
       { label: "Clients", href: "/dashboard/admin/people/clients", icon: "clients", matchPrefix: "/dashboard/admin/clients" },
       { label: "Tutors", href: "/dashboard/admin/people/tutors", icon: "tutors", matchPrefix: "/dashboard/admin/tutors" },
-      { label: "Tutor checks", href: "/dashboard/admin/vetting", icon: "tutors" },
-      { label: "Roles", href: "/dashboard/admin/roles", icon: "settings", matchPrefix: "/dashboard/admin/roles" },
+      { label: "Tutor checks", href: "/dashboard/admin/vetting", icon: "vetting" },
+      { label: "Roles", href: "/dashboard/admin/roles", icon: "roles", matchPrefix: "/dashboard/admin/roles" },
       { label: "Applications", href: "/dashboard/admin/careers", icon: "applications", matchPrefix: "/dashboard/admin/careers" },
     ],
   },
@@ -55,7 +56,7 @@ const ADMIN_NAV: AppNavSection[] = [
     items: [
       { label: "Assignments", href: "/dashboard/admin/assignments", icon: "assignments" },
       { label: "Reports", href: "/dashboard/reports", icon: "reports" },
-      { label: "Billing", href: "/dashboard/admin/billing", icon: "clients", matchPrefix: "/dashboard/admin/billing" },
+      { label: "Billing", href: "/dashboard/admin/billing", icon: "billing", matchPrefix: "/dashboard/admin/billing" },
     ],
   },
   {
@@ -63,7 +64,7 @@ const ADMIN_NAV: AppNavSection[] = [
     items: [
       { label: "Notifications", href: "/dashboard/notifications", icon: "notifications" },
       { label: "Activity", href: "/dashboard/activity", icon: "activity" },
-      { label: "Concerns", href: "/dashboard/admin/concerns", icon: "activity", matchPrefix: "/dashboard/admin/concerns" },
+      { label: "Concerns", href: "/dashboard/admin/concerns", icon: "concerns", matchPrefix: "/dashboard/admin/concerns" },
     ],
   },
   {
@@ -81,16 +82,16 @@ const TUTOR_NAV: AppNavSection[] = [
       { label: "Lessons", href: "/dashboard/lessons", icon: "lessons", matchPrefix: "/dashboard/lessons" },
       { label: "Students", href: "/dashboard/students", icon: "students" },
       { label: "Reports", href: "/dashboard/reports", icon: "reports" },
-      { label: "Meetings", href: "/dashboard/meetings", icon: "calendar", matchPrefix: "/dashboard/meetings" },
+      { label: "Meetings", href: "/dashboard/meetings", icon: "meetings", matchPrefix: "/dashboard/meetings" },
     ],
   },
   {
     title: "You",
     items: [
       { label: "Availability", href: "/dashboard/tutor/availability", icon: "availability" },
-      { label: "My subjects", href: "/dashboard/tutor/subjects", icon: "lessons" },
+      { label: "My subjects", href: "/dashboard/tutor/subjects", icon: "subjects" },
       { label: "Notifications", href: "/dashboard/notifications", icon: "notifications" },
-      { label: "Raise a concern", href: "/dashboard/concerns", icon: "activity" },
+      { label: "Raise a concern", href: "/dashboard/concerns", icon: "concerns" },
       { label: "Settings", href: "/dashboard/settings", icon: "settings" },
     ],
   },
@@ -102,7 +103,7 @@ const ADMIN_TEACHING: AppNavSection = {
   items: [
     { label: "My students", href: "/dashboard/students", icon: "students" },
     { label: "Availability", href: "/dashboard/tutor/availability", icon: "availability" },
-    { label: "My subjects", href: "/dashboard/tutor/subjects", icon: "lessons" },
+    { label: "My subjects", href: "/dashboard/tutor/subjects", icon: "subjects" },
   ],
 };
 
@@ -119,7 +120,7 @@ const CLIENT_NAV: AppNavSection[] = [
       { label: "Children", href: "/dashboard/children", icon: "students" },
       { label: "Calendar", href: "/dashboard/calendar", icon: "calendar" },
       { label: "Lesson reports", href: "/dashboard/reports", icon: "reports" },
-      { label: "Fees", href: "/dashboard/billing", icon: "reports" },
+      { label: "Fees", href: "/dashboard/billing", icon: "billing" },
       { label: "Notifications", href: "/dashboard/notifications", icon: "notifications" },
       { label: "Settings", href: "/dashboard/settings", icon: "settings" },
     ],

@@ -275,7 +275,7 @@ export function AppShellClient({
               </span>
             </button>
             {menu.rendered && (
-              <div className={`app-usermenu__panel ${menu.closing ? "is-closing" : ""}`} id={menuId} role="menu" ref={menuRef}>
+              <div className={`app-usermenu__panel ${menu.closing ? "is-closing" : ""}`} ref={menuRef}>
                 <div className="app-usermenu__header">
                   <Avatar name={user.name} size="md" />
                   <div>
@@ -286,12 +286,15 @@ export function AppShellClient({
                 <div className="app-usermenu__appearance">
                   <ThemeToggle variant="radio" />
                 </div>
-                <Link href={accountHref} className="app-usermenu__item" role="menuitem">
-                  <UserRound size={16} aria-hidden="true" />{accountLabel}
-                </Link>
-                <button type="button" className="app-usermenu__item app-usermenu__item--danger" role="menuitem" onClick={handleLogout} disabled={signingOut}>
-                  <LogOut size={16} aria-hidden="true" />{signingOut ? "Signing out…" : "Log out"}
-                </button>
+                {/* Only the two actions are the menu: a role="menu" may hold menu items alone, not the profile header or the theme radios (axe aria-required-children). */}
+                <div id={menuId} role="menu" aria-label="Account">
+                  <Link href={accountHref} className="app-usermenu__item" role="menuitem">
+                    <UserRound size={16} aria-hidden="true" />{accountLabel}
+                  </Link>
+                  <button type="button" className="app-usermenu__item app-usermenu__item--danger" role="menuitem" onClick={handleLogout} disabled={signingOut}>
+                    <LogOut size={16} aria-hidden="true" />{signingOut ? "Signing out…" : "Log out"}
+                  </button>
+                </div>
               </div>
             )}
           </div>

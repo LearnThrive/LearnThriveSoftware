@@ -156,57 +156,10 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
         </div>
 
         <div className="stack">
-          <LoginCard
-            profileId={loginProfileId}
-            returnTo={`/dashboard/admin/students/${student.id}`}
-            childLinked
-            learner={login && !removed ? { studentId: student.id, status: login.status } : undefined}
-            noLogin={
-              <>
-                <CreateLoginForm
-                  action={createLearnerLoginAction}
-                  hidden={{ studentId: student.id }}
-                  submitLabel="Create login"
-                  intro={`${removed ? "This student's last login was removed." : "This student has no login of their own."} A new one will be linked to their parent, whose email receives its password resets.`}
-                >
-                  <UsernameField id="student-login-username" required={false} hint="Leave empty to generate one. Never use a child's name or school." />
-                </CreateLoginForm>
-                {!removed && (
-                  <form action={linkLearnerLoginAction} className="form">
-                    <p className="muted">
-                      Or link a login they already have, such as a tutor who is also a student: they sign in once and have both, and keep every role they hold.
-                      A login that owns a family account cannot be linked.
-                    </p>
-                    <input type="hidden" name="studentId" value={student.id} />
-                    <Field label="Username of their login" htmlFor="student-link-username" required>
-                      <input id="student-link-username" name="username" required autoComplete="off" autoCapitalize="none" spellCheck={false} />
-                    </Field>
-                    <FormActions>
-                      <button type="submit" className="btn btn--secondary">Link login</button>
-                    </FormActions>
-                  </form>
-                )}
-              </>
-            }
-          />
-
-          {purge && (
-            <PurgePanel
-              preview={purge}
-              kind="STUDENT"
-              action={purgeStudentAction}
-              id={student.id}
-              returnTo={`/dashboard/admin/students/${student.id}`}
-              confirmation="PURGE STUDENT"
-              title="Purge this student"
-              description="For a student who has left. Their records are removed, apart from what another child's lessons still need."
-            />
-          )}
-
           <Card>
             <CardHeader title="Details" />
             <CardBody>
-              <dl className="detail-list" style={{ marginTop: 0 }}>
+              <dl className="detail-list">
                 <div>
                   <dt>Parent</dt>
                   <dd>
@@ -262,6 +215,53 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
               )}
             </CardBody>
           </Card>
+
+          <LoginCard
+            profileId={loginProfileId}
+            returnTo={`/dashboard/admin/students/${student.id}`}
+            childLinked
+            learner={login && !removed ? { studentId: student.id, status: login.status } : undefined}
+            noLogin={
+              <>
+                <CreateLoginForm
+                  action={createLearnerLoginAction}
+                  hidden={{ studentId: student.id }}
+                  submitLabel="Create login"
+                  intro={`${removed ? "This student's last login was removed." : "This student has no login of their own."} A new one will be linked to their parent, whose email receives its password resets.`}
+                >
+                  <UsernameField id="student-login-username" required={false} hint="Leave empty to generate one. Never use a child's name or school." />
+                </CreateLoginForm>
+                {!removed && (
+                  <form action={linkLearnerLoginAction} className="form">
+                    <p className="muted">
+                      Or link a login they already have, such as a tutor who is also a student: they sign in once and have both, and keep every role they hold.
+                      A login that owns a family account cannot be linked.
+                    </p>
+                    <input type="hidden" name="studentId" value={student.id} />
+                    <Field label="Username of their login" htmlFor="student-link-username" required>
+                      <input id="student-link-username" name="username" required autoComplete="off" autoCapitalize="none" spellCheck={false} />
+                    </Field>
+                    <FormActions>
+                      <button type="submit" className="btn btn--secondary">Link login</button>
+                    </FormActions>
+                  </form>
+                )}
+              </>
+            }
+          />
+
+          {purge && (
+            <PurgePanel
+              preview={purge}
+              kind="STUDENT"
+              action={purgeStudentAction}
+              id={student.id}
+              returnTo={`/dashboard/admin/students/${student.id}`}
+              confirmation="PURGE STUDENT"
+              title="Purge this student"
+              description="For a student who has left. Their records are removed, apart from what another child's lessons still need."
+            />
+          )}
         </div>
       </div>
     </>

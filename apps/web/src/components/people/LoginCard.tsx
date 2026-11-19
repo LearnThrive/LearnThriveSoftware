@@ -33,7 +33,7 @@ export async function LoginCard({ profileId, returnTo, noLogin, childLinked = fa
     <Card>
       <CardHeader title="Login" />
       <CardBody>
-        <dl className="detail-list" style={{ marginTop: 0 }}>
+        <dl className="detail-list">
           <div><dt>Username</dt><dd>{account.username}</dd></div>
           <div><dt>Linked email</dt><dd>{account.linkedEmail ?? "None"}</dd></div>
           <div><dt>Status</dt><dd>{account.loginDisabled ? "Disabled" : account.mustChangePassword ? "Waiting for them to choose a password" : "Active"}</dd></div>

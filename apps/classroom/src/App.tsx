@@ -430,7 +430,7 @@ function App() {
                 </div>
               </div>
             </div>
-            <div className="permission-note"><Icon name="shield" size={19} /><p>Your preview is only visible to you.<br />Your camera and microphone stay off until you enable them.</p></div>
+            <div className="permission-note"><Icon name="shield" size={19} /><p>Your preview is only visible to you. <br />Your camera and microphone stay off until you enable them.</p></div>
             {import.meta.env.DEV && <p className="dev-feedback-note"><Icon name="info" size={15} />Testing nearby devices? Use headphones on one device to prevent audio feedback.</p>}
           </section>
           <section className="join-panel" aria-labelledby="join-heading">
