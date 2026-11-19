@@ -31,7 +31,7 @@ export function VettingCard({ tutorId, lines, today }: { tutorId: string; lines:
         title="Checks"
         description="What an administrator has seen for this tutor, and when it runs out. Record that a check was seen; never a certificate number."
         action={
-          <Dialog trigger="Record a check" title="Record a check" description="Record what you saw, how and when. Do not enter a certificate number.">
+          <Dialog trigger="Record a check" tone="secondary" title="Record a check" description="Record what you saw, how and when. Do not enter a certificate number.">
             <form action={recordVettingCheckAction} className="form">
               <input type="hidden" name="tutorId" value={tutorId} />
               <Field label="Check" htmlFor="vetting-kind" required>

@@ -66,7 +66,7 @@ export default async function FamilyBillingPage({ params, searchParams }: { para
                 <option value="true">Yes</option>
               </select>
             </Field>
-            <FormActions><button className="btn btn--primary" type="submit">Save</button></FormActions>
+            <FormActions><button className="btn btn--secondary" type="submit">Save</button></FormActions>
           </form>
         </CardBody>
       </Card>
@@ -88,7 +88,7 @@ export default async function FamilyBillingPage({ params, searchParams }: { para
                   <Field label="This rate starts" htmlFor={`start-${a.id}`} required hint={mine.length === 0 ? "It applies until you set a new one. It can start in the past, to cover lessons already taught." : "A new price starts today or later and ends the current rate the day before."}>
                     <input id={`start-${a.id}`} name="contractStart" type="date" defaultValue={today} required />
                   </Field>
-                  <FormActions><button className="btn btn--primary" type="submit">Set rate</button></FormActions>
+                  <FormActions><button className="btn btn--secondary" type="submit">Set rate</button></FormActions>
                 </form>
               </div>
             );
@@ -116,7 +116,7 @@ export default async function FamilyBillingPage({ params, searchParams }: { para
               <Field label="Note" htmlFor={`n-${l.lessonId}`} hint="Required when you choose not to charge.">
                 <input id={`n-${l.lessonId}`} name="note" maxLength={500} autoComplete="off" />
               </Field>
-              <FormActions><button className="btn btn--primary" type="submit">Save decision</button></FormActions>
+              <FormActions><button className="btn btn--secondary" type="submit">Save decision</button></FormActions>
             </form>
           ))}
         </CardBody>
@@ -181,7 +181,7 @@ export default async function FamilyBillingPage({ params, searchParams }: { para
             <Field label="Date received" htmlFor="p-date" required><input id="p-date" name="receivedOn" type="date" defaultValue={today} required /></Field>
             <Field label="Method" htmlFor="p-method" required hint="For example bank transfer or cash."><input id="p-method" name="method" required maxLength={40} autoComplete="off" /></Field>
             <Field label="Note" htmlFor="p-note" required hint="Who paid and for what."><input id="p-note" name="note" required minLength={3} maxLength={500} autoComplete="off" /></Field>
-            <FormActions><button className="btn btn--primary" type="submit">Record payment</button></FormActions>
+            <FormActions><button className="btn btn--secondary" type="submit">Record payment</button></FormActions>
           </form>
         </CardBody>
       </Card>
@@ -219,7 +219,7 @@ export default async function FamilyBillingPage({ params, searchParams }: { para
                       <input type="hidden" name="refundId" value={r.id} />
                       <Field label="Note" htmlFor={`rn-${r.id}`} hint="Required when rejecting."><input id={`rn-${r.id}`} name="note" maxLength={1000} autoComplete="off" /></Field>
                       <FormActions>
-                        <button className="btn btn--primary" type="submit" name="decision" value="approve">Approve</button>
+                        <button className="btn btn--secondary" type="submit" name="decision" value="approve">Approve</button>
                         <button className="btn btn--secondary" type="submit" name="decision" value="reject">Reject</button>
                       </FormActions>
                     </form>
@@ -235,7 +235,7 @@ export default async function FamilyBillingPage({ params, searchParams }: { para
             <Field label="A statutory right" htmlFor="r-stat" hint="For example a refund the family is legally owed.">
               <select id="r-stat" name="statutory" defaultValue="false"><option value="false">No</option><option value="true">Yes</option></select>
             </Field>
-            <FormActions><button className="btn btn--primary" type="submit">Request refund</button></FormActions>
+            <FormActions><button className="btn btn--secondary" type="submit">Request refund</button></FormActions>
           </form>
         </CardBody>
       </Card>
