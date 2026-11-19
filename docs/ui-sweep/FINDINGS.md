@@ -86,3 +86,18 @@ detail page to open); the live classroom call screen (needs two real media devic
    catalogue into the signed-in route group (a route change).
 2. **Development seed uses real names.** The in-memory seed names its demo people after the real owners and testers. They are masked in
    these screenshots; renaming them in the seed would make every future screenshot, demo and test log safe by default.
+
+## Verification
+
+Run on branch `ui-sweep` after the last change.
+
+| Check | Result |
+|-------|--------|
+| `npm run lint` | 0 errors; the same 10 warnings as before the sweep (unused variables in test files) |
+| `npm run typecheck` | Clean in all four workspaces |
+| `npm test` | All pass: web 1,207/1,207; the other workspaces 585 with 1 skip that predates the sweep |
+| `apps/web` Playwright (`npx playwright test`, 1,104 tests) | Full run with 4 workers: 1,052 passed, 29 flaky (passed on retry), 22 failed, all timeouts or stale navigations while four dev servers compiled on this machine. Re-run of those 22 with one worker (`--last-failed --workers=1`): **all pass** (one voice test on its retry). No test or selector was changed. |
+| `apps/classroom` Playwright (`npm run test:browser`) | 36 passed, 6 failed (3 tests × 2 browsers). **Pre-existing:** "delete a chat message" and "full 4-participant room" fail the same way with `main`'s classroom files; "Admit All" passes on its own. Not caused by this sweep (whose only classroom changes are one space and one phone-width CSS rule). |
+| `npm run build` | Passes |
+
+`graphify update .` was not run: this checkout has no `graphify-out/` graph to update.
