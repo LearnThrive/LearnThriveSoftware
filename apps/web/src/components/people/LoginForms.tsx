@@ -33,7 +33,8 @@ function keepingFields(dispatch: (formData: FormData) => void) {
 }
 
 /** Makes a login. The fields that differ by person are `children`; the record it belongs to travels in `hidden`. */
-export function CreateLoginForm({ action, hidden, children, submitLabel, intro }: { action: LoginAction; hidden?: Record<string, string>; children: ReactNode; submitLabel: string; intro?: string }) {
+/** `tone`: "secondary" where the form sits on a page that already has its own primary action (a profile's Login card). */
+export function CreateLoginForm({ action, hidden, children, submitLabel, intro, tone = "primary" }: { action: LoginAction; hidden?: Record<string, string>; children: ReactNode; submitLabel: string; intro?: string; tone?: "primary" | "secondary" }) {
   const [state, formAction, pending] = useActionState(action, initial);
   if (state.status === "created" && state.username && state.temporaryPassword) return <TemporaryPassword username={state.username} password={state.temporaryPassword} />;
   return (
@@ -43,7 +44,7 @@ export function CreateLoginForm({ action, hidden, children, submitLabel, intro }
       {children}
       {state.status === "refused" ? <p className="field__error" role="alert">{state.message}</p> : null}
       <FormActions>
-        <button type="submit" className="btn btn--primary" disabled={pending}>{pending ? "Working…" : submitLabel}</button>
+        <button type="submit" className={`btn btn--${tone}`} disabled={pending}>{pending ? "Working…" : submitLabel}</button>
       </FormActions>
     </form>
   );

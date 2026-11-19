@@ -119,12 +119,20 @@ them:
 | `--text-body` | `0.9375rem` | Default body/paragraph/input text |
 | `--text-small` | `0.8125rem` | Secondary text, hints, badges |
 | `--text-label` | `0.6875rem` | Uppercase eyebrows, column headers, nav counts |
+| `--text-figure` | `1.75rem` | A stat's number: stat tiles, the parent's "this week" figures |
+| `--text-micro` | `0.625rem` | The unread count on the topbar bell, and nothing else |
+
+Three weights: `--weight-medium` (500), `--weight-semibold` (600) and `--weight-bold` (700). A fourth step, 650, had crept in
+beside 600 and is folded into semibold. Use a token rather than a number.
 
 ## Spacing and radii
 
-An 8-step spacing scale (`--space-1` through `--space-7`, `0.25rem`→`3rem`) and three radii
-(`--app-radius-sm` `0.5rem`, `--app-radius` `0.75rem`, `--app-radius-lg` `1rem`) — pick from these
-rather than a one-off pixel value. Three shadow levels (`--app-shadow-sm/--app-shadow/
+A 7-step spacing scale (`--space-1` through `--space-7`: `0.25`, `0.5`, `0.75`, `1`, `1.5`, `2`, `3rem`) and five radii
+(`--app-radius-xs` `0.3rem` for boxes smaller than a control, `--app-radius-sm` `0.5rem`, `--app-radius` `0.75rem`,
+`--app-radius-lg` `1rem`, `--app-radius-pill` for badges, counts and chips) — pick from these rather than a one-off value.
+Sub-`--space-1` padding inside a badge or count (`0.05`–`0.2rem`) is part of that component's shape and stays literal.
+Page rhythm is automatic: top-level blocks in `.app-content` and children of `.card__body` are spaced by zero-specificity rules
+(app-shell.css), so a page does not add margins between its cards. Three shadow levels (`--app-shadow-sm/--app-shadow/
 --app-shadow-lg`) follow the same principle for elevation.
 
 ## Motion (plan8)

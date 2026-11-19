@@ -61,17 +61,20 @@ Screenshot names are relative to `before/` and `after/`.
 | F30 | All roles · Details cards (lesson, student, assignment, login) · all | `admin__dashboard-settings__1440__light` | Extra gap above the first row of a details list | `.detail-list` always had a top margin, so five pages patched it with an inline `marginTop: 0` | **Fixed** — margin only when something precedes it; inline overrides removed |
 | F31 | All roles · classroom join form · dark | `admin__classroom-lab__375__dark` | The classroom's text inputs turn navy on its light page | The product's `.field input` rule (higher specificity) matches the classroom's own `.field` | **Fixed** — `.app .field input` restores the classroom's own input style |
 | F32 | Admin/Tutor · Meetings invite list · 375 | `admin__dashboard-meetings__375__light` | With 44px rows the sixth invitee sat below the list's scroll fold | Introduced by F18; `.meeting-people` capped at 16rem | **Fixed** — 21rem cap on phones |
+| F33 | All roles · every screen · all | n/a (code) | Token drift: four font weights (500/600/**650**/700) written as numbers; `999px`, `0.3rem` and `5px` radii; off-scale sizes for stat numbers (1.75rem and 2rem for the same role), the bell count, avatars and timeline titles; spacing literals beside the `--space-*` scale; raw colours in the next-lesson and sign-in gradients | The scale existed but had no tokens for weights, pills, small radii or figures, so components wrote values by hand | **Fixed** — weight, `--text-figure`, `--text-micro`, `--app-radius-xs`, `--app-radius-pill`, `--app-feature-*` and `--app-hover-veil` tokens; every literal in the product stylesheets replaced; 650 folded into 600 and 0.4/0.45/0.55rem onto `--space-2`; documented in docs/DESIGN_SYSTEM.md. **Left:** badge-internal micro padding (below `--space-1`), the brand-mark inks, the next-lesson button's 35% white border, and the sign-in page's phone headline size (not a signed-in screen) |
+| F34 | Admin/Tutor · family billing, tutor rates, tutor profile, student profile, lesson detail · all | scan `manifest-*.json` | More than one primary button on one screen: family billing 5, tutor rates 11 (one per row), tutor profile 3, student profile 2, lesson detail 2 | Each card's form used the primary style for its own submit | **Fixed** — the page's main step stays primary (Issue statement, Schedule lesson, Start a report); everything else is secondary; Complete lesson is primary only once it can be pressed. Re-scan: every screen has at most one primary. Screens with none are read-only pages, which is deliberate |
 
 ## After
 
-Same script, same routes, same widths and themes (`docs/ui-sweep/after/`).
+Same script, same routes, same widths and themes (`docs/ui-sweep/after/`), re-captured after the token pass and the primary-action fixes (F33, F34).
 
 | Check | Before | After |
 |-------|--------|-------|
 | axe WCAG 2 A/AA violations (306 runs, 77 role/route pairs, 375 + 1440, light + dark) | 4 (`aria-required-children`) | **0** |
 | Routes with horizontal overflow at 375px | 2 (parent Children +50px, tutor Availability +5px) | **0** |
-| Undersized targets counted at 375px (all routes, both themes) | 2,304 | 1,061 — the rest are calendar day numbers, inline text links and the marketing Library page (F18) |
+| Undersized targets counted at 375px (all routes, both themes) | 2,304 | 1,069 — the rest are calendar day numbers, inline text links and the marketing Library page (F18) |
 | Screenshots skipped because a real value survived masking | 0 | 0 |
+| Screens with more than one visible primary action (375 + 1440) | 6 | **0** (F34) |
 
 Accessibility notes: every control keeps the existing two-tone focus ring (`--app-focus-ring`); contrast is checked by axe in both themes;
 icon-only buttons already carry labels (no axe `button-name` failures); reduced motion is honoured by the existing blanket rule in
@@ -101,3 +104,11 @@ Run on branch `ui-sweep` after the last change.
 | `npm run build` | Passes |
 
 `graphify update .` was not run: this checkout has no `graphify-out/` graph to update.
+
+### After the token pass and primary-action fixes (F33, F34)
+
+| Check | Result |
+|-------|--------|
+| `npm run lint`, `npm run typecheck`, `npm test`, `npm run build` | All pass (lint: 0 errors, the same 10 warnings; unit: 1,207 + 585, 1 pre-existing skip) |
+| Playwright specs covering the changed screens and global layout (accessibility, accessibility-dark, accessibility-zoom-keyboard, accounts, fees, lessons, safeguarding, people, navigation, corrections, app-motion, app-palette; 159 tests, 2 workers) | 154 passed, 2 skipped, 3 timed out. With one worker, two of those pass. The third, `lessons.spec.ts:301`, passes every assertion but takes ~35s against the 30s local limit, and takes the same ~35s on the code from before F33/F34 (commit `179acf6`); CI's limit is 90s. Not caused by these changes. |
+| Full 1,104-test suite | Not re-run after F33/F34 (it takes about an hour here); it passed after the earlier fixes, as recorded above. |

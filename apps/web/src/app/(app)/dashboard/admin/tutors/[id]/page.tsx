@@ -228,6 +228,7 @@ export default async function TutorProfilePage({ params }: { params: Promise<{ i
               action={createTutorLoginAction}
               hidden={{ tutorId: tutor.id }}
               submitLabel="Create login"
+              tone="secondary"
               intro="This tutor has no login yet. This makes one and gives you a temporary password to hand over."
             >
               <UsernameField id="tutor-login-username" />

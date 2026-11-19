@@ -321,7 +321,7 @@ export default async function LessonDetailPage({
                 )}
 
                 {isAdmin && report?.status === "SUBMITTED" && (
-                  <div style={{ marginTop: "var(--space-4)", display: "flex", gap: "var(--space-3)", flexWrap: "wrap" }}>
+                  <div className="form-actions">
                     <form action={approveReportAction}>
                       <input type="hidden" name="lessonId" value={lesson.id} />
                       <button type="submit" className="btn btn--primary">Approve report</button>
@@ -388,7 +388,7 @@ export default async function LessonDetailPage({
                   <input type="hidden" name="lessonId" value={lesson.id} />
                   <button
                     type="submit"
-                    className="btn btn--primary btn--block"
+                    className={`btn ${completionBlockedReason == null ? "btn--primary" : "btn--secondary"} btn--block`}
                     disabled={completionBlockedReason != null}
                     aria-describedby={completionBlockedReason ? "complete-lesson-hint" : undefined}
                   >

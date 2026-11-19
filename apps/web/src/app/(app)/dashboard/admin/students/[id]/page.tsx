@@ -227,6 +227,7 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
                   action={createLearnerLoginAction}
                   hidden={{ studentId: student.id }}
                   submitLabel="Create login"
+                  tone="secondary"
                   intro={`${removed ? "This student's last login was removed." : "This student has no login of their own."} A new one will be linked to their parent, whose email receives its password resets.`}
                 >
                   <UsernameField id="student-login-username" required={false} hint="Leave empty to generate one. Never use a child's name or school." />

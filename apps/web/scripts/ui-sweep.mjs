@@ -21,7 +21,7 @@ const require = createRequire(import.meta.url);
 const AXE = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
 
 const args = process.argv.slice(2);
-const phase = args[0] === "after" ? "after" : "before";
+const phase = ["after", "scan"].includes(args[0]) ? args[0] : "before";
 const flag = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
 const base = flag("--base") ?? "http://localhost:3105";
 const only = flag("--only")?.split(",");
@@ -194,6 +194,10 @@ try {
             overflowX: Math.max(0, document.documentElement.scrollWidth - window.innerWidth),
             wide: [...document.querySelectorAll("main *, .app-topbar *")].filter((el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.right > window.innerWidth + 1; })
               .slice(0, 5).map((el) => `${el.tagName.toLowerCase()}.${String(el.className).split(" ")[0]}`),
+            // Every visible control styled as the primary action: a screen should have one (docs/ui-sweep/FINDINGS.md).
+            primaries: [...document.querySelectorAll(".btn--primary, .dialog-trigger--primary, .button-primary")].filter((el) => {
+              const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden";
+            }).map((el) => (el.textContent ?? "").trim().replace(/\s+/g, " ").slice(0, 48)),
             smallTargets: window.innerWidth <= 400 ? [...document.querySelectorAll("a, button, [role=button], input, select")].filter((el) => {
               const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && (r.height < 44 || r.width < 44) && getComputedStyle(el).visibility !== "hidden";
             }).length : undefined,
