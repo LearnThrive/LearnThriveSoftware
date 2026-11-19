@@ -31,6 +31,7 @@ const EXPECTED_TABLES = [
   "lesson_activity",
   "lesson_attendance",
   "lesson_chat_access_log",
+  "lesson_file_objects",
   "lesson_files",
   "lesson_messages",
   "lesson_reports",
@@ -91,6 +92,7 @@ const FORCED_TABLES = [
   "lesson_activity",
   "lesson_attendance",
   "lesson_chat_access_log",
+  "lesson_file_objects",
   "lesson_files",
   "lesson_messages",
   "lesson_reports",
@@ -204,6 +206,7 @@ describe("migrations", () => {
       "0026_payment_reference.sql",
       "0027_lesson_chat.sql",
       "0028_staff_meetings.sql",
+      "0029_lesson_chat_threads.sql",
     ]);
     assert.deepEqual(
       applied.map((f) => Number(f.slice(0, 4))),

@@ -135,6 +135,8 @@ export interface ClientToServerEvents {
   'chat:file': (payload: { name: string; data: ArrayBuffer | Uint8Array; caption?: string }) => void;
   'chat:delete': (payload: { id: string }) => void;
   'chat:clear': () => void;
+  /** A lesson's chat changed (a file was saved over HTTP): tells the others to reload the saved chat. Carries nothing. */
+  'chat:refresh': () => void;
   'poll:create': (payload: { question: string; options: string[]; anonymous: boolean; resultsVisible: PollVisibility }) => void;
   'poll:vote': (payload: { optionId: string }) => void;
   'poll:close': () => void;
@@ -215,6 +217,8 @@ export interface ServerToClientEvents {
   'chat:message': (payload: ChatMessage) => void;
   'chat:message-deleted': (payload: { id: string }) => void;
   'chat:cleared': () => void;
+  /** Reload the lesson's saved chat from the website. */
+  'chat:refresh': () => void;
   'poll:update': (payload: PollState | null) => void;
   'understanding:update': (payload: UnderstandingCheckState | null) => void;
   'timer:update': (payload: RoomTimerState | null) => void;

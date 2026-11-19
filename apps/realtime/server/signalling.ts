@@ -1003,7 +1003,7 @@ export function createSignallingServer(options?: {
       const room = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
       const self = room?.participants.get(socket.id);
       if (!room || !self) return fail(socket, 'You are not currently in a meeting.');
-      if (!room.meeting) return fail(socket, 'Files in a lesson are shared from the lesson page.');
+      if (!room.meeting) return fail(socket, 'Files in a lesson are saved over the website: use the attach button.');
       if (self.role === 'student' && !room.settings.studentsCanChat) return fail(socket, 'The host has turned off chat.');
       if (!isRecord(payload) || typeof payload.name !== 'string') return fail(socket, 'Invalid file.');
       const bytes = payload.data instanceof Uint8Array ? payload.data : payload.data instanceof ArrayBuffer ? new Uint8Array(payload.data) : null;
@@ -1019,6 +1019,14 @@ export function createSignallingServer(options?: {
       const current = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
       if (!current) return;
       for (const id of current.participants.keys()) io.to(id).emit('chat:message', message);
+    });
+    // A lesson's file is saved by the website over HTTP (the room never sees its bytes). This only nudges the others to reload the saved chat; it
+    // carries and grants nothing, so a made-up one only makes the others re-ask the website, which decides what each may read.
+    socket.on('chat:refresh', () => {
+      const room = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
+      if (!room || room.meeting || !socket.data.chat || !room.participants.has(socket.id)) return;
+      if (!chatFileRateLimiter.allow(socket.id)) return;
+      for (const id of room.participants.keys()) if (id !== socket.id) io.to(id).emit('chat:refresh');
     });
     // Nobody edits or deletes a message, the tutor included (docs/LESSON_CHAT.md). An administrator removes one from the lesson page, and it is audit-logged.
     socket.on('chat:delete', () => fail(socket, 'Messages cannot be deleted. Ask an administrator to remove one.'));

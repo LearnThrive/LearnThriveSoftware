@@ -12,6 +12,8 @@ import type { AccessorKind, ChatParty } from "./types";
 
 export interface ChatLesson {
   id: string;
+  /** The conversation this lesson belongs to: its assignment, so every occurrence of a weekly lesson shares one chat. Defaults to the lesson itself. */
+  threadId?: string;
   tutorId: string;
   studentIds: readonly string[];
   clientIds: readonly string[];
@@ -34,6 +36,9 @@ export interface ChatActor {
 }
 
 export type Relationship = "tutor" | "junior_tutor" | "student" | "parent" | "admin" | "safeguarding_lead";
+
+/** The conversation a lesson's chat lives in. */
+export const threadOf = (lesson: Pick<ChatLesson, "id" | "threadId">): string => lesson.threadId ?? lesson.id;
 
 export function relationshipsOf(lesson: ChatLesson, actor: ChatActor): Set<Relationship> {
   const holds = (role: Role) => actor.roles.includes(role);

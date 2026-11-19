@@ -50,7 +50,7 @@ The repository has no edit and no delete. **Only an administrator removes a mess
 The classroom server has no database. For each chat message it posts a signed request to `POST /api/internal/lesson-chat` on the web app and **relays nothing until the web app has said yes**. The request is signed (HMAC over the timestamp and the exact body, stale after a minute) with the secret both apps already share (`CLASSROOM_JOIN_SECRET`), and carries only the lesson and the account id named by the verified join token plus the text. The web app looks the person up fresh (roles and records as they are now) and runs the same service as the HTTP send.
 
 - Only a socket that joined through a lesson link has an identity; a manual-name join cannot chat when a gate is configured.
-- The classroom needs `CLASSROOM_WEB_URL` (the web app's address). **With it unset, production allows no chat in the classroom at all**; development and tests keep the old unsaved relay so the classroom can be tried alone.
+- The classroom needs `CLASSROOM_WEB_URL` (the web app's address). The live site runs the classroom inside the website, so its own address is used automatically (`apps/web/server.ts`); set it only for a classroom server run apart from the website. With neither, production allows no chat in the classroom; development and tests keep the old unsaved relay so the classroom can be tried alone.
 
 ## Where it is in the product
 
@@ -58,7 +58,8 @@ The lesson page has a "Lesson chat" card for everyone connected to the lesson (t
 
 ## Storage today, and what is not applied
 
-- **In memory.** What is said is lost when the server restarts. For that reason **in production the chat is closed** until the owner sets `LESSON_CHAT_ENABLED=true` and `LESSON_FILE_URL_SECRET` (at least 32 characters). Development and tests are always open.
+- **In Postgres (migrations 0027 and 0029).** Messages, file records and the stored file bytes (`lesson_file_objects`, private, no API grants) survive a restart. In production the chat is open whenever the database is set up; `LESSON_CHAT_ENABLED=false` switches it off. Files need `LESSON_FILE_URL_SECRET` (at least 32 characters); without it text chat works and uploads are refused. Development and tests use memory and are always open.
+- **One conversation per assignment.** A weekly lesson is one assignment with a lesson row per week. Its chat and files are one thread (`thread_id` = the assignment), so everything sent in the first lesson is there in every later one. Sending is still allowed only in that occurrence's own scheduled time and only to its tutor and students; anyone on a later occurrence reads the whole thread. Purging a lesson removes its messages (migration 0018 behaviour).
 - **Written as files, applied nowhere:** `supabase/migrations/0027_lesson_chat.sql` creates `lesson_messages`, `lesson_files` and `lesson_chat_access_log`, with guards the database enforces by itself (who may send, the outer time limit, no edit or delete, removal by an administrator only, append-only log) and row-level security (participants read; a parent only after the lesson; **no policy for administrators**, who read through the server so every read is audited; no API role writes). It is tested on PGlite in `packages/data/src/lessonChatSql.test.ts` and has not been applied to any live project.
 - **Not built yet:** the Postgres `LessonChatRepository`, a `FileStore` over a private Supabase Storage bucket (`lesson-files`), a real malware scanner, and supervision rules for junior tutors.
 

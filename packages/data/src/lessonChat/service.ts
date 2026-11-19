@@ -1,7 +1,7 @@
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import type { LessonChatConfig } from "./config";
 import { checkUpload, newStorageKey } from "./files";
-import { canRead, canRemove, canSend, chatWindow, type ChatActor, type ChatLesson } from "./policy";
+import { canRead, canRemove, canSend, chatWindow, threadOf, type ChatActor, type ChatLesson } from "./policy";
 import type { FileScanner, FileStore, LessonChatRepository } from "./repository";
 import type { AccessorKind, LessonFileType, LessonMessage } from "./types";
 
@@ -111,7 +111,7 @@ export function createLessonChatService(deps: ChatServiceDeps) {
       const text = cleanText(rawText, config.maxTextLength, false);
       if (text === null) return refuse(400, "BAD_MESSAGE", `A message is 1 to ${config.maxTextLength} characters.`);
       if (limited(lessonId, actor.accountId)) return refuse(429, "TOO_FAST", "You are sending messages too quickly. Please slow down.");
-      const message = await repo.addMessage({ lessonId, senderAccountId: actor.accountId, senderRecordId: (allowed.party === "tutor" ? actor.tutorId : actor.studentId)!, senderParty: allowed.party, senderName: actor.name, text, file: null }, now());
+      const message = await repo.addMessage({ lessonId, threadId: threadOf(allowed.lesson), senderAccountId: actor.accountId, senderRecordId: (allowed.party === "tutor" ? actor.tutorId : actor.studentId)!, senderParty: allowed.party, senderName: actor.name, text, file: null }, now());
       return { ok: true, message: await view(message, lessonId, actor.accountId, false) };
     },
 
@@ -135,8 +135,8 @@ export function createLessonChatService(deps: ChatServiceDeps) {
       const storageKey = newStorageKey(lessonId, checked.ext);
       await files.put(storageKey, checked.bytes, checked.contentType);
       const ref = { id: fileId, displayName: checked.displayName, contentType: checked.contentType, size: checked.bytes.length };
-      const message = await repo.addMessage({ lessonId, senderAccountId: actor.accountId, senderRecordId: (allowed.party === "tutor" ? actor.tutorId : actor.studentId)!, senderParty: allowed.party, senderName: actor.name, text: caption, file: ref }, now());
-      await repo.addFile({ ...ref, lessonId, messageId: message.id, storageKey, uploadedByAccountId: actor.accountId, createdAt: message.createdAt });
+      const message = await repo.addMessage({ lessonId, threadId: threadOf(allowed.lesson), senderAccountId: actor.accountId, senderRecordId: (allowed.party === "tutor" ? actor.tutorId : actor.studentId)!, senderParty: allowed.party, senderName: actor.name, text: caption, file: ref }, now());
+      await repo.addFile({ ...ref, lessonId, threadId: threadOf(allowed.lesson), messageId: message.id, storageKey, uploadedByAccountId: actor.accountId, createdAt: message.createdAt });
       return { ok: true, message: await view(message, lessonId, actor.accountId, false) };
     },
 
@@ -146,7 +146,7 @@ export function createLessonChatService(deps: ChatServiceDeps) {
       const read = canRead(lesson, actor, now(), config);
       if (!read.ok) return refuse(read.code === "LESSON_NOT_FOUND" ? 404 : 403, read.code, read.message);
       if (read.audited) await repo.logAccess({ lessonId, actorAccountId: actor.accountId, actorKind: read.kind as AccessorKind, action: "read_messages", targetId: null }, now());
-      const messages = await Promise.all((await repo.listMessages(lessonId)).map((m) => view(m, lessonId, actor.accountId, read.seesRemoved)));
+      const messages = await Promise.all((await repo.listMessages(threadOf(lesson!))).map((m) => view(m, lessonId, actor.accountId, read.seesRemoved)));
       const sendDecision = canSend(lesson, actor, now(), config);
       const window = chatWindow(lesson!, config);
       return {
@@ -173,8 +173,9 @@ export function createLessonChatService(deps: ChatServiceDeps) {
       if (exp < now().getTime()) return refuse(403, "LINK_EXPIRED", "That link has expired. Reload the lesson to get a new one.");
       if (link.u !== actor.accountId) return refuse(403, "BAD_LINK", "That link is not valid.");
       const file = await repo.getFile(fileId);
-      if (!file || file.lessonId !== lessonId) return refuse(404, "NOT_FOUND", "There is no such file.");
       const lesson = await deps.lessons.get(lessonId);
+      // The file must belong to this lesson's conversation: its own thread, never another assignment's.
+      if (!file || !lesson || file.threadId !== threadOf(lesson)) return refuse(404, "NOT_FOUND", "There is no such file.");
       const read = canRead(lesson, actor, now(), config);
       if (!read.ok) return refuse(read.code === "LESSON_NOT_FOUND" ? 404 : 403, read.code, read.message);
       const message = await repo.getMessage(file.messageId);
@@ -190,8 +191,9 @@ export function createLessonChatService(deps: ChatServiceDeps) {
       if (!canRemove(actor)) return refuse(403, "NOT_ADMIN", "Only an administrator can remove a message.");
       const reason = cleanText(rawReason, 300, false);
       if (reason === null) return refuse(400, "BAD_REASON", "Give a reason (up to 300 characters).");
+      const lesson = await deps.lessons.get(lessonId);
       const message = await repo.getMessage(messageId);
-      if (!message || message.lessonId !== lessonId) return refuse(404, "NOT_FOUND", "There is no such message in this lesson.");
+      if (!message || !lesson || message.threadId !== threadOf(lesson)) return refuse(404, "NOT_FOUND", "There is no such message in this lesson.");
       const removed = await repo.removeMessage(messageId, { by: actor.accountId, reason, at: now() });
       if (!removed) return refuse(409, "ALREADY_REMOVED", "That message was already removed.");
       await repo.logAccess({ lessonId, actorAccountId: actor.accountId, actorKind: "admin", action: "remove_message", targetId: messageId }, now());

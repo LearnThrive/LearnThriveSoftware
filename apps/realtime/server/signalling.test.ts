@@ -1888,6 +1888,6 @@ describe('a staff meeting in production mode', () => {
     await new Promise<JoinedRoom>((resolve) => tutor.once('room:joined', resolve));
     const refused = errorOf(tutor);
     tutor.emit('chat:file', { name: 'a.pdf', data: bytes(10) });
-    expect((await refused).message).toMatch(/lesson page/i);
+    expect((await refused).message).toMatch(/attach button/i);
   });
 });

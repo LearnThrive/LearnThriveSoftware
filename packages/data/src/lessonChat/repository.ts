@@ -9,7 +9,7 @@ import type { AccessLogEntry, LessonMessage, StoredLessonFile } from "./types";
 export interface LessonChatRepository {
   addMessage(input: Omit<LessonMessage, "id" | "createdAt" | "removed">, now: Date): Promise<LessonMessage>;
   /** Oldest first. Removed messages are included, marked: what each reader sees of them is decided by the policy, not here. */
-  listMessages(lessonId: string): Promise<LessonMessage[]>;
+  listMessages(threadId: string): Promise<LessonMessage[]>;
   getMessage(id: string): Promise<LessonMessage | null>;
   /** The administrator's removal. Marks the message (once); returns null if there is no such message or it was already removed. */
   removeMessage(id: string, removal: { by: string; reason: string; at: Date }): Promise<LessonMessage | null>;

@@ -5,3 +5,4 @@ export * from "./files";
 export * from "./repository";
 export { InMemoryFileStore, InMemoryLessonChatRepository } from "./memory";
 export * from "./service";
+export { createSqlFileStore, createSqlLessonChatRepository } from "./sql";

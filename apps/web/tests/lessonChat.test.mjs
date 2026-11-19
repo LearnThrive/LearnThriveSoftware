@@ -329,15 +329,15 @@ test("the join token carries the account (uid) and an old token without one stil
 
 // ---- availability and wiring --------------------------------------------------------------------------------------------------------------
 
-test("in production the chat is closed until the owner opens it and a real secret is set; in development it is open", () => {
+test("in production the chat is open when the database is set up, switched off by LESSON_CHAT_ENABLED=false, and in development it is open", () => {
   const prod = { NODE_ENV: "production" };
+  const db = { ...prod, SUPABASE_URL: "https://x.supabase.co", SUPABASE_ANON_KEY: "k", DATABASE_URL: "postgres://x" };
   assert.deepEqual(runtime.chatAvailability({ NODE_ENV: "development" }), { open: true });
   assert.deepEqual(runtime.chatAvailability({ NODE_ENV: "test" }), { open: true });
-  assert.equal(runtime.chatAvailability(prod).open, false);
-  assert.equal(runtime.chatAvailability({ ...prod, LESSON_CHAT_ENABLED: "true" }).open, false, "no secret");
-  assert.equal(runtime.chatAvailability({ ...prod, LESSON_CHAT_ENABLED: "true", LESSON_FILE_URL_SECRET: "short" }).open, false, "a short secret");
-  assert.equal(runtime.chatAvailability({ ...prod, LESSON_CHAT_ENABLED: "1", LESSON_FILE_URL_SECRET: "s".repeat(40) }).open, false, "only exactly true");
-  assert.equal(runtime.chatAvailability({ ...prod, LESSON_CHAT_ENABLED: "true", LESSON_FILE_URL_SECRET: "s".repeat(40) }).open, true);
+  assert.equal(runtime.chatAvailability(prod).open, false, "no database: closed, never in memory in production");
+  assert.equal(runtime.chatAvailability({ ...prod, LESSON_CHAT_ENABLED: "true" }).open, false, "still no database");
+  assert.equal(runtime.chatAvailability(db).open, true, "database set: open by default");
+  assert.equal(runtime.chatAvailability({ ...db, LESSON_CHAT_ENABLED: "false" }).open, false, "the explicit off-switch");
 });
 
 function walk(dir, out = []) {

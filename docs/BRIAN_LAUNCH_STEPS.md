@@ -93,7 +93,7 @@ On any machine: `openssl rand -hex 32`, twice. One is `CAPTCHA_SECRET`, one is `
 
 - Everything Stripe: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_ANNUAL`, `STRIPE_FAKE`. **No Stripe at launch.**
 - `BANK_PAYEE_NAME`, `BANK_ACCOUNT_NUMBER`, `BANK_SORT_CODE`, `BANK_NAME`: the bank details are built into the site. Set all four **only** if the account ever changes and you want to change it without a deploy (all four or none: a partial set stops the server starting).
-- `LESSON_CHAT_ENABLED`, `LESSON_FILE_URL_SECRET`, `CLASSROOM_WEB_URL`: the lesson chat stays **closed** until it is stored in the database (see Part 8). With these unset, in production there is no chat in the classroom or on the lesson page. That is intended.
+- `LESSON_CHAT_ENABLED`, `LESSON_FILE_URL_SECRET`, `CLASSROOM_WEB_URL`: the lesson chat is stored in the database and is open whenever the database is set up. `LESSON_CHAT_ENABLED=false` switches it off; `LESSON_FILE_URL_SECRET` (32+ characters) is needed for file sharing only; `CLASSROOM_WEB_URL` is only for a classroom server run apart from the website. Apply migration 0029 first.
 - `ASSISTANT_*`, `OLLAMA_API_KEY`, `VOICE_*`, `LIBRARY_*`, `CAREERS_OPEN_FOR_TESTING`, `NEXT_PUBLIC_MOTION_DEBUG`.
 - `NEXT_PUBLIC_APP_PORTAL_ENABLED`: leave unset until Gate C (Part 7). Unset means sign-in shows "Portal opening soon".
 
@@ -177,7 +177,7 @@ These do not block Gate A or B. They are here so nothing is forgotten when the p
 ## Part 8: Known gaps (not blocking, tell Alvi when you hit one)
 
 1. **No screen to find a family from its payment reference.** When money arrives quoting `LT-XXXXXX`, an administrator has no search by reference; the reference is stored and `GET /api/tuition/bank-details?clientId=<id>` returns it for a known family. Until a lookup is built, match payments by the payer name and amount, and record them against the family by hand.
-2. **Lesson chat is closed in production on purpose.** Messages are held in memory today (lost on a restart). It needs a Postgres store and a private storage bucket before it opens; then set `LESSON_CHAT_ENABLED=true`, `LESSON_FILE_URL_SECRET` (32+ characters) and, where the classroom server runs, `CLASSROOM_WEB_URL`. Meanwhile the classroom has no text chat in production.
+2. **Lesson chat files need a secret, and are PNG, JPG or PDF only.** Messages and files are saved in Postgres and carry over between a weekly lesson's sessions. Set `LESSON_FILE_URL_SECRET` (32+ characters) to allow file uploads; without it text chat works and uploads are refused. File bytes sit in the database (10 MB cap each); move them to a private bucket if volume grows. No malware scanner is installed yet.
 3. **The account tool gives each login one role, but the admin screens can add the rest.** A tutor who is also a student: make the tutor login (the tool, or Admin, People, Tutors, Create login), then open the student's page under People, Students and use "Link login" with the tutor's username. That binds the login to the student record and adds the Student role, so one sign-in holds both. A junior tutor: make the tutor login, then set the role to Junior tutor on the Roles screen (a tutor and a junior tutor cannot be held together). A parent with a student side is refused by design (Parent and Student exclude each other).
 4. **Real-device and real-infrastructure checks are yours:** nothing in this file has been run against Render, the hosted Supabase project, Resend or Cloudflare by the person who wrote it.
 

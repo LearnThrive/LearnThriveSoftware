@@ -422,6 +422,62 @@ export class MeetingController {
     this.update({ chatOpen: open, unreadCount: open ? 0 : this.snapshot.unreadCount });
   };
 
+  private lessonChatId: string | null = null;
+  private lessonChatTimer: ReturnType<typeof setInterval> | null = null;
+
+  /**
+   * A lesson's chat is saved by the website and carries over to the lesson's later sessions. This loads it (and keeps it fresh: its file links last a
+   * minute), and is how files are sent: over HTTP, then the others are nudged to reload.
+   */
+  startLessonChat = (lessonId: string) => {
+    if (this.lessonChatId === lessonId) return;
+    this.lessonChatId = lessonId;
+    void this.loadLessonChat();
+    if (this.lessonChatTimer) clearInterval(this.lessonChatTimer);
+    this.lessonChatTimer = setInterval(() => void this.loadLessonChat(), 30_000);
+  };
+
+  loadLessonChat = async () => {
+    const lessonId = this.lessonChatId;
+    if (!lessonId) return;
+    try {
+      const response = await fetch(`/api/lessons/${encodeURIComponent(lessonId)}/messages`, { cache: 'no-store' });
+      if (!response.ok) return;
+      const data = await response.json() as { messages?: { id: string; senderParty: string; senderName: string; text: string; createdAt: string; removed: unknown; file: { displayName: string; size: number; contentType: string; url: string } | null }[] };
+      const role = this.snapshot.role;
+      const myName = this.snapshot.name;
+      const known = this.snapshot.messages.length;
+      const messages: DisplayChatMessage[] = (data.messages ?? []).filter((m) => !m.removed).map((m) => ({
+        id: m.id, senderId: '', name: m.senderName, text: m.text, timestamp: Date.parse(m.createdAt) || Date.now(),
+        own: m.senderParty === role && m.senderName === myName,
+        ...(m.file ? { attachment: { name: m.file.displayName, size: m.file.size, image: m.file.contentType.startsWith('image/'), url: m.file.url } } : {}),
+      }));
+      if (lessonId !== this.lessonChatId) return;
+      const fresh = messages.slice(known).filter((m) => !m.own).length;
+      this.update({ messages, unreadCount: this.snapshot.chatOpen || known === 0 ? this.snapshot.unreadCount : this.snapshot.unreadCount + fresh });
+    } catch { /* the next refresh tries again */ }
+  };
+
+  /** Saves a file in the lesson's chat (png, jpg or pdf). Returns a message to show if it could not be sent, or null once it is saved. */
+  private sendLessonFile = async (file: File, caption?: string): Promise<string | null> => {
+    if (!/\.(png|jpe?g|pdf)$/i.test(file.name)) return 'Only PNG, JPG and PDF files can be shared in a lesson.';
+    const form = new FormData();
+    form.set('file', file);
+    if (caption?.trim()) form.set('caption', caption.trim().slice(0, MAX_CHAT_LENGTH));
+    try {
+      const response = await fetch(`/api/lessons/${encodeURIComponent(this.lessonChatId!)}/messages`, { method: 'POST', body: form });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({})) as { error?: unknown };
+        return typeof data.error === 'string' ? data.error : 'That file could not be shared.';
+      }
+      await this.loadLessonChat();
+      this.socket?.emit('chat:refresh');
+      return null;
+    } catch {
+      return 'That file could not be shared. Check your connection.';
+    }
+  };
+
   sendChatMessage = (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || trimmed.length > MAX_CHAT_LENGTH || !this.active || !this.socket?.connected) return;
@@ -433,6 +489,7 @@ export class MeetingController {
    * connected), or null once it is on its way. The same rules are checked again by the room server.
    */
   sendChatFile = async (file: File, caption?: string): Promise<string | null> => {
+    if (this.lessonChatId) return this.sendLessonFile(file, caption);
     const problem = chatFileProblem(file.name, file.size);
     if (problem) return problem;
     if (!this.active || !this.socket?.connected) return 'You are not connected to the meeting right now.';
@@ -731,7 +788,9 @@ export class MeetingController {
       this.announce(sharing ? `${peer.participant.name} started sharing their screen` : `${peer.participant.name} stopped sharing their screen`);
       this.updatePeer(id, { participant: { ...peer.participant, screenSharing: sharing } });
     });
+    socket.on('chat:refresh', () => void this.loadLessonChat());
     socket.on('chat:message', ({ file, ...message }) => {
+      if (this.lessonChatId) { void this.loadLessonChat(); return; }
       const own = message.senderId === this.socket?.id;
       const unread = this.snapshot.chatOpen || own ? this.snapshot.unreadCount : this.snapshot.unreadCount + 1;
       // A shared file arrives as bytes. The type it is given comes from its extension (never from the sender), and it is held only in this browser.
@@ -1042,6 +1101,7 @@ export class MeetingController {
   }
 
   dispose = () => {
+    if (this.lessonChatTimer) clearInterval(this.lessonChatTimer);
     this.revokeAttachments();
     this.active = false;
     this.actionVersion += 1;

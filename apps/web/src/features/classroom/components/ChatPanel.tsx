@@ -17,6 +17,8 @@ interface ChatPanelProps {
   canChat?: boolean;
   /** Staff meetings only: share a file (any document, image, slide, spreadsheet, audio, video or zip). Resolves with a message to show if it could not be sent. */
   onSendFile?: (file: File) => Promise<string | null>;
+  /** A lesson's saved chat (carries over to later lessons) rather than a meeting's: PNG, JPG and PDF only. */
+  lessonChat?: boolean;
   /** Staff meetings only: web addresses in a message are clickable. (A lesson's chat stays plain text.) */
   linkifyMessages?: boolean;
 }
@@ -39,7 +41,7 @@ function MessageText({ text, links }: { text: string; links: boolean }) {
 }
 
 export function ChatPanel({
-  messages, open, onClose, onSend, triggerRef, isTutor = false, onDeleteMessage, onClearChat, canChat = true, onSendFile, linkifyMessages = false,
+  messages, open, onClose, onSend, triggerRef, isTutor = false, onDeleteMessage, onClearChat, canChat = true, onSendFile, linkifyMessages = false, lessonChat = false,
 }: ChatPanelProps) {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState<string | null>(null);
@@ -109,7 +111,7 @@ export function ChatPanel({
         </div>
       </div>
       <div className="chat-messages" ref={listRef} role="log" aria-live="polite">
-        {messages.length === 0 && <p className="chat-empty">Messages{onSendFile ? ' and files' : ''} are only visible during this meeting.</p>}
+        {messages.length === 0 && <p className="chat-empty">{lessonChat ? 'Messages and files here are saved, and carry over to every future lesson of this class.' : `Messages${onSendFile ? ' and files' : ''} are only visible during this meeting.`}</p>}
         {messages.map((message) => (
           <div key={message.id} className={`chat-message ${message.own ? 'own' : ''}`}>
             <div className="chat-message-meta">
@@ -146,10 +148,10 @@ export function ChatPanel({
         {onSendFile && (
           <>
             <input
-              ref={fileRef} type="file" className="sr-only" tabIndex={-1} accept={CHAT_FILE_ACCEPT} aria-label="Choose a file to share"
+              ref={fileRef} type="file" className="sr-only" tabIndex={-1} accept={lessonChat ? '.png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf' : CHAT_FILE_ACCEPT} aria-label="Choose a file to share"
               onChange={(event) => { void share(event.target.files?.[0]); event.target.value = ''; }}
             />
-            <button type="button" className="chat-attach" onClick={() => fileRef.current?.click()} disabled={!canChat || Boolean(sending)} aria-label="Share a file" title="Share a file: documents, images, slides, spreadsheets, audio, video, zip (up to 10 MB)">
+            <button type="button" className="chat-attach" onClick={() => fileRef.current?.click()} disabled={!canChat || Boolean(sending)} aria-label="Share a file" title={lessonChat ? 'Share a PNG, JPG or PDF (up to 10 MB)' : 'Share a file: documents, images, slides, spreadsheets, audio, video, zip (up to 10 MB)'}>
               <Icon name="attach" size={18} />
             </button>
           </>

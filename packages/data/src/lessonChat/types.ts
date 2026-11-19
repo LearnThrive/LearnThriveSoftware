@@ -22,6 +22,8 @@ export interface LessonFileRef {
 
 export interface StoredLessonFile extends LessonFileRef {
   lessonId: string;
+  /** The conversation the file belongs to: every lesson of the same assignment (a weekly lesson) shares one. */
+  threadId: string;
   /** The message that carries this file. */
   messageId: string;
   /** Where the bytes are in private storage: generated (`lessons/<lesson>/<uuid>.<ext>`), never derived from what the user sent. */
@@ -32,7 +34,10 @@ export interface StoredLessonFile extends LessonFileRef {
 
 export interface LessonMessage {
   id: string;
+  /** The lesson occurrence it was sent in. */
   lessonId: string;
+  /** The conversation it belongs to: all lessons of one assignment (a recurring lesson) share a thread, so the chat and its files carry over week to week. */
+  threadId: string;
   /** The sender's account, and the tutor or student record they sent as (the relationship the send was checked against). */
   senderAccountId: string;
   senderRecordId: string;

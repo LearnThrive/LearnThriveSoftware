@@ -18,6 +18,8 @@ export function useMeeting() {
     toggleChat: controller.toggleChat,
     sendChatMessage: controller.sendChatMessage,
     sendChatFile: controller.sendChatFile,
+    startLessonChat: controller.startLessonChat,
+    loadLessonChat: controller.loadLessonChat,
     switchCamera: controller.switchCamera,
     switchMicrophone: controller.switchMicrophone,
     flipCamera: controller.flipCamera,

@@ -83,7 +83,7 @@ export function App({ lessonId, meetingId, initialToken, isDevRoute, returnHref 
     resumeTimer, stopTimer, sendBoardUpdate, sendBoardCursor, sendBoardLaser, createBoardPage, renameBoardPage,
     deleteBoardPage, reorderBoardPages, switchBoardPage, setBoardBackground, setStudentsCanDraw,
     followMe, importBoard, duplicateBoardPage, commitLocalPageElements, sendAnnouncement, setDataSaver, allowRejoin,
-    sendAnnotationUpdate, clearAnnotations, commitLocalAnnotations, sendChatFile, detectDevices,
+    sendAnnotationUpdate, clearAnnotations, commitLocalAnnotations, sendChatFile, detectDevices, startLessonChat, loadLessonChat,
     join, leave, reset, rejoin, copyInvite, retryConnection, subscribeBoardPointers, getBoardPointersSnapshot,
   } = useMeeting();
   const [name, setName] = useState('');
@@ -95,6 +95,12 @@ export function App({ lessonId, meetingId, initialToken, isDevRoute, returnHref 
   // join() uses it, so a later re-render must not pick a fresh (now-absent) value back up.
   const [autoJoinToken] = useState(() => initialToken || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('token') : null));
   const [deviceMenuOpen, setDeviceMenuOpen] = useState(false);
+  // A lesson's chat is saved: load it when the lesson room opens (it carries over from earlier lessons of the same assignment).
+  useEffect(() => {
+    if (!lessonId || snapshot.phase !== 'meeting') return;
+    startLessonChat(lessonId);
+    void loadLessonChat();
+  }, [lessonId, snapshot.phase, startLessonChat, loadLessonChat]);
   // Opening Settings refreshes the camera and microphone lists, and asks the browser for them once if it has not shared them yet.
   useEffect(() => { if (deviceMenuOpen) void detectDevices(true); }, [deviceMenuOpen, detectDevices]);
   const [participantPanelOpen, setParticipantPanelOpen] = useState(false);
@@ -430,7 +436,7 @@ export function App({ lessonId, meetingId, initialToken, isDevRoute, returnHref 
             messages={snapshot.messages} open={snapshot.chatOpen} onClose={toggleChat} onSend={sendChatMessage} triggerRef={chatTriggerRef}
             isTutor={snapshot.role === 'tutor'} onDeleteMessage={deleteChatMessage} onClearChat={clearChat}
             canChat={snapshot.role === 'tutor' || snapshot.roomSettings.studentsCanChat}
-            onSendFile={isStaffMeeting ? sendChatFile : undefined} linkifyMessages={isStaffMeeting}
+            onSendFile={isStaffMeeting || lessonId ? sendChatFile : undefined} linkifyMessages={isStaffMeeting} lessonChat={Boolean(lessonId)}
           />
         </div>
         {(snapshot.error || snapshot.mediaError) && <div className="notice notice-error" role="alert"><Icon name="info" /><span>{snapshot.error || snapshot.mediaError}</span>{snapshot.reconnectFailed && <button className="inline-action" type="button" onClick={retryConnection}>Reconnect</button>}</div>}

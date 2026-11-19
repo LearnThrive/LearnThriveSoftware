@@ -14,8 +14,8 @@ export class InMemoryLessonChatRepository implements LessonChatRepository {
     return { ...message };
   }
 
-  async listMessages(lessonId: string): Promise<LessonMessage[]> {
-    return [...this.messages.values()].filter((m) => m.lessonId === lessonId).sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)).map((m) => ({ ...m }));
+  async listMessages(threadId: string): Promise<LessonMessage[]> {
+    return [...this.messages.values()].filter((m) => m.threadId === threadId).sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)).map((m) => ({ ...m }));
   }
 
   async getMessage(id: string): Promise<LessonMessage | null> {
