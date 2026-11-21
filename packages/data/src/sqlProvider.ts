@@ -154,7 +154,13 @@ export function createSqlDataProvider(db: SqlExecutor): DataProvider {
   };
 
   const clients: ClientRepository = {
-    list: async () => (await db.query<Row>(`${CLIENT_SELECT} order by c.created_at, c.id`)).map(toClient),
+    // Parents only. A family record is made on the quiet for any adult login that opens the library (ensureClient), so a tutor or an administrator
+    // has one too. That is not a parent: list a family when its owner holds the CLIENT role or it has children linked. get/getByUserId still find any.
+    list: async () => (await db.query<Row>(`${CLIENT_SELECT}
+      where exists (select 1 from public.profile_roles r where r.profile_id = c.owner_profile_id and r.role = 'CLIENT')
+         or exists (select 1 from public.client_students cs where cs.client_id = c.id)
+         or exists (select 1 from public.students st where st.client_id = c.id)
+      order by c.created_at, c.id`)).map(toClient),
     get: async (id) => {
       const rows = isId(id) ? await db.query<Row>(`${CLIENT_SELECT} where c.id = $1`, [id]) : [];
       return rows[0] ? toClient(rows[0]) : null;
