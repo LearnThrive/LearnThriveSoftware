@@ -34,7 +34,7 @@ export class SupabaseAccountAdmin implements AccountAdmin {
     this.timeoutMs = config.timeoutMs ?? 8000;
   }
 
-  private async call(method: "POST" | "PUT" | "DELETE", path: string, body?: Json): Promise<Reply | null> {
+  private async call(method: "GET" | "POST" | "PUT" | "DELETE", path: string, body?: Json): Promise<Reply | null> {
     try {
       const response = await this.doFetch(`${this.base}${path}`, {
         method,
@@ -95,6 +95,18 @@ export class SupabaseAccountAdmin implements AccountAdmin {
   async setDisabled(userId: string, disabled: boolean): Promise<boolean> {
     const reply = await this.call("PUT", `/users/${encodeURIComponent(userId)}`, { ban_duration: disabled ? BAN_FOR_GOOD : "none" });
     return reply?.status === 200;
+  }
+
+  async lastSignIns(): Promise<Map<string, string> | null> {
+    const out = new Map<string, string>();
+    for (let page = 1; page <= 25; page += 1) {
+      const reply = await this.call("GET", `/users?page=${page}&per_page=200`);
+      const users = reply?.status === 200 ? reply.body?.users : undefined;
+      if (!Array.isArray(users)) return null;
+      for (const u of users as Json[]) if (typeof u.id === "string" && typeof u.last_sign_in_at === "string") out.set(u.id, u.last_sign_in_at);
+      if (users.length < 200) break;
+    }
+    return out;
   }
 
   async deleteUser(userId: string): Promise<boolean> {

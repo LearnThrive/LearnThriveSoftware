@@ -8,6 +8,8 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { CreateLoginForm, UsernameField } from "@/components/people/LoginForms";
 import { PeopleTabs } from "@/components/people/PeopleTabs";
 import { PersonList, PersonRow } from "@/components/people/PersonRow";
+import { loginStatuses } from "@/lib/people/loginStatus";
+import { LoginStatusBadge, loginSummary } from "@/components/people/LoginStatusBadge";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Dialog } from "@/components/ui/Dialog";
@@ -39,6 +41,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
   }
 
   const visible = clients.filter((client) => matchesQuery(q, client.name, client.email, ...(studentsByClient.get(client.id) ?? [])));
+  const logins = await loginStatuses(visible.map((client) => client.userId));
 
   return (
     <>
@@ -72,7 +75,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
 
       <div className="list-toolbar">
         <SearchInput placeholder="Search clients or their children…" label="Search clients" />
-        <p className="list-toolbar__count">{visible.length} of {clients.length}</p>
+        <p className="list-toolbar__count">{visible.length} of {clients.length} · {loginSummary(visible.map((client) => (client.userId ? logins.get(client.userId) : undefined)))}</p>
       </div>
 
       <Card className={visible.length === 0 ? "card--empty" : ""}>
@@ -85,7 +88,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
               : "Add a parent or guardian to link them to their children's tuition."}
           />
         ) : (
-          <PersonList identityLabel="Client" columnLabels={["Children", "Next lesson"]}>
+          <PersonList identityLabel="Client" columnLabels={["Children", "Next lesson", "Sign-in"]}>
             {visible.map((client) => {
               const childNames = studentsByClient.get(client.id) ?? [];
               const next = lessons
@@ -101,6 +104,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                   columns={[
                     { label: "Children", value: childNames.join(", ") || "None linked" },
                     { label: "Next lesson", value: next ? formatLessonDayTime(next.startAt) : "None scheduled" },
+                    { label: "Sign-in", value: <LoginStatusBadge status={client.userId ? logins.get(client.userId) : undefined} /> },
                   ]}
                 />
               );

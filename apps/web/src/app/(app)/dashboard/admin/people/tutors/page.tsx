@@ -14,6 +14,8 @@ import { Field, FormActions } from "@/components/ui/Field";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { formatLessonDayTime } from "@/lib/format";
 import { matchesQuery, peopleCounts } from "@/lib/people/peopleHelpers";
+import { loginStatuses } from "@/lib/people/loginStatus";
+import { LoginStatusBadge, loginSummary } from "@/components/people/LoginStatusBadge";
 
 export const metadata: Metadata = createMetadata({
   title: "Tutors",
@@ -32,6 +34,7 @@ export default async function TutorsPage({ searchParams }: { searchParams: Promi
 
   const nowIso = new Date().toISOString();
   const visible = tutors.filter((tutor) => matchesQuery(q, tutor.name, tutor.email, ...tutor.subjects));
+  const logins = await loginStatuses(visible.map((tutor) => tutor.userId));
 
   return (
     <>
@@ -67,7 +70,7 @@ export default async function TutorsPage({ searchParams }: { searchParams: Promi
 
       <div className="list-toolbar">
         <SearchInput placeholder="Search tutors or subjects…" label="Search tutors" />
-        <p className="list-toolbar__count">{visible.length} of {tutors.length}</p>
+        <p className="list-toolbar__count">{visible.length} of {tutors.length} · {loginSummary(visible.map((tutor) => (tutor.userId ? logins.get(tutor.userId) : undefined)))}</p>
       </div>
 
       <Card className={visible.length === 0 ? "card--empty" : ""}>
@@ -80,7 +83,7 @@ export default async function TutorsPage({ searchParams }: { searchParams: Promi
               : "Add your first tutor to begin assigning students and scheduling lessons."}
           />
         ) : (
-          <PersonList identityLabel="Tutor" columnLabels={["Subjects", "Students", "Next lesson"]}>
+          <PersonList identityLabel="Tutor" columnLabels={["Subjects", "Students", "Next lesson", "Sign-in"]}>
             {visible.map((tutor) => {
               const theirAssignments = assignments.filter((assignment) => assignment.tutorId === tutor.id);
               const studentCount = new Set(theirAssignments.flatMap((assignment) => assignment.studentIds)).size;
@@ -98,6 +101,7 @@ export default async function TutorsPage({ searchParams }: { searchParams: Promi
                     { label: "Subjects", value: tutor.subjects.join(", ") || "None listed" },
                     { label: "Students", value: studentCount === 0 ? "None" : `${studentCount}` },
                     { label: "Next lesson", value: next ? formatLessonDayTime(next.startAt) : "None scheduled" },
+                    { label: "Sign-in", value: <LoginStatusBadge status={tutor.userId ? logins.get(tutor.userId) : undefined} /> },
                   ]}
                 />
               );

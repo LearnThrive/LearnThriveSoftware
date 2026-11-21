@@ -7,6 +7,8 @@ import { createStudentAction } from "@/lib/actions/people";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { PeopleTabs } from "@/components/people/PeopleTabs";
 import { PersonList, PersonRow } from "@/components/people/PersonRow";
+import { loginStatuses } from "@/lib/people/loginStatus";
+import { LoginStatusBadge } from "@/components/people/LoginStatusBadge";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Dialog } from "@/components/ui/Dialog";
@@ -38,6 +40,7 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
   }
 
   const visible = students.filter((student) => matchesQuery(q, student.name, student.yearGroup, ...(clientsByStudent.get(student.id) ?? [])));
+  const logins = await loginStatuses(visible.map((student) => student.userId));
 
   return (
     <>
@@ -89,7 +92,7 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
               : "Add your first student to begin assigning tutors and scheduling lessons."}
           />
         ) : (
-          <PersonList identityLabel="Student" columnLabels={["Parent", "Next lesson"]}>
+          <PersonList identityLabel="Student" columnLabels={["Parent", "Next lesson", "Sign-in"]}>
             {visible.map((student) => {
               const next = lessons
                 .filter((lesson) => lesson.status !== "CANCELLED" && lesson.studentIds.includes(student.id) && lesson.startAt >= nowIso)
@@ -104,6 +107,7 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
                   columns={[
                     { label: "Parent", value: clientsByStudent.get(student.id)?.join(", ") || "Not linked" },
                     { label: "Next lesson", value: next ? formatLessonDayTime(next.startAt) : "None scheduled" },
+                    { label: "Sign-in", value: student.userId ? <LoginStatusBadge status={logins.get(student.userId)} /> : "Uses their parent login" },
                   ]}
                 />
               );

@@ -25,6 +25,7 @@ interface UserRow {
   confirmed: boolean;
   /** Disabled (banned): the right password is still refused, and says why. */
   disabled?: boolean;
+  lastSignInAt?: string;
 }
 
 const ACCESS_MS = 60 * 60 * 1000;
@@ -113,6 +114,7 @@ export class MemoryAccountAuth implements AccountAuth, AccountAdmin {
     if (!row || !correct) return { ok: false as const, reason: "invalid_credentials" as const };
     if (row.disabled) return { ok: false as const, reason: "account_disabled" as const };
     if (!row.confirmed) return { ok: false as const, reason: "email_not_confirmed" as const };
+    row.lastSignInAt = new Date(this.now()).toISOString();
     return { ok: true as const, user: this.publicUser(row), tokens: this.issueTokens(row) };
   }
 
@@ -195,6 +197,10 @@ export class MemoryAccountAuth implements AccountAuth, AccountAdmin {
     this.byId.set(row.id, row);
     this.options.onUserCreated?.({ id: row.id, displayName: row.displayName, email: row.email, adultConfirmed: input.adultConfirmed });
     return { ok: true, id: row.id };
+  }
+
+  async lastSignIns(): Promise<Map<string, string> | null> {
+    return new Map([...this.byId.values()].filter((r) => r.lastSignInAt).map((r) => [r.id, r.lastSignInAt!]));
   }
 
   async setPassword(userId: string, password: string): Promise<{ ok: true } | { ok: false; reason: "weak_password" | "unavailable" }> {

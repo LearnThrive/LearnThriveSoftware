@@ -81,6 +81,8 @@ export interface AccountAdmin {
   /** A one-time recovery token for this internal address, sending nothing: the site emails the linked address itself. */
   recoveryLink(email: string): Promise<{ tokenHash: string } | null>;
   setDisabled(userId: string, disabled: boolean): Promise<boolean>;
+  /** When each login last signed in: profile id to an ISO time (a login that never has is absent). null if Auth could not be read. */
+  lastSignIns(): Promise<Map<string, string> | null>;
   /** Removes a login that could not be bound to its record. */
   deleteUser(userId: string): Promise<boolean>;
 }
