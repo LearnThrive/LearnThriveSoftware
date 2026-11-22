@@ -16,12 +16,12 @@ export default function CookiesPage() {
       eyebrow="Website information"
       title="Cookie notice"
       intro="A plain-language explanation of the cookies and similar technologies used by the current LearnThrive Tuition website."
-      reviewedOn="20 October 2026"
+      reviewedOn="22 November 2026"
       scope={
         <>
           <p>
-            This notice covers the features LearnThrive Tuition currently
-            provides on its public marketing website. It does not cover a
+            This notice covers the LearnThrive Tuition public website and the
+            sign-in to your LearnThrive account. It does not cover a
             third-party website after you follow a link away from this site.
           </p>
         </>
@@ -46,10 +46,11 @@ export default function CookiesPage() {
           content: (
             <>
               <p>
-                The current LearnThrive website does not set cookies. It keeps
-                two small things in your own browser, each only because of
-                something you choose to do, and neither is sent to LearnThrive
-                or to anyone else:
+                The public pages of the LearnThrive website do not set any
+                cookies. If you sign in, the site sets the two cookies described
+                next. Apart from those, it keeps two small things in your own
+                browser, each only because of something you choose to do, and
+                neither is sent to LearnThrive or to anyone else:
               </p>
               <ul>
                 <li>
@@ -69,6 +70,20 @@ export default function CookiesPage() {
                   them.
                 </li>
               </ul>
+              <p>
+                <strong>If you sign in to your account,</strong> the site sets
+                two cookies, “learnthrive_acct” and “learnthrive_acct_r”. They
+                keep you signed in and are the only way the site knows it is
+                you, so we cannot provide the sign-in without them. They are
+                set only when you sign in or open a link we email you, never on
+                a public page, and are not readable by scripts on the page
+                (they are “httpOnly”). They stay on your device for up to 13
+                months and are renewed each time you use the site, so you stay
+                signed in, even after you close your browser, until you choose
+                Sign out, which removes them. Do not stay signed in on a shared
+                or public computer: use Sign out when you have finished. We do
+                not use these cookies for analytics or advertising.
+              </p>
               <p>
                 The site does not include analytics, advertising pixels,
                 embedded third-party media, external font services or other
@@ -131,10 +146,12 @@ export default function CookiesPage() {
           title: "Why there is no cookie banner",
           content: (
             <p>
-              The current website does not ask for cookie choices because it sets
-              no cookies, and the only browser storage it uses is the appearance
-              choices and recent-search list described above, which exist only
-              because you used those controls.
+              The website does not ask for cookie choices because its public
+              pages set no cookies, the two sign-in cookies are strictly
+              necessary to give you the sign-in you asked for, and the only
+              other browser storage it uses is the appearance choices and
+              recent-search list described above, which exist only because you
+              used those controls.
               We will reassess this before adding analytics, embedded services
               or any other feature that may require information, consent or an
               objection control.
@@ -148,8 +165,9 @@ export default function CookiesPage() {
             <p>
               Most browsers let you view, block or delete cookies and other site
               data. The help section in your browser explains these controls.
-              Blocking essential storage can affect some websites, although the
-              current LearnThrive website features do not depend on it.
+              The public pages do not depend on cookies. If you block the two
+              sign-in cookies, you will not be able to stay signed in to your
+              account.
             </p>
           ),
         },
