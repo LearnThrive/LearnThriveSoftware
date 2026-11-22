@@ -38,7 +38,10 @@ test('sign up, confirm by email, sign out, sign in again', async ({ page }) => {
   expect(access, 'the session cookie').toBeTruthy();
   expect(access!.httpOnly).toBe(true);
   expect(access!.sameSite).toBe('Lax');
-  expect(access!.expires, 'a session cookie, not a persistent one').toBe(-1);
+  // Persistent on purpose: people stay signed in until they press Sign out (400 days, the longest a browser keeps a cookie).
+  const daysLeft = (access!.expires - Date.now() / 1000) / 86400;
+  expect(daysLeft, 'a persistent cookie that lasts about 400 days').toBeGreaterThan(395);
+  expect(daysLeft).toBeLessThanOrEqual(400);
   expect(await page.evaluate(() => document.cookie)).toBe('');
   expect(await page.evaluate(() => [localStorage.length, sessionStorage.length])).toEqual([0, 0]);
 
