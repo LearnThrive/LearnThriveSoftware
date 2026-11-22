@@ -8,15 +8,19 @@ import { createMetadata } from "@/lib/metadata";
 import { getDataProvider } from "@/lib/data/provider";
 import { visibleLessonsFor } from "@/lib/scheduling/visibleLessons";
 import { isWithinJoinWindow, JOIN_WINDOW_MINUTES } from "@/lib/scheduling/joinWindow";
+import { getMeetings } from "@/lib/meetings/runtime";
+import { meetingOpenFor } from "@/lib/meetings/rules";
+import { meetingRoleFor } from "@learnthrive/data/meetings";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Card, CardBody } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { CalendarView, type CalendarLesson } from "@/components/CalendarView";
+import type { PeekMeeting } from "@/components/lessons/MeetingPeekPanel";
 
 export const metadata: Metadata = createMetadata({
   title: "Calendar",
-  description: "Your LearnThrive lesson calendar.",
+  description: "Your LearnThrive lessons and meetings.",
   path: "/dashboard/calendar",
 });
 
@@ -29,6 +33,19 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     data.tutors.list(),
     data.students.list(),
   ]);
+  // Staff meetings this person hosts or is invited to (only staff ever have any). A calendar that cannot read them still shows the lessons.
+  const now = new Date();
+  const meetings: PeekMeeting[] = await getMeetings().forPerson(user.id, new Date(now.getTime() - 90 * 24 * 3600_000).toISOString())
+    .then((all) => all.map((m) => {
+      const role = meetingRoleFor(m, user.id);
+      return {
+        id: m.id, title: m.title, startsAt: m.startsAt, durationMinutes: m.durationMinutes, hostName: m.hostName,
+        people: [m.hostName, ...m.invitees.map((p) => p.name)].filter((n) => n !== undefined),
+        youHost: role === "HOST", joinOpen: role !== null && meetingOpenFor(m, role, now),
+        joinOpensAt: new Date(new Date(m.startsAt).getTime() - (role === "HOST" ? 30 : 10) * 60_000).toISOString(),
+      };
+    }))
+    .catch(() => []);
   const tutorNames = new Map(tutors.map((t) => [t.id, t.name]));
   const studentNames = new Map(students.map((s) => [s.id, s.name]));
 
@@ -67,7 +84,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       <PageHeader
         eyebrow="Workspace"
         title="Calendar"
-        description={isAdmin ? "Every lesson across the platform. Drag a lesson to reschedule it." : "Your lessons, at a glance."}
+        description={isAdmin ? "Every lesson across the platform, and your meetings. Drag a lesson to reschedule it." : "Your lessons and meetings, at a glance."}
         actions={isAdmin ? (
           <Link href="/dashboard/admin/lessons/new" className="btn btn--primary">
             <CalendarPlus size={16} aria-hidden="true" />Schedule lesson
@@ -96,8 +113,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       )}
 
       <Card>
-        <CardBody className={lessons.length === 0 ? undefined : "card__body--flush"}>
-          {lessons.length === 0 ? (
+        <CardBody className={lessons.length === 0 && meetings.length === 0 ? undefined : "card__body--flush"}>
+          {lessons.length === 0 && meetings.length === 0 ? (
             <EmptyState
               icon={<CalendarPlus size={22} aria-hidden="true" />}
               title={tutorFilter === "all" ? "No lessons on your calendar yet" : "No lessons for this tutor"}
@@ -107,7 +124,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
               ) : undefined}
             />
           ) : (
-            <CalendarView lessons={calendarLessons} canManage={isAdmin} />
+            <CalendarView lessons={calendarLessons} canManage={isAdmin} meetings={meetings} />
           )}
         </CardBody>
       </Card>

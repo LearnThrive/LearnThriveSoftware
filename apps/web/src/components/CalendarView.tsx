@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { rescheduleLessonAction } from "@/lib/actions/lessons";
 import { LessonPeekPanel, type PeekLesson } from "@/components/lessons/LessonPeekPanel";
+import { MeetingPeekPanel, type PeekMeeting } from "@/components/lessons/MeetingPeekPanel";
 import { formatLongDate } from "@/lib/format";
 
 export interface CalendarLesson {
@@ -40,7 +41,7 @@ type RescheduleScope = "THIS_ONLY" | "THIS_AND_FUTURE" | "ENTIRE_SERIES";
 /** Section 55: FullCalendar themed onto LearnThrive's own tokens via its CSS custom properties,
  * rather than left at its default appearance — see the `.calendar-wrap` rules in
  * app-dashboard.css for the actual colour/shape mapping. */
-export function CalendarView({ lessons, canManage }: { lessons: CalendarLesson[]; canManage: boolean }) {
+export function CalendarView({ lessons, canManage, meetings = [] }: { lessons: CalendarLesson[]; canManage: boolean; meetings?: PeekMeeting[] }) {
   const router = useRouter();
   const [pendingDrop, setPendingDrop] = useState<EventDropArg | null>(null);
   const [peekId, setPeekId] = useState<string | null>(null);
@@ -56,7 +57,7 @@ export function CalendarView({ lessons, canManage }: { lessons: CalendarLesson[]
     icons.forEach((icon) => icon.setAttribute("aria-hidden", "true"));
   }, []);
 
-  const events = lessons.map((lesson) => ({
+  const lessonEvents = lessons.map((lesson) => ({
     id: lesson.id,
     title: lesson.status === "CANCELLED" ? `Cancelled: ${lesson.title}` : lesson.title,
     start: lesson.startAt,
@@ -64,6 +65,17 @@ export function CalendarView({ lessons, canManage }: { lessons: CalendarLesson[]
     classNames: [`lesson-status-${lesson.status.toLowerCase()}`, ...(lesson.id === peekId ? ["is-selected"] : [])],
     editable: canManage && lesson.status === "PLANNED",
   }));
+
+  // Staff meetings share the calendar: their own colour, not draggable (they are moved from the Meetings page), an id that cannot clash with a lesson's.
+  const meetingEvents = meetings.map((m) => ({
+    id: `meeting:${m.id}`,
+    title: m.title,
+    start: m.startsAt,
+    end: new Date(new Date(m.startsAt).getTime() + m.durationMinutes * 60_000).toISOString(),
+    classNames: ["calendar-meeting", ...(`meeting:${m.id}` === peekId ? ["is-selected"] : [])],
+    editable: false,
+  }));
+  const events = [...lessonEvents, ...meetingEvents];
 
   // Takes `info` directly rather than reading it back off state — calling this immediately
   // after setPendingDrop() for a non-recurring lesson would otherwise read a stale (pre-update)
@@ -84,6 +96,7 @@ export function CalendarView({ lessons, canManage }: { lessons: CalendarLesson[]
 
   const lessonById = new Map(lessons.map((l) => [l.id, l]));
   const peekLesson = peekId ? lessonById.get(peekId) : undefined;
+  const peekMeeting = peekId?.startsWith("meeting:") ? meetings.find((m) => `meeting:${m.id}` === peekId) : undefined;
 
   return (
     <div className="calendar-wrap" ref={wrapRef}>
@@ -126,6 +139,8 @@ export function CalendarView({ lessons, canManage }: { lessons: CalendarLesson[]
           </div>
         </div>
       )}
+
+      {peekMeeting && <MeetingPeekPanel meeting={peekMeeting} onClose={() => setPeekId(null)} />}
 
       {peekLesson && (
         <LessonPeekPanel

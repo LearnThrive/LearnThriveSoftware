@@ -308,6 +308,8 @@
   color: var(--app-muted); text-decoration: line-through;
 }
 .calendar-wrap .fc-event.lesson-status-no_show { background: var(--error-bg); color: var(--fg-error); }
+/* A staff meeting: its own colour (the info tone) so it never reads as a lesson. */
+.calendar-wrap .fc-event.calendar-meeting { background: var(--tone-info-bg); color: var(--tone-info-fg); border: 1px solid var(--tone-info-fg); }
 /* Selected state: the peek panel is open for this event — a visible ring so it's clear which
    card the panel belongs to while it's up. */
 .calendar-wrap .fc-event.is-selected { box-shadow: 0 0 0 2px var(--app-surface), 0 0 0 4px var(--app-accent); }
