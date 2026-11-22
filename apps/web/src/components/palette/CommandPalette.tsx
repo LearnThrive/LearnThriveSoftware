@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CornerDownLeft, Search, X } from "lucide-react";
+import {
+  ArrowUpRight, BookOpen, CalendarDays, Clock, Compass, CornerDownLeft, FileText, GraduationCap, Landmark, LifeBuoy, Loader2,
+  LogOut, MessageCircleQuestion, Palette, Plus, Scale, Search, SearchX, Sparkles, UserRound, Users, X,
+  type LucideIcon,
+} from "lucide-react";
 import { useDelayedUnmount } from "@/lib/motion/useDelayedUnmount";
 import { rankCommands } from "@/lib/palette/score";
 import styles from "./CommandPalette.module.css";
@@ -84,7 +88,55 @@ function writeRecent(storageKey: string, persist: "local" | "session", id: strin
   }
 }
 
-type Row = { kind: "header"; label: string; key: string } | { kind: "option"; command: PaletteCommand; index: number; key: string };
+/** One icon per group, so a long list scans by shape as well as by word. Unknown groups get a quiet default. */
+const GROUP_ICON: Record<string, LucideIcon> = {
+  Recent: Clock, "Go to": Compass, Pages: Compass, Create: Plus, Actions: Sparkles, Appearance: Palette, Help: LifeBuoy, Account: LogOut,
+  Lessons: CalendarDays, Students: GraduationCap, Clients: Users, Tutors: UserRound, Reports: FileText, Subjects: BookOpen,
+  FAQ: MessageCircleQuestion, Legal: Scale, Results: Search,
+};
+
+function iconFor(command: PaletteCommand, group: string): LucideIcon {
+  if (command.href && /^(https?:|mailto:|tel:)/i.test(command.href)) return ArrowUpRight;
+  return GROUP_ICON[group] ?? Landmark;
+}
+
+/** A short hint like "G D", "?" or "Ctrl K" is a keyboard shortcut and is drawn as keys; anything longer is a subtitle. */
+function shortcutKeys(hint: string | undefined): string[] | null {
+  if (!hint) return null;
+  // Exactly the shapes the app uses ("?", "G D", "Ctrl K", "⌘K"); a name or a status that merely starts with G or Q stays a subtitle.
+  const isKeys = hint === "?" || /^G [A-Z0-9]$/.test(hint) || /^(Ctrl|Cmd|Alt|Shift)( ?\+ ?| )\S{1,3}$/.test(hint) || /^[⌘⌃⌥⇧]+\S{1,2}$/.test(hint);
+  return isKeys ? hint.split(/ ?\+ ?| /).filter(Boolean) : null;
+}
+
+/** Marks the part of a title the search matched: the whole phrase if it is there, otherwise each word. */
+function Highlight({ text, query, className }: { text: string; query: string; className: string }) {
+  const q = query.trim().toLowerCase();
+  if (!q) return <>{text}</>;
+  const lower = text.toLowerCase();
+  const ranges: Array<[number, number]> = [];
+  const whole = lower.indexOf(q);
+  if (whole >= 0) ranges.push([whole, whole + q.length]);
+  else {
+    for (const word of q.split(/\s+/).filter(Boolean)) {
+      const at = lower.indexOf(word);
+      if (at >= 0) ranges.push([at, at + word.length]);
+    }
+  }
+  if (ranges.length === 0) return <>{text}</>;
+  ranges.sort((a, b) => a[0] - b[0]);
+  const parts: React.ReactNode[] = [];
+  let cursor = 0;
+  for (const [start, end] of ranges) {
+    if (start < cursor) continue;
+    if (start > cursor) parts.push(text.slice(cursor, start));
+    parts.push(<mark key={start} className={className}>{text.slice(start, end)}</mark>);
+    cursor = end;
+  }
+  if (cursor < text.length) parts.push(text.slice(cursor));
+  return <>{parts}</>;
+}
+
+type Row = { kind: "header"; label: string; key: string } | { kind: "option"; command: PaletteCommand; group: string; index: number; key: string };
 
 export function CommandPalette({
   open,
@@ -110,6 +162,7 @@ export function CommandPalette({
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const [remote, setRemote] = useState<readonly PaletteCommand[]>([]);
+  const [remoteFor, setRemoteFor] = useState("");
   const [recentIds, setRecentIds] = useState<string[]>([]);
   const [announcement, setAnnouncement] = useState("");
 
@@ -128,6 +181,7 @@ export function CommandPalette({
       setQuery("");
       setActive(0);
       setRemote([]);
+      setRemoteFor("");
       setRecentIds(readRecent(storageKey, persist));
     }
     document.body.classList.add("has-dialog");
@@ -152,10 +206,16 @@ export function CommandPalette({
     const timer = window.setTimeout(() => {
       search(text)
         .then((results) => {
-          if (!cancelled) setRemote(results);
+          if (!cancelled) {
+            setRemote(results);
+            setRemoteFor(text);
+          }
         })
         .catch(() => {
-          if (!cancelled) setRemote([]);
+          if (!cancelled) {
+            setRemote([]);
+            setRemoteFor(text);
+          }
         });
     }, SEARCH_DEBOUNCE_MS);
     return () => {
@@ -171,7 +231,7 @@ export function CommandPalette({
     const push = (group: string, items: readonly PaletteCommand[]) => {
       if (items.length === 0) return;
       result.push({ kind: "header", label: group, key: `h-${group}` });
-      for (const command of items) result.push({ kind: "option", command, index: index++, key: `${group}-${command.id}` });
+      for (const command of items) result.push({ kind: "option", command, group, index: index++, key: `${group}-${command.id}` });
     };
     if (!text) {
       const byId = new Map(commands.map((command) => [command.id, command]));
@@ -192,6 +252,8 @@ export function CommandPalette({
     push("Results", remote.filter((r) => !matched.some((m) => m.id === r.id)));
     return result;
   }, [query, commands, recentIds, remote]);
+
+  const searching = Boolean(search) && query.trim().length >= 2 && remoteFor !== query.trim();
 
   const options = useMemo(() => rows.filter((row): row is Extract<Row, { kind: "option" }> => row.kind === "option"), [rows]);
 
@@ -287,6 +349,16 @@ export function CommandPalette({
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
       if (options.length) setActive((activeIndex - 1 + options.length) % options.length);
+    } else if (event.key === "Home" || event.key === "End" || event.key === "PageDown" || event.key === "PageUp") {
+      if (!options.length) return;
+      event.preventDefault();
+      const last = options.length - 1;
+      setActive(event.key === "Home" ? 0 : event.key === "End" ? last : event.key === "PageDown" ? Math.min(last, activeIndex + 6) : Math.max(0, activeIndex - 6));
+    } else if (event.ctrlKey && (event.key === "n" || event.key === "p" || event.key === "j")) {
+      if (!options.length) return;
+      event.preventDefault();
+      const down = event.key === "n" || event.key === "j";
+      setActive((activeIndex + (down ? 1 : -1) + options.length) % options.length);
     } else if (event.key === "Enter") {
       const row = options[activeIndex];
       if (row) {
@@ -309,7 +381,11 @@ export function CommandPalette({
         aria-label={label}
       >
         <div className={styles.field}>
-          <Search aria-hidden="true" size={18} className={styles.fieldIcon} />
+          {searching ? (
+            <Loader2 aria-hidden="true" size={18} className={`${styles.fieldIcon} ${styles.spin}`} />
+          ) : (
+            <Search aria-hidden="true" size={18} className={styles.fieldIcon} />
+          )}
           <input
             ref={inputRef}
             data-palette-input=""
@@ -332,6 +408,20 @@ export function CommandPalette({
             }}
             onKeyDown={onInputKeyDown}
           />
+          {query ? (
+            <button
+              type="button"
+              className={styles.clear}
+              aria-label="Clear search"
+              onClick={() => {
+                setQuery("");
+                setActive(0);
+                inputRef.current?.focus();
+              }}
+            >
+              Clear
+            </button>
+          ) : null}
           <button type="button" className={`icon-button ${styles.close}`} aria-label="Close search" onClick={close}>
             <X size={16} aria-hidden="true" />
           </button>
@@ -340,30 +430,67 @@ export function CommandPalette({
         <ul ref={listRef} id={listId} role="listbox" aria-label="Results" className={styles.list} data-lenis-prevent="">
           {rows.length === 0 ? (
             <li role="presentation" className={styles.empty}>
-              {query.trim() ? `Nothing matches “${query.trim()}”.` : "Start typing to search."}
+              {query.trim() ? (
+                <>
+                  <SearchX aria-hidden="true" size={26} className={styles.emptyIcon} />
+                  <strong>{searching ? "Searching…" : `Nothing matches “${query.trim()}”`}</strong>
+                  {searching ? null : <span>Check the spelling, or try a shorter word such as a name or a subject.</span>}
+                </>
+              ) : (
+                <>
+                  <Search aria-hidden="true" size={26} className={styles.emptyIcon} />
+                  <strong>Start typing to search</strong>
+                </>
+              )}
             </li>
           ) : (
-            rows.map((row) =>
-              row.kind === "header" ? (
-                <li key={row.key} role="presentation" className={styles.group}>
-                  {row.label}
-                </li>
-              ) : (
+            rows.map((row) => {
+              if (row.kind === "header") {
+                const HeaderIcon = GROUP_ICON[row.label];
+                return (
+                  <li key={row.key} role="presentation" className={styles.group}>
+                    {HeaderIcon ? <HeaderIcon aria-hidden="true" size={12} /> : null}
+                    {row.label}
+                  </li>
+                );
+              }
+              const Icon = iconFor(row.command, row.group);
+              const keys = shortcutKeys(row.command.hint);
+              const subtitle = keys ? null : row.command.hint;
+              const isActive = row.index === activeIndex;
+              return (
                 <li
                   key={row.key}
                   id={optionId(row.index)}
                   role="option"
-                  aria-selected={row.index === activeIndex}
+                  aria-selected={isActive}
                   data-index={row.index}
-                  className={`${styles.option} ${row.index === activeIndex ? styles.optionActive : ""}`}
+                  className={`${styles.option} ${isActive ? styles.optionActive : ""}`}
                   onMouseMove={() => row.index !== activeIndex && setActive(row.index)}
                   onClick={() => execute(row.command)}
                 >
-                  <span className={styles.optionTitle}>{row.command.title}</span>
-                  {row.command.hint ? <span className={styles.optionHint}>{row.command.hint}</span> : null}
+                  <span className={styles.optionIcon} aria-hidden="true">
+                    <Icon size={16} />
+                  </span>
+                  <span className={styles.optionText}>
+                    <span className={styles.optionTitle}>
+                      <Highlight text={row.command.title} query={query} className={styles.mark} />
+                    </span>
+                    {subtitle ? <span className={styles.optionSub}>{subtitle}</span> : null}
+                  </span>
+                  <span className={styles.optionEnd} aria-hidden="true">
+                    {keys?.map((key) => (
+                      <kbd key={key} className={styles.key}>{key}</kbd>
+                    ))}
+                    {isActive ? (
+                      <kbd className={`${styles.key} ${styles.keyEnter}`}>
+                        <CornerDownLeft size={11} />
+                      </kbd>
+                    ) : null}
+                  </span>
                 </li>
-              ),
-            )
+              );
+            })
           )}
         </ul>
 
