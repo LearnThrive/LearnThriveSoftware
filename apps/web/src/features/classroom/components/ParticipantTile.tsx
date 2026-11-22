@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import type { ParticipantRole } from '@learnthrive/shared/protocol';
+import type { ParticipantRole, StaffTitle } from '@learnthrive/shared/protocol';
 import { qualityLabel, type ConnectionQuality } from '../stats';
 import { Icon } from './Icon';
 import { RoleBadge } from './RoleBadge';
@@ -16,6 +16,8 @@ interface ParticipantTileProps {
   focused?: boolean;
   onFocus?: () => void;
   role?: ParticipantRole | null;
+  /** A staff meeting: the person's real title, shown instead of Tutor/Student. */
+  title?: StaffTitle;
   // Only ever passed for remote peers — a local tile has no connection to rate.
   quality?: ConnectionQuality;
   // Whether to play this person is no longer decided here: a tile only shows the picture (its <video> is always muted). Their sound, including
@@ -32,7 +34,7 @@ function initials(name: string) {
 }
 
 export function ParticipantTile({
-  stream, name, audio, video, screenSharing = false, local = false, compact = false, preview = false, focused, onFocus, role = null,
+  stream, name, audio, video, screenSharing = false, local = false, compact = false, preview = false, focused, onFocus, role = null, title,
   quality, handRaised = false, onLowerHand,
 }: ParticipantTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -90,7 +92,7 @@ export function ParticipantTile({
       />
       {!hasVideo && <div className="camera-placeholder">
         <div className="avatar">{initials(name)}</div>
-        {!compact && <><h2>{preview ? 'Your space to get ready' : name}{!preview && <RoleBadge role={role} />}</h2><p>{local ? 'Your camera is off' : videoTrackMuted && video ? 'Video is paused' : 'Camera is off'}</p></>}
+        {!compact && <><h2>{preview ? 'Your space to get ready' : name}{!preview && <RoleBadge role={role} title={title} />}</h2><p>{local ? 'Your camera is off' : videoTrackMuted && video ? 'Video is paused' : 'Camera is off'}</p></>}
       </div>}
       {preview && <div className="preview-tag"><span /> Camera preview</div>}
       {handRaised && (

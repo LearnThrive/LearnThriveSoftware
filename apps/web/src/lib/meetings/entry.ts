@@ -1,6 +1,7 @@
 import type { StaffMeeting } from "@learnthrive/data/meetings";
 import { signClassroomJoinToken } from "@learnthrive/shared/classroomToken";
 import type { AuthenticatedUser } from "@/lib/auth/types";
+import { holds } from "@/lib/auth/scope";
 import { decideEntry } from "./rules";
 import { getMeetings } from "./runtime";
 
@@ -16,7 +17,7 @@ export async function enterMeeting(user: AuthenticatedUser, meetingId: string, n
   const decision = decideEntry(user, meeting, now);
   if (!decision.ok || !meeting) return { ok: false, message: decision.ok ? "There is no such meeting." : decision.message };
   const token = signClassroomJoinToken({
-    roomId: meeting.roomId, lessonId: `meeting:${meeting.id}`, name: user.name, role: decision.role === "HOST" ? "tutor" : "student", uid: user.id, kind: "meeting",
+    roomId: meeting.roomId, lessonId: `meeting:${meeting.id}`, name: user.name, role: decision.role === "HOST" ? "tutor" : "student", uid: user.id, kind: "meeting", title: holds(user, "ADMIN") ? "Admin" : "Tutor",
     exp: now.getTime() + 5 * 60_000,
   });
   return { ok: true, meeting, role: decision.role, token };

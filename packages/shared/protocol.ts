@@ -1,5 +1,6 @@
 export interface MediaState { audio: boolean; video: boolean }
 export type ParticipantRole = 'tutor' | 'student';
+export type StaffTitle = 'Admin' | 'Tutor';
 // forceMuted is a server/tutor-authoritative directive layered on top of media.audio, which stays
 // 100% client-self-reported as before — the two are deliberately independent (never clamp one
 // from the other) so a broadcast never lies about what a track is actually doing. See
@@ -10,6 +11,9 @@ export type ParticipantRole = 'tutor' | 'student';
 export interface Participant {
   id: string; name: string; media: MediaState; screenSharing: boolean; handRaised: boolean; handRaisedAt: number | null;
   role: ParticipantRole; forceMuted: boolean;
+  // A staff meeting only: who this person really is on the platform ("Admin" or "Tutor"), from the verified join token. A meeting's
+  // host/guest split rides on `role`, so without this a colleague who is an administrator would be badged "Student".
+  title?: StaffTitle;
 }
 export interface WaitingParticipant { id: string; name: string }
 // `token`: an optional signed classroom-join token (see shared/classroomToken.ts) issued by the
@@ -106,7 +110,15 @@ export interface MeetingError { message: string }
 // A file shared in a staff meeting's chat (see chatFiles.ts for what is allowed). The bytes travel through the room server to everyone present and are
 // never stored: the file exists only in the browsers of the people who were there. `data` is binary (a Buffer from the server, an ArrayBuffer in a browser).
 export interface ChatFileShare { name: string; size: number; data: ArrayBuffer | Uint8Array }
-export interface ChatMessage { id: string; senderId: string; name: string; text: string; timestamp: number; file?: ChatFileShare }
+// A staff meeting's chat can reply to an earlier message: the server builds this preview from what it holds, never from what the sender claims.
+export interface ChatReplyPreview { id: string; name: string; text: string }
+export interface ChatMessage { id: string; senderId: string; name: string; text: string; timestamp: number; file?: ChatFileShare; replyTo?: ChatReplyPreview }
+// The emoji a staff meeting's chat message can be reacted to with. Fixed, so a client cannot put anything else on a message.
+export const CHAT_REACTION_EMOJIS = ['👍', '❤️', '😂', '🎉', '😮', '🙏', '✅', '👀'] as const;
+// How much of the original a reply's preview shows. The server cuts it, and a client cuts an edited one the same way.
+export const CHAT_REPLY_PREVIEW_LENGTH = 120;
+// Emoji -> the ids of the participants who chose it.
+export type ChatReactions = Record<string, string[]>;
 export const REACTION_EMOJIS = ['👍', '❤️', '😂', '🎉', '👏', '❓'] as const;
 export type ReactionEmoji = typeof REACTION_EMOJIS[number];
 export interface ClientToServerEvents {
@@ -130,10 +142,14 @@ export interface ClientToServerEvents {
   'participant:screen-share': (payload: { sharing: boolean }) => void;
   'participant:hand': (payload: { raised: boolean }) => void;
   'participant:reaction': (payload: { emoji: string }) => void;
-  'chat:message': (payload: { text: string }) => void;
+  'chat:message': (payload: { text: string; replyTo?: string }) => void;
   // A file in a staff meeting's chat. Refused in a lesson (a lesson's files go through its own, stored and safeguarded, lesson chat).
   'chat:file': (payload: { name: string; data: ArrayBuffer | Uint8Array; caption?: string }) => void;
   'chat:delete': (payload: { id: string }) => void;
+  // Staff meetings only: the writer replaces their own message's words. The old words are not kept anywhere.
+  'chat:edit': (payload: { id: string; text: string }) => void;
+  // Staff meetings only: toggles the sender's reaction on a message.
+  'chat:react': (payload: { id: string; emoji: string }) => void;
   'chat:clear': () => void;
   /** A lesson's chat changed (a file was saved over HTTP): tells the others to reload the saved chat. Carries nothing. */
   'chat:refresh': () => void;
@@ -216,6 +232,8 @@ export interface ServerToClientEvents {
   'participant:force-muted': (payload: { id: string; forceMuted: boolean; soft?: boolean }) => void;
   'chat:message': (payload: ChatMessage) => void;
   'chat:message-deleted': (payload: { id: string }) => void;
+  'chat:message-edited': (payload: { id: string; text: string }) => void;
+  'chat:reactions': (payload: { id: string; reactions: ChatReactions }) => void;
   'chat:cleared': () => void;
   /** Reload the lesson's saved chat from the website. */
   'chat:refresh': () => void;

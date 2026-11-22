@@ -7,7 +7,7 @@ import type {
   PollState, RoomTimerState, ServerToClientEvents, UnderstandingCheckState, WaitingParticipant,
 } from '@learnthrive/shared/protocol';
 import { createSignallingServer } from './signalling';
-import { signClassroomJoinToken } from '@learnthrive/shared/classroomToken';
+import { signClassroomJoinToken, verifyClassroomJoinToken } from '@learnthrive/shared/classroomToken';
 
 const DISCONNECT_GRACE_MS = 300;
 
@@ -1616,6 +1616,167 @@ describe('chat in a staff meeting versus a lesson, with the lesson chat gate on'
     host.emit('chat:message', { text: 'Yes, go ahead' });
     expect((await toGuest).name).toBe('Host');
     expect(asked).toEqual([]);
+  });
+
+  /** A host and two guests in one meeting room: `admin` is an administrator, `tutor` a tutor, both with a verified title. */
+  async function meetingOfThree(roomId: string) {
+    const stamp = { roomId, lessonId: `meeting:${roomId}`, kind: 'meeting' as const, exp: Date.now() + 60_000 };
+    const host = await joinWith(signClassroomJoinToken({ ...stamp, name: 'Host', role: 'tutor', uid: 'h', title: 'Tutor' }));
+    const admin = await admittedGuest(host, signClassroomJoinToken({ ...stamp, name: 'Admin Guest', role: 'student', uid: 'a', title: 'Admin' }));
+    const tutor = await admittedGuest(host, signClassroomJoinToken({ ...stamp, name: 'Tutor Guest', role: 'student', uid: 't', title: 'Tutor' }));
+    return { host, admin, tutor };
+  }
+  const heard = (client: Client, text: string) => new Promise<ChatMessage>((resolve) => client.on('chat:message', (message) => { if (message.text === text) resolve(message); }));
+  const errorOf = (client: Client) => new Promise<{ message: string }>((resolve) => client.once('room:error', resolve));
+
+  it('shows a meeting guest by their real title (Admin or Tutor), not as a student', async () => {
+    const stamp = { roomId: 'meeting-titles', lessonId: 'meeting:titles', kind: 'meeting' as const, exp: Date.now() + 60_000 };
+    const host = await joinWith(signClassroomJoinToken({ ...stamp, name: 'Host', role: 'tutor', uid: 'h', title: 'Admin' }));
+    const guest: Client = io(url, { transports: ['websocket'], reconnection: false });
+    clients.push(guest);
+    await new Promise<void>((resolve) => guest.once('connect', () => resolve()));
+    const hostSees = new Promise<{ peer: { title?: string; name: string } }>((resolve) => host.once('room:participant-joined', resolve));
+    const waiting = new Promise((resolve) => guest.once('room:waiting', resolve));
+    const joined = new Promise<JoinedRoom>((resolve) => guest.once('room:joined', resolve));
+    guest.emit('room:join', { roomId: 'x', name: 'x', role: 'student', media, token: signClassroomJoinToken({ ...stamp, name: 'Guest', role: 'student', uid: 'g', title: 'Admin' }) });
+    await waiting;
+    host.emit('room:admit', { id: guest.id! });
+    const room = await joined;
+    expect(room.self.title).toBe('Admin');
+    expect(room.peers[0].peer.title).toBe('Admin');
+    expect((await hostSees).peer.title).toBe('Admin');
+  });
+
+  it('refuses a join token whose title is not Admin or Tutor', () => {
+    const base = { roomId: 'meeting-title-token', lessonId: 'meeting:t', name: 'X', role: 'student' as const, kind: 'meeting' as const, exp: Date.now() + 60_000 };
+    expect(verifyClassroomJoinToken(signClassroomJoinToken({ ...base, title: 'Admin' }))?.title).toBe('Admin');
+    expect(verifyClassroomJoinToken(signClassroomJoinToken({ ...base, title: 'Superuser' as never }))).toBeNull();
+  });
+
+  it('a meeting message can be deleted by its writer, the host or an administrator, but not by another tutor', async () => {
+    const { host, admin, tutor } = await meetingOfThree('meeting-delete-1');
+    const sent = async (from: Client, text: string) => { const wait = heard(host, text); from.emit('chat:message', { text }); return (await wait).id; };
+    const deletedOn = (client: Client, id: string) => new Promise<void>((resolve) => client.on('chat:message-deleted', (gone) => { if (gone.id === id) resolve(); }));
+
+    // The writer deletes their own, and everyone is told.
+    const own = await sent(tutor, 'my own words');
+    const toAll = Promise.all([deletedOn(host, own), deletedOn(admin, own), deletedOn(tutor, own)]);
+    tutor.emit('chat:delete', { id: own });
+    await toAll;
+
+    // A tutor who is not the host cannot delete someone else's message.
+    const hostsWords = await sent(host, 'host words');
+    const refused = errorOf(tutor);
+    tutor.emit('chat:delete', { id: hostsWords });
+    expect((await refused).message).toMatch(/Only the person who wrote a message, the host or an administrator/);
+
+    // An administrator can, though they are only a guest.
+    const adminDeletes = deletedOn(host, hostsWords);
+    admin.emit('chat:delete', { id: hostsWords });
+    await adminDeletes;
+
+    // The host can delete a guest's message.
+    const guestWords = await sent(tutor, 'guest words');
+    const hostDeletes = deletedOn(tutor, guestWords);
+    host.emit('chat:delete', { id: guestWords });
+    await hostDeletes;
+
+    // A deleted message is gone for good: deleting it again is refused, not silently repeated.
+    const gone = errorOf(host);
+    host.emit('chat:delete', { id: guestWords });
+    expect((await gone).message).toBe('That message is no longer there.');
+  });
+
+  it('the host or an administrator can clear a meeting chat; another tutor cannot', async () => {
+    const { host, admin, tutor } = await meetingOfThree('meeting-clear-1');
+    const refused = errorOf(tutor);
+    tutor.emit('chat:clear');
+    expect((await refused).message).toBe('Only the host or an administrator can clear the chat.');
+    const cleared = Promise.all([host, tutor].map((client) => new Promise<void>((resolve) => client.once('chat:cleared', () => resolve()))));
+    admin.emit('chat:clear');
+    await cleared;
+  });
+
+  it('reacts to a message with a fixed set of emoji, toggles it off again, and refuses anything else', async () => {
+    const { host, admin } = await meetingOfThree('meeting-react-1');
+    const message = heard(admin, 'react to me');
+    host.emit('chat:message', { text: 'react to me' });
+    const { id } = await message;
+
+    const tally = (client: Client) => new Promise<Record<string, string[]>>((resolve) => client.once('chat:reactions', (payload) => resolve(payload.reactions)));
+    let next = tally(host);
+    admin.emit('chat:react', { id, emoji: '👍' });
+    expect(await next).toEqual({ '👍': [admin.id] });
+    next = tally(host);
+    host.emit('chat:react', { id, emoji: '👍' });
+    expect(await next).toEqual({ '👍': [admin.id, host.id] });
+    next = tally(host);
+    admin.emit('chat:react', { id, emoji: '👍' });
+    expect(await next).toEqual({ '👍': [host.id] });
+    next = tally(host);
+    host.emit('chat:react', { id, emoji: '👍' });
+    expect(await next).toEqual({});
+
+    const notAllowed = errorOf(host);
+    host.emit('chat:react', { id, emoji: '💣' });
+    expect((await notAllowed).message).toBe('Invalid reaction.');
+    const unknown = errorOf(host);
+    host.emit('chat:react', { id: 'no-such-message', emoji: '👍' });
+    expect((await unknown).message).toBe('That message is no longer there.');
+  });
+
+  it('only the writer can edit a meeting message, everyone sees the new words, and a later reply quotes the new words, never the old', async () => {
+    const { host, admin, tutor } = await meetingOfThree('meeting-edit-1');
+    const original = heard(admin, 'secret old wording');
+    tutor.emit('chat:message', { text: 'secret old wording' });
+    const { id } = await original;
+
+    const editedOn = (client: Client) => new Promise<{ id: string; text: string }>((resolve) => client.once('chat:message-edited', resolve));
+    const toAll = Promise.all([editedOn(host), editedOn(admin), editedOn(tutor)]);
+    tutor.emit('chat:edit', { id, text: '  the corrected wording  ' });
+    for (const edit of await toAll) expect(edit).toEqual({ id, text: 'the corrected wording' });
+
+    // Not even the host or an administrator can edit someone else's words (they can delete them).
+    for (const other of [host, admin]) {
+      const refused = errorOf(other);
+      other.emit('chat:edit', { id, text: 'put in their mouth' });
+      expect((await refused).message).toBe('You can only edit your own messages.');
+    }
+
+    // Empty, over-long and unknown edits are refused.
+    const empty = errorOf(tutor);
+    tutor.emit('chat:edit', { id, text: '   ' });
+    expect((await empty).message).toMatch(/Messages must be 1/);
+    const unknown = errorOf(tutor);
+    tutor.emit('chat:edit', { id: 'no-such-message', text: 'x' });
+    expect((await unknown).message).toBe('That message is no longer there.');
+
+    // The server's own record was overwritten: a reply now previews the corrected words.
+    const reply = heard(host, 'a reply');
+    host.emit('chat:message', { text: 'a reply', replyTo: id });
+    expect((await reply).replyTo).toEqual({ id, name: 'Tutor Guest', text: 'the corrected wording' });
+  });
+
+  it('refuses an edit in a lesson', async () => {
+    const tutor = await joinWith(signClassroomJoinToken({ roomId: 'lesson-room-edit', lessonId: 'lesson-edit', name: 'Tutor', role: 'tutor', uid: 'te', exp: Date.now() + 60_000 }));
+    const refused = errorOf(tutor);
+    tutor.emit('chat:edit', { id: 'whatever', text: 'new' });
+    expect((await refused).message).toBe('Messages cannot be edited in a lesson.');
+  });
+
+  it('a reply carries a preview the server built from the original, and ignores a made-up one', async () => {
+    const { host, admin } = await meetingOfThree('meeting-reply-1');
+    const original = heard(admin, 'the original question');
+    host.emit('chat:message', { text: 'the original question' });
+    const { id } = await original;
+
+    const reply = heard(host, 'my answer');
+    admin.emit('chat:message', { text: 'my answer', replyTo: id });
+    expect((await reply).replyTo).toEqual({ id, name: 'Host', text: 'the original question' });
+
+    const orphan = heard(host, 'replying to nothing');
+    admin.emit('chat:message', { text: 'replying to nothing', replyTo: 'made-up-id' });
+    expect((await orphan).replyTo).toBeUndefined();
   });
 
   it('a host mute in a meeting switches the guest off once and does not lock them; in a lesson it still locks', async () => {

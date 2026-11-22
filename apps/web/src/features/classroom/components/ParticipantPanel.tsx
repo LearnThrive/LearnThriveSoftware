@@ -1,5 +1,5 @@
 import { useRef, type RefObject } from 'react';
-import { MAX_PARTICIPANTS, type ParticipantRole } from '@learnthrive/shared/protocol';
+import { MAX_PARTICIPANTS, type ParticipantRole, type StaffTitle } from '@learnthrive/shared/protocol';
 import type { RemotePeer } from '../meeting';
 import { usePopoverDismiss } from '../usePopoverDismiss';
 import { Icon } from './Icon';
@@ -11,6 +11,7 @@ interface ParticipantPanelProps {
   triggerRef: RefObject<HTMLButtonElement | null>;
   selfName: string;
   selfRole: ParticipantRole | null;
+  selfTitle?: StaffTitle;
   selfAudio: boolean;
   selfVideo: boolean;
   selfHandRaised: boolean;
@@ -23,7 +24,7 @@ interface ParticipantPanelProps {
 }
 
 export function ParticipantPanel({
-  open, onClose, triggerRef, selfName, selfRole, selfAudio, selfVideo, selfHandRaised, peers,
+  open, onClose, triggerRef, selfName, selfRole, selfTitle, selfAudio, selfVideo, selfHandRaised, peers,
   onMuteParticipant, onAllowUnmute, onRemoveParticipant, onLowerHand, onStopShare,
 }: ParticipantPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -37,7 +38,7 @@ export function ParticipantPanel({
       <h2>People ({1 + peers.length}/{MAX_PARTICIPANTS})</h2>
       <ul>
         <li>
-          <span className="participant-row-name">{selfName || 'You'} (You)<RoleBadge role={selfRole} /></span>
+          <span className="participant-row-name">{selfName || 'You'} (You)<RoleBadge role={selfRole} title={selfTitle} /></span>
           <span className="participant-row-state">
             {selfHandRaised && <span aria-label="Hand raised" title="Hand raised"><Icon name="hand" size={14} /></span>}
             <Icon name={selfAudio ? 'microphone' : 'microphone-off'} size={14} />
@@ -47,7 +48,7 @@ export function ParticipantPanel({
         {peers.length === 0 && <li className="participant-row-empty">Waiting for participants…</li>}
         {peers.map(({ participant, reconnecting }) => (
           <li key={participant.id}>
-            <span className="participant-row-name">{participant.name}{reconnecting ? ' — reconnecting…' : ''}<RoleBadge role={participant.role} /></span>
+            <span className="participant-row-name">{participant.name}{reconnecting ? ' — reconnecting…' : ''}<RoleBadge role={participant.role} title={participant.title} /></span>
             <span className="participant-row-state">
               {participant.handRaised && <span aria-label="Hand raised" title="Hand raised"><Icon name="hand" size={14} /></span>}
               <Icon name={participant.media.audio ? 'microphone' : 'microphone-off'} size={14} />

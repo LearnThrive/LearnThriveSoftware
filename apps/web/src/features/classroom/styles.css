@@ -292,3 +292,70 @@
    the dark theme the join form's inputs turned navy on the classroom's light page. The classroom keeps its own look in both themes. */
 .app .field input:not([type="checkbox"]):not([type="radio"]){height:47px;min-height:0;border:1px solid #d8dfdb;border-radius:7px;padding:0 13px;font-size:13px;color:var(--navy);background:#fefefd}
 .app .field input:not([type="checkbox"]):not([type="radio"]):focus{border-color:#087363}
+
+/* Chat, laid out like a chat app: one left-aligned list of avatar rows (not bubbles), runs of one person's messages share a header, and the message
+   you hover, focus or click shows its actions. These rules follow the older bubble rules above and replace them. */
+.chat-panel{width:340px}
+.chat-messages{gap:0;padding:8px 0}
+.chat-message{position:relative;display:flex;align-items:flex-start;gap:10px;max-width:none;align-self:stretch;padding:5px 14px 5px 12px;margin-top:10px;border-radius:0}
+.chat-message.is-run{margin-top:0;padding-top:1px;padding-bottom:1px}
+.chat-message:first-child{margin-top:0}
+.chat-message.own{align-self:stretch}
+.chat-message.is-interactive{cursor:default}
+.chat-message.is-interactive:hover,.chat-message.is-interactive:focus-within{background:#f4f7f2}
+.chat-message.is-selected{background:#e9f2ec;box-shadow:inset 0 0 0 1px #b8d8c6}
+.chat-message.is-flash{animation:chat-flash 1.6s ease-out}
+@keyframes chat-flash{0%,40%{background:#fdf3c8}100%{background:transparent}}
+.chat-avatar{flex:none;width:32px;height:32px;margin-top:2px;display:grid;place-items:center;border-radius:50%;color:#fff;font-size:12px;font-weight:700;letter-spacing:.2px;user-select:none}
+.chat-message-gutter-time{flex:none;width:32px;text-align:center;font-size:9px;line-height:20px;color:transparent;user-select:none}
+.chat-message.is-run:hover .chat-message-gutter-time,.chat-message.is-run:focus-within .chat-message-gutter-time{color:#8a968f}
+.chat-message-body{min-width:0;flex:1}
+.chat-message .chat-message-meta{display:flex;align-items:center;justify-content:flex-start;gap:7px;margin:0 0 1px;font-size:11px;color:#8a968f}
+.chat-message.own .chat-message-meta{justify-content:flex-start}
+.chat-message-name{font-size:13px;font-weight:650;color:#16293d}
+.chat-title-badge{font-size:9px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;padding:1px 6px;border-radius:9px;background:#e0eee7;color:#075f52}
+.chat-message p,.chat-message.own p{background:none;color:#16293d;padding:0;border-radius:0;font-size:13px;line-height:1.45;white-space:pre-wrap}
+.chat-message.own .chat-attachment{margin-left:0}
+.chat-message .chat-attachment{margin:2px 0 4px;max-width:260px}
+.chat-reply-preview{display:flex;align-items:center;gap:5px;max-width:100%;margin:0 0 2px;padding:0;background:none;border:0;border-left:2px solid #9fcdb5;padding-left:7px;font:inherit;font-size:11px;color:#667b6d;text-align:left;cursor:pointer}
+.chat-reply-preview:hover{color:#075f52}
+.chat-reply-preview strong{flex:none;font-weight:650;color:#3d5262}
+.chat-reply-preview span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chat-reactions{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.chat-reaction{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;border:1px solid #d6dfd5;border-radius:12px;background:#f7faf6;color:#3d5262;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.chat-reaction:hover{border-color:#9fcdb5;background:#eef6f1}
+.chat-reaction.is-mine{border-color:#087363;background:#dff0e8;color:#075f52}
+.chat-tools{position:absolute;top:-15px;right:10px;z-index:2;display:none;align-items:center;gap:1px;padding:2px;background:#fff;border:1px solid #d6dfd5;border-radius:9px;box-shadow:0 4px 14px #091d3118}
+.chat-message:hover>.chat-tools,.chat-message:focus-within>.chat-tools,.chat-tools.is-open{display:flex}
+.chat-message:first-child>.chat-tools{top:-8px}
+.chat-tool{width:28px;height:28px;display:grid;place-items:center;border:0;border-radius:7px;background:none;color:#586b7b;cursor:pointer;font-size:15px;line-height:1}
+.chat-tool:hover,.chat-tool:focus-visible{background:#eef2ec;color:#16293d}
+.chat-tool-danger:hover,.chat-tool-danger:focus-visible{background:#fbe4de;color:#933f35}
+.chat-emoji-picker{position:absolute;top:calc(100% + 4px);right:0;display:flex;gap:2px;padding:4px;background:#fff;border:1px solid #d6dfd5;border-radius:11px;box-shadow:0 8px 24px #091d3122}
+.chat-emoji{width:32px;height:32px;display:grid;place-items:center;border:0;border-radius:8px;background:none;font-size:18px;cursor:pointer}
+.chat-emoji:hover,.chat-emoji:focus-visible{background:#eef2ec;transform:scale(1.12)}
+.chat-delete-confirm{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:5px;padding:6px 8px;border:1px solid #efd5cd;border-radius:9px;background:#fff1ee;font-size:11px;color:#933f35}
+.chat-delete-confirm span{flex:1 1 100%}
+.chat-delete-yes,.chat-delete-no{height:26px;padding:0 11px;border-radius:7px;font:inherit;font-size:11px;font-weight:650;cursor:pointer}
+.chat-delete-yes{border:1px solid #933f35;background:#933f35;color:#fff}
+.chat-delete-yes:hover{background:#7d342b}
+.chat-delete-no{border:1px solid #d6dfd5;background:#fff;color:#3d5262}
+.chat-replying{display:flex;align-items:center;gap:7px;padding:7px 14px;border-top:1px solid #e3e8df;background:#f4f7f2;font-size:11px;color:#586b7b}
+.chat-replying span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chat-replying strong{color:#16293d}
+.chat-replying button{flex:none;width:20px;height:20px;display:grid;place-items:center;border:0;border-radius:50%;background:none;color:#586b7b;cursor:pointer}
+.chat-replying button:hover{background:#e3e8df}
+.chat-clear{width:auto;min-width:28px;padding:0 6px;gap:5px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:650;color:#933f35;cursor:pointer}
+.chat-clear.is-confirming{background:#fbe4de}
+.role-badge-staff{background:#e0eee7;color:#075f52}
+/* A phone has no hover: the actions open when you tap a message, and sit inside the row so they are not clipped by the screen edge. */
+@media (hover:none){.chat-message.is-interactive:hover{background:none}.chat-message.is-interactive.is-selected{background:#e9f2ec}}
+@media (prefers-reduced-motion:reduce){.chat-message.is-flash{animation:none;background:#fdf3c8}.chat-emoji:hover{transform:none}}
+.chat-edited{margin-left:5px;font-size:10px;color:#8a968f;user-select:none}
+.chat-edit{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:2px}
+.chat-edit input{flex:1 1 100%;height:34px;border:1px solid #087363;border-radius:9px;padding:0 10px;font-size:13px;background:#fff;color:#16293d;outline:none;box-shadow:0 0 0 3px #08736322}
+.chat-edit-hint{flex:1;font-size:10px;color:#8a968f}
+.chat-edit-save,.chat-edit-cancel{height:26px;padding:0 11px;border-radius:7px;font:inherit;font-size:11px;font-weight:650;cursor:pointer}
+.chat-edit-save{border:1px solid #087363;background:#087363;color:#fff}
+.chat-edit-save:disabled{opacity:.4;cursor:default}
+.chat-edit-cancel{border:1px solid #d6dfd5;background:#fff;color:#3d5262}

@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react';
 
 export type IconName = 'microphone' | 'microphone-off' | 'camera' | 'camera-off' | 'arrow' | 'plus' | 'link' | 'check' | 'leave' | 'people' | 'shield' | 'info' | 'refresh' | 'volume' | 'spark'
   | 'screen' | 'screen-off' | 'chat' | 'settings' | 'send' | 'expand' | 'collapse' | 'flip' | 'close' | 'pip' | 'hand'
-  | 'lock' | 'unlock' | 'poll' | 'timer' | 'help-circle' | 'user-x' | 'edit' | 'attach' | 'file' | 'download';
+  | 'lock' | 'unlock' | 'poll' | 'timer' | 'help-circle' | 'user-x' | 'edit' | 'attach' | 'file' | 'download' | 'reply' | 'copy' | 'trash' | 'smile';
 
 export function Icon({ name, size = 20, style }: { name: IconName; size?: number; style?: CSSProperties }) {
   const paths: Record<IconName, React.ReactNode> = {
@@ -42,6 +42,10 @@ export function Icon({ name, size = 20, style }: { name: IconName; size?: number
     attach: <path d="m21 11-8.5 8.5a5 5 0 0 1-7-7L14 4a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.5a1.7 1.7 0 0 1-2.4-2.4L15 7" />,
     file: <><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" /></>,
     download: <><path d="M12 4v11m-4-4 4 4 4-4M5 20h14" /></>,
+    reply: <><path d="M9 14 4 9l5-5" /><path d="M4 9h10a6 6 0 0 1 6 6v3" /></>,
+    copy: <><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h8" /></>,
+    trash: <><path d="M4 7h16M10 11v6m4-6v6M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M9 7V4h6v3" /></>,
+    smile: <><circle cx="12" cy="12" r="9" /><path d="M8.5 14a4 4 0 0 0 7 0M9 9.5v.1M15 9.5v.1" /></>,
   };
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={style}>{paths[name]}</svg>;
 }

@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import type { ParticipantRole } from "./protocol";
+import type { ParticipantRole, StaffTitle } from "./protocol";
 
 // The trust boundary between the platform (apps/web, which knows about accounts, Lessons, and
 // who's actually allowed to join which one) and the classroom (apps/realtime/apps/classroom,
@@ -50,6 +50,8 @@ export interface ClassroomJoinTokenPayload {
    * plain, unsaved relay between the people in the room, who are all staff the web app has already let in. Absent for a lesson.
    */
   kind?: "meeting";
+  /** A staff meeting only: the badge shown beside this person's name ("Admin" or "Tutor"), set by apps/web from their real roles. */
+  title?: StaffTitle;
 }
 
 function base64UrlEncode(input: string): string {
@@ -85,6 +87,7 @@ export function verifyClassroomJoinToken(token: string): ClassroomJoinTokenPaylo
     ) return null;
     if (payload.uid !== undefined && (typeof payload.uid !== "string" || payload.uid.length > 100)) return null;
     if (payload.kind !== undefined && payload.kind !== "meeting") return null;
+    if (payload.title !== undefined && payload.title !== "Admin" && payload.title !== "Tutor") return null;
     if (payload.exp < Date.now()) return null;
     return payload as ClassroomJoinTokenPayload;
   } catch {

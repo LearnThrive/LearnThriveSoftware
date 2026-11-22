@@ -6,15 +6,15 @@ import { isDevTunnelHost } from '@learnthrive/shared/allowedHosts';
 import { verifyClassroomJoinToken } from '@learnthrive/shared/classroomToken';
 import { chatFileProblem, MAX_CHAT_FILE_BYTES, safeFileName } from '@learnthrive/shared/chatFiles';
 import {
-  ANNOUNCEMENT_TTL_MS, MAX_ANNOUNCEMENT_LENGTH, MAX_BOARD_ELEMENT_BYTES, MAX_BOARD_ELEMENTS_PER_PAGE,
+  ANNOUNCEMENT_TTL_MS, CHAT_REACTION_EMOJIS, CHAT_REPLY_PREVIEW_LENGTH, MAX_ANNOUNCEMENT_LENGTH, MAX_BOARD_ELEMENT_BYTES, MAX_BOARD_ELEMENTS_PER_PAGE,
   MAX_BOARD_IMPORT_BYTES, MAX_BOARD_PAGE_NAME_LENGTH, MAX_BOARD_PAGES, MAX_BOARD_UPDATE_BATCH, MAX_CHAT_LENGTH,
   MAX_NAME_LENGTH, MAX_POLL_OPTION_LENGTH, MAX_POLL_OPTIONS, MAX_POLL_QUESTION_LENGTH, MAX_STUDENTS,
   MIN_POLL_OPTIONS, REACTION_EMOJIS, ROOM_PATTERN, SFU_MAX_STUDENTS, WAITING_ROOM_CAP,
 } from '@learnthrive/shared/protocol';
 import type {
-  Announcement, BoardBackground, BoardElement, BoardPage, BoardState, ChatMessage, ClientToServerEvents,
+  Announcement, BoardBackground, BoardElement, BoardPage, BoardState, ChatMessage, ChatReactions, ChatReplyPreview, ClientToServerEvents,
   JoinedRoom, MediaState, Participant, ParticipantRole, PollState, PollVisibility, RoomSettings, RoomTimerState,
-  ServerToClientEvents, SfuPublication, SfuTrackInfo, SignalCandidate, SignalDescription, TimerMode, UnderstandingCheckState, UnderstandingStatus,
+  ServerToClientEvents, SfuPublication, SfuTrackInfo, SignalCandidate, SignalDescription, StaffTitle, TimerMode, UnderstandingCheckState, UnderstandingStatus,
 } from '@learnthrive/shared/protocol';
 import { clientAddress } from './clientAddress';
 import { chatGateFromEnv, type ChatGate } from './chatGate';
@@ -62,6 +62,10 @@ interface Edge { sessionId: string; participantIds: [string, string]; initiatorI
 // A student who has joined but not yet been let in by the tutor. Keyed by socket id in
 // Room.waiting; Map insertion order gives FIFO for free, so no separate ordering field is kept.
 interface WaitingEntry { name: string; media: MediaState }
+// What a staff meeting's room remembers about each chat message, so the server (not the browser) decides who may delete it, builds a reply's
+// preview, and keeps each person's reactions. Only the latest MAX_CHAT_LOG messages, and only while the room lives: nothing is stored.
+interface ChatLogEntry { senderId: string; name: string; preview: string; reactions: Map<string, Set<string>> }
+const MAX_CHAT_LOG = 300;
 interface RoomPoll {
   id: string; question: string; options: { id: string; text: string }[];
   anonymous: boolean; resultsVisible: PollVisibility; open: boolean;
@@ -98,6 +102,8 @@ interface Room {
   // A staff meeting's room, not a lesson's (set from a VERIFIED join token of kind "meeting"). Its chat is an unsaved relay, and the host's
   // mute is a one-time mute that people can undo themselves, because everyone in it is an adult colleague.
   meeting: boolean;
+  // A staff meeting only: the recent chat messages by id (see ChatLogEntry).
+  chatLog: Map<string, ChatLogEntry>;
   // The tutor's drawing on the shared screen, by element id. Lives only while a screen is being shared (cleared whenever a share starts or ends).
   annotations: Map<string, BoardElement>;
 }
@@ -107,6 +113,8 @@ interface SocketData {
   chat?: { lessonId: string; userId: string };
   // True when the VERIFIED join token is for a staff meeting (kind "meeting"), not a lesson. Its chat is an unsaved relay: there is no lesson to check.
   meeting?: true;
+  // A staff meeting only: "Admin" or "Tutor", from the VERIFIED join token. Shown beside the person's name and used for who may delete a message.
+  title?: StaffTitle;
 }
 type MeetingSocket = Socket<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>;
 
@@ -120,7 +128,7 @@ function createRoom(meeting = false): Room {
       pages: [{ id: firstPageId, name: 'Board 1', background: 'blank', elements: new Map() }],
       activePageId: firstPageId, studentsCanDraw: true,
     },
-    announcement: null, announcementTimer: null, removedNames: new Map(), meeting, annotations: new Map(),
+    announcement: null, announcementTimer: null, removedNames: new Map(), meeting, chatLog: new Map(), annotations: new Map(),
   };
 }
 
@@ -582,6 +590,13 @@ export function createSignallingServer(options?: {
   // room:join handler below) — everything from here on treats a verified-token identity and a
   // manually-entered one identically, since by this point both have already been validated as
   // trustworthy by their own respective path.
+  /** Remembers a staff meeting's chat message (bounded), so it can be replied to, reacted to and deleted. */
+  function rememberChat(room: Room, message: ChatMessage) {
+    room.chatLog.set(message.id, { senderId: message.senderId, name: message.name, preview: (message.text || message.file?.name || '').slice(0, CHAT_REPLY_PREVIEW_LENGTH), reactions: new Map() });
+    while (room.chatLog.size > MAX_CHAT_LOG) room.chatLog.delete(room.chatLog.keys().next().value as string);
+  }
+  const reactionsOf = (entry: ChatLogEntry): ChatReactions => Object.fromEntries([...entry.reactions].map(([emoji, ids]) => [emoji, [...ids]]));
+
   function proceedWithJoin(socket: MeetingSocket, roomId: string, name: string, role: ParticipantRole, media: MediaState, meeting = false) {
     if (socket.data.roomId) {
       if (socket.data.roomId !== roomId) return fail(socket, 'Leave your current meeting before joining another.');
@@ -607,7 +622,7 @@ export function createSignallingServer(options?: {
         }
         evictStale(room, existingTutor.id);
       }
-      const self: Participant = { id: socket.id, name, media, screenSharing: false, handRaised: false, handRaisedAt: null, role, forceMuted: false };
+      const self: Participant = { id: socket.id, name, media, screenSharing: false, handRaised: false, handRaisedAt: null, role, forceMuted: false, ...(meeting && socket.data.title ? { title: socket.data.title } : {}) };
       rooms.set(roomId, room);
       admitParticipant(socket, roomId, room, self);
       return;
@@ -666,6 +681,7 @@ export function createSignallingServer(options?: {
     room.waiting.delete(waitingId);
     const newParticipant: Participant = {
       id: waitingId, name: entry.name, media: entry.media, screenSharing: false, handRaised: false, handRaisedAt: null, role: 'student', forceMuted: false,
+      ...(room.meeting && waitingSocket.data.title ? { title: waitingSocket.data.title } : {}),
     };
     admitParticipant(waitingSocket, roomId, room, newParticipant);
     return true;
@@ -784,7 +800,7 @@ export function createSignallingServer(options?: {
         }
         const media = parseMedia(payload.media);
         if (!media) return fail(socket, 'Invalid microphone or camera status.');
-        if (verified.kind === 'meeting') socket.data.meeting = true;
+        if (verified.kind === 'meeting') { socket.data.meeting = true; if (verified.title) socket.data.title = verified.title; }
         else if (verified.uid) socket.data.chat = { lessonId: verified.lessonId, userId: verified.uid };
         proceedWithJoin(socket, verified.roomId, verified.name.trim().slice(0, MAX_NAME_LENGTH) || 'Participant', verified.role, media, verified.kind === 'meeting');
         return;
@@ -979,6 +995,10 @@ export function createSignallingServer(options?: {
       if (socket.data.meeting || room.meeting) {
         // A staff meeting (docs/STAFF_MEETINGS.md): everyone in the room was let in by the web app as staff, and nothing is stored.
         message = { id: randomUUID(), senderId: socket.id, name: self.name, text, timestamp: Date.now() };
+        // A reply names an earlier message; the preview comes from what the room holds, never from what the sender claims.
+        const replied = typeof payload.replyTo === 'string' ? room.chatLog.get(payload.replyTo) : undefined;
+        if (replied) message.replyTo = { id: payload.replyTo as string, name: replied.name, text: replied.preview } satisfies ChatReplyPreview;
+        rememberChat(room, message);
       } else if (chatGate) {
         // The lesson chat (docs/LESSON_CHAT.md). Only a person who came in through their lesson link has an identity, and apps/web decides, on
         // every message, whether they may send in that lesson now. Nothing reaches the room until it says yes.
@@ -1016,6 +1036,7 @@ export function createSignallingServer(options?: {
         id: randomUUID(), senderId: socket.id, name: self.name, text: caption, timestamp: Date.now(),
         file: { name: safeFileName(payload.name), size: bytes.byteLength, data: bytes },
       };
+      rememberChat(room, message);
       const current = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
       if (!current) return;
       for (const id of current.participants.keys()) io.to(id).emit('chat:message', message);
@@ -1028,9 +1049,64 @@ export function createSignallingServer(options?: {
       if (!chatFileRateLimiter.allow(socket.id)) return;
       for (const id of room.participants.keys()) if (id !== socket.id) io.to(id).emit('chat:refresh');
     });
-    // Nobody edits or deletes a message, the tutor included (docs/LESSON_CHAT.md). An administrator removes one from the lesson page, and it is audit-logged.
-    socket.on('chat:delete', () => fail(socket, 'Messages cannot be deleted. Ask an administrator to remove one.'));
-    socket.on('chat:clear', () => fail(socket, 'The chat cannot be cleared. Ask an administrator to remove a message.'));
+    // A lesson: nobody edits or deletes a message, the tutor included (docs/LESSON_CHAT.md). An administrator removes one from the lesson page, and it is
+    // audit-logged. A STAFF MEETING (docs/STAFF_MEETINGS.md) has no such record to keep and everyone in it is an adult colleague, so there the person who
+    // wrote a message, the host and any administrator may delete it, and the host or an administrator may clear the chat.
+    socket.on('chat:delete', (payload: unknown) => {
+      const room = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
+      const self = room?.participants.get(socket.id);
+      if (!room || !self) return fail(socket, 'You are not currently in a meeting.');
+      if (!room.meeting) return fail(socket, 'Messages cannot be deleted. Ask an administrator to remove one.');
+      if (!isRecord(payload) || typeof payload.id !== 'string') return fail(socket, 'Invalid message.');
+      const entry = room.chatLog.get(payload.id);
+      if (!entry) return fail(socket, 'That message is no longer there.');
+      if (entry.senderId !== socket.id && self.role !== 'tutor' && self.title !== 'Admin') return fail(socket, 'Only the person who wrote a message, the host or an administrator can delete it.');
+      room.chatLog.delete(payload.id);
+      for (const id of room.participants.keys()) io.to(id).emit('chat:message-deleted', { id: payload.id });
+    });
+    socket.on('chat:clear', () => {
+      const room = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
+      const self = room?.participants.get(socket.id);
+      if (!room || !self) return fail(socket, 'You are not currently in a meeting.');
+      if (!room.meeting) return fail(socket, 'The chat cannot be cleared. Ask an administrator to remove a message.');
+      if (self.role !== 'tutor' && self.title !== 'Admin') return fail(socket, 'Only the host or an administrator can clear the chat.');
+      room.chatLog.clear();
+      for (const id of room.participants.keys()) io.to(id).emit('chat:cleared');
+    });
+    // Staff meetings only: the writer replaces their own message's words. Nothing of the old words is kept: the room's record, every browser's copy and
+    // any reply that quoted them are all overwritten, so nobody can see what it said before. A file's caption can be changed but not removed.
+    socket.on('chat:edit', (payload: unknown) => {
+      const room = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
+      const self = room?.participants.get(socket.id);
+      if (!room || !self) return fail(socket, 'You are not currently in a meeting.');
+      if (!room.meeting) return fail(socket, 'Messages cannot be edited in a lesson.');
+      if (!isRecord(payload) || typeof payload.id !== 'string' || typeof payload.text !== 'string' || payload.text.length > MAX_CHAT_LENGTH * 4) return fail(socket, 'Invalid chat message.');
+      const entry = room.chatLog.get(payload.id);
+      if (!entry) return fail(socket, 'That message is no longer there.');
+      if (entry.senderId !== socket.id) return fail(socket, 'You can only edit your own messages.');
+      if (self.role === 'student' && !room.settings.studentsCanChat) return fail(socket, 'The host has turned off chat.');
+      const text = payload.text.trim();
+      if (!text || text.length > MAX_CHAT_LENGTH) return fail(socket, `Messages must be 1\u2013${MAX_CHAT_LENGTH} characters.`);
+      if (!chatRateLimiter.allow(socket.id)) return fail(socket, 'You are sending messages too quickly. Please slow down.');
+      entry.preview = text.slice(0, CHAT_REPLY_PREVIEW_LENGTH);
+      for (const id of room.participants.keys()) io.to(id).emit('chat:message-edited', { id: payload.id, text });
+    });
+    // Staff meetings only: toggles this person's reaction on a message (one of a fixed set of emoji) and tells the room the message's new tally.
+    socket.on('chat:react', (payload: unknown) => {
+      const room = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
+      const self = room?.participants.get(socket.id);
+      if (!room || !self) return fail(socket, 'You are not currently in a meeting.');
+      if (!room.meeting) return fail(socket, 'Reactions on messages are only in staff meetings.');
+      if (!isRecord(payload) || typeof payload.id !== 'string' || typeof payload.emoji !== 'string' || !(CHAT_REACTION_EMOJIS as readonly string[]).includes(payload.emoji)) return fail(socket, 'Invalid reaction.');
+      const entry = room.chatLog.get(payload.id);
+      if (!entry) return fail(socket, 'That message is no longer there.');
+      if (!reactionRateLimiter.allow(socket.id)) return fail(socket, 'You are reacting too quickly. Please slow down.');
+      const people = entry.reactions.get(payload.emoji) ?? new Set<string>();
+      if (!people.delete(socket.id)) people.add(socket.id);
+      if (people.size === 0) entry.reactions.delete(payload.emoji); else entry.reactions.set(payload.emoji, people);
+      const reactions = reactionsOf(entry);
+      for (const id of room.participants.keys()) io.to(id).emit('chat:reactions', { id: payload.id, reactions });
+    });
     socket.on('participant:hand', (payload: unknown) => {
       const room = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
       const self = room?.participants.get(socket.id);

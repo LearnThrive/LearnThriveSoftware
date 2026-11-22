@@ -1,9 +1,9 @@
 import { io, type Socket } from 'socket.io-client';
 import {
-  MAX_CHAT_LENGTH, MAX_NAME_LENGTH, MAX_PARTICIPANTS, ROOM_PATTERN,
-  type Announcement, type BoardBackground, type BoardElement, type BoardState, type ChatMessage,
+  CHAT_REPLY_PREVIEW_LENGTH, MAX_CHAT_LENGTH, MAX_NAME_LENGTH, MAX_PARTICIPANTS, ROOM_PATTERN,
+  type Announcement, type BoardBackground, type BoardElement, type BoardState, type ChatMessage, type ChatReactions,
   type ClientToServerEvents, type Participant, type ParticipantRole, type PollState, type PollVisibility,
-  type ReactionEmoji, type RoomSettings, type RoomTimerState, type ServerToClientEvents, type TimerMode,
+  type ReactionEmoji, type RoomSettings, type RoomTimerState, type ServerToClientEvents, type StaffTitle, type TimerMode,
   type UnderstandingCheckState, type UnderstandingStatus, type WaitingParticipant,
 } from '@learnthrive/shared/protocol';
 import { chatFileProblem, contentTypeFor, isInlineImage } from '@learnthrive/shared/chatFiles';
@@ -84,6 +84,8 @@ export interface MeetingSnapshot {
   maxParticipants: number;
   mediaMode: 'mesh' | 'sfu';
   role: ParticipantRole | null;
+  /** A staff meeting only: this person's real title ("Admin" or "Tutor"), which decides who may delete chat messages. */
+  title?: StaffTitle;
   waiting: WaitingParticipant[];
   roomId: string;
   name: string;
@@ -124,7 +126,7 @@ export interface MeetingSnapshot {
 // if a non-recovered reconnect ever assigns this client a new socket id mid-meeting.
 /** A file that came in with a chat message, ready to show: a link to the bytes held in this browser only (made here from what the room server relayed). */
 export interface ChatAttachment { name: string; size: number; url: string; image: boolean }
-export interface DisplayChatMessage extends Omit<ChatMessage, 'file'> { own: boolean; attachment?: ChatAttachment }
+export interface DisplayChatMessage extends Omit<ChatMessage, 'file'> { own: boolean; /** Staff meetings: the writer changed the words after sending. */ edited?: boolean; attachment?: ChatAttachment; /** Staff meetings: emoji -> ids of the people who reacted. */ reactions?: ChatReactions }
 
 function defaultRemotePeer(participant: Participant): RemotePeer {
   return {
@@ -479,10 +481,10 @@ export class MeetingController {
     }
   };
 
-  sendChatMessage = (text: string) => {
+  sendChatMessage = (text: string, replyTo?: string) => {
     const trimmed = text.trim();
     if (!trimmed || trimmed.length > MAX_CHAT_LENGTH || !this.active || !this.socket?.connected) return;
-    this.socket.emit('chat:message', { text: trimmed });
+    this.socket.emit('chat:message', { text: trimmed, ...(replyTo ? { replyTo } : {}) });
   };
 
   /**
@@ -555,8 +557,17 @@ export class MeetingController {
   stopShare = (id: string) => this.tutorEmit('room:stop-share', { id });
   lowerHand = (id: string) => this.tutorEmit('room:lower-hand', { id });
 
-  deleteChatMessage = (id: string) => this.tutorEmit('chat:delete', { id });
-  clearChat = () => this.tutorEmit('chat:clear');
+  // Staff meetings: the room server decides who may delete (the writer, the host, an administrator) and tells everyone; nothing changes here until it does.
+  deleteChatMessage = (id: string) => { if (this.active && this.socket?.connected) this.socket.emit('chat:delete', { id }); };
+  clearChat = () => { if (this.active && this.socket?.connected) this.socket.emit('chat:clear'); };
+  /** This connection's id in the room (what chat reactions are keyed by). It changes if the connection is rebuilt, so read it when you need it. */
+  getSelfId = (): string | undefined => this.socket?.id;
+  editChatMessage = (id: string, text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || trimmed.length > MAX_CHAT_LENGTH || !this.active || !this.socket?.connected) return;
+    this.socket.emit('chat:edit', { id, text: trimmed });
+  };
+  reactToChatMessage = (id: string, emoji: string) => { if (this.active && this.socket?.connected) this.socket.emit('chat:react', { id, emoji }); };
 
   createPoll = (question: string, options: string[], anonymous: boolean, resultsVisible: PollVisibility) =>
     this.tutorEmit('poll:create', { question, options, anonymous, resultsVisible });
@@ -725,7 +736,7 @@ export class MeetingController {
     socket.io.on('reconnect_failed', this.reconnectFailedHandler);
     socket.on('room:joined', (payload) => {
       this.update({
-        phase: 'meeting', roomId: payload.roomId, name: payload.self.name, role: payload.self.role, waiting: payload.waiting, error: null,
+        phase: 'meeting', roomId: payload.roomId, name: payload.self.name, role: payload.self.role, title: payload.self.title, waiting: payload.waiting, error: null,
         maxParticipants: payload.media ? payload.media.maxStudents + 1 : MAX_PARTICIPANTS, mediaMode: payload.media?.mode ?? 'mesh',
         forceMuted: payload.self.forceMuted, roomSettings: payload.settings,
         poll: payload.poll, understandingCheck: payload.understandingCheck, timer: payload.timer,
@@ -835,6 +846,19 @@ export class MeetingController {
     socket.on('room:stop-share', () => { if (this.snapshot.screenSharing) this.endScreenShare(); });
     socket.on('chat:message-deleted', ({ id }) => {
       this.update({ messages: this.snapshot.messages.filter((message) => message.id !== id) });
+    });
+    // The old words are overwritten here too, including in any reply that quoted them, so nothing on screen shows what it used to say.
+    socket.on('chat:message-edited', ({ id, text }) => {
+      this.update({
+        messages: this.snapshot.messages.map((message) => {
+          if (message.id === id) return { ...message, text, edited: true };
+          if (message.replyTo?.id === id) return { ...message, replyTo: { ...message.replyTo, text: text.slice(0, CHAT_REPLY_PREVIEW_LENGTH) } };
+          return message;
+        }),
+      });
+    });
+    socket.on('chat:reactions', ({ id, reactions }) => {
+      this.update({ messages: this.snapshot.messages.map((message) => (message.id === id ? { ...message, reactions } : message)) });
     });
     socket.on('chat:cleared', () => { this.revokeAttachments(); this.update({ messages: [] }); });
     socket.on('poll:update', (poll) => this.update({ poll }));

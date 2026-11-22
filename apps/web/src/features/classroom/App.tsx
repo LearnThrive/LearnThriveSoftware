@@ -15,7 +15,7 @@ import { ParticipantTile } from './components/ParticipantTile';
 import { RemoteAudio } from './components/RemoteAudio';
 import { ScreenStage } from './components/ScreenStage';
 import { StageRail, type RailEntry } from './components/StageRail';
-import { ChatPanel } from './components/ChatPanel';
+import { ChatPanel, type ChatPerson } from './components/ChatPanel';
 import { DeviceMenu } from './components/DeviceMenu';
 import { ParticipantPanel } from './components/ParticipantPanel';
 import { WaitingRoomPanel } from './components/WaitingRoomPanel';
@@ -78,7 +78,7 @@ export function App({ lessonId, meetingId, initialToken, isDevRoute, returnHref 
     snapshot, prepareMedia, toggleAudio, toggleVideo, toggleScreenShare, toggleChat, sendChatMessage,
     switchCamera, switchMicrophone, flipCamera, toggleHand, sendReaction, admitOne, admitAll, denyOne,
     setRoomLocked, setStudentsCanShareScreen, setStudentsCanChat, muteParticipant, muteAll, allowUnmute,
-    removeParticipant, stopShare, lowerHand, deleteChatMessage, clearChat, createPoll, closePoll, clearPoll,
+    removeParticipant, stopShare, lowerHand, deleteChatMessage, clearChat, reactToChatMessage, editChatMessage, getSelfId, createPoll, closePoll, clearPoll,
     votePoll, startUnderstandingCheck, endUnderstandingCheck, respondUnderstanding, startTimer, pauseTimer,
     resumeTimer, stopTimer, sendBoardUpdate, sendBoardCursor, sendBoardLaser, createBoardPage, renameBoardPage,
     deleteBoardPage, reorderBoardPages, switchBoardPage, setBoardBackground, setStudentsCanDraw,
@@ -254,13 +254,18 @@ export function App({ lessonId, meetingId, initialToken, isDevRoute, returnHref 
   const activeCameraLabel = snapshot.cameras.find(c => c.deviceId === snapshot.selectedCamera)?.label ?? 'Default';
   const activeMicLabel = snapshot.microphones.find(m => m.deviceId === snapshot.selectedMicrophone)?.label ?? 'Default';
 
+  const selfChatId = getSelfId();
+  const chatPeople: Record<string, ChatPerson> = {
+    ...(selfChatId ? { [selfChatId]: { name: snapshot.name || name || 'You', title: snapshot.title } } : {}),
+    ...Object.fromEntries(snapshot.peers.map(({ participant }) => [participant.id, { name: participant.name, title: participant.title }])),
+  };
   const canFocusToggle = layoutMode === 'focus' && snapshot.peers.length > 0;
   const effectiveFocus: FocusTarget = focusTarget ?? (snapshot.peers[0]?.participant.id ?? 'local');
 
   const peerTile = (peer: RemotePeer, compact: boolean) => <ParticipantTile
     key={peer.participant.id}
     stream={peer.stream} name={peer.participant.name} audio={peer.participant.media.audio}
-    video={peer.participant.media.video} screenSharing={peer.participant.screenSharing} compact={compact} role={peer.participant.role}
+    video={peer.participant.media.video} screenSharing={peer.participant.screenSharing} compact={compact} role={peer.participant.role} title={peer.participant.title}
     focused={canFocusToggle && effectiveFocus === peer.participant.id} onFocus={canFocusToggle ? () => setFocusTarget(peer.participant.id) : undefined}
     quality={peer.quality} forceMuted={peer.participant.forceMuted}
     handRaised={peer.participant.handRaised}
@@ -269,7 +274,7 @@ export function App({ lessonId, meetingId, initialToken, isDevRoute, returnHref 
   const selfTile = (compact: boolean) => <ParticipantTile
     key="local"
     stream={snapshot.localStream} name={snapshot.name || name || 'You'} audio={snapshot.audio} video={snapshot.video}
-    screenSharing={snapshot.screenSharing} local compact={compact} role={snapshot.role} handRaised={snapshot.handRaised}
+    screenSharing={snapshot.screenSharing} local compact={compact} role={snapshot.role} title={snapshot.title} handRaised={snapshot.handRaised}
     focused={canFocusToggle && effectiveFocus === 'local'} onFocus={canFocusToggle ? () => setFocusTarget('local') : undefined}
   />;
   const waitingTile = <section className="waiting-tile" aria-label="Waiting for other participants">
@@ -434,7 +439,12 @@ export function App({ lessonId, meetingId, initialToken, isDevRoute, returnHref 
           )}
           <ChatPanel
             messages={snapshot.messages} open={snapshot.chatOpen} onClose={toggleChat} onSend={sendChatMessage} triggerRef={chatTriggerRef}
-            isTutor={snapshot.role === 'tutor'} onDeleteMessage={deleteChatMessage} onClearChat={clearChat}
+            // Only a staff meeting can delete, react to or reply to a message, or clear the chat: a lesson's chat is saved and only an administrator
+            // removes from it (docs/LESSON_CHAT.md), so the buttons would only be refused there.
+            canDelete={isStaffMeeting ? (message) => message.own || snapshot.role === 'tutor' || snapshot.title === 'Admin' : undefined}
+            onDeleteMessage={isStaffMeeting ? deleteChatMessage : undefined}
+            canClear={isStaffMeeting && (snapshot.role === 'tutor' || snapshot.title === 'Admin')} onClearChat={isStaffMeeting ? clearChat : undefined}
+            onReact={isStaffMeeting ? reactToChatMessage : undefined} onEdit={isStaffMeeting ? editChatMessage : undefined} selfId={getSelfId()} people={chatPeople}
             canChat={snapshot.role === 'tutor' || snapshot.roomSettings.studentsCanChat}
             onSendFile={isStaffMeeting || lessonId ? sendChatFile : undefined} linkifyMessages={isStaffMeeting} lessonChat={Boolean(lessonId)}
           />
@@ -469,7 +479,7 @@ export function App({ lessonId, meetingId, initialToken, isDevRoute, returnHref 
               <span>People</span>
               <ParticipantPanel
                 open={participantPanelOpen} onClose={() => setParticipantPanelOpen(false)} triggerRef={participantTriggerRef}
-                selfName={snapshot.name || name || 'You'} selfRole={snapshot.role} selfAudio={snapshot.audio} selfVideo={snapshot.video} selfHandRaised={snapshot.handRaised}
+                selfName={snapshot.name || name || 'You'} selfRole={snapshot.role} selfTitle={snapshot.title} selfAudio={snapshot.audio} selfVideo={snapshot.video} selfHandRaised={snapshot.handRaised}
                 peers={snapshot.peers}
                 onMuteParticipant={muteParticipant} onAllowUnmute={allowUnmute} onRemoveParticipant={removeParticipant}
                 onLowerHand={lowerHand} onStopShare={stopShare}
