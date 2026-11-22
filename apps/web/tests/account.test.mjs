@@ -365,8 +365,7 @@ test("verify, sign in, session cookies, me, sign out", async (t) => {
   assert.equal(signedIn.status, 200);
   assert.deepEqual(await signedIn.json(), { success: true, user: { displayName: "Pat" }, next: "/account" }, "someone with no entitlement lands on their account page");
   for (const name of [session.ACCESS_COOKIE, session.REFRESH_COOKIE]) {
-    assert.deepEqual(c2.options.get(name), { httpOnly: true, sameSite: "lax", secure: false, path: "/" }, "httpOnly, Lax, session cookie (no Max-Age)");
-    assert.ok(!("maxAge" in c2.options.get(name)) && !("expires" in c2.options.get(name)));
+    assert.deepEqual(c2.options.get(name), { httpOnly: true, sameSite: "lax", secure: false, path: "/", maxAge: 400 * 24 * 60 * 60 }, "httpOnly, Lax, persistent (400 days)");
   }
 
   const me = await h.handleMe({ rt, jar: c2 });
@@ -387,6 +386,14 @@ test("production cookies are Secure", async (t) => {
   const c = jar();
   session.setSessionCookies(c, { accessToken: "a", refreshToken: "r", expiresAt: 1 }, process.env);
   assert.equal(c.options.get(session.ACCESS_COOKIE).secure, true);
+});
+
+test("both account cookies outlive the browser (400 days), so people stay signed in until they sign out", () => {
+  const c = jar();
+  session.setSessionCookies(c, { accessToken: "a", refreshToken: "r", expiresAt: 1 }, {});
+  for (const name of [session.ACCESS_COOKIE, session.REFRESH_COOKIE]) {
+    assert.equal(c.options.get(name).maxAge, 400 * 24 * 60 * 60, name);
+  }
 });
 
 test("an expired access token is renewed from the refresh token, and a dead session is cleared", async (t) => {

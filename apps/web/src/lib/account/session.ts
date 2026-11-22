@@ -8,9 +8,12 @@ import type { AuthTokens, AuthUser } from "./types";
  *   learnthrive_acct    the access token (short lived, about an hour)
  *   learnthrive_acct_r  the refresh token
  *
- * Both are SESSION cookies (no Max-Age, so the browser drops them on close): "remember me" is out of scope (plan19
- * section 3). httpOnly, SameSite=Lax, Secure in production, Path=/. They are strictly necessary and are set only
- * after a person signs in or opens an emailed link; the public marketing pages set no cookie.
+ * Both last STAY_SIGNED_IN_SECONDS (about 13 months, the longest a browser keeps a cookie) and are re-set with a fresh
+ * lifetime every time the access token is renewed, so a person stays signed in across browser restarts for as long as
+ * they keep using the site, and is signed out only by pressing Sign out (or by the auth server ending the session:
+ * Supabase's own time-box / inactivity settings, Auth > Sessions). httpOnly, SameSite=Lax, Secure in production,
+ * Path=/. They are strictly necessary and are set only after a person signs in or opens an emailed link; the public
+ * marketing pages set no cookie.
  *
  * A Server Component cannot set cookies, so an expired access token is renewed by a tiny route
  * (/api/account/refresh) that pages redirect through; route handlers renew in place.
@@ -18,11 +21,16 @@ import type { AuthTokens, AuthUser } from "./types";
 export const ACCESS_COOKIE = "learnthrive_acct";
 export const REFRESH_COOKIE = "learnthrive_acct_r";
 
+/** 400 days: browsers cap a cookie's life at this (Chrome's limit), so asking for more would buy nothing. */
+export const STAY_SIGNED_IN_SECONDS = 400 * 24 * 60 * 60;
+
 export interface CookieOptions {
   httpOnly: true;
   sameSite: "lax";
   secure: boolean;
   path: "/";
+  /** Absent = a browser-session cookie (the supervised-view cookie stays one on purpose); the account cookies always carry it. */
+  maxAge?: number;
 }
 
 export interface CookieJar {
@@ -32,7 +40,7 @@ export interface CookieJar {
 }
 
 function options(env: Record<string, string | undefined>): CookieOptions {
-  return { httpOnly: true, sameSite: "lax", secure: env.NODE_ENV === "production", path: "/" };
+  return { httpOnly: true, sameSite: "lax", secure: env.NODE_ENV === "production", path: "/", maxAge: STAY_SIGNED_IN_SECONDS };
 }
 
 export function setSessionCookies(jar: CookieJar, tokens: AuthTokens, env: Record<string, string | undefined> = process.env): void {
