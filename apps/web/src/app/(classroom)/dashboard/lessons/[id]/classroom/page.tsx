@@ -1,11 +1,8 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth/guard";
-import { holds } from "@/lib/auth/scope";
-import { joinRoleFor } from "@/lib/auth/teaching";
 import { getDataProvider } from "@/lib/data/provider";
-import { signClassroomJoinToken } from "@learnthrive/shared/classroomToken";
-import { isWithinJoinWindow } from "@/lib/scheduling/joinWindow";
+import { lessonEntryFor, lessonJoinRole, recordSupervision } from "@/lib/classroom/lessonEntry";
 import { ClassroomClient } from "@/features/classroom/ClassroomClient";
 
 export const metadata: Metadata = {
@@ -24,46 +21,17 @@ export default async function LessonClassroomPage({
   const { id } = await params;
   const { token: paramToken } = await searchParams;
 
-  const data = getDataProvider();
-  const lesson = await data.lessons.get(id);
+  const lesson = await getDataProvider().lessons.get(id);
   if (!lesson) notFound();
 
-  // IDOR & assignment check. An administrator who is not this lesson's tutor has no join role: they never enter as its tutor.
-  const joinRole = joinRoleFor(user, lesson);
-
-  if (!holds(user, "ADMIN") && !joinRole) {
-    redirect("/403");
-  }
-
-  if (lesson.locationType !== "ONLINE" || !lesson.classroomRoomId) {
-    redirect(`/dashboard/lessons/${id}?joinError=${encodeURIComponent("This lesson is not scheduled for an online classroom.")}`);
-  }
-
-  if (lesson.status === "CANCELLED") {
-    redirect(`/dashboard/lessons/${id}?joinError=${encodeURIComponent("This lesson has been cancelled.")}`);
-  }
-
-  // Join window check
-  if (joinRole) {
-    if (!isWithinJoinWindow(lesson, joinRole)) {
-      redirect(`/dashboard/lessons/${id}?joinError=${encodeURIComponent("The classroom is not open yet. Please check back closer to the start time.")}`);
-    }
-  }
-
-  const token = paramToken || signClassroomJoinToken({
-    roomId: lesson.classroomRoomId,
-    lessonId: lesson.id,
-    name: user.name,
-    role: joinRole === "TUTOR" ? "tutor" : "student",
-    // Names the signed-in person: without it the classroom has no identity for them and refuses their chat ("only available in a lesson").
-    uid: user.id,
-    // A Server Component renders once per request on the server, with no client
-    // reconciliation/memoization to destabilize; a short-lived token expiry genuinely needs the
-    // real current time, same as lib/actions/classroom.ts's identical exp calculation (not
-    // flagged there, since a Server Action isn't treated as a "component" by this rule).
-    // eslint-disable-next-line react-hooks/purity
-    exp: Date.now() + 5 * 60_000,
-  });
+  // The same rule as the Join button and the reconnect route (lib/classroom/lessonEntry.ts): its tutor, a student on it, or an administrator, who
+  // enters as a supervisor. Anyone else is turned away. A token in the address was signed by that same rule a moment ago; without one, a fresh one
+  // is made here, after the same checks.
+  if (!lessonJoinRole(user, lesson)) redirect("/403");
+  const entry = paramToken ? null : lessonEntryFor(user, lesson);
+  if (entry && !entry.ok) redirect(`/dashboard/lessons/${id}?joinError=${encodeURIComponent(entry.message)}`);
+  if (entry?.ok && entry.role === "supervisor") await recordSupervision(user, lesson.id);
+  const token = paramToken || (entry as { token: string }).token;
 
   // No background override: the classroom paints its own surfaces (a cream page around dark stage
   // tiles). A navy one underneath was invisible during a call — .call-app covers it — but showed

@@ -152,6 +152,9 @@ function parseSfuTracks(value: unknown): SfuTrackInfo[] | null {
   return new Set(tracks.map((track) => track.trackName)).size === tracks.length ? tracks : null;
 }
 
+/** Administrators supervising one lesson at once. Two is plenty, and each is one more connection for everybody in a peer-to-peer room. */
+const MAX_SUPERVISORS = 2;
+
 function parseRole(value: unknown): ParticipantRole | null {
   return value === 'tutor' || value === 'student' ? value : null;
 }
@@ -613,6 +616,22 @@ export function createSignallingServer(options?: {
     // Only ever raised, by a verified token: a manual join cannot turn a lesson's room into a meeting's, or back.
     if (meeting) room.meeting = true;
 
+    if (role === 'supervisor') {
+      // An administrator supervising a lesson (only ever from a verified token: a manual join cannot ask for this role). Straight in, without
+      // the waiting room, so the tutor is not interrupted to admit them; no student's seat is taken (seats count students only); microphone and
+      // camera off to begin with, so nobody is surprised by a voice or a face; and at most two at once.
+      let supervisors = 0;
+      for (const participant of room.participants.values()) if (participant.role === 'supervisor' && !pendingDisconnects.has(participant.id)) supervisors += 1;
+      if (supervisors >= MAX_SUPERVISORS) {
+        socket.emit('room:full', { message: 'Two administrators are already supervising this lesson.' });
+        return;
+      }
+      const self: Participant = { id: socket.id, name, media: { audio: false, video: false }, screenSharing: false, handRaised: false, handRaisedAt: null, role, forceMuted: false, title: 'Admin' };
+      rooms.set(roomId, room);
+      admitParticipant(socket, roomId, room, self);
+      return;
+    }
+
     if (role === 'tutor') {
       const existingTutor = tutorOf(room);
       if (existingTutor) {
@@ -967,6 +986,7 @@ export function createSignallingServer(options?: {
         if (self.role === 'student' && !room.settings.studentsCanShareScreen) {
           return fail(socket, 'The tutor has turned off screen sharing for students.');
         }
+        if (self.role === 'supervisor') return fail(socket, 'A supervisor cannot share a screen in a lesson.');
         if (room.activeScreenShareId !== socket.id) clearAnnotations(room); // a new share starts with a clean slate
         room.activeScreenShareId = socket.id;
       } else if (room.activeScreenShareId === socket.id) {
@@ -1147,6 +1167,7 @@ export function createSignallingServer(options?: {
       const room = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
       const self = room?.participants.get(socket.id);
       if (!room || !self) return fail(socket, 'You are not currently in a class.');
+      if (self.role === 'supervisor') return fail(socket, 'A supervisor does not vote in the class poll.');
       if (!room.poll || !room.poll.open) return fail(socket, 'There is no open poll right now.');
       if (!isRecord(payload) || typeof payload.optionId !== 'string' || !room.poll.options.some((option) => option.id === payload.optionId)) {
         return fail(socket, 'Invalid vote.');
@@ -1179,6 +1200,7 @@ export function createSignallingServer(options?: {
       const room = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
       const self = room?.participants.get(socket.id);
       if (!room || !self) return fail(socket, 'You are not currently in a class.');
+      if (self.role === 'supervisor') return fail(socket, 'A supervisor does not answer the understanding check.');
       if (!room.understandingCheck || !room.understandingCheck.open) return fail(socket, 'There is no open understanding check right now.');
       if (!isRecord(payload) || (payload.status !== 'understood' && payload.status !== 'confused' && payload.status !== 'lost')) {
         return fail(socket, 'Invalid response.');
@@ -1236,6 +1258,7 @@ export function createSignallingServer(options?: {
       const self = room?.participants.get(socket.id);
       if (!room || !self) return fail(socket, 'You are not currently in a class.');
       if (self.role === 'student' && !room.board.studentsCanDraw) return fail(socket, 'The tutor has turned off drawing for students.');
+      if (self.role === 'supervisor') return fail(socket, 'A supervisor watches the whiteboard but does not draw on it.');
       if (!boardUpdateRateLimiter.allow(socket.id)) return fail(socket, 'You are drawing too fast — please slow down.');
       const parsed = parseBoardUpdateBatch(payload);
       if (!parsed) return fail(socket, 'Invalid whiteboard update.');
@@ -1303,6 +1326,7 @@ export function createSignallingServer(options?: {
       const self = room?.participants.get(socket.id);
       if (!room || !self || !isRecord(payload) || typeof payload.x !== 'number' || typeof payload.y !== 'number'
         || !Number.isFinite(payload.x) || !Number.isFinite(payload.y)) return;
+      if (self.role === 'supervisor') return; // a supervisor points at nothing on the class's board
       if (!boardPointerRateLimiter.allow(socket.id)) return;
       // Ephemeral only — never written into board history, unlike board:update.
       for (const id of room.participants.keys()) {

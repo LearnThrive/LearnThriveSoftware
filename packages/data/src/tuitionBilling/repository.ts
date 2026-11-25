@@ -1,5 +1,5 @@
 import type {
-  AuditEntry, BillingSettings, ChargeDecision, FamilyBillingProfile, FamilyRate, IssuedStatement, Payment, RefundRequest, StatementDraft, TutorRate,
+  AuditEntry, BillingSettings, ChargeDecision, FamilyBillingProfile, FamilyRate, IssuedStatement, LessonPrice, Payment, RefundRequest, StatementDraft, TutorRate,
 } from "./types";
 
 /**
@@ -29,6 +29,13 @@ export interface TuitionBillingRepository {
     setSiblingEligible(clientId: string, eligible: boolean, actor: string): Promise<FamilyBillingProfile>;
     /** Every family with a profile row (so the billing list can show who is eligible). */
     list(): Promise<FamilyBillingProfile[]>;
+  };
+  /** A price set for one lesson, in place of the hourly rates (migration 0033). One per lesson; setting it again replaces it. */
+  lessonPrices: {
+    list(lessonIds?: string[]): Promise<LessonPrice[]>;
+    set(input: Omit<LessonPrice, "setAt">): Promise<LessonPrice>;
+    /** Back to the hourly rates. Nothing happens if the lesson had no price of its own. */
+    clear(lessonId: string): Promise<void>;
   };
   decisions: {
     list(lessonIds?: string[]): Promise<ChargeDecision[]>;

@@ -304,8 +304,9 @@
 .chat-message.is-interactive{cursor:default}
 .chat-message.is-interactive:hover,.chat-message.is-interactive:focus-within{background:#f4f7f2}
 .chat-message.is-selected{background:#e9f2ec;box-shadow:inset 0 0 0 1px #b8d8c6}
-.chat-message.is-flash{animation:chat-flash 1.6s ease-out}
-@keyframes chat-flash{0%,40%{background:#fdf3c8}100%{background:transparent}}
+/* The highlight is a pale layer over the message that fades out (opacity only: the compositor test allows nothing else). multiply keeps the text readable through it. */
+.chat-message.is-flash::before{content:"";position:absolute;inset:0;background:#fdf3c8;mix-blend-mode:multiply;pointer-events:none;opacity:0;animation:chat-flash 1.6s ease-out}
+@keyframes chat-flash{0%,40%{opacity:1}100%{opacity:0}}
 .chat-avatar{flex:none;width:32px;height:32px;margin-top:2px;display:grid;place-items:center;border-radius:50%;color:#fff;font-size:12px;font-weight:700;letter-spacing:.2px;user-select:none}
 .chat-message-gutter-time{flex:none;width:32px;text-align:center;font-size:9px;line-height:20px;color:transparent;user-select:none}
 .chat-message.is-run:hover .chat-message-gutter-time,.chat-message.is-run:focus-within .chat-message-gutter-time{color:#8a968f}
@@ -350,7 +351,7 @@
 .role-badge-staff{background:#e0eee7;color:#075f52}
 /* A phone has no hover: the actions open when you tap a message, and sit inside the row so they are not clipped by the screen edge. */
 @media (hover:none){.chat-message.is-interactive:hover{background:none}.chat-message.is-interactive.is-selected{background:#e9f2ec}}
-@media (prefers-reduced-motion:reduce){.chat-message.is-flash{animation:none;background:#fdf3c8}.chat-emoji:hover{transform:none}}
+@media (prefers-reduced-motion:reduce){.chat-message.is-flash::before{animation:none;opacity:1}.chat-emoji:hover{transform:none}}
 .chat-edited{margin-left:5px;font-size:10px;color:#8a968f;user-select:none}
 .chat-edit{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:2px}
 .chat-edit input{flex:1 1 100%;height:34px;border:1px solid #087363;border-radius:9px;padding:0 10px;font-size:13px;background:#fff;color:#16293d;outline:none;box-shadow:0 0 0 3px #08736322}
@@ -359,3 +360,6 @@
 .chat-edit-save{border:1px solid #087363;background:#087363;color:#fff}
 .chat-edit-save:disabled{opacity:.4;cursor:default}
 .chat-edit-cancel{border:1px solid #d6dfd5;background:#fff;color:#3d5262}
+
+/* An administrator supervising a lesson: said plainly to everyone in it. */
+.supervisor-notice{display:flex;align-items:center;gap:8px;margin:0 0 8px;padding:8px 12px;border-radius:10px;border:1px solid #c9b8f0;background:#f4effd;color:#3b2a6b;font-size:13px;font-weight:600}

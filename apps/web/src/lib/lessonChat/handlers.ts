@@ -162,8 +162,9 @@ export async function relayedSend(
   if (!user) return jsonResponse(403, { ok: false, code: "NOT_PARTICIPANT", error: "You are not part of this lesson, so you cannot message in it." });
   const result = await (deps.chat as ChatOpen).service.sendText(chatActorFor(user, deps.leads), body.lessonId, body.text);
   if (!result.ok) return refusal(result);
-  const { id, senderName, text, createdAt } = result.message;
-  return jsonResponse(200, { ok: true, message: { id, name: senderName, text, createdAt } });
+  const { id, senderName, senderParty, text, createdAt } = result.message;
+  // An administrator's message is labelled as one in the classroom too, so the tutor and the students always know who is speaking.
+  return jsonResponse(200, { ok: true, message: { id, name: senderParty === "admin" ? `${senderName} (administrator)` : senderName, text, createdAt } });
 }
 
 export type { LessonChatService };

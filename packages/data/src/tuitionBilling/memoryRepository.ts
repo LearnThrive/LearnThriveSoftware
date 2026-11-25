@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { planFamilyRate, validateDecision, validateFamilyRate, validatePayment, validateRefundRequest, validateSettings, validateTutorRate } from "./validate";
+import { planFamilyRate, validateDecision, validateFamilyRate, validateLessonPrice, validatePayment, validateRefundRequest, validateSettings, validateTutorRate } from "./validate";
 import type { TuitionBillingRepository } from "./repository";
 import {
   BillingError, DEFAULT_BILLING_SETTINGS, type AuditEntry, type BillingSettings, type ChargeDecision, type FamilyBillingProfile, type FamilyRate, type IssuedStatement,
-  type Payment, type RefundRequest, type TutorRate,
+  type LessonPrice, type Payment, type RefundRequest, type TutorRate,
 } from "./types";
 
 interface StoredPayment extends Payment {
@@ -17,6 +17,7 @@ export function createMemoryTuitionBilling(): TuitionBillingRepository {
   const tutorRates: TutorRate[] = [];
   const profiles = new Map<string, FamilyBillingProfile>();
   const decisions = new Map<string, ChargeDecision>();
+  const lessonPrices = new Map<string, LessonPrice>();
   const statements: IssuedStatement[] = [];
   const payments: StoredPayment[] = [];
   const refunds: RefundRequest[] = [];
@@ -64,6 +65,16 @@ export function createMemoryTuitionBilling(): TuitionBillingRepository {
         return profile;
       },
       async list() { return [...profiles.values()]; },
+    },
+    lessonPrices: {
+      async list(lessonIds) { return [...lessonPrices.values()].filter((p) => !lessonIds || lessonIds.includes(p.lessonId)); },
+      async set(input) {
+        validateLessonPrice(input);
+        const stored: LessonPrice = { ...input, note: input.note.trim(), setAt: now() };
+        lessonPrices.set(input.lessonId, stored);
+        return stored;
+      },
+      async clear(lessonId) { lessonPrices.delete(lessonId); },
     },
     decisions: {
       async list(lessonIds) { return [...decisions.values()].filter((d) => !lessonIds || lessonIds.includes(d.lessonId)); },

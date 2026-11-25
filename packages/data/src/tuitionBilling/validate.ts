@@ -2,7 +2,10 @@
 // Postgres (the database has matching CHECK constraints as the last line of defence).
 
 import { dayBefore, YMD } from "./period";
-import { BillingError, TUTOR_RATE_MAX_PENCE, TUTOR_RATE_MIN_PENCE, type BillingSettings, type FamilyRate, type Payment, type RefundRequest, type TutorRate } from "./types";
+import {
+  BillingError, LESSON_PRICE_MAX_PENCE, TUTOR_RATE_MAX_PENCE, TUTOR_RATE_MIN_PENCE, type BillingSettings, type FamilyRate, type LessonPrice, type Payment, type RefundRequest,
+  type TutorRate,
+} from "./types";
 
 const isInt = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n);
 const bad = (message: string): never => { throw new BillingError("INVALID", message); };
@@ -51,6 +54,15 @@ export function validateTutorRate(input: Omit<TutorRate, "id" | "createdAt">): v
     throw new BillingError("RATE_RANGE", "A tutor's pay is between 5 and 45 pounds an hour.");
   }
   if (!YMD.test(input.effectiveFrom)) bad("The tutor rate needs a start date.");
+}
+
+export function validateLessonPrice(input: Pick<LessonPrice, "lessonId" | "clientPence" | "tutorPence" | "note">): void {
+  text(input.lessonId, 1, 80, "The lesson");
+  for (const [amount, what] of [[input.clientPence, "The family's price"], [input.tutorPence, "The tutor's pay"]] as const) {
+    if (amount !== null && (!isInt(amount) || amount < 0 || amount > LESSON_PRICE_MAX_PENCE)) bad(`${what} for a lesson is whole pence, from nothing up to 1,000 pounds.`);
+  }
+  if (input.clientPence === null && input.tutorPence === null) bad("Set the family's price, the tutor's pay, or both.");
+  text(input.note, 0, 500, "The note");
 }
 
 export function validatePayment(input: Omit<Payment, "id" | "createdAt">): void {

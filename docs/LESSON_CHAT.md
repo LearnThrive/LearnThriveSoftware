@@ -14,11 +14,24 @@ Decided by the person's **relationship to this lesson**, never by role alone, an
 
 1. **Relationship.** The lesson's own tutor (the tutor record their `TUTOR` role stands on equals the lesson's tutor; an administrator who also teaches counts, as the tutor) or a student enrolled in it (the student record their `STUDENT` role stands on is on the lesson). A tutor of another lesson, or a student of another lesson, is refused. A person with several roles is checked with each role's own record.
 2. **Junior tutors cannot send at all, for now** (`JUNIOR_TUTOR_CANNOT_SEND`), not messages and not files, even in a lesson they are assigned to. *TODO(supervision):* when the supervision rules exist (a tutor overseeing a junior's messages), decide in `canSend` what a junior may send and who sees it. They can read their assigned lesson's chat.
-3. **Parents, administrators and the safeguarding lead only read.**
+3. **Parents and the safeguarding lead only read.** An **administrator** may also send (see "Administrators" below).
 4. **Not on a cancelled or no-show lesson,** and not on a lesson with no usable schedule.
 5. **Only inside the scheduled window:** from the scheduled start up to, not including, the scheduled end, in Europe/London. The schedule is stored as an instant, so daylight saving cannot move it (a 17:00 summer lesson is 16:00Z). Students may reply anywhere inside the same window.
 
 The grace window is configuration, default **0 minutes either side** (`LESSON_CHAT_GRACE_BEFORE_MINUTES`, `LESSON_CHAT_GRACE_AFTER_MINUTES`, each 0 to 60). A wrong value is an error, never a silent default.
+
+## Administrators (migration 0032)
+
+An administrator can step into any lesson's chat to sort out a problem, **without joining the classroom**: the lesson page's "Lesson chat" card shows
+them the message box. They can also message from inside the classroom while supervising (see `docs/CLASSROOM_INTEGRATION.md`).
+
+- They send **as an administrator** (`sender_party = 'admin'`, the record is their own account). The lesson page labels the message "administrator"
+  and the classroom shows "Name (administrator)", so the tutor and the students always know who is speaking.
+- **At any time**, not only during the lesson (a problem does not keep to the timetable), on any lesson that is **not cancelled**. The thread is the
+  assignment's, so the message is there for the tutor and students at their next lesson too.
+- An administrator who is also the lesson's tutor sends as its tutor while the lesson is on, and as an administrator otherwise.
+- The database checks it by itself (`private.lesson_messages_guard`): only someone holding `ADMIN` can send as an administrator, and only as
+  themself. The tutor and student rules are unchanged.
 
 ## Who may read (`canRead`)
 

@@ -177,9 +177,9 @@ describe("who may send: the lesson's own tutor and a student enrolled in it, by 
     assert.equal((await two.service.sendText(otherStudent, "lesson-2", "hi")).ok, true);
   });
 
-  test("a parent cannot send, and neither can an administrator or the safeguarding lead who is not in the lesson", async () => {
+  test("a parent cannot send, and neither can the safeguarding lead who is not in the lesson", async () => {
     const w = world();
-    for (const [name, who] of [["parent", parent], ["admin", admin], ["lead", lead]] as const) {
+    for (const [name, who] of [["parent", parent], ["lead", lead]] as const) {
       const result = await w.service.sendText(who, "lesson-1", "hi");
       assert.equal(result.ok, false, name);
       assert.equal((result as { code: string }).code, "NOT_PARTICIPANT", name);
@@ -188,6 +188,30 @@ describe("who may send: the lesson's own tutor and a student enrolled in it, by 
     const file = await w.service.sendFile(parent, "lesson-1", { name: "a.png", declaredType: "image/png", bytes: png() });
     assert.equal(file.ok, false);
     assert.equal(w.files.size, 0, "nothing was stored for a parent");
+  });
+
+  test("an administrator may step into any lesson's chat, AS AN ADMINISTRATOR, at any time, but not on a cancelled lesson", async () => {
+    const w = world();
+    for (const minute of [-600, -1, 10, 60, 24 * 60]) {
+      w.setNow(at(minute));
+      const sent = await w.service.sendText(admin, "lesson-1", `checking in at ${minute}`);
+      assert.equal(sent.ok, true, `minute ${minute}`);
+    }
+    const stored = await w.repo.listMessages("lesson-1");
+    assert.equal(stored.length, 5);
+    assert.ok(stored.every((m) => m.senderParty === "admin" && m.senderRecordId === "acct-admin" && m.senderAccountId === "acct-admin"));
+    w.setNow(at(10));
+    const view = await w.service.list(tutor, "lesson-1");
+    assert.ok(view.ok && view.messages.every((m) => m.senderParty === "admin"), "the tutor sees who it is from");
+    const file = await w.service.sendFile(admin, "lesson-1", { name: "note.png", declaredType: "image/png", bytes: png() });
+    assert.equal(file.ok, true, "and may share a file");
+    for (const status of ["CANCELLED", "NO_SHOW"]) {
+      const cancelled = world({ lessons: [lesson({ status })] });
+      const refused = await cancelled.service.sendText(admin, "lesson-1", "hi");
+      assert.equal((refused as { code: string }).code, "LESSON_CANCELLED", status);
+    }
+    const missing = await w.service.sendText(admin, "no-such-lesson", "hi");
+    assert.equal(missing.ok, false);
   });
 
   test("a junior tutor cannot send messages or files at all, even in their own assigned lesson", async () => {
@@ -211,8 +235,17 @@ describe("who may send: the lesson's own tutor and a student enrolled in it, by 
   test("an administrator who is also the lesson's tutor may send as its tutor, and the tutor role is what allows it", async () => {
     const teachingAdmin = actor({ accountId: "acct-ta", roles: ["ADMIN", "TUTOR"], tutorId: "tutor-1" });
     const w = world();
-    assert.equal((await w.service.sendText(teachingAdmin, "lesson-1", "hi")).ok, true);
-    assert.equal((await w.service.sendText({ ...teachingAdmin, roles: ["ADMIN"] }, "lesson-1", "hi")).ok, false);
+    const asTutor = await w.service.sendText(teachingAdmin, "lesson-1", "hi");
+    assert.equal(asTutor.ok, true);
+    assert.equal((await w.repo.listMessages("lesson-1"))[0]!.senderParty, "tutor", "inside the lesson they speak as its tutor");
+    // Without the TUTOR role they are not its tutor: they may still send, but as an administrator.
+    await w.service.sendText({ ...teachingAdmin, roles: ["ADMIN"] }, "lesson-1", "hi");
+    const parties = async () => (await w.repo.listMessages("lesson-1")).map((m) => m.senderParty).sort();
+    assert.deepEqual(await parties(), ["admin", "tutor"]);
+    // Outside the lesson the tutor cannot send; an administrator who teaches it still can, as an administrator.
+    w.setNow(at(200));
+    await w.service.sendText(teachingAdmin, "lesson-1", "afterwards");
+    assert.deepEqual(await parties(), ["admin", "admin", "tutor"]);
   });
 
   test("each occurrence of a recurring lesson has its own conversation and its own window", async () => {

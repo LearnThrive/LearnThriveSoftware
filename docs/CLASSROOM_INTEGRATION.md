@@ -52,6 +52,23 @@ The pre-existing manual name/room-code entry path is left completely intact as a
 section 36 explicitly allows a dev/test role-picker route) — `apps/realtime` picks the token
 branch only when the incoming `room:join` payload actually includes a `token` field.
 
+## Supervising a lesson (administrators)
+
+Who enters, and as what, is decided in one place, `apps/web/src/lib/classroom/lessonEntry.ts` (`lessonEntryFor`), which the lesson page's Join
+button, the classroom page and the reconnect route (`POST /api/classroom/token`) all use: the lesson's tutor enters as `tutor`, a student on it as
+`student`, and **any other administrator as `supervisor`** (the button reads "Join to supervise"). A supervisor has the tutor's join window.
+
+The room server (`apps/realtime/server/signalling.ts`) treats a supervisor so the lesson in progress is not disturbed:
+
+| | |
+| --- | --- |
+| Getting in | Straight in, no waiting room, so the tutor is never interrupted to admit them. Only ever from a signed link: a manual join cannot claim the role, and a staff meeting link cannot carry it. |
+| Seats | Takes no student's seat: a full class still admits all its students. At most two supervisors at once. |
+| Camera and microphone | Off on entry (the server announces them off, and the browser switches them off). They can turn them on to speak. |
+| Seen by everyone | Badged "Admin · supervising", and a notice tells everyone in the lesson that an administrator is supervising. The visit is written to the lesson's history (`SUPERVISED`), which the tutor sees. |
+| Powers | None over the lesson: the tutor stays in charge (admit, mute, lock, end). A supervisor cannot draw, share a screen, vote in a poll or answer the understanding check; the tutor cannot mute or remove them. They can watch and use the chat. |
+| Ending | When the tutor ends the class it ends for the supervisor too. |
+
 ## Join window (plan section 35)
 
 Configurable, not hardcoded into the authorization check itself —

@@ -113,10 +113,13 @@ export interface PricedEvent {
   listed: boolean;
 }
 
-/** What one event costs, and why. */
-export function priceEvent(event: ChargeEvent, rate: FamilyRate | null, verdict: AllowanceVerdict | undefined, settings: BillingSettings): PricedEvent {
-  const ratePence = rate?.hourlyPence ?? null;
-  const full: Pence | null = ratePence === null ? null : lessonAmount(ratePence, event.durationMinutes);
+/**
+ * What one event costs, and why. `lessonPence` is a price an administrator set for this lesson (per child): when there is one it is the lesson's
+ * price, whatever the hourly rate says, and the line carries no hourly rate (it was not priced by the hour).
+ */
+export function priceEvent(event: ChargeEvent, rate: FamilyRate | null, verdict: AllowanceVerdict | undefined, settings: BillingSettings, lessonPence: Pence | null = null): PricedEvent {
+  const ratePence = lessonPence !== null ? null : rate?.hourlyPence ?? null;
+  const full: Pence | null = lessonPence !== null ? lessonPence : ratePence === null ? null : lessonAmount(ratePence, event.durationMinutes);
   const noRate = (description: string, missed: boolean): PricedEvent => ({ amountPence: 0, ratePence: null, waived: false, missed, description, flag: "NO_RATE", listed: true });
   switch (event.kind) {
     case "DELIVERED":

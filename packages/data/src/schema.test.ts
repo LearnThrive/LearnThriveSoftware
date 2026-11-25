@@ -60,6 +60,7 @@ const EXPECTED_TABLES = [
   "tuition_charge_decisions",
   "tuition_family_profiles",
   "tuition_family_rates",
+  "tuition_lesson_prices",
   "tuition_payments",
   "tuition_refunds",
   "tuition_statements",
@@ -118,6 +119,7 @@ const FORCED_TABLES = [
   "tuition_charge_decisions",
   "tuition_family_profiles",
   "tuition_family_rates",
+  "tuition_lesson_prices",
   "tuition_payments",
   "tuition_refunds",
   "tuition_statements",
@@ -209,6 +211,8 @@ describe("migrations", () => {
       "0029_lesson_chat_threads.sql",
       "0030_lesson_chat_file_types.sql",
       "0031_server_role_grants.sql",
+      "0032_admin_lesson_chat.sql",
+      "0033_tuition_lesson_prices.sql",
     ]);
     assert.deepEqual(
       applied.map((f) => Number(f.slice(0, 4))),

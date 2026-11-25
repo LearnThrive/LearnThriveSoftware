@@ -297,6 +297,11 @@ export function App({ lessonId, meetingId, initialToken, isDevRoute, returnHref 
     ...snapshot.peers.map((peer) => ({ key: peer.participant.id, role: peer.participant.role, tile: peerTile(peer, true) })),
   ];
   const reconnectingPeers = snapshot.peers.filter((peer) => peer.reconnecting);
+  // Supervision is never hidden: everyone in a lesson is told when an administrator is in it, and the administrator is told what they may do.
+  const supervisors = snapshot.peers.filter((peer) => peer.participant.role === 'supervisor').map((peer) => peer.participant.name);
+  const supervisorNotice = snapshot.role === 'supervisor'
+    ? 'You are supervising this lesson. The tutor stays in charge. Your microphone and camera started off; you can watch, and use the chat.'
+    : supervisors.length > 0 ? `${supervisors.join(' and ')} (administrator${supervisors.length > 1 ? 's' : ''}) ${supervisors.length > 1 ? 'are' : 'is'} supervising this lesson.` : null;
   const mainPeer = effectiveFocus !== 'local' ? snapshot.peers.find((peer) => peer.participant.id === effectiveFocus) : undefined;
   const otherTiles = () => {
     const tiles: ReactElement[] = [];
@@ -374,8 +379,9 @@ export function App({ lessonId, meetingId, initialToken, isDevRoute, returnHref 
         {reconnectingPeers.length > 0 && <p className="peer-reconnecting" role="status"><span className="status-dot" />{reconnectingPeers.map((peer) => peer.participant.name).join(', ')} {reconnectingPeers.length > 1 ? 'are' : 'is'} reconnecting…</p>}
         {snapshot.notice && <div className="participant-toast" role="status" key={snapshot.notice.id}>{snapshot.notice.text}</div>}
         {snapshot.announcement && <AnnouncementBanner announcement={snapshot.announcement} />}
-        {snapshot.poll && <PollPanel poll={snapshot.poll} isTutor={snapshot.role === 'tutor'} onVote={votePoll} onClose={closePoll} onClear={clearPoll} />}
-        {snapshot.understandingCheck && <UnderstandingCheckPanel check={snapshot.understandingCheck} isTutor={snapshot.role === 'tutor'} onRespond={respondUnderstanding} onEnd={endUnderstandingCheck} />}
+        {supervisorNotice && <p className="supervisor-notice" role="status"><Icon name="people" size={16} /> {supervisorNotice}</p>}
+        {snapshot.poll && snapshot.role !== 'supervisor' && <PollPanel poll={snapshot.poll} isTutor={snapshot.role === 'tutor'} onVote={votePoll} onClose={closePoll} onClear={clearPoll} />}
+        {snapshot.understandingCheck && snapshot.role !== 'supervisor' && <UnderstandingCheckPanel check={snapshot.understandingCheck} isTutor={snapshot.role === 'tutor'} onRespond={respondUnderstanding} onEnd={endUnderstandingCheck} />}
         {snapshot.peers.map((peer) => (
           <RemoteAudio
             key={peer.participant.id} stream={peer.stream} muted={peer.participant.forceMuted} resume={audioResume}
@@ -467,7 +473,7 @@ export function App({ lessonId, meetingId, initialToken, isDevRoute, returnHref 
               />
             </div>
             <span className="controls-divider" />
-            {screenShareSupported && (() => {
+            {screenShareSupported && snapshot.role !== 'supervisor' && (() => {
               const shareBlocked = snapshot.role === 'student' && !snapshot.roomSettings.studentsCanShareScreen && !snapshot.screenSharing;
               return <div className="control-item"><button type="button" className={`media-button ${snapshot.screenSharing ? 'is-on' : ''}`} disabled={shareBlocked} onClick={() => void toggleScreenShare()} aria-pressed={snapshot.screenSharing} aria-label={shareBlocked ? 'The tutor has turned off screen sharing for students' : snapshot.screenSharing ? 'Stop sharing your screen' : 'Share your screen'}><Icon name={snapshot.screenSharing ? 'screen-off' : 'screen'} size={21} /></button><span>{snapshot.screenSharing ? (snapshot.screenShareAudio ? 'Sharing audio' : 'Stop sharing') : 'Share screen'}</span></div>;
             })()}

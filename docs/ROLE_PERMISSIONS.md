@@ -121,7 +121,7 @@ regardless of what a higher layer already decided:
 | `createTutorAction`/`createClientAction`/`createStudentAction`/`createAssignmentAction` | `ADMIN` | n/a — Admin manages everyone |
 | `createLessonAction`/`rescheduleLessonAction`/`cancelLessonAction` | `ADMIN` | n/a |
 | `addAvailabilityAction`/`removeAvailabilityAction` | `TUTOR` (permission `tutor.availability`) | operates only on the caller's own tutor record — never a `tutorId` from form input |
-| `joinClassroomAction` | The lesson's tutor (`TUTOR` or `JUNIOR_TUTOR`, on their own tutor record) or one of its `STUDENT`s | assigned to the specific Lesson, online, not cancelled, within the join window (`docs/CLASSROOM_INTEGRATION.md`) |
+| `joinClassroomAction` | The lesson's tutor (`TUTOR` or `JUNIOR_TUTOR`, on their own tutor record), one of its `STUDENT`s, or any `ADMIN` (as a supervisor) | assigned to the specific Lesson (an administrator supervises any), online, not cancelled, within the join window (`docs/CLASSROOM_INTEGRATION.md`, "Supervising a lesson") |
 | `markAttendanceAction`/`completeLessonAction` | permission `attendance.mark` / `lesson.complete` (`TUTOR`, `JUNIOR_TUTOR`, `ADMIN`) | must be the Lesson's own tutor, or an administrator (`mayActOnLesson`) |
 | `saveReportDraftAction` | permission `report.draft` (`TUTOR`, `JUNIOR_TUTOR`, `ADMIN`) | same |
 | `submitReportAction` | permission `report.submit` (`TUTOR`, `ADMIN`; **not** a junior tutor) | same |

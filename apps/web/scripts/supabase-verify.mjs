@@ -25,7 +25,7 @@ export const PUBLIC_TABLES = [
   "lesson_attendance", "lesson_chat_access_log", "lesson_file_objects", "lesson_files", "lesson_messages", "lesson_reports", "lesson_students", "lessons", "notifications", "paper_assessment_versions", "paper_jobs",
   "platform_settings", "profile_roles", "profiles", "resource_files", "resources", "role_changes", "safeguarding_concern_events",
   "safeguarding_concerns", "staff_meeting_invitees", "staff_meetings", "stripe_webhook_events", "students", "subscriptions", "supervised_contexts", "tuition_assignments",
-  "tuition_billing_audit", "tuition_billing_settings", "tuition_charge_decisions", "tuition_family_profiles", "tuition_family_rates",
+  "tuition_billing_audit", "tuition_billing_settings", "tuition_charge_decisions", "tuition_family_profiles", "tuition_family_rates", "tuition_lesson_prices",
   "tuition_payments", "tuition_refunds", "tuition_statements", "tuition_tutor_rates", "tutor_availability_blocks", "tutor_vetting_checks", "tutors",
   "usage_counters",
 ];

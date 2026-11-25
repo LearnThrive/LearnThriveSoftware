@@ -90,7 +90,8 @@ export function Whiteboard({
 
   const currentPage = pages.find((page) => page.id === viewedPageId) ?? null;
   const pageElements = useMemo(() => elementsByPage[viewedPageId] ?? [], [elementsByPage, viewedPageId]);
-  const viewOnly = !isTutor && !studentsCanDraw;
+  // A supervisor watches the board and never draws on it, whatever the tutor allows students.
+  const viewOnly = role === 'supervisor' || (!isTutor && !studentsCanDraw);
   // Equations typeset by someone else arrive as elements carrying their LaTeX; this makes the picture for each one here.
   useEquationImages(apiRef, pageElements, apiReady);
 

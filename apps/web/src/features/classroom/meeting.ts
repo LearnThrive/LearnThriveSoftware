@@ -372,6 +372,8 @@ export class MeetingController {
     }
   }
 
+  /** Set once a supervisor's microphone and camera have been switched off on entry, so a reconnect does not switch them off again. */
+  private supervisorQuietened = false;
   toggleAudio = () => this.toggle('audio');
   toggleVideo = () => this.toggle('video');
 
@@ -749,6 +751,13 @@ export class MeetingController {
       // Comply immediately if a force-mute directive was missed while offline (a resync via this
       // same event) and the mic is still enabled from before the disconnect.
       if (payload.self.forceMuted && this.media.track('audio')?.enabled) this.media.disable('audio');
+      // An administrator supervising a lesson comes in with their microphone and camera OFF (the room has already told everyone so): nobody in the
+      // lesson is surprised by a voice or a face. They can turn either on themselves if they need to speak.
+      if (payload.self.role === 'supervisor' && !this.supervisorQuietened) {
+        this.supervisorQuietened = true;
+        this.media.disable('audio');
+        this.media.disable('video');
+      }
       const known = new Set(this.snapshot.peers.map((peer) => peer.participant.id));
       const additions = payload.peers.filter((edge) => !known.has(edge.peer.id)).map((edge) => this.freshPeer(edge.peer));
       // Always recomputes status (via setPeers), not just when there happen to be new peers —

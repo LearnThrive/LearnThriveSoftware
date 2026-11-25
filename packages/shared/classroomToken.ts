@@ -82,11 +82,13 @@ export function verifyClassroomJoinToken(token: string): ClassroomJoinTokenPaylo
     const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as Partial<ClassroomJoinTokenPayload>;
     if (
       typeof payload.roomId !== "string" || typeof payload.lessonId !== "string" ||
-      typeof payload.name !== "string" || (payload.role !== "tutor" && payload.role !== "student") ||
+      typeof payload.name !== "string" || (payload.role !== "tutor" && payload.role !== "student" && payload.role !== "supervisor") ||
       typeof payload.exp !== "number"
     ) return null;
     if (payload.uid !== undefined && (typeof payload.uid !== "string" || payload.uid.length > 100)) return null;
     if (payload.kind !== undefined && payload.kind !== "meeting") return null;
+    // A supervisor is an administrator watching a LESSON. A staff meeting has a host and guests and nothing else.
+    if (payload.role === "supervisor" && payload.kind === "meeting") return null;
     if (payload.title !== undefined && payload.title !== "Admin" && payload.title !== "Tutor") return null;
     if (payload.exp < Date.now()) return null;
     return payload as ClassroomJoinTokenPayload;

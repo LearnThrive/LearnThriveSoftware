@@ -52,7 +52,7 @@ describe("lesson chat in Postgres (migration 0027, on PGlite)", () => {
     return { p, tutorUser, juniorUser, adminUser, tutor, juniorTutor, a, b, now, bLesson, juniorLesson, cancelled, future, past };
   }
 
-  const send = (lessonId: string, profile: string, party: "tutor" | "student", record: string, body = "hello") =>
+  const send = (lessonId: string, profile: string, party: "tutor" | "student" | "admin", record: string, body = "hello") =>
     owner<{ id: string }>(`insert into public.lesson_messages (lesson_id, sender_profile_id, sender_party, sender_record_id, sender_name, body) values ($1, $2, $3, $4, 'Someone', $5) returning id`, [lessonId, profile, party, record, body]);
 
   test("the lesson's tutor and an enrolled student can add a message, and the time stored is the database's", async () => {
@@ -85,6 +85,21 @@ describe("lesson chat in Postgres (migration 0027, on PGlite)", () => {
     // A parent's login cannot be a sender.
     await assert.rejects(() => send(w.now.id, w.a.userId, "student", w.a.studentId), /enrolled in this lesson/);
     assert.equal((await owner(`select 1 from public.lesson_messages where lesson_id = any($1::uuid[])`, [[w.cancelled.id, w.future.id, w.past.id, w.juniorLesson.id]])).length, 0);
+  });
+
+  test("migration 0032: an administrator may send as an administrator at any time, as themself, on a lesson that is not cancelled", async () => {
+    const w = await world();
+    for (const lesson of [w.now, w.future, w.past, w.bLesson]) assert.equal((await send(lesson.id, w.adminUser, "admin", w.adminUser)).length, 1);
+    const row = await owner<{ sender_party: string }>(`select sender_party from public.lesson_messages where lesson_id = $1 and sender_profile_id = $2`, [w.past.id, w.adminUser]);
+    assert.equal(row[0]!.sender_party, "admin");
+    await assert.rejects(() => send(w.cancelled.id, w.adminUser, "admin", w.adminUser), /cancelled lesson has no chat/);
+    // Not an administrator, or an administrator claiming to be somebody else.
+    await assert.rejects(() => send(w.now.id, w.tutorUser, "admin", w.tutorUser), /Only an administrator/);
+    await assert.rejects(() => send(w.now.id, w.a.learner, "admin", w.a.learner), /Only an administrator/);
+    await assert.rejects(() => send(w.now.id, w.adminUser, "admin", w.tutorUser), /Only an administrator/);
+    // The tutor and student rules are unchanged: the lesson's tutor still cannot send outside the hour either side.
+    await assert.rejects(() => send(w.past.id, w.tutorUser, "tutor", w.tutor.id), /during the lesson/);
+    await assert.rejects(() => owner(`insert into public.lesson_messages (lesson_id, sender_profile_id, sender_party, sender_record_id, sender_name) values ($1, $2, 'parent', $2, 'X')`, [w.now.id, w.adminUser]), /./, "no other party exists");
   });
 
   test("a message is never edited or deleted: only an administrator's removal may mark it, once", async () => {

@@ -6,7 +6,8 @@
  * tutor-to-student channel.
  */
 
-export type ChatParty = "tutor" | "student";
+/** Who a message was sent as. "admin": an administrator stepping into a lesson's chat (to sort out a problem). Shown to everyone as an administrator. */
+export type ChatParty = "tutor" | "student" | "admin";
 
 export const LESSON_FILE_TYPES = ["image/png", "image/jpeg", "application/pdf"] as const;
 /** The content type a file is served as. The three in LESSON_FILE_TYPES are checked by their bytes; any other allowed type comes from its extension. */

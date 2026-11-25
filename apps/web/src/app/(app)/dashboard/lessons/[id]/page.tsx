@@ -5,7 +5,8 @@ import { AlertCircle, CheckCircle2, Lock, Video, CalendarPlus, Download } from "
 import { requireSession } from "@/lib/auth/guard";
 import { holds, rolesOf, scopes } from "@/lib/auth/scope";
 import type { AuthenticatedUser } from "@/lib/auth/types";
-import { joinRoleFor, teachesLesson } from "@/lib/auth/teaching";
+import { teachesLesson } from "@/lib/auth/teaching";
+import { lessonJoinRole } from "@/lib/classroom/lessonEntry";
 import { createMetadata } from "@/lib/metadata";
 import { getDataProvider } from "@/lib/data/provider";
 import { cancelLessonAction } from "@/lib/actions/lessons";
@@ -80,8 +81,10 @@ export default async function LessonDetailPage({
   const isOwningTutor = teachesLesson(user, lesson);
   const canManage = isAdmin || isOwningTutor;
   const canCancel = isAdmin && lesson.status === "PLANNED";
-  const joinRole = joinRoleFor(user, lesson);
-  const canJoin = lesson.locationType === "ONLINE" && lesson.status !== "CANCELLED" && joinRole !== null;
+  // Its tutor, a student on it, or any other administrator, who joins to supervise (lib/classroom/lessonEntry.ts decides, here and on entry).
+  const entryRole = lessonJoinRole(user, lesson);
+  const joinRole = entryRole === "student" ? "STUDENT" : "TUTOR";
+  const canJoin = lesson.locationType === "ONLINE" && lesson.status !== "CANCELLED" && entryRole !== null;
   const joinWindowOpen = canJoin && isWithinJoinWindow(lesson, joinRole);
   // A student can be marked absent only 15 minutes after the scheduled start (the server enforces it; this explains it).
   const noShowFrom = noShowAllowedFrom(lesson.startAt);
@@ -130,6 +133,16 @@ export default async function LessonDetailPage({
                 <CalendarPlus size={16} aria-hidden="true" />Add to calendar
               </a>
             )}
+            {isAdmin && (
+              // Administrators only: a plain link to the billing screen where this lesson's family price and tutor pay are set. Nothing about
+              // money is read or shown on this page, which tutors also see (B17).
+              <Link
+                href={`/dashboard/admin/billing/lessons?period=${new Date(lesson.startAt).toLocaleDateString("en-CA", { timeZone: "Europe/London" }).slice(0, 7)}#lesson-${lesson.id}`}
+                className="btn btn--ghost"
+              >
+                Price and tutor pay
+              </Link>
+            )}
             {lesson.recurrenceId && lesson.status !== "CANCELLED" && (
               <a href={`/api/lessons/${lesson.id}/ics?series=1`} className="btn btn--ghost" download>
                 Add the whole series
@@ -137,7 +150,7 @@ export default async function LessonDetailPage({
             )}
             {canJoin && joinWindowOpen && (
               <Link href={`/dashboard/lessons/${lesson.id}/classroom`} className="btn btn--primary">
-                <Video size={16} aria-hidden="true" />Join classroom
+                <Video size={16} aria-hidden="true" />{entryRole === "supervisor" ? "Join to supervise" : "Join classroom"}
               </Link>
             )}
             {canJoin && !joinWindowOpen && lesson.status === "PLANNED" && (
@@ -197,8 +210,8 @@ export default async function LessonDetailPage({
           {/* The ONLY place a tutor and a student exchange messages and files: here, during the lesson (docs/LESSON_CHAT.md). Who may do what is the server's. */}
           {lesson.status !== "CANCELLED" && (
             <Card>
-              <CardHeader title="Lesson chat" description="Messages and photos or PDFs for this lesson, during the lesson only. Parents can read them afterwards." />
-              <CardBody><LessonChatPanel lessonId={lesson.id} isAdmin={isAdmin} /></CardBody>
+              <CardHeader title="Lesson chat" description={isAdmin && !isOwningTutor ? "You can read this chat and message the tutor and students at any time, without joining the classroom. Your messages show as from an administrator." : "Messages and photos or PDFs for this lesson, during the lesson only. Parents can read them afterwards."} />
+              <CardBody><LessonChatPanel lessonId={lesson.id} isAdmin={isAdmin} sendsAsAdmin={isAdmin && !isOwningTutor} /></CardBody>
             </Card>
           )}
           {canManage && (

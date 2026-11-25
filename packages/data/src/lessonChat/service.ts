@@ -3,7 +3,7 @@ import type { LessonChatConfig } from "./config";
 import { checkUpload, newStorageKey } from "./files";
 import { canRead, canRemove, canSend, chatWindow, threadOf, type ChatActor, type ChatLesson } from "./policy";
 import type { FileScanner, FileStore, LessonChatRepository } from "./repository";
-import type { AccessorKind, LessonFileType, LessonMessage } from "./types";
+import type { AccessorKind, ChatParty, LessonFileType, LessonMessage } from "./types";
 
 /**
  * The lesson chat, in one place (docs/LESSON_CHAT.md). Every send, read, file fetch and removal goes through this service, from the HTTP routes
@@ -18,13 +18,16 @@ const refuse = (status: ChatStatus, code: string, message: string): Refusal => (
 /** What a reader is shown of a message. A removed one is blank to everyone but an administrator or the safeguarding lead. */
 export interface MessageView {
   id: string;
-  senderParty: "tutor" | "student";
+  senderParty: "tutor" | "student" | "admin";
   senderName: string;
   text: string;
   file: { id: string; displayName: string; contentType: LessonFileType; size: number; url: string } | null;
   createdAt: string;
   removed: null | { at: string; by?: string; reason?: string };
 }
+
+/** The record a send is checked against: the tutor or student record, or for an administrator their own account. */
+const recordOf = (party: ChatParty, actor: ChatActor): string => (party === "tutor" ? actor.tutorId! : party === "student" ? actor.studentId! : actor.accountId);
 
 export interface ChatServiceDeps {
   lessons: { get(id: string): Promise<ChatLesson | null> };
@@ -113,7 +116,7 @@ export function createLessonChatService(deps: ChatServiceDeps) {
       const text = cleanText(rawText, config.maxTextLength, false);
       if (text === null) return refuse(400, "BAD_MESSAGE", `A message is 1 to ${config.maxTextLength} characters.`);
       if (limited(lessonId, actor.accountId)) return refuse(429, "TOO_FAST", "You are sending messages too quickly. Please slow down.");
-      const message = await repo.addMessage({ lessonId, threadId: threadOf(allowed.lesson), senderAccountId: actor.accountId, senderRecordId: (allowed.party === "tutor" ? actor.tutorId : actor.studentId)!, senderParty: allowed.party, senderName: actor.name, text, file: null }, now());
+      const message = await repo.addMessage({ lessonId, threadId: threadOf(allowed.lesson), senderAccountId: actor.accountId, senderRecordId: recordOf(allowed.party, actor), senderParty: allowed.party, senderName: actor.name, text, file: null }, now());
       return { ok: true, message: await view(message, lessonId, actor.accountId, false) };
     },
 
@@ -137,7 +140,7 @@ export function createLessonChatService(deps: ChatServiceDeps) {
       const storageKey = newStorageKey(lessonId, checked.ext);
       await files.put(storageKey, checked.bytes, checked.contentType);
       const ref = { id: fileId, displayName: checked.displayName, contentType: checked.contentType, size: checked.bytes.length };
-      const message = await repo.addMessage({ lessonId, threadId: threadOf(allowed.lesson), senderAccountId: actor.accountId, senderRecordId: (allowed.party === "tutor" ? actor.tutorId : actor.studentId)!, senderParty: allowed.party, senderName: actor.name, text: caption, file: ref }, now());
+      const message = await repo.addMessage({ lessonId, threadId: threadOf(allowed.lesson), senderAccountId: actor.accountId, senderRecordId: recordOf(allowed.party, actor), senderParty: allowed.party, senderName: actor.name, text: caption, file: ref }, now());
       await repo.addFile({ ...ref, lessonId, threadId: threadOf(allowed.lesson), messageId: message.id, storageKey, uploadedByAccountId: actor.accountId, createdAt: message.createdAt });
       return { ok: true, message: await view(message, lessonId, actor.accountId, false) };
     },

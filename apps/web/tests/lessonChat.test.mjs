@@ -93,7 +93,7 @@ test("the lesson's tutor and a student on it send over HTTP; and only `text` is 
   assert.equal((await handlers.sendMessage(studentU, w.now.id, json({ text: "Here it is." }), w.deps)).status, 201);
 });
 
-test("rejected over HTTP: before the start, after the end, a cancelled lesson, an unassigned tutor, a student of another lesson, a parent, a junior tutor, an administrator", async () => {
+test("rejected over HTTP: before the start, after the end, a cancelled lesson, an unassigned tutor, a student of another lesson, a parent, a junior tutor", async () => {
   const w = await world();
   const send = (user, lesson, text = "hi") => handlers.sendMessage(user, lesson.id, json({ text }), w.deps);
   const expectRefused = async (response, code, httpStatus = 403) => {
@@ -109,11 +109,25 @@ test("rejected over HTTP: before the start, after the end, a cancelled lesson, a
   await expectRefused(await send(otherTutorU, w.now), "NOT_PARTICIPANT");
   await expectRefused(await send(otherStudentU, w.now), "NOT_PARTICIPANT");
   await expectRefused(await send(parentU, w.now), "NOT_PARTICIPANT");
-  await expectRefused(await send(adminU, w.now), "NOT_PARTICIPANT");
   await expectRefused(await send(leadU, w.now), "NOT_PARTICIPANT");
   await expectRefused(await send(juniorU, w.now), "JUNIOR_TUTOR_CANNOT_SEND");
   await expectRefused(await handlers.sendMessage(tutorU, "no-such-lesson", json({ text: "hi" }), w.deps), "LESSON_NOT_FOUND", 404);
   for (const lesson of [w.now, w.tomorrow, w.past, w.cancelled]) assert.equal((await w.repo.listMessages(lesson.id)).length, 0);
+});
+
+test("an administrator can message in any lesson's chat over HTTP, without joining the classroom, as an administrator, and not on a cancelled lesson", async () => {
+  const w = await world();
+  for (const lesson of [w.now, w.tomorrow, w.past]) {
+    const response = await handlers.sendMessage(adminU, lesson.id, json({ text: "Checking in" }), w.deps);
+    assert.equal(response.status, 201, lesson.title);
+    assert.equal((await body(response)).message.senderParty, "admin");
+  }
+  const refused = await handlers.sendMessage(adminU, w.cancelled.id, json({ text: "hi" }), w.deps);
+  assert.equal(refused.status, 403);
+  assert.equal((await body(refused)).code, "LESSON_CANCELLED");
+  // The tutor and student see it, marked as an administrator's.
+  const listed = await body(await handlers.listMessages(tutorU, w.now.id, w.deps));
+  assert.deepEqual(listed.messages.map((m) => m.senderParty), ["admin"]);
 });
 
 test("the grace window comes from config over HTTP: 0 by default, and wider when set", async () => {
@@ -172,7 +186,7 @@ test("files: a png from the student is shared; other types, an oversized file an
 
 test("files: people who may not send are refused BEFORE their upload is read or stored (parent, junior tutor, unassigned tutor, another lesson's student)", async () => {
   const w = await world();
-  for (const user of [parentU, juniorU, otherTutorU, otherStudentU, adminU]) {
+  for (const user of [parentU, juniorU, otherTutorU, otherStudentU]) {
     const response = await handlers.sendMessage(user, w.now.id, upload("a.png", "image/png"), w.deps);
     assert.equal(response.status, 403, user.id);
   }
@@ -295,6 +309,17 @@ test("relay: a signed request from the classroom goes through the SAME service a
   assert.equal((await w.repo.listMessages(w.now.id)).length, 2);
 });
 
+test("relay: an administrator supervising in the classroom can message, and the classroom shows them as an administrator", async () => {
+  const w = await world();
+  const asAdmin = async (id) => (id === "acct-admin" ? adminU : null);
+  const response = await handlers.relayedSend(relay(w, { lessonId: w.now.id, userId: "acct-admin", text: "Is everything all right?" }), w.deps, asAdmin);
+  assert.equal(response.status, 200);
+  assert.match((await body(response)).message.name, /\(administrator\)$/);
+  const stored = await w.repo.listMessages(w.now.id);
+  assert.equal(stored[0].senderParty, "admin");
+  assert.doesNotMatch(stored[0].senderName, /administrator/, "the label is shown, not stored in the name");
+});
+
 test("relay: unsigned, wrongly signed, tampered, stale and malformed requests are refused and nothing is stored", async () => {
   const w = await world();
   const good = { lessonId: w.now.id, userId: "acct-tutor", text: "hello" };
@@ -324,16 +349,20 @@ test("the join token carries the account (uid) and an old token without one stil
   assert.equal(withUid?.uid, "acct-1");
   assert.equal(verifyClassroomJoinToken(signClassroomJoinToken({ roomId: "room-one", lessonId: "l1", name: "N", role: "tutor", exp }))?.uid, undefined);
   assert.equal(verifyClassroomJoinToken(signClassroomJoinToken({ roomId: "room-one", lessonId: "l1", name: "N", role: "tutor", exp, uid: 5 })), null, "a non-string uid is not a token");
-  assert.match(readFileSync(join(import.meta.dirname, "..", "src", "lib", "actions", "classroom.ts"), "utf8"), /uid: user\.id/, "the join action names the signed-in person in the token");
+  assert.match(readFileSync(join(import.meta.dirname, "..", "src", "lib", "classroom", "lessonEntry.ts"), "utf8"), /uid: user\.id/, "the one place that signs a lesson join token names the signed-in person");
 });
 
 // ---- availability and wiring --------------------------------------------------------------------------------------------------------------
 
-test("every place that signs a lesson join token names the signed-in person (uid), or the classroom refuses their chat", () => {
-  for (const file of [["app", "(classroom)", "dashboard", "lessons", "[id]", "classroom", "page.tsx"], ["lib", "actions", "classroom.ts"], ["lib", "classroom", "lessonEntry.ts"]]) {
-    const source = readFileSync(join(import.meta.dirname, "..", "src", ...file), "utf8");
-    assert.match(source, /uid: user\.id/, file.join("/"));
+test("a lesson join token is signed in ONE place, which names the signed-in person (uid); the page, the Join button and reconnect all go through it", () => {
+  const read = (...file) => readFileSync(join(import.meta.dirname, "..", "src", ...file), "utf8");
+  assert.match(read("lib", "classroom", "lessonEntry.ts"), /uid: user\.id/);
+  for (const file of [["app", "(classroom)", "dashboard", "lessons", "[id]", "classroom", "page.tsx"], ["lib", "actions", "classroom.ts"]]) {
+    const source = read(...file);
+    assert.doesNotMatch(source, /signClassroomJoinToken\(/, `${file.join("/")} must not sign a token itself`);
+    assert.match(source, /lessonEntryFor\(/, `${file.join("/")} must use the shared entry rule`);
   }
+  assert.match(read("app", "api", "classroom", "token", "route.ts"), /enterLesson\(/);
 });
 
 test("in production the chat is open when the database is set up, switched off by LESSON_CHAT_ENABLED=false, and in development it is open", () => {

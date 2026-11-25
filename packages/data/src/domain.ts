@@ -155,7 +155,9 @@ export interface LessonAttendanceRecord {
 export type LessonActivityEventType =
   | "CREATED" | "RESCHEDULED" | "CANCELLED" | "ATTENDANCE_MARKED" | "COMPLETED" | "REPORT_SUBMITTED" | "REPORT_APPROVED"
   // An administrator sent a submitted report back to its tutor for changes (migration 0023).
-  | "REPORT_RETURNED";
+  | "REPORT_RETURNED"
+  // An administrator joined the lesson's classroom to supervise it (migration 0032).
+  | "SUPERVISED";
 
 export interface LessonActivityEvent {
   id: string;

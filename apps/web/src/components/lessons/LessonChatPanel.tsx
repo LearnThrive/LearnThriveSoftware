@@ -6,7 +6,7 @@ import styles from "./LessonChatPanel.module.css";
 
 interface MessageView {
   id: string;
-  senderParty: "tutor" | "student";
+  senderParty: "tutor" | "student" | "admin";
   senderName: string;
   text: string;
   file: { id: string; displayName: string; contentType: string; size: number; url: string } | null;
@@ -29,7 +29,7 @@ const size = (bytes: number) => (bytes >= 1_048_576 ? `${(bytes / 1_048_576).toF
  * message, and the box below is offered only when the server says this person may send right now. Parents see it read-only, afterwards. Text is shown as
  * text (React escapes it); a file is a short-lived link the server makes for this person.
  */
-export function LessonChatPanel({ lessonId, isAdmin = false }: { lessonId: string; isAdmin?: boolean }) {
+export function LessonChatPanel({ lessonId, isAdmin = false, sendsAsAdmin = false }: { lessonId: string; isAdmin?: boolean; sendsAsAdmin?: boolean }) {
   const [data, setData] = useState<Listing | null>(null);
   const [problem, setProblem] = useState("");
   const [text, setText] = useState("");
@@ -131,7 +131,7 @@ export function LessonChatPanel({ lessonId, isAdmin = false }: { lessonId: strin
                 <span className={styles.removed}>Removed by an administrator.</span>
               ) : (
                 <>
-                  <span className={styles.meta}>{m.senderName} · {m.senderParty === "tutor" ? "tutor" : "student"} · {time(m.createdAt)}</span>
+                  <span className={styles.meta}>{m.senderName} · {m.senderParty === "admin" ? <strong>administrator</strong> : m.senderParty === "tutor" ? "tutor" : "student"} · {time(m.createdAt)}</span>
                   {m.text ? <p className={styles.text}>{m.text}</p> : null}
                   {m.file ? (
                     <a className={styles.file} href={m.file.url} target="_blank" rel="noopener noreferrer">
@@ -151,7 +151,7 @@ export function LessonChatPanel({ lessonId, isAdmin = false }: { lessonId: strin
       {data?.canSend ? (
         <form className={styles.composer} onSubmit={(e) => void send(e)}>
           <label className="sr-only" htmlFor={`chat-${lessonId}`}>Message</label>
-          <textarea id={`chat-${lessonId}`} value={text} onChange={(e) => setText(e.target.value)} rows={2} maxLength={2000} placeholder="Write a message" />
+          <textarea id={`chat-${lessonId}`} value={text} onChange={(e) => setText(e.target.value)} rows={2} maxLength={2000} placeholder={sendsAsAdmin ? "Write a message (it will show as from an administrator)" : "Write a message"} />
           <div className={styles.row}>
             <label className="btn btn--secondary btn--sm">
               <Paperclip size={14} aria-hidden="true" /> Attach a photo or PDF

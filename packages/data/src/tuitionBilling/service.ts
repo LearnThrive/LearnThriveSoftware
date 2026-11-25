@@ -8,7 +8,8 @@ import { londonYmd } from "./period";
 import { decideRefund, isRefundApprover, type Actor, type RefundApprovers } from "./refunds";
 import { deriveChargeEvents, type BillingAttendance, type BillingLesson } from "./rules";
 import type { TuitionBillingRepository } from "./repository";
-import { BillingError, type CompanyDetails, type IssuedStatement, type Pence, type Payment, type RefundRequest, type StatementDraft } from "./types";
+import { validateLessonPrice } from "./validate";
+import { BillingError, type CompanyDetails, type IssuedStatement, type LessonPrice, type LineFlag, type Pence, type Payment, type RefundRequest, type StatementDraft } from "./types";
 
 export interface BillingContext {
   data: DataProvider;
@@ -42,14 +43,15 @@ async function gather(ctx: BillingContext, clientId: string, period: string): Pr
   }));
   const attendance: BillingAttendance[] = [];
   for (const lesson of lessons) for (const a of await ctx.data.attendance.forLesson(lesson.id)) attendance.push({ lessonId: a.lessonId, studentId: a.studentId, status: a.status });
-  const [settings, rates, decisions, payments, statements, profile] = await Promise.all([
-    ctx.billing.settings.get(), ctx.billing.familyRates.list(clientId), ctx.billing.decisions.list(lessons.map((l) => l.id)), ctx.billing.payments.list(clientId),
-    ctx.billing.statements.list(clientId), ctx.billing.profiles.get(clientId),
+  const lessonIds = lessons.map((l) => l.id);
+  const [settings, rates, decisions, payments, statements, profile, lessonPrices] = await Promise.all([
+    ctx.billing.settings.get(), ctx.billing.familyRates.list(clientId), ctx.billing.decisions.list(lessonIds), ctx.billing.payments.list(clientId),
+    ctx.billing.statements.list(clientId), ctx.billing.profiles.get(clientId), ctx.billing.lessonPrices.list(lessonIds),
   ]);
   const before = statements.filter((s) => s.period < period);
   const previous = before[before.length - 1] ?? null;
   const input: StatementInput = {
-    client: { id: client.id, name: client.name }, students: children, period, lessons: billingLessons, attendance, decisions, rates, payments, profile, settings, company: ctx.company,
+    client: { id: client.id, name: client.name }, students: children, period, lessons: billingLessons, attendance, decisions, rates, lessonPrices, payments, profile, settings, company: ctx.company,
     asOf: nowOf(ctx), previous, countedPaymentIds: new Set(statements.flatMap((s) => s.paymentIds)),
   };
   const issued = new Set(statements.map((s) => s.period));
@@ -196,11 +198,100 @@ export async function lessonsNeedingDecision(ctx: BillingContext, clientId: stri
 export async function tutorPayFor(ctx: BillingContext, period: string): Promise<TutorPaySummary[]> {
   const [tutors, lessons, rates] = await Promise.all([ctx.data.tutors.list(), ctx.data.lessons.list(), ctx.billing.tutorRates.list()]);
   const attendance: TutorPayAttendance[] = [];
+  const paid: string[] = [];
   for (const l of lessons) {
     if (l.status !== "COMPLETED" || londonYmd(l.startAt).slice(0, 7) !== period) continue;
+    paid.push(l.id);
     for (const a of await ctx.data.attendance.forLesson(l.id)) attendance.push({ lessonId: a.lessonId, studentId: a.studentId, status: a.status });
   }
-  return tutorPay({ period, tutors: tutors.filter((t) => t.id !== ARCHIVED_TUTOR_ID).map((t) => ({ id: t.id, name: t.name })), lessons, attendance, rates });
+  const lessonPrices = await ctx.billing.lessonPrices.list(paid);
+  return tutorPay({ period, tutors: tutors.filter((t) => t.id !== ARCHIVED_TUTOR_ID).map((t) => ({ id: t.id, name: t.name })), lessons, attendance, rates, lessonPrices });
+}
+
+/**
+ * Sets one lesson's own price: what each child's family is charged for it and/or what its tutor is paid, in place of the hourly rates. The
+ * family's price cannot change once the lesson is on an issued statement (a statement is frozen: the family has been told what they owe);
+ * the tutor's pay still can, since nothing here pays a tutor. Audited.
+ */
+export async function setLessonPrice(ctx: BillingContext, input: { lessonId: string; clientPence: Pence | null; tutorPence: Pence | null; note: string }, actor: Actor): Promise<LessonPrice> {
+  validateLessonPrice(input);
+  const lesson = await ctx.data.lessons.get(input.lessonId);
+  if (!lesson) throw new BillingError("NOT_FOUND", "There is no such lesson.");
+  const [before] = await ctx.billing.lessonPrices.list([lesson.id]);
+  if ((before?.clientPence ?? null) !== input.clientPence) await refuseIfInvoiced(ctx, lesson.id);
+  const price = await ctx.billing.lessonPrices.set({ ...input, setBy: actor.id });
+  await ctx.billing.audit.append({
+    actorId: actor.id, action: "lesson_price.set", subject: lesson.id,
+    detail: { clientPence: price.clientPence, tutorPence: price.tutorPence, previousClientPence: before?.clientPence ?? null, previousTutorPence: before?.tutorPence ?? null, note: price.note },
+  });
+  return price;
+}
+
+/** Puts a lesson back on the hourly rates. Refused, like a change, if its family price is already on an issued statement. Audited. */
+export async function clearLessonPrice(ctx: BillingContext, lessonId: string, actor: Actor): Promise<void> {
+  const [before] = await ctx.billing.lessonPrices.list([lessonId]);
+  if (!before) return;
+  if (before.clientPence !== null) await refuseIfInvoiced(ctx, lessonId);
+  await ctx.billing.lessonPrices.clear(lessonId);
+  await ctx.billing.audit.append({ actorId: actor.id, action: "lesson_price.cleared", subject: lessonId, detail: { clientPence: before.clientPence, tutorPence: before.tutorPence } });
+}
+
+async function refuseIfInvoiced(ctx: BillingContext, lessonId: string): Promise<void> {
+  const on = (await ctx.billing.statements.list()).find((s) => s.lines.some((l) => l.lessonId === lessonId));
+  if (on) throw new BillingError("INVALID", `This lesson is already on statement ${on.invoiceNumber}, which has been issued, so what the family pays for it can no longer change.`);
+}
+
+/** One lesson in a month, with what the families owe for it and what its tutor is paid for it, side by side (admin only). */
+export interface LessonMoney {
+  lessonId: string;
+  startAt: string;
+  date: string;
+  title: string;
+  tutorName: string;
+  status: string;
+  minutes: number;
+  /** What the families are charged for this lesson, all children together, before any sibling discount (that is taken off the month). */
+  clientOwedPence: Pence;
+  /** What the tutor is paid for it. Null while it is not paid: not completed, or every child was absent (undecided). */
+  tutorPayPence: Pence | null;
+  /** Client owed less tutor pay, when the tutor is paid. */
+  marginPence: Pence | null;
+  /** The lesson's own price, if an administrator set one. */
+  price: LessonPrice | null;
+  /** On an issued (frozen) statement: the family price can no longer change. */
+  invoiced: boolean;
+  flags: LineFlag[];
+}
+
+/** Every lesson in a month with the family side and the tutor side kept apart, so each lesson's price and pay can be read and set. */
+export async function lessonMoneyFor(ctx: BillingContext, period: string): Promise<LessonMoney[]> {
+  const [lessons, tutors, clients, pay] = await Promise.all([ctx.data.lessons.list(), ctx.data.tutors.list(), ctx.data.clients.list(), tutorPayFor(ctx, period)]);
+  const inMonth = lessons.filter((l) => londonYmd(l.startAt).slice(0, 7) === period);
+  if (inMonth.length === 0) return [];
+  const owed = new Map<string, Pence>();
+  const flags = new Map<string, Set<LineFlag>>();
+  const invoiced = new Set<string>();
+  for (const client of clients) {
+    const issued = await ctx.billing.statements.get(client.id, period);
+    const lines = issued ? issued.lines : (await previewStatement(ctx, client.id, period))?.lines ?? [];
+    for (const line of lines) {
+      owed.set(line.lessonId, (owed.get(line.lessonId) ?? 0) + line.amountPence);
+      if (line.flag) flags.set(line.lessonId, (flags.get(line.lessonId) ?? new Set()).add(line.flag));
+      if (issued) invoiced.add(line.lessonId);
+    }
+  }
+  const paidFor = new Map(pay.flatMap((s) => s.lines).map((l) => [l.lessonId, l.amountPence]));
+  const prices = new Map((await ctx.billing.lessonPrices.list(inMonth.map((l) => l.id))).map((p) => [p.lessonId, p]));
+  const tutorName = new Map(tutors.map((t) => [t.id, t.name]));
+  return inMonth.map((l): LessonMoney => {
+    const clientOwedPence = owed.get(l.id) ?? 0;
+    const tutorPayPence = paidFor.get(l.id) ?? null;
+    return {
+      lessonId: l.id, startAt: l.startAt, date: londonYmd(l.startAt), title: l.title, tutorName: tutorName.get(l.tutorId) ?? "", status: l.status, minutes: l.durationMinutes,
+      clientOwedPence, tutorPayPence, marginPence: tutorPayPence === null ? null : clientOwedPence - tutorPayPence, price: prices.get(l.id) ?? null,
+      invoiced: invoiced.has(l.id), flags: [...(flags.get(l.id) ?? [])],
+    };
+  }).sort((a, b) => a.startAt.localeCompare(b.startAt) || a.lessonId.localeCompare(b.lessonId));
 }
 
 /** The archived "Former tutor" a purge moves history to: nobody is paid through it. */

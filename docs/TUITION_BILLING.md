@@ -11,8 +11,8 @@ Status of this work: built and tested; applied to the hosted `learnthrive-prod` 
 | Rules and statements (pure, no I/O) | `packages/data/src/tuitionBilling/` (`rules.ts`, `statement.ts`, `period.ts`, `money.ts`, `refunds.ts`, `validate.ts`) |
 | Repository, in memory and Postgres | `repository.ts`, `memoryRepository.ts`, `sqlRepository.ts` |
 | Reads lessons from the tuition data, calls the rules | `service.ts` |
-| Tables | `supabase/migrations/0021_tuition_billing.sql` |
-| Admin pages | `/dashboard/admin/billing`, `/billing/[clientId]`, `/billing/tutor-rates`, `/billing/tutor-pay` (the monthly pay run), `/billing/settings` |
+| Tables | `supabase/migrations/0021_tuition_billing.sql`; a lesson's own price in `0033_tuition_lesson_prices.sql` |
+| Admin pages | `/dashboard/admin/billing`, `/billing/[clientId]`, `/billing/tutor-rates`, `/billing/tutor-pay` (the monthly pay run), `/billing/lessons` (each lesson's family price and tutor pay, side by side), `/billing/settings` |
 | A parent's page | `/dashboard/billing` ("Fees"): their own statements, payments and how to pay. The `parentAccount` projection in `service.ts` is all it can read |
 | Spreadsheets | `GET /api/admin/billing/export?kind=statements\|payments\|tutor-pay[&period=yyyy-mm]`, admin only (`csv.ts`, `tutorPay.ts`) |
 | Admin actions | `apps/web/src/lib/actions/tuitionBilling.ts` |
@@ -22,6 +22,14 @@ Status of this work: built and tested; applied to the hosted `learnthrive-prod` 
 
 - **Money is integer pence.** Dates are London calendar dates. A month is `yyyy-mm`.
 - **Family rate and tutor rate are different tables** (B2). A family rate belongs to one assignment and **applies until a newer one replaces it**: there is no fixed contract year (14 Nov 2026: families commit for three months to start with, then give a month's notice; the notice and the minimum are terms, not enforced by the software). A new rate ends the current one the day before it starts; it cannot start on or before the current rate's start (`RATE_LOCKED`), and once a family has a rate, a change cannot start before today, so it can never reprice lessons already taught. Tutor pay must be £5 to £45 an hour.
+- **A lesson can have its own price** (`tuition_lesson_prices`, `/dashboard/admin/billing/lessons`). For one lesson an administrator sets what each
+  child's family is charged for it and/or what its tutor is paid for it, as **two separate amounts** (a lesson may cost a family £10 and pay its
+  tutor £5). A side left blank uses the hourly rate. The family amount is per child and replaces the hourly charge on the statement (a repeat
+  no-show or repeat late cancellation is charged at it too, unless a fixed late-cancellation fee is set); the line then shows no hourly rate. The
+  tutor amount is paid once for the lesson in the pay run. The page lists every lesson in a month with what the families owe for it, what the tutor
+  is paid and the difference (before any sibling discount, which comes off the month). **The family side cannot change once the lesson is on an
+  issued statement**; the tutor side still can. Every change is audited (`lesson_price.set`, `lesson_price.cleared`). An administrator reaches it from
+  the lesson page ("Price and tutor pay"), which links there and reads no money itself.
 - **A lesson is charged** when it was delivered (completed, and the child was not absent or excused), late-cancelled by the family (less than the notice, 24 hours), or a no-show. A tutor cancellation, a free cancellation or a lesson not yet happened is never charged (B8). A cancelled or unfinished lesson nobody has explained **blocks the statement** until an admin says who cancelled, or waives it with a reason.
 - **Allowances are per child and separate** (B6, B7): the first late cancellation and the first no-show are each waived once, counted over the child's whole history. **A repeat late cancellation is charged at the lesson's own price** ("charged" was decided on 14 Nov, the amount was not, so this is an assumption to confirm; a fixed fee can be set instead).
 - **A student cannot be marked absent until 15 minutes after the lesson's scheduled start** (14 Nov 2026), in the software (`markAttendance`) and on the lesson screen.

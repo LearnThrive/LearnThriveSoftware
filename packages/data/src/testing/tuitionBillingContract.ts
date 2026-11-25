@@ -7,7 +7,8 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { DataProvider } from "../repositories";
 import {
-  BillingError, decideRefundRequest, familyBalances, issueStatement, parseApprovers, previewStatement, recordPayment, requestRefund, voidPayment,
+  BillingError, clearLessonPrice, decideRefundRequest, familyBalances, issueStatement, lessonMoneyFor, parseApprovers, previewStatement, recordPayment, requestRefund,
+  setLessonPrice, tutorPayFor, voidPayment,
   type BillingContext, type TuitionBillingRepository,
 } from "../tuitionBilling";
 
@@ -306,6 +307,65 @@ export function tuitionBillingContract(name: string, make: () => Promise<{ harne
       const done = await decideRefundRequest(both, r.id, second, true, "");
       assert.ok(done.ok && done.refund.status === "APPROVED");
       await repo.settings.update({ refundSecondApprovalPence: null }, admin);
+    });
+
+    test("a lesson's own price: the family's and the tutor's amounts are stored apart, either may be left to the hourly rate, one per lesson", async () => {
+      const { clientId } = await h.family("Priced");
+      const kid = await child(clientId);
+      const l = await lesson(await assignment((await tutor()).id, [kid.id]), "2026-10-07T16:00:00Z");
+      await rejects(repo.lessonPrices.set({ lessonId: l.id, clientPence: null, tutorPence: null, note: "", setBy: admin }), "INVALID");
+      await rejects(repo.lessonPrices.set({ lessonId: l.id, clientPence: -1, tutorPence: null, note: "", setBy: admin }), "INVALID");
+      await rejects(repo.lessonPrices.set({ lessonId: l.id, clientPence: 100_001, tutorPence: null, note: "", setBy: admin }), "INVALID");
+      await rejects(repo.lessonPrices.set({ lessonId: l.id, clientPence: 1000, tutorPence: 12.5, note: "", setBy: admin }), "INVALID");
+      const first = await repo.lessonPrices.set({ lessonId: l.id, clientPence: 1000, tutorPence: 500, note: " trial lesson ", setBy: admin });
+      assert.deepEqual({ c: first.clientPence, t: first.tutorPence, n: first.note }, { c: 1000, t: 500, n: "trial lesson" });
+      const tutorOnly = await repo.lessonPrices.set({ lessonId: l.id, clientPence: null, tutorPence: 700, note: "", setBy: admin });
+      assert.deepEqual({ c: tutorOnly.clientPence, t: tutorOnly.tutorPence }, { c: null, t: 700 });
+      assert.deepEqual((await repo.lessonPrices.list([l.id])).map((x) => x.tutorPence), [700], "one price per lesson; setting again replaces it");
+      assert.deepEqual(await repo.lessonPrices.list([]), []);
+      await repo.lessonPrices.clear(l.id);
+      assert.deepEqual(await repo.lessonPrices.list([l.id]), []);
+      await repo.lessonPrices.clear(l.id); // clearing nothing is not an error
+    });
+
+    test("a lesson priced on its own: the family is charged its price, the tutor paid theirs, side by side; frozen for the family once invoiced", async () => {
+      const actor = { id: admin, email: "a@example.test" };
+      const { clientId } = await h.family("Own Price Family");
+      const kid = await child(clientId, "Zara");
+      const t = await tutor();
+      const a = await assignment(t.id, [kid.id]);
+      const own = await lesson(a, "2026-10-08T16:00:00Z");
+      const hourly = await lesson(a, "2026-10-15T16:00:00Z");
+      await repo.tutorRates.create({ tutorId: t.id, hourlyPence: 1500, effectiveFrom: "2026-09-01", createdBy: admin });
+
+      // With no family rate, the lesson with its own price is still priced; only the other one is blocked.
+      await setLessonPrice(ctx(), { lessonId: own.id, clientPence: 1000, tutorPence: 500, note: "Taster" }, actor);
+      const before = await previewStatement(ctx(), clientId, "2026-10");
+      assert.deepEqual(before?.lines.map((x) => [x.amountPence, x.flag ?? null]), [[1000, null], [0, "NO_RATE"]]);
+
+      await repo.familyRates.create({ clientId, assignmentId: a.id, hourlyPence: 3000, contractStart: "2026-09-01", contractEnd: null, createdBy: admin });
+      const draft = await previewStatement(ctx(), clientId, "2026-10");
+      assert.equal(draft?.lessonChargesPence, 1000 + 3000, "10 pounds for the priced lesson, the hourly rate for the other");
+      assert.deepEqual(draft?.lines.map((x) => x.ratePence), [null, 3000], "a lesson with its own price is not shown as priced by the hour");
+
+      const pay = (await tutorPayFor(ctx(), "2026-10")).find((s) => s.tutorId === t.id);
+      assert.deepEqual(pay?.lines.map((x) => [x.amountPence, x.setForLesson]), [[500, true], [1500, false]]);
+      assert.equal(pay?.unpricedLessons, 0);
+
+      const rows = (await lessonMoneyFor(ctx(), "2026-10")).filter((r) => r.lessonId === own.id || r.lessonId === hourly.id);
+      assert.deepEqual(rows.map((r) => [r.clientOwedPence, r.tutorPayPence, r.marginPence, r.price?.clientPence ?? null, r.invoiced]), [[1000, 500, 500, 1000, false], [3000, 1500, 1500, null, false]]);
+
+      await issueStatement(ctx(), clientId, "2026-10", actor);
+      await assert.rejects(setLessonPrice(ctx(), { lessonId: own.id, clientPence: 1200, tutorPence: 500, note: "" }, actor), (e) => e instanceof BillingError && /already on statement/.test(e.message));
+      await assert.rejects(setLessonPrice(ctx(), { lessonId: hourly.id, clientPence: 2000, tutorPence: null, note: "" }, actor), (e) => e instanceof BillingError && e.code === "INVALID");
+      await assert.rejects(clearLessonPrice(ctx(), own.id, actor), (e) => e instanceof BillingError);
+      // The tutor's side is not on a statement, so it can still be corrected.
+      await setLessonPrice(ctx(), { lessonId: own.id, clientPence: 1000, tutorPence: 600, note: "Taster" }, actor);
+      assert.equal((await tutorPayFor(ctx(), "2026-10")).find((s) => s.tutorId === t.id)?.lines[0]?.amountPence, 600);
+      const [entry] = await repo.audit.recent(1);
+      assert.deepEqual([entry?.action, entry?.subject, entry?.detail.previousTutorPence, entry?.detail.tutorPence], ["lesson_price.set", own.id, 500, 600]);
+      assert.equal((await lessonMoneyFor(ctx(), "2026-10")).find((r) => r.lessonId === own.id)?.invoiced, true);
+      await rejects(setLessonPrice(ctx(), { lessonId: "00000000-0000-4000-8000-000000000999", clientPence: 1, tutorPence: null, note: "" }, actor), "NOT_FOUND");
     });
 
     test("teardown", async () => {

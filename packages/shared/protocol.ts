@@ -1,5 +1,8 @@
 export interface MediaState { audio: boolean; video: boolean }
-export type ParticipantRole = 'tutor' | 'student';
+// 'supervisor': an administrator who has joined a LESSON to supervise it (docs/CLASSROOM_INTEGRATION.md, "Supervising a lesson"). Only ever from a
+// verified join token. They are let in without the waiting room, take no student's seat, join with microphone and camera off, are shown to everyone
+// as an administrator, and have no say over the lesson: the tutor stays in charge, and the supervisor cannot draw, share a screen or vote.
+export type ParticipantRole = 'tutor' | 'student' | 'supervisor';
 export type StaffTitle = 'Admin' | 'Tutor';
 // forceMuted is a server/tutor-authoritative directive layered on top of media.audio, which stays
 // 100% client-self-reported as before — the two are deliberately independent (never clamp one

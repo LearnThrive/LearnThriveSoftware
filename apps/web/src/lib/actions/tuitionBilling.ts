@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
-  BillingError, decideRefundRequest, issueStatement, londonYmd, parsePounds, recordPayment, requestRefund, voidPayment, PERIOD, YMD,
+  BillingError, clearLessonPrice, decideRefundRequest, issueStatement, londonYmd, parsePounds, recordPayment, requestRefund, setLessonPrice, voidPayment, PERIOD, YMD,
   type Actor, type CancelParty,
 } from "@learnthrive/data/tuitionBilling";
 import { requireRole } from "@/lib/auth/guard";
@@ -35,12 +35,12 @@ async function attempt(back: string, done: string, change: () => Promise<void>):
   try {
     await change();
   } catch (error) {
-    if (error instanceof BillingError) redirect(`${back}?toast=${encodeURIComponent(error.message)}`);
+    if (error instanceof BillingError) redirect(`${back}${back.includes("?") ? "&" : "?"}toast=${encodeURIComponent(error.message)}`);
     throw error;
   }
   revalidatePath(BASE);
-  revalidatePath(back);
-  redirect(`${back}?toast=${encodeURIComponent(done)}`);
+  revalidatePath(back.split("?")[0]!);
+  redirect(`${back}${back.includes("?") ? "&" : "?"}toast=${encodeURIComponent(done)}`);
 }
 
 function pence(formData: FormData, key: string, label: string): number {
@@ -96,6 +96,37 @@ export async function setSiblingEligibleAction(formData: FormData): Promise<void
     const ctx = billingContext();
     await ctx.billing.profiles.setSiblingEligible(clientId, value === "true", actor.id);
     await ctx.billing.audit.append({ actorId: actor.id, action: "sibling_discount.set", subject: clientId, detail: { eligible: value === "true" } });
+  });
+}
+
+/** Pounds typed by a person, or null when the box was left empty (the hourly rate applies). */
+function optionalPence(formData: FormData, key: string, label: string): number | null {
+  return text(formData, key) === "" ? null : pence(formData, key, label);
+}
+
+const lessonPricesPath = (formData: FormData) => {
+  const period = text(formData, "period");
+  return `${BASE}/lessons${PERIOD.test(period) ? `?period=${period}` : ""}`;
+};
+
+/** One lesson's own price: what each child's family pays and/or what its tutor gets, kept apart. Blank on a side means the hourly rate. */
+export async function setLessonPriceAction(formData: FormData): Promise<void> {
+  const actor = await admin();
+  await attempt(lessonPricesPath(formData), "Lesson price saved", async () => {
+    await setLessonPrice(billingContext(), {
+      lessonId: text(formData, "lessonId"),
+      clientPence: optionalPence(formData, "client", "The family's price"),
+      tutorPence: optionalPence(formData, "tutor", "The tutor's pay"),
+      note: text(formData, "note"),
+    }, actor);
+  });
+}
+
+/** Puts a lesson back on the hourly rates. */
+export async function clearLessonPriceAction(formData: FormData): Promise<void> {
+  const actor = await admin();
+  await attempt(lessonPricesPath(formData), "Lesson back on the hourly rates", async () => {
+    await clearLessonPrice(billingContext(), text(formData, "lessonId"), actor);
   });
 }
 

@@ -64,6 +64,24 @@ export interface TutorRate {
 export const TUTOR_RATE_MIN_PENCE = 500; // 5 pounds an hour
 export const TUTOR_RATE_MAX_PENCE = 4500; // 45 pounds an hour
 
+/**
+ * A price set for ONE lesson, in place of the hourly rates: what each child's family is charged for it, and what its tutor is paid for it,
+ * as two separate amounts (a lesson may cost a family 10 pounds and pay its tutor 5). Either side may be left to the hourly rate (null).
+ * The family amount is per child on the lesson; the tutor amount is for the lesson, once. Admin only, like every rate (B17).
+ */
+export interface LessonPrice {
+  lessonId: string;
+  /** What each child's family is charged for this lesson, in place of the family's hourly rate. Null: the hourly rate applies. */
+  clientPence: Pence | null;
+  /** What the tutor is paid for this lesson, in place of their hourly pay. Null: the hourly pay applies. */
+  tutorPence: Pence | null;
+  note: string;
+  setBy: string;
+  setAt: string;
+}
+
+export const LESSON_PRICE_MAX_PENCE = 100_000; // 1,000 pounds for one lesson: a guard against a mistyped amount, not a price
+
 /** B4: the family is recorded as eligible for the sibling discount. */
 export interface FamilyBillingProfile {
   clientId: string;

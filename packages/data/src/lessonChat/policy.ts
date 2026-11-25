@@ -91,13 +91,25 @@ export function chatWindow(lesson: Pick<ChatLesson, "startAt" | "durationMinutes
  *
  * Only the lesson's own tutor and a student enrolled in it may send. Students may reply anywhere inside the same window. A junior tutor cannot
  * send at all for now: TODO(supervision) when the supervision rules exist (a tutor overseeing a junior's messages), decide here what a junior may
- * send and who sees it. Parents, administrators and the safeguarding lead only read.
+ * send and who sees it. Parents and the safeguarding lead only read. An administrator may send, as an administrator, on any lesson that is not
+ * cancelled, at any time.
  */
 export function canSend(lesson: ChatLesson | null, actor: ChatActor, now: Date, config: LessonChatConfig): SendDecision {
   if (!lesson) return refuse("LESSON_NOT_FOUND");
   const relations = relationshipsOf(lesson, actor);
+  const decision = asParticipant(lesson, relations, now, config);
+  // An administrator may step into any lesson's chat to sort out a problem, at any time (a problem does not keep to the timetable), on any lesson that
+  // is not cancelled. They send AS AN ADMINISTRATOR, so the tutor and the students always know who is speaking. An administrator who is also this
+  // lesson's tutor sends as its tutor while the lesson is on, and as an administrator otherwise.
+  const cancelled = lesson.status === "CANCELLED" || lesson.status === "NO_SHOW";
+  if (!decision.ok && relations.has("admin") && !cancelled) return { ok: true, party: "admin" };
+  return decision;
+}
+
+/** The lesson's own tutor or a student on it, inside the lesson's window: the rule for everybody but an administrator. */
+function asParticipant(lesson: ChatLesson, relations: Set<Relationship>, now: Date, config: LessonChatConfig): SendDecision {
   const party: ChatParty | null = relations.has("tutor") ? "tutor" : relations.has("student") ? "student" : null;
-  if (party === null) return relations.has("junior_tutor") ? refuse("JUNIOR_TUTOR_CANNOT_SEND") : refuse("NOT_PARTICIPANT");
+  if (party === null) return relations.has("junior_tutor") ? refuse("JUNIOR_TUTOR_CANNOT_SEND") : refuse(relations.has("admin") && (lesson.status === "CANCELLED" || lesson.status === "NO_SHOW") ? "LESSON_CANCELLED" : "NOT_PARTICIPANT");
   if (lesson.status === "CANCELLED" || lesson.status === "NO_SHOW") return refuse("LESSON_CANCELLED");
   const window = chatWindow(lesson, config);
   if (window === null) return refuse("LESSON_NOT_SCHEDULED");

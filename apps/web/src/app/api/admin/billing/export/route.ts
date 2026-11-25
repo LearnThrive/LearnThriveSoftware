@@ -47,7 +47,7 @@ export async function GET(request: Request) {
     if (!period) return jsonResponse(400, { error: "Choose the month to pay for: period=yyyy-mm." });
     const summaries = await tutorPayFor(ctx, period);
     header = ["Tutor", "Period", "Lesson date", "Lesson", "Minutes", "Hourly pay", "Amount"];
-    rows = summaries.flatMap((s) => s.lines.map((l): CsvValue[] => [s.tutorName, period, l.date, l.title, l.minutes, l.ratePence === null ? "no rate set" : money(l.ratePence), money(l.amountPence)]));
+    rows = summaries.flatMap((s) => s.lines.map((l): CsvValue[] => [s.tutorName, period, l.date, l.title, l.minutes, l.setForLesson ? "set for this lesson" : l.ratePence === null ? "no rate set" : money(l.ratePence), money(l.amountPence)]));
     name = `tutor-pay-${period}`;
   } else {
     return NOT_FOUND();

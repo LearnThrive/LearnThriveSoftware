@@ -1486,6 +1486,112 @@ describe('signalling through real Socket.IO clients', () => {
     }
   }, 60_000);
 
+  describe('an administrator supervising a lesson (role "supervisor")', () => {
+    const supervisorToken = (name = 'Ada Admin', roomId = 'room-one') => signClassroomJoinToken({ roomId, lessonId: 'lesson-1', name, role: 'supervisor', uid: `admin-${name}`, exp: Date.now() + 60_000 });
+    async function joinSupervisor(client: Client, name?: string) {
+      const joined = new Promise<JoinedRoom>((resolve) => client.once('room:joined', resolve));
+      // The token decides the role: what the client claims alongside it is ignored.
+      client.emit('room:join', { roomId: 'ignored', name: 'Ignored', role: 'student', media, token: supervisorToken(name) });
+      return joined;
+    }
+    const errorOf = (client: Client) => new Promise<{ message: string }>((resolve) => client.once('room:error', resolve));
+
+    it('walks straight in without the waiting room, with microphone and camera off, badged Admin, and the class sees them arrive', async () => {
+      const tutor = await connect();
+      await joinTutor(tutor, 'Tara');
+      const student = await connect();
+      await admit(tutor, student, 'Sam');
+      const tutorSees = new Promise<{ peer: Participant }>((resolve) => tutor.once('room:participant-joined', resolve));
+      const studentSees = new Promise<{ peer: Participant }>((resolve) => student.once('room:participant-joined', resolve));
+      let tutorAskedToAdmit = false;
+      tutor.on('room:waiting-update', (update) => { if (update.waiting.length > 0) tutorAskedToAdmit = true; });
+      const supervisor = await connect();
+      const joined = await joinSupervisor(supervisor);
+      expect(joined.self).toMatchObject({ name: 'Ada Admin', role: 'supervisor', title: 'Admin', media: { audio: false, video: false } });
+      expect(joined.peers.map((p) => p.peer.name).sort()).toEqual(['Sam', 'Tara']);
+      expect((await tutorSees).peer).toMatchObject({ role: 'supervisor', title: 'Admin' });
+      expect((await studentSees).peer.role).toBe('supervisor');
+      expect(tutorAskedToAdmit).toBe(false);
+    });
+
+    it('takes no student seat: a full class still admits its students with a supervisor present', async () => {
+      const tutor = await connect();
+      await joinTutor(tutor, 'Tara');
+      await joinSupervisor(await connect(), 'Ada');
+      for (const name of ['S1', 'S2', 'S3']) await admit(tutor, await connect(), name);
+      expect(server.stats().participants).toBe(5);
+    });
+
+    it('leaves the tutor in charge: the tutor cannot mute or remove a supervisor, and a supervisor has no tutor powers', async () => {
+      const tutor = await connect();
+      await joinTutor(tutor, 'Tara');
+      const supervisor = await connect();
+      await joinSupervisor(supervisor);
+      const refusedMute = errorOf(tutor);
+      tutor.emit('room:mute-participant', { id: supervisor.id! });
+      expect((await refusedMute).message).toBe('That student is not currently in the class.');
+      const refusedRemove = errorOf(tutor);
+      tutor.emit('room:remove-participant', { id: supervisor.id! });
+      expect((await refusedRemove).message).toBe('That student is not currently in the class.');
+      const noLock = errorOf(supervisor);
+      supervisor.emit('room:settings', { locked: true });
+      expect((await noLock).message).toBe('Only the tutor can change class settings.');
+      const noMute = errorOf(supervisor);
+      supervisor.emit('room:mute-all');
+      expect((await noMute).message).toBe('Only the tutor can mute students.');
+    });
+
+    it('watches without disturbing: no drawing, no screen share, no poll vote, no understanding answer', async () => {
+      const tutor = await connect();
+      await joinTutor(tutor, 'Tara');
+      const supervisor = await connect();
+      await joinSupervisor(supervisor);
+      const draw = errorOf(supervisor);
+      supervisor.emit('board:update', { pageId: 'any', elements: [] });
+      expect((await draw).message).toBe('A supervisor watches the whiteboard but does not draw on it.');
+      const share = errorOf(supervisor);
+      supervisor.emit('participant:screen-share', { sharing: true });
+      expect((await share).message).toBe('A supervisor cannot share a screen in a lesson.');
+      const vote = errorOf(supervisor);
+      supervisor.emit('poll:vote', { optionId: 'anything' });
+      expect((await vote).message).toBe('A supervisor does not vote in the class poll.');
+      const answer = errorOf(supervisor);
+      supervisor.emit('understanding:respond', { status: 'lost' });
+      expect((await answer).message).toBe('A supervisor does not answer the understanding check.');
+    });
+
+    it('can come in before the tutor, and the tutor still takes the tutor seat; when the tutor leaves, the class ends for the supervisor too', async () => {
+      const supervisor = await connect();
+      await joinSupervisor(supervisor);
+      const tutor = await connect();
+      const joined = await joinTutor(tutor, 'Tara');
+      expect(joined.self.role).toBe('tutor');
+      const ended = new Promise<void>((resolve) => supervisor.once('room:ended', () => resolve()));
+      tutor.emit('room:leave', () => undefined);
+      await ended;
+    });
+
+    it('at most two supervisors at once', async () => {
+      const tutor = await connect();
+      await joinTutor(tutor, 'Tara');
+      await joinSupervisor(await connect(), 'A1');
+      await joinSupervisor(await connect(), 'A2');
+      const third = await connect();
+      const full = new Promise<{ message: string }>((resolve) => third.once('room:full', resolve));
+      third.emit('room:join', { roomId: 'ignored', name: 'x', role: 'student', media, token: supervisorToken('A3') });
+      expect((await full).message).toBe('Two administrators are already supervising this lesson.');
+    });
+
+    it('nobody can claim the role without a signed link, and a staff meeting link can never carry it', async () => {
+      const client = await connect();
+      const refused = errorOf(client);
+      client.emit('room:join', { roomId: 'room-one', name: 'Pretender', role: 'supervisor' as ParticipantRole, media });
+      expect((await refused).message).toBe('Invalid role.');
+      const meetingToken = signClassroomJoinToken({ roomId: 'meeting-room-9', lessonId: 'meeting-9', name: 'Ada', role: 'supervisor', kind: 'meeting', exp: Date.now() + 60_000 });
+      expect(verifyClassroomJoinToken(meetingToken)).toBeNull();
+    });
+  });
+
   describe('platform-authenticated join (classroom join tokens)', () => {
     it('a valid token joins using the TOKEN\'s own name/role, ignoring any different values also sent alongside it', async () => {
       const tutor = await connect();
