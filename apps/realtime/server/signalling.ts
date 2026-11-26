@@ -6,13 +6,13 @@ import { isDevTunnelHost } from '@learnthrive/shared/allowedHosts';
 import { verifyClassroomJoinToken } from '@learnthrive/shared/classroomToken';
 import { chatFileProblem, MAX_CHAT_FILE_BYTES, safeFileName } from '@learnthrive/shared/chatFiles';
 import {
-  ANNOUNCEMENT_TTL_MS, CHAT_REACTION_EMOJIS, CHAT_REPLY_PREVIEW_LENGTH, MAX_ANNOUNCEMENT_LENGTH, MAX_BOARD_ELEMENT_BYTES, MAX_BOARD_ELEMENTS_PER_PAGE,
+  ANNOUNCEMENT_TTL_MS, BOARD_FILE_MIME_TYPES, MAX_BOARD_FILE_CHARS, MAX_BOARD_FILES_TOTAL_CHARS, CHAT_REACTION_EMOJIS, CHAT_REPLY_PREVIEW_LENGTH, MAX_ANNOUNCEMENT_LENGTH, MAX_BOARD_ELEMENT_BYTES, MAX_BOARD_ELEMENTS_PER_PAGE,
   MAX_BOARD_IMPORT_BYTES, MAX_BOARD_PAGE_NAME_LENGTH, MAX_BOARD_PAGES, MAX_BOARD_UPDATE_BATCH, MAX_CHAT_LENGTH,
   MAX_NAME_LENGTH, MAX_POLL_OPTION_LENGTH, MAX_POLL_OPTIONS, MAX_POLL_QUESTION_LENGTH, MAX_STUDENTS,
   MIN_POLL_OPTIONS, REACTION_EMOJIS, ROOM_PATTERN, SFU_MAX_STUDENTS, WAITING_ROOM_CAP,
 } from '@learnthrive/shared/protocol';
 import type {
-  Announcement, BoardBackground, BoardElement, BoardPage, BoardState, ChatMessage, ChatReactions, ChatReplyPreview, ClientToServerEvents,
+  Announcement, BoardBackground, BoardElement, BoardFile, BoardPage, BoardState, ChatMessage, ChatReactions, ChatReplyPreview, ClientToServerEvents,
   JoinedRoom, MediaState, Participant, ParticipantRole, PollState, PollVisibility, RoomSettings, RoomTimerState,
   ServerToClientEvents, SfuPublication, SfuTrackInfo, SignalCandidate, SignalDescription, StaffTitle, TimerMode, UnderstandingCheckState, UnderstandingStatus,
 } from '@learnthrive/shared/protocol';
@@ -76,7 +76,7 @@ interface RoomTimer { mode: TimerMode; anchorAt: number; durationMs: number | nu
 // Elements are keyed by id for O(1) reconciliation lookups. The server is schema-blind to
 // everything on a BoardElement except id/version/versionNonce/isDeleted — see shared/protocol.ts.
 interface RoomBoardPage { id: string; name: string; background: BoardBackground; elements: Map<string, BoardElement> }
-interface RoomBoard { pages: RoomBoardPage[]; activePageId: string; studentsCanDraw: boolean }
+interface RoomBoard { pages: RoomBoardPage[]; activePageId: string; studentsCanDraw: boolean; files: Map<string, BoardFile> }
 interface Room {
   participants: Map<string, Participant>;
   waiting: Map<string, WaitingEntry>;
@@ -126,7 +126,7 @@ function createRoom(meeting = false): Room {
     activeScreenShareId: null, poll: null, understandingCheck: null, timer: null,
     board: {
       pages: [{ id: firstPageId, name: 'Board 1', background: 'blank', elements: new Map() }],
-      activePageId: firstPageId, studentsCanDraw: true,
+      activePageId: firstPageId, studentsCanDraw: true, files: new Map(),
     },
     announcement: null, announcementTimer: null, removedNames: new Map(), meeting, chatLog: new Map(), annotations: new Map(),
   };
@@ -225,6 +225,17 @@ function parseBoardImport(value: unknown): { pageId: string; elements: BoardElem
     elements.push(element);
   }
   return { pageId: value.pageId, elements };
+}
+
+// Only the three fields that are used are kept. The picture must be a base64 data URL of the very type it claims, from the allowed list.
+function parseBoardFile(value: unknown): BoardFile | null {
+  if (!isRecord(value) || typeof value.id !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(value.id)) return null;
+  const { id, mimeType, dataURL } = value;
+  if (typeof mimeType !== 'string' || !(BOARD_FILE_MIME_TYPES as readonly string[]).includes(mimeType)) return null;
+  if (typeof dataURL !== 'string' || dataURL.length > MAX_BOARD_FILE_CHARS) return null;
+  const head = `data:${mimeType};base64,`;
+  if (!dataURL.startsWith(head) || !/^[A-Za-z0-9+/]+={0,2}$/.test(dataURL.slice(head.length))) return null;
+  return { id: id as string, mimeType, dataURL };
 }
 
 function parseBackground(value: unknown): BoardBackground | null {
@@ -378,6 +389,7 @@ export function createSignallingServer(options?: {
   const understandingRateLimiter = createRateLimiter(UNDERSTANDING_RATE_WINDOW_MS, UNDERSTANDING_RATE_MAX);
   const boardPointerRateLimiter = createRateLimiter(BOARD_POINTER_RATE_WINDOW_MS, BOARD_POINTER_RATE_MAX);
   const boardUpdateRateLimiter = createRateLimiter(BOARD_UPDATE_RATE_WINDOW_MS, BOARD_UPDATE_RATE_MAX);
+  const boardFileRateLimiter = createRateLimiter(60_000, 60);
 
   function fail(socket: MeetingSocket, message: string) {
     socket.emit('room:error', { message });
@@ -513,6 +525,11 @@ export function createSignallingServer(options?: {
     };
   }
 
+  /** The whiteboard's pictures, one message each, for someone who has just been given the board. */
+  function sendBoardFiles(socket: MeetingSocket, room: Room) {
+    for (const file of room.board.files.values()) socket.emit('board:file', file);
+  }
+
   /** Wipes the drawing on the shared screen and tells everyone, if there was any. Whenever a share starts or ends, its drawing goes with it. */
   function clearAnnotations(room: Room) {
     if (room.annotations.size === 0) return;
@@ -560,7 +577,8 @@ export function createSignallingServer(options?: {
     socket.data.roomId = roomId;
     void socket.join(`meeting:${roomId}`);
     const waiting = self.role === 'tutor' ? [...room.waiting.entries()].map(([id, entry]) => ({ id, name: entry.name })) : [];
-    socket.emit('room:joined', { roomId, self, peers, waiting, media: roomMedia, ...personalizedExtras(room, self.id, self.role), board: buildBoardState(room), announcement: room.announcement, annotations: [...room.annotations.values()] });
+    socket.emit('room:joined', { roomId, self, peers, waiting, media: roomMedia, ...personalizedExtras(room, self.id, self.role), board: buildBoardState(room), announcement: room.announcement, annotations: [...room.annotations.values()], boardFileIds: [...room.board.files.keys()] });
+    sendBoardFiles(socket, room);
     if (sfuService) socket.emit('sfu:publications', { publications: [...room.publications.values()] });
     if (self.role === 'tutor') socket.emit('room:removed-list-update', { names: [...room.removedNames.values()] });
   }
@@ -584,7 +602,8 @@ export function createSignallingServer(options?: {
       }
     }
     const waiting = self.role === 'tutor' ? [...room.waiting.entries()].map(([id, entry]) => ({ id, name: entry.name })) : [];
-    socket.emit('room:joined', { roomId, self, peers, waiting, media: roomMedia, ...personalizedExtras(room, self.id, self.role), board: buildBoardState(room), announcement: room.announcement, annotations: [...room.annotations.values()] });
+    socket.emit('room:joined', { roomId, self, peers, waiting, media: roomMedia, ...personalizedExtras(room, self.id, self.role), board: buildBoardState(room), announcement: room.announcement, annotations: [...room.annotations.values()], boardFileIds: [...room.board.files.keys()] });
+    sendBoardFiles(socket, room);
     if (sfuService) socket.emit('sfu:publications', { publications: [...room.publications.values()] });
     if (self.role === 'tutor') socket.emit('room:removed-list-update', { names: [...room.removedNames.values()] });
   }
@@ -684,6 +703,7 @@ export function createSignallingServer(options?: {
     understandingRateLimiter.clear(staleId);
     boardPointerRateLimiter.clear(staleId);
     boardUpdateRateLimiter.clear(staleId);
+    boardFileRateLimiter.clear(staleId);
     if (room.activeScreenShareId === staleId) { room.activeScreenShareId = null; clearAnnotations(room); }
     for (const [sessionId, edge] of room.edges) {
       if (edge.participantIds.includes(staleId)) room.edges.delete(sessionId);
@@ -728,6 +748,7 @@ export function createSignallingServer(options?: {
     understandingRateLimiter.clear(socket.id);
     boardPointerRateLimiter.clear(socket.id);
     boardUpdateRateLimiter.clear(socket.id);
+    boardFileRateLimiter.clear(socket.id);
     if (room.activeScreenShareId === socket.id) { room.activeScreenShareId = null; clearAnnotations(room); }
     const departing = room.participants.get(socket.id) ?? null;
     if (!room.participants.delete(socket.id)) return;
@@ -1438,6 +1459,27 @@ export function createSignallingServer(options?: {
         io.to(id).emit('board:cleared', { pageId: parsed.pageId });
         if (parsed.elements.length > 0) io.to(id).emit('board:update', { pageId: parsed.pageId, elements: parsed.elements });
       }
+    });
+
+    // A picture for the whiteboard. The tutor only: students see it and can move and draw on it like anything else, but cannot add their own
+    // (a lesson's files from students go through the stored, safeguarded lesson chat).
+    socket.on('board:file', (payload: unknown, ack: unknown) => {
+      const answer = (accepted: boolean) => { if (typeof ack === 'function') ack(accepted); };
+      const refuse = (message: string) => { answer(false); fail(socket, message); };
+      const room = socket.data.roomId ? rooms.get(socket.data.roomId) : undefined;
+      if (!room || room.participants.get(socket.id)?.role !== 'tutor') return refuse('Only the tutor can add pictures to the whiteboard.');
+      if (!boardFileRateLimiter.allow(socket.id)) return refuse('You are adding pictures too quickly. Please wait a moment and add it again.');
+      const file = parseBoardFile(payload);
+      if (!file) return refuse('That picture could not be shared. Use a PNG, JPG, GIF, WebP or SVG of up to 4 MB.');
+      if (!room.board.files.has(file.id)) {
+        // ponytail: pictures live as long as the room, even after being deleted from the board (an undo can bring one back); a simple total cap.
+        let held = 0;
+        for (const other of room.board.files.values()) held += other.dataURL.length;
+        if (held + file.dataURL.length > MAX_BOARD_FILES_TOTAL_CHARS) return refuse('The whiteboard is full of pictures for this lesson, so that one was not shared.');
+        room.board.files.set(file.id, file);
+        for (const id of room.participants.keys()) if (id !== socket.id) io.to(id).emit('board:file', file);
+      }
+      answer(true);
     });
 
     socket.on('announce:send', (payload: unknown) => {

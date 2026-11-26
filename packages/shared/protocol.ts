@@ -70,6 +70,9 @@ export type BoardBackground = 'blank' | 'lined' | 'grid' | 'dotted' | 'coordinat
 // client-side; the server is deliberately schema-blind to it.
 export interface BoardElement { id: string; version: number; versionNonce: number; isDeleted?: boolean; [key: string]: unknown }
 export interface BoardPage { id: string; name: string; background: BoardBackground }
+// The picture behind an image element. The element (where it sits, how big) travels with the other drawings; the picture itself is sent once, by the
+// tutor, through the room server, which holds it in memory while the room lasts and gives it to everyone who is or later comes in. Never stored.
+export interface BoardFile { id: string; mimeType: string; dataURL: string }
 // Not personalized (unlike polls/understanding checks) — every participant sees the same board
 // state, so this is broadcast/embedded as-is. Every page's elements are included up front so
 // switching pages is a pure local operation with no server round-trip.
@@ -105,6 +108,8 @@ export interface JoinedRoom {
   board: BoardState; announcement: Announcement | null;
   // The tutor's drawing on top of a shared screen (separate from the whiteboard's pages). Empty unless a screen is being shared and drawn on.
   annotations?: BoardElement[];
+  // The pictures the room already holds for the whiteboard; each follows as its own board:file message.
+  boardFileIds?: string[];
 }
 export interface PeerJoined { peer: Participant; sessionId: string; initiator: boolean }
 export interface SignalDescription { sessionId: string; description: RTCSessionDescriptionInit }
@@ -180,6 +185,8 @@ export interface ClientToServerEvents {
   'board:clear': (payload: { pageId: string }) => void;
   'board:follow-me': () => void;
   'board:import': (payload: { pageId: string; elements: BoardElement[] }) => void;
+  // Tutor only: a picture for the whiteboard. Answered true once the room has it, false if it was refused (a room:error says why).
+  'board:file': (payload: BoardFile, ack: (accepted: boolean) => void) => void;
   // Drawing on a shared screen (tutor only, and only while a screen is shared). Elements use the whiteboard's own format, and their
   // coordinates are the shared screen's own pixels, so the drawing lines up whatever size each person's window is.
   'annotation:update': (payload: { elements: BoardElement[] }) => void;
@@ -254,6 +261,7 @@ export interface ServerToClientEvents {
   'board:pages-update': (payload: { pages: BoardPage[]; activePageId: string }) => void;
   'board:permission-update': (payload: { studentsCanDraw: boolean }) => void;
   'board:cleared': (payload: { pageId: string }) => void;
+  'board:file': (payload: BoardFile) => void;
   'annotation:update': (payload: { elements: BoardElement[] }) => void;
   'annotation:cleared': () => void;
   'board:follow-me': () => void;
@@ -292,5 +300,10 @@ export const MAX_BOARD_UPDATE_BATCH = 200;
 // carry hundreds of points), tight enough to reject an obviously abusive payload.
 export const MAX_BOARD_ELEMENT_BYTES = 200_000;
 export const MAX_BOARD_IMPORT_BYTES = 5_000_000;
+// Whiteboard pictures: the kinds the drawing tool can insert, the longest data URL (the tool shrinks a picture to at most 4 MB, which is about
+// 5.6 million characters), and how much one room holds in memory in total.
+export const BOARD_FILE_MIME_TYPES = ['image/png', 'image/jpeg', 'image/jfif', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp', 'image/avif', 'image/x-icon'] as const;
+export const MAX_BOARD_FILE_CHARS = 6_000_000;
+export const MAX_BOARD_FILES_TOTAL_CHARS = 40_000_000;
 export const MAX_ANNOUNCEMENT_LENGTH = 200;
 export const ANNOUNCEMENT_TTL_MS = 15_000;

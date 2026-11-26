@@ -3,9 +3,10 @@ import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { io, type Socket } from 'socket.io-client';
 import type {
-  BoardElement, ChatMessage, ClientToServerEvents, JoinedRoom, Participant, ParticipantRole,
+  BoardElement, BoardFile, ChatMessage, ClientToServerEvents, JoinedRoom, Participant, ParticipantRole,
   PollState, RoomTimerState, ServerToClientEvents, UnderstandingCheckState, WaitingParticipant,
 } from '@learnthrive/shared/protocol';
+import { MAX_BOARD_FILE_CHARS, MAX_BOARD_FILES_TOTAL_CHARS } from '@learnthrive/shared/protocol';
 import { createSignallingServer } from './signalling';
 import { signClassroomJoinToken, verifyClassroomJoinToken } from '@learnthrive/shared/classroomToken';
 
@@ -115,6 +116,7 @@ describe('signalling through real Socket.IO clients', () => {
       },
       announcement: null,
       annotations: [],
+      boardFileIds: [],
     });
 
     const waitingUpdate = new Promise<{ waiting: WaitingParticipant[] }>((resolve) => tutor.once('room:waiting-update', resolve));
@@ -1050,6 +1052,85 @@ describe('signalling through real Socket.IO clients', () => {
     tutor.emit('board:update', { pageId, elements: [makeElement('el-3')] });
     await onStudent;
   });
+
+  // A picture on the whiteboard is two things: the element (where it sits) and the file (what it shows). Both have to reach everyone.
+  const PIXELS = 'data:image/png;base64,iVBORw0KGgo=';
+  const picture = (id: string, overrides: Partial<BoardFile> = {}): BoardFile => ({ id, mimeType: 'image/png', dataURL: PIXELS, ...overrides });
+  const sendFile = (client: Client, file: unknown) => new Promise<boolean>((resolve) => client.emit('board:file', file as BoardFile, resolve));
+  const nextFile = (client: Client) => new Promise<BoardFile>((resolve) => client.once('board:file', resolve));
+
+  it('a picture the tutor puts on the board reaches the students there, and one who joins later', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const early = await connect();
+    await admit(tutor, early, 'Bob');
+
+    const seen = nextFile(early);
+    expect(await sendFile(tutor, picture('file-1'))).toBe(true);
+    expect(await seen).toEqual(picture('file-1'));
+
+    const late = await connect();
+    const lateFile = nextFile(late);
+    const joined = await admit(tutor, late, 'Cate');
+    expect(joined.boardFileIds).toEqual(['file-1']);
+    expect(await lateFile).toEqual(picture('file-1'));
+  });
+
+  it('a student who drops and comes back is sent the pictures again', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const student = await connectRecoverable();
+    await admit(tutor, student);
+    const first = nextFile(student);
+    await sendFile(tutor, picture('file-1'));
+    await first;
+
+    const again = nextFile(student);
+    student.io.engine.close();
+    expect(await again).toEqual(picture('file-1'));
+  });
+
+  it('only the tutor can add a picture to the board, even while students are allowed to draw', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const student = await connect();
+    await admit(tutor, student);
+    const seen: BoardFile[] = [];
+    tutor.on('board:file', (file) => seen.push(file));
+    const refused = new Promise<{ message: string }>((resolve) => student.once('room:error', resolve));
+    expect(await sendFile(student, picture('from-student'))).toBe(false);
+    expect((await refused).message).toMatch(/only the tutor/i);
+    expect(seen).toEqual([]);
+  });
+
+  it('refuses a board file that is not a picture, does not match its type, or is too big', async () => {
+    const tutor = await connect();
+    const joinedRoom = await joinTutor(tutor, 'Alice');
+    expect(joinedRoom.boardFileIds).toEqual([]);
+    for (const bad of [
+      picture('x', { mimeType: 'text/html', dataURL: 'data:text/html;base64,PGI+' }),
+      picture('x', { dataURL: 'data:text/html;base64,PGI+' }),
+      picture('x', { dataURL: 'https://example.com/a.png' }),
+      picture('x', { dataURL: 'data:image/png;base64,<script>' }),
+      picture('x', { dataURL: `data:image/png;base64,${'A'.repeat(MAX_BOARD_FILE_CHARS)}` }),
+      picture('../x'), picture(''), null,
+    ]) {
+      expect(await sendFile(tutor, bad)).toBe(false);
+    }
+  });
+
+  it('stops accepting pictures once the room holds as many as it can, and re-sending one it has costs nothing', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const head = 'data:image/png;base64,';
+    const big = head + 'A'.repeat(MAX_BOARD_FILE_CHARS - head.length);
+    const fits = Math.floor(MAX_BOARD_FILES_TOTAL_CHARS / big.length);
+    for (let i = 0; i < fits; i += 1) expect(await sendFile(tutor, picture(`big-${i}`, { dataURL: big }))).toBe(true);
+    expect(await sendFile(tutor, picture('big-0', { dataURL: big }))).toBe(true);
+    const full = new Promise<{ message: string }>((resolve) => tutor.once('room:error', resolve));
+    expect(await sendFile(tutor, picture('one-too-many', { dataURL: big }))).toBe(false);
+    expect((await full).message).toMatch(/full/i);
+  }, 20_000);
 
   it('a new join and a reconnecting participant both receive the current board snapshot', async () => {
     const tutor = await connect();

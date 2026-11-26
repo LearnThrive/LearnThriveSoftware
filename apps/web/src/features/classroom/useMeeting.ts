@@ -60,6 +60,7 @@ export function useMeeting() {
     clearAnnotations: controller.clearAnnotations,
     commitLocalAnnotations: controller.commitLocalAnnotations,
     sendBoardUpdate: controller.sendBoardUpdate,
+    shareBoardFile: controller.shareBoardFile,
     sendBoardCursor: controller.sendBoardCursor,
     sendBoardLaser: controller.sendBoardLaser,
     // Not read here — passed straight through to Whiteboard, which subscribes to these itself.

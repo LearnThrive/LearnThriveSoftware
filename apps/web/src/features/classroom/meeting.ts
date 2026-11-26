@@ -1,7 +1,7 @@
 import { io, type Socket } from 'socket.io-client';
 import {
-  CHAT_REPLY_PREVIEW_LENGTH, MAX_CHAT_LENGTH, MAX_NAME_LENGTH, MAX_PARTICIPANTS, ROOM_PATTERN,
-  type Announcement, type BoardBackground, type BoardElement, type BoardState, type ChatMessage, type ChatReactions,
+  CHAT_REPLY_PREVIEW_LENGTH, MAX_CHAT_LENGTH, MAX_NAME_LENGTH, MAX_BOARD_FILE_CHARS, MAX_PARTICIPANTS, ROOM_PATTERN,
+  type Announcement, type BoardBackground, type BoardElement, type BoardFile, type BoardState, type ChatMessage, type ChatReactions,
   type ClientToServerEvents, type Participant, type ParticipantRole, type PollState, type PollVisibility,
   type ReactionEmoji, type RoomSettings, type RoomTimerState, type ServerToClientEvents, type StaffTitle, type TimerMode,
   type UnderstandingCheckState, type UnderstandingStatus, type WaitingParticipant,
@@ -109,6 +109,8 @@ export interface MeetingSnapshot {
   timer: RoomTimerState | null;
   endedReason: EndedReason | null;
   board: BoardState;
+  /** The pictures on the whiteboard, by file id (see BoardFile). */
+  boardFiles: Record<string, BoardFile>;
   boardPointers: Record<string, BoardPointer>;
   // Bumped on every incoming 'board:follow-me' nudge; the Whiteboard component watches it to
   // re-enable local follow-mode and jump to the tutor's current page — a one-shot signal, not a
@@ -154,11 +156,13 @@ export class MeetingController {
     cameras: [], microphones: [], selectedCamera: undefined, selectedMicrophone: undefined, notice: null,
     chatOpen: false, messages: [], unreadCount: 0, handRaised: false, reactions: [],
     forceMuted: false, roomSettings: DEFAULT_ROOM_SETTINGS, poll: null, understandingCheck: null, timer: null, endedReason: null,
-    board: DEFAULT_BOARD_STATE, boardPointers: {}, boardFollowMeSeq: 0, announcement: null, dataSaver: false, removedNames: [],
+    board: DEFAULT_BOARD_STATE, boardFiles: {}, boardPointers: {}, boardFollowMeSeq: 0, announcement: null, dataSaver: false, removedNames: [],
   };
   // Set by duplicateBoardPage() while waiting for board:page-create's own pages-update echo to
   // learn the new page's id (the server doesn't otherwise report it) — see duplicateBoardPage.
   private pendingDuplicate: { name: string; elements: BoardElement[] } | null = null;
+  /** Whiteboard pictures the room has, or that are on their way to it, so each is sent once. */
+  private roomFileIds = new Set<string>();
   private listeners = new Set<() => void>();
   private readonly media = new LocalMedia(() => this.mediaChanged());
   private readonly screenShare = new ScreenShare(() => this.endScreenShare());
@@ -604,6 +608,16 @@ export class MeetingController {
     if (!this.active || !this.socket?.connected) return;
     this.socket.emit('board:laser', { x, y });
   };
+  // A picture the tutor has put on the board. Called on every change that shows it, so it returns early once the room has it. No answer (the
+  // connection dropped on the way) means it goes again at the next change; a refusal is final and the server says why.
+  shareBoardFile = (file: BoardFile) => {
+    if (!this.active || !this.socket?.connected || this.snapshot.role !== 'tutor' || this.roomFileIds.has(file.id)) return;
+    this.roomFileIds.add(file.id);
+    // Checked here too: a message over the server's size limit would drop the connection instead of being refused.
+    if (file.dataURL.length > MAX_BOARD_FILE_CHARS) { this.update({ error: 'That picture is too large to share. Use one of up to 4 MB.' }); return; }
+    this.update({ boardFiles: { ...this.snapshot.boardFiles, [file.id]: file } });
+    this.socket.timeout(60_000).emit('board:file', file, (error) => { if (error) this.roomFileIds.delete(file.id); });
+  };
   createBoardPage = () => this.tutorEmit('board:page-create');
   renameBoardPage = (pageId: string, name: string) => this.tutorEmit('board:page-rename', { pageId, name });
   deleteBoardPage = (pageId: string) => this.tutorEmit('board:page-delete', { pageId });
@@ -675,8 +689,9 @@ export class MeetingController {
       phase: 'joining', status: 'Connecting…', error: null, roomId, name, role: null, waiting: [],
       messages: [], unreadCount: 0, chatOpen: false, handRaised: false, reactions: [],
       forceMuted: false, roomSettings: DEFAULT_ROOM_SETTINGS, poll: null, understandingCheck: null, timer: null, endedReason: null,
-      board: DEFAULT_BOARD_STATE, boardPointers: {}, announcement: null, removedNames: [],
+      board: DEFAULT_BOARD_STATE, boardFiles: {}, boardPointers: {}, announcement: null, removedNames: [],
     });
+    this.roomFileIds.clear();
     // Unlike the old standalone classroom app (where this component owned the whole origin and
     // '/meeting' was its own SPA route), this now renders under whichever real Next.js route
     // loaded it (a Lesson's /classroom route, or /dev/classroom) — rewriting the pathname would
@@ -737,12 +752,14 @@ export class MeetingController {
     };
     socket.io.on('reconnect_failed', this.reconnectFailedHandler);
     socket.on('room:joined', (payload) => {
+      this.roomFileIds = new Set(payload.boardFileIds ?? []);
       this.update({
         phase: 'meeting', roomId: payload.roomId, name: payload.self.name, role: payload.self.role, title: payload.self.title, waiting: payload.waiting, error: null,
         maxParticipants: payload.media ? payload.media.maxStudents + 1 : MAX_PARTICIPANTS, mediaMode: payload.media?.mode ?? 'mesh',
         forceMuted: payload.self.forceMuted, roomSettings: payload.settings,
         poll: payload.poll, understandingCheck: payload.understandingCheck, timer: payload.timer,
         board: payload.board, announcement: payload.announcement, annotations: payload.annotations ?? [],
+        boardFiles: Object.fromEntries(Object.entries(this.snapshot.boardFiles).filter(([id]) => this.roomFileIds.has(id))),
         // Unlike media/screen-share (whose local source of truth is the live track/capture, not
         // the server), hand-raise has no other local record — a reconnect must restore it from
         // the resync or a participant who reconnects mid-raise would silently show as lowered.
@@ -876,6 +893,10 @@ export class MeetingController {
     socket.on('board:update', ({ pageId, elements }) => {
       const merged = reconcileBoardElements(this.snapshot.board.elementsByPage[pageId] ?? [], elements);
       this.update({ board: { ...this.snapshot.board, elementsByPage: { ...this.snapshot.board.elementsByPage, [pageId]: merged } } });
+    });
+    socket.on('board:file', (file) => {
+      this.roomFileIds.add(file.id);
+      this.update({ boardFiles: { ...this.snapshot.boardFiles, [file.id]: file } });
     });
     socket.on('board:pages-update', ({ pages, activePageId }) => {
       this.update({ board: { ...this.snapshot.board, pages, activePageId } });
@@ -1106,7 +1127,7 @@ export class MeetingController {
       phase: 'ended', status, signalling: 'disconnected', preparing: false, error: null, mediaError: null,
       reconnectFailed: false, screenSharing: false, screenStream: null, annotations: [], screenShareAudio: false, waiting: [],
       chatOpen: false, messages: [], unreadCount: 0, notice: null, handRaised: false, reactions: [],
-      endedReason: reason, board: DEFAULT_BOARD_STATE, boardPointers: {}, announcement: null,
+      endedReason: reason, board: DEFAULT_BOARD_STATE, boardFiles: {}, boardPointers: {}, announcement: null,
     });
   }
 

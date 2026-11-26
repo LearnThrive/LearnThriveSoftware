@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import type { BoardBackground, BoardElement } from '@learnthrive/shared/protocol';
+import { MAX_BOARD_UPDATE_BATCH, type BoardBackground, type BoardElement } from '@learnthrive/shared/protocol';
 
 // The same version/versionNonce merge rule the server uses (see server/signalling.ts's
 // shouldAcceptElement) — kept independently here rather than shared, since this one only ever
@@ -37,6 +37,32 @@ export function trailingThrottle<Args extends unknown[]>(fn: (...args: Args) => 
   throttled.cancel = () => { clearTimeout(timeout); timeout = undefined; pendingArgs = null; };
   throttled.flush = () => { if (timeout) { clearTimeout(timeout); invoke(); } };
   return throttled;
+}
+
+/**
+ * Sends drawing changes at a bounded rate without losing any: everything that changed during a window is kept (each element in its latest state,
+ * page by page) and sent when it ends, in messages no larger than the server accepts. A plain throttle keeps only the last call, so a picture
+ * added just before a stroke would never reach anyone.
+ */
+export function boardBatcher(send: (pageId: string, elements: BoardElement[]) => void, ms: number) {
+  const pending = new Map<string, Map<string, BoardElement>>();
+  const tick = trailingThrottle(() => {
+    const pages = [...pending];
+    pending.clear();
+    for (const [pageId, byId] of pages) {
+      const all = [...byId.values()];
+      for (let from = 0; from < all.length; from += MAX_BOARD_UPDATE_BATCH) send(pageId, all.slice(from, from + MAX_BOARD_UPDATE_BATCH));
+    }
+  }, ms);
+  return {
+    add(pageId: string, elements: readonly BoardElement[]) {
+      const byId = pending.get(pageId) ?? new Map<string, BoardElement>();
+      for (const element of elements) byId.set(element.id, element);
+      pending.set(pageId, byId);
+      tick();
+    },
+    flush: tick.flush,
+  };
 }
 
 // Rendered as CSS behind a transparent-background Excalidraw canvas — never as actual board

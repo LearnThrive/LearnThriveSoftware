@@ -80,7 +80,7 @@ export function App({ lessonId, meetingId, initialToken, isDevRoute, returnHref 
     setRoomLocked, setStudentsCanShareScreen, setStudentsCanChat, muteParticipant, muteAll, allowUnmute,
     removeParticipant, stopShare, lowerHand, deleteChatMessage, clearChat, reactToChatMessage, editChatMessage, getSelfId, createPoll, closePoll, clearPoll,
     votePoll, startUnderstandingCheck, endUnderstandingCheck, respondUnderstanding, startTimer, pauseTimer,
-    resumeTimer, stopTimer, sendBoardUpdate, sendBoardCursor, sendBoardLaser, createBoardPage, renameBoardPage,
+    resumeTimer, stopTimer, shareBoardFile, sendBoardUpdate, sendBoardCursor, sendBoardLaser, createBoardPage, renameBoardPage,
     deleteBoardPage, reorderBoardPages, switchBoardPage, setBoardBackground, setStudentsCanDraw,
     followMe, importBoard, duplicateBoardPage, commitLocalPageElements, sendAnnouncement, setDataSaver, allowRejoin,
     sendAnnotationUpdate, clearAnnotations, commitLocalAnnotations, sendChatFile, detectDevices, startLessonChat, loadLessonChat,
@@ -402,6 +402,7 @@ export function App({ lessonId, meetingId, initialToken, isDevRoute, returnHref 
                 elementsByPage={snapshot.board.elementsByPage} studentsCanDraw={snapshot.board.studentsCanDraw}
                 subscribeBoardPointers={subscribeBoardPointers} getBoardPointersSnapshot={getBoardPointersSnapshot}
                 followMeSeq={snapshot.boardFollowMeSeq}
+                files={snapshot.boardFiles} onShareFile={shareBoardFile}
                 onUpdate={sendBoardUpdate} onCursor={sendBoardCursor} onLaser={sendBoardLaser} onCommitLocal={commitLocalPageElements}
                 onSwitchPage={switchBoardPage} onCreatePage={createBoardPage} onRenamePage={renameBoardPage}
                 onDuplicatePage={duplicateBoardPage} onDeletePage={deleteBoardPage} onReorderPages={reorderBoardPages}

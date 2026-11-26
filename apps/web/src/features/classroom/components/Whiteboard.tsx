@@ -1,18 +1,19 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
   CaptureUpdateAction, Excalidraw, convertToExcalidrawElements, exportToBlob, reconcileElements, restoreElements,
 } from '@excalidraw/excalidraw';
-import type { ExcalidrawImperativeAPI, Collaborator, SocketId } from '@excalidraw/excalidraw/types';
+import type { BinaryFiles, ExcalidrawImperativeAPI, Collaborator, SocketId } from '@excalidraw/excalidraw/types';
 import type { OrderedExcalidrawElement } from '@excalidraw/excalidraw/element/types';
 import type { RemoteExcalidrawElement } from '@excalidraw/excalidraw/data/reconcile';
 import '@excalidraw/excalidraw/index.css';
-import { MAX_BOARD_IMPORT_BYTES, type BoardElement, type BoardPage, type ParticipantRole } from '@learnthrive/shared/protocol';
+import { MAX_BOARD_FILES_TOTAL_CHARS, type BoardElement, type BoardFile, type BoardPage, type ParticipantRole } from '@learnthrive/shared/protocol';
 import type { BoardPointer } from '../meeting';
-import { boardBackgroundStyle, trailingThrottle } from '../board';
+import { boardBackgroundStyle, boardBatcher, trailingThrottle } from '../board';
 import { usePopoverDismiss } from '../usePopoverDismiss';
 import { BoardPageTabs } from './BoardPageTabs';
 import { EquationDialog } from './EquationDialog';
 import { insertEquation, useEquationImages } from './equations';
+import { addBoardFiles, picturesIn, toBinaryFiles } from './boardFiles';
 import { Icon } from './Icon';
 
 const AS_BOARD_ELEMENTS = (elements: readonly OrderedExcalidrawElement[]) => elements as unknown as BoardElement[];
@@ -25,6 +26,9 @@ interface WhiteboardProps {
   activePageId: string;
   elementsByPage: Record<string, BoardElement[]>;
   studentsCanDraw: boolean;
+  /** The pictures the room holds, and how the tutor's new ones get there. */
+  files: Record<string, BoardFile>;
+  onShareFile: (file: BoardFile) => void;
   // plan11.md task 17 (audit C-02): a subscribe/getSnapshot pair, not the pointers value itself —
   // this component calls useSyncExternalStore on it directly below, so a remote cursor/laser move
   // re-renders only this component, never the parent App and everything else beneath it. See
@@ -55,7 +59,7 @@ const TUTORING_SHORTCUTS = [
 ] as const;
 
 export function Whiteboard({
-  role, pages, activePageId, elementsByPage, studentsCanDraw, subscribeBoardPointers, getBoardPointersSnapshot, followMeSeq,
+  role, pages, activePageId, elementsByPage, studentsCanDraw, files, onShareFile, subscribeBoardPointers, getBoardPointersSnapshot, followMeSeq,
   onUpdate, onCursor, onLaser, onCommitLocal, onSwitchPage, onCreatePage, onRenamePage, onDuplicatePage,
   onDeletePage, onReorderPages, onBackground, onSetStudentsCanDraw, onFollowMe, onImport,
 }: WhiteboardProps) {
@@ -94,6 +98,9 @@ export function Whiteboard({
   const viewOnly = role === 'supervisor' || (!isTutor && !studentsCanDraw);
   // Equations typeset by someone else arrive as elements carrying their LaTeX; this makes the picture for each one here.
   useEquationImages(apiRef, pageElements, apiReady);
+
+  // Pictures that came from the room (someone else's, or ones already there when this person joined).
+  useEffect(() => { if (apiRef.current) addBoardFiles(apiRef.current, Object.values(files)); }, [files, apiReady]);
 
   const addEquation = async (latex: string) => {
     const api = apiRef.current;
@@ -135,11 +142,22 @@ export function Whiteboard({
     api.updateScene({ collaborators, captureUpdate: CaptureUpdateAction.NEVER });
   }, [pointers]);
 
-  const sendThrottled = useRef(trailingThrottle((pageId: string, elements: BoardElement[]) => onUpdate(pageId, elements), 120)).current;
-  useEffect(() => () => sendThrottled.cancel(), [sendThrottled]);
+  const outgoing = useRef(boardBatcher((pageId, elements) => onUpdate(pageId, elements), 120)).current;
+  // Leaving the board (for the call or a shared screen) sends what is waiting and keeps what is on it, so it is all there on coming back: this
+  // browser's own changes are never echoed back to it. A LAYOUT effect, because it runs before the canvas inside is torn down and emptied.
+  useLayoutEffect(() => () => {
+    outgoing.flush();
+    const api = apiRef.current;
+    const pageId = prevViewedRef.current;
+    const scene = api?.getSceneElementsIncludingDeleted();
+    if (pageId && scene?.length) onCommitLocal(pageId, AS_BOARD_ELEMENTS(scene));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the board goes away; onCommitLocal is a stable controller method
+  }, []);
 
-  const handleChange = useCallback((elements: readonly OrderedExcalidrawElement[]) => {
+  const handleChange = useCallback((elements: readonly OrderedExcalidrawElement[], _appState: unknown, sceneFiles: BinaryFiles) => {
     if (!viewedPageId) return;
+    // The picture goes ahead of the element that shows it.
+    if (isTutor) for (const file of picturesIn(elements, sceneFiles)) onShareFile(file);
     const changed: BoardElement[] = [];
     for (const element of elements) {
       const last = lastSentRef.current.get(element.id);
@@ -148,8 +166,8 @@ export function Whiteboard({
         lastSentRef.current.set(element.id, { version: element.version, versionNonce: element.versionNonce });
       }
     }
-    if (changed.length > 0) sendThrottled(viewedPageId, changed);
-  }, [viewedPageId, sendThrottled]);
+    if (changed.length > 0) outgoing.add(viewedPageId, changed);
+  }, [viewedPageId, outgoing, isTutor, onShareFile]);
 
   const cursorThrottled = useRef(trailingThrottle((x: number, y: number, tool: 'pointer' | 'laser') => {
     if (tool === 'laser') onLaser(x, y); else onCursor(x, y);
@@ -202,7 +220,8 @@ export function Whiteboard({
   const exportJson = () => {
     const api = apiRef.current;
     if (!api) return;
-    const data = { type: 'excalidraw', version: 2, elements: api.getSceneElements(), appState: { viewBackgroundColor: '#ffffff' } };
+    const elements = api.getSceneElements();
+    const data = { type: 'excalidraw', version: 2, elements, appState: { viewBackgroundColor: '#ffffff' }, files: toBinaryFiles(picturesIn(elements, api.getFiles())) };
     const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -211,12 +230,15 @@ export function Whiteboard({
   };
 
   const handleImportFile = async (file: File) => {
-    if (file.size > MAX_BOARD_IMPORT_BYTES) { apiRef.current?.setToast({ message: 'That file is too large to import.' }); return; }
+    if (file.size > MAX_BOARD_FILES_TOTAL_CHARS) { apiRef.current?.setToast({ message: 'That file is too large to import.' }); return; }
     try {
       const text = await file.text();
-      const parsed = JSON.parse(text) as { elements?: unknown };
+      const parsed = JSON.parse(text) as { elements?: unknown; files?: BinaryFiles };
       if (!Array.isArray(parsed.elements)) throw new Error('Missing elements array');
       const restored = restoreElements(parsed.elements as never, null);
+      const pictures = picturesIn(restored, parsed.files ?? {});
+      if (apiRef.current) addBoardFiles(apiRef.current, pictures);
+      pictures.forEach(onShareFile);
       onImport(viewedPageId, AS_BOARD_ELEMENTS(restored));
     } catch {
       apiRef.current?.setToast({ message: 'That file is not a valid Excalidraw board.' });
@@ -275,14 +297,15 @@ export function Whiteboard({
       <div className="whiteboard-canvas" style={boardBackgroundStyle(currentPage?.background ?? 'blank')}>
         <Excalidraw
           excalidrawAPI={(api) => { apiRef.current = api; setApiReady(true); }}
-          initialData={{ elements: AS_EXCALIDRAW_ELEMENTS(pageElements), appState: { viewBackgroundColor: 'transparent' } }}
+          initialData={{ elements: AS_EXCALIDRAW_ELEMENTS(pageElements), files: toBinaryFiles(Object.values(files)), appState: { viewBackgroundColor: 'transparent' } }}
           onChange={handleChange}
           onPointerUpdate={({ pointer }) => cursorThrottled(pointer.x, pointer.y, pointer.tool)}
           viewModeEnabled={viewOnly}
           isCollaborating
           theme="light"
           name={currentPage?.name}
-          UIOptions={{ canvasActions: { export: false, saveToActiveFile: false, loadScene: false, toggleTheme: false } }}
+          // Only the tutor adds pictures (the server enforces it); everyone can see, move and draw on them.
+          UIOptions={{ canvasActions: { export: false, saveToActiveFile: false, loadScene: false, toggleTheme: false }, tools: { image: isTutor } }}
         />
         {viewOnly && <div className="whiteboard-view-only-badge"><Icon name="lock" size={13} />View only — the tutor has turned off drawing</div>}
       </div>

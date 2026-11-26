@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { CaptureUpdateAction, Excalidraw, reconcileElements } from '@excalidraw/excalidraw';
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types';
 import type { OrderedExcalidrawElement } from '@excalidraw/excalidraw/element/types';
 import type { RemoteExcalidrawElement } from '@excalidraw/excalidraw/data/reconcile';
 import '@excalidraw/excalidraw/index.css';
 import type { BoardElement } from '@learnthrive/shared/protocol';
-import { trailingThrottle } from '../board';
+import { boardBatcher } from '../board';
 import type { ScreenFrame } from './ScreenStage';
 import { EquationDialog } from './EquationDialog';
 import { insertEquation, useEquationImages } from './equations';
@@ -58,11 +58,11 @@ export function ScreenAnnotations({ frame, canDraw, elements, onUpdate, onCommit
   }, [elements, apiReady]);
   useEquationImages(apiRef, elements, apiReady);
 
-  const send = useRef(trailingThrottle((changed: BoardElement[]) => onUpdate(changed), 100)).current;
-  useEffect(() => () => send.cancel(), [send]);
+  const send = useRef(boardBatcher((_page, changed) => onUpdate(changed), 100)).current;
   const commitRef = useRef(onCommit);
   useEffect(() => { commitRef.current = onCommit; });
-  useEffect(() => () => {
+  // A layout effect: it has to read the canvas before the canvas is torn down.
+  useLayoutEffect(() => () => {
     send.flush();
     const api = apiRef.current;
     if (api && canDraw) commitRef.current(AS_BOARD(api.getSceneElementsIncludingDeleted()));
@@ -79,7 +79,7 @@ export function ScreenAnnotations({ frame, canDraw, elements, onUpdate, onCommit
         lastSent.current.set(element.id, { version: element.version, versionNonce: element.versionNonce });
       }
     }
-    if (changed.length > 0) send(changed);
+    if (changed.length > 0) send.add('', changed);
   }, [canDraw, send]);
 
   const addEquation = async (latex: string) => {
