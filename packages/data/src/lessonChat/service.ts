@@ -20,6 +20,8 @@ export interface MessageView {
   id: string;
   senderParty: "tutor" | "student" | "admin";
   senderName: string;
+  /** Whether the person this list was made for wrote it. */
+  own: boolean;
   text: string;
   file: { id: string; displayName: string; contentType: LessonFileType; size: number; url: string } | null;
   createdAt: string;
@@ -81,13 +83,15 @@ export function createLessonChatService(deps: ChatServiceDeps) {
   }
 
   async function view(message: LessonMessage, lessonId: string, accountId: string, seesRemoved: boolean): Promise<MessageView> {
+    const own = message.senderAccountId === accountId;
     if (message.removed && !seesRemoved) {
-      return { id: message.id, senderParty: message.senderParty, senderName: "", text: "", file: null, createdAt: message.createdAt, removed: { at: message.removed.at } };
+      return { id: message.id, senderParty: message.senderParty, senderName: "", own, text: "", file: null, createdAt: message.createdAt, removed: { at: message.removed.at } };
     }
     return {
       id: message.id,
       senderParty: message.senderParty,
       senderName: message.senderName,
+      own,
       text: message.text,
       file: message.file ? { ...message.file, url: fileUrl(lessonId, message.file.id, accountId) } : null,
       createdAt: message.createdAt,

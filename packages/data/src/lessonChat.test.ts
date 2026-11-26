@@ -203,6 +203,10 @@ describe("who may send: the lesson's own tutor and a student enrolled in it, by 
     w.setNow(at(10));
     const view = await w.service.list(tutor, "lesson-1");
     assert.ok(view.ok && view.messages.every((m) => m.senderParty === "admin"), "the tutor sees who it is from");
+    // The website says whose each message is: the browser cannot work it out from a name or a role (a supervisor sends as "admin").
+    assert.ok(view.ok && view.messages.every((m) => m.own === false), "none of them are the tutor's");
+    const mine = await w.service.list(admin, "lesson-1");
+    assert.ok(mine.ok && mine.messages.every((m) => m.own === true), "all of them are the administrator's");
     const file = await w.service.sendFile(admin, "lesson-1", { name: "note.png", declaredType: "image/png", bytes: png() });
     assert.equal(file.ok, true, "and may share a file");
     for (const status of ["CANCELLED", "NO_SHOW"]) {

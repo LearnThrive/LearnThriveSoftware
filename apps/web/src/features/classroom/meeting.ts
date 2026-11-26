@@ -9,6 +9,7 @@ import {
 import { chatFileProblem, contentTypeFor, isInlineImage } from '@learnthrive/shared/chatFiles';
 import { aggregateConnectionStatus } from './callStatus';
 import { reconcileBoardElements } from './board';
+import { savedChatMessages, type SavedLessonMessage } from './lessonChat';
 import { ensureFreshTurnCredentials, getIceConfiguration } from './ice';
 import { createLogger } from './log';
 import { browserSupportError, listDevices, LocalMedia, mediaErrorMessage, type DeviceOption } from './media';
@@ -451,15 +452,9 @@ export class MeetingController {
     try {
       const response = await fetch(`/api/lessons/${encodeURIComponent(lessonId)}/messages`, { cache: 'no-store' });
       if (!response.ok) return;
-      const data = await response.json() as { messages?: { id: string; senderParty: string; senderName: string; text: string; createdAt: string; removed: unknown; file: { displayName: string; size: number; contentType: string; url: string } | null }[] };
-      const role = this.snapshot.role;
-      const myName = this.snapshot.name;
+      const data = await response.json() as { messages?: SavedLessonMessage[] };
       const known = this.snapshot.messages.length;
-      const messages: DisplayChatMessage[] = (data.messages ?? []).filter((m) => !m.removed).map((m) => ({
-        id: m.id, senderId: '', name: m.senderName, text: m.text, timestamp: Date.parse(m.createdAt) || Date.now(),
-        own: m.senderParty === role && m.senderName === myName,
-        ...(m.file ? { attachment: { name: m.file.displayName, size: m.file.size, image: isInlineImage(m.file.displayName), url: m.file.url } } : {}),
-      }));
+      const messages = savedChatMessages(data.messages ?? []);
       if (lessonId !== this.lessonChatId) return;
       const fresh = messages.slice(known).filter((m) => !m.own).length;
       this.update({ messages, unreadCount: this.snapshot.chatOpen || known === 0 ? this.snapshot.unreadCount : this.snapshot.unreadCount + fresh });
