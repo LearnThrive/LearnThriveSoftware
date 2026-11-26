@@ -1,5 +1,5 @@
 import type {
-  AuditEntry, BillingSettings, ChargeDecision, FamilyBillingProfile, FamilyRate, IssuedStatement, LessonPrice, Payment, RefundRequest, StatementDraft, TutorRate,
+  AuditEntry, BillingSettings, ChargeDecision, FamilyBillingProfile, FamilyRate, IssuedStatement, LessonPrice, Payment, RefundRequest, RepeatingPrice, StatementDraft, TutorRate,
 } from "./types";
 
 /**
@@ -36,6 +36,14 @@ export interface TuitionBillingRepository {
     set(input: Omit<LessonPrice, "setAt">): Promise<LessonPrice>;
     /** Back to the hourly rates. Nothing happens if the lesson had no price of its own. */
     clear(lessonId: string): Promise<void>;
+  };
+  /** A price repeated across a class's lessons between two dates (migration 0034). */
+  repeatingPrices: {
+    list(assignmentIds?: string[]): Promise<RepeatingPrice[]>;
+    /** Throws BillingError RATE_LOCKED if the class already has one for any of those days. */
+    create(input: Omit<RepeatingPrice, "id" | "setAt">): Promise<RepeatingPrice>;
+    /** Nothing happens if there is no such price. */
+    remove(id: string): Promise<void>;
   };
   decisions: {
     list(lessonIds?: string[]): Promise<ChargeDecision[]>;

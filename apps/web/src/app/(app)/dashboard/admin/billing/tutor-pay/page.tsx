@@ -37,7 +37,7 @@ export default async function TutorPayPage({ searchParams }: { searchParams: Pro
         backTo={{ href: "/dashboard/admin/billing", label: "Back to billing" }}
         eyebrow="Tuition billing"
         title={`Tutor pay for ${monthName(period)}`}
-        description="Lessons completed in the month, at each tutor's hourly pay on the day, or at the pay set for a lesson on the Lesson prices page. Paid from the business account on the 15th of the next month. This adds up what is owed; nothing is paid from here."
+        description="Lessons completed in the month, at each tutor's hourly pay on the day, or at the pay set for a lesson (or repeated across lessons) on the Lesson prices page. Paid from the business account on the 15th of the next month. This adds up what is owed; nothing is paid from here."
         actions={
           <>
             <a className="btn btn--secondary" href={`/dashboard/admin/billing/lessons?period=${period}`}>Lesson prices</a>
@@ -65,7 +65,7 @@ export default async function TutorPayPage({ searchParams }: { searchParams: Pro
             <CardBody>
               {s.unpricedLessons > 0 && <p><Badge tone="warning">No pay rate</Badge> {s.unpricedLessons} lesson{s.unpricedLessons === 1 ? " has" : "s have"} no hourly pay set for this tutor on that date, so {s.unpricedLessons === 1 ? "it is" : "they are"} counted at nothing. Set it on the Tutor pay page.</p>}
               {s.allAbsentLessons.length > 0 && <p><Badge tone="info">To decide</Badge> {s.allAbsentLessons.length} lesson{s.allAbsentLessons.length === 1 ? " was" : "s were"} not counted because every child was absent: {s.allAbsentLessons.map((l) => `${l.date} ${l.title}`).join("; ")}. Whether a tutor is paid for waiting has not been decided.</p>}
-              <ul>{s.lines.map((l) => <li key={l.lessonId}>{l.date} · {l.title} · {l.minutes} min · {l.setForLesson ? "set for this lesson" : l.ratePence === null ? "no rate" : `${formatPence(l.ratePence)} an hour`} · <strong>{formatPence(l.amountPence)}</strong></li>)}</ul>
+              <ul>{s.lines.map((l) => <li key={l.lessonId}>{l.date} · {l.title} · {l.minutes} min · {l.priceFrom === "lesson" ? "set for this lesson" : l.priceFrom === "repeating" ? "repeating price" : l.ratePence === null ? "no rate" : `${formatPence(l.ratePence)} an hour`} · <strong>{formatPence(l.amountPence)}</strong></li>)}</ul>
             </CardBody>
           </Card>
         ))

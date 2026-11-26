@@ -9,7 +9,9 @@ import { teachesLesson } from "@/lib/auth/teaching";
 import { lessonJoinRole } from "@/lib/classroom/lessonEntry";
 import { createMetadata } from "@/lib/metadata";
 import { getDataProvider } from "@/lib/data/provider";
-import { cancelLessonAction } from "@/lib/actions/lessons";
+import { cancelLessonAction, editLessonAction } from "@/lib/actions/lessons";
+import { LEARNTHRIVE_DEFAULT_TIMEZONE, utcToZonedWallClock } from "@/lib/scheduling/timezone";
+import { splitDuration } from "@/lib/scheduling/duration";
 import { markAttendanceAction, completeLessonAction } from "@/lib/actions/attendance";
 import { approveReportAction, returnReportAction, saveReportDraftAction, submitReportAction } from "@/lib/actions/reports";
 import { visibleReportFor } from "@/lib/reports/reportService";
@@ -24,7 +26,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Dialog } from "@/components/ui/Dialog";
 import { Field, FormActions } from "@/components/ui/Field";
-import type { AttendanceStatus, ReportAssessmentLevel } from "@learnthrive/data/domain";
+import type { AttendanceStatus, Lesson, ReportAssessmentLevel } from "@learnthrive/data/domain";
 
 const ATTENDANCE_STATUSES: AttendanceStatus[] = ["ATTENDED", "LATE", "ABSENT", "EXCUSED"];
 const ASSESSMENT_LEVELS: ReportAssessmentLevel[] = ["LOW", "MEDIUM", "HIGH"];
@@ -158,6 +160,7 @@ export default async function LessonDetailPage({
                 <Lock size={15} aria-hidden="true" />Classroom opens {formatRelative(opensAt)}
               </span>
             )}
+            {isAdmin && lesson.status !== "CANCELLED" && <EditLessonDialog lesson={lesson} />}
             {canCancel && (
               <Dialog
                 trigger="Cancel lesson"
@@ -440,6 +443,60 @@ export default async function LessonDetailPage({
         </div>
       </div>
     </>
+  );
+}
+
+/** Changing a lesson's details, before, during or after it. The tutor and students stay in the same classroom room. */
+function EditLessonDialog({ lesson }: { lesson: Lesson }) {
+  const wall = utcToZonedWallClock(new Date(lesson.startAt), LEARNTHRIVE_DEFAULT_TIMEZONE);
+  const two = (n: number) => String(n).padStart(2, "0");
+  const length = splitDuration(lesson.durationMinutes);
+  return (
+    <Dialog
+      trigger="Edit details"
+      tone="secondary"
+      title="Edit this lesson"
+      description="Changes apply straight away, even while the lesson is on. The classroom stays open to whoever is in it; the joining and chat times follow the new start and length."
+    >
+      <form action={editLessonAction} className="form">
+        <input type="hidden" name="lessonId" value={lesson.id} />
+        <Field label="Title" htmlFor="edit-title" required>
+          <input id="edit-title" name="title" defaultValue={lesson.title} required maxLength={120} />
+        </Field>
+        <Field label="Subject" htmlFor="edit-subject" required>
+          <input id="edit-subject" name="subject" defaultValue={lesson.subject} required maxLength={80} />
+        </Field>
+        <div className="grid-2">
+          <Field label="Date" htmlFor="edit-date" required>
+            <input id="edit-date" name="date" type="date" defaultValue={`${wall.year}-${two(wall.month)}-${two(wall.day)}`} required />
+          </Field>
+          <Field label="Start time" htmlFor="edit-time" required>
+            <input id="edit-time" name="time" type="time" defaultValue={`${two(wall.hour)}:${two(wall.minute)}`} required />
+          </Field>
+          <Field label="Length: hours" htmlFor="edit-hours">
+            <input id="edit-hours" name="durationHours" type="number" min={0} max={8} step={1} inputMode="numeric" defaultValue={length.hours} />
+          </Field>
+          <Field label="Length: minutes" htmlFor="edit-minutes">
+            <input id="edit-minutes" name="durationExtra" type="number" min={0} max={59} step={1} inputMode="numeric" defaultValue={length.minutes} />
+          </Field>
+        </div>
+        {lesson.locationType === "IN_PERSON" && (
+          <Field label="Location" htmlFor="edit-location" required>
+            <input id="edit-location" name="location" defaultValue={lesson.location ?? ""} required maxLength={200} />
+          </Field>
+        )}
+        <Field label="Notes" htmlFor="edit-notes">
+          <textarea id="edit-notes" name="notes" rows={3} defaultValue={lesson.notes ?? ""} maxLength={2000} />
+        </Field>
+        <label className="checkbox-field">
+          <input type="checkbox" name="reportRequired" defaultChecked={lesson.reportRequired} />
+          <span><span className="checkbox-field__label">Require a lesson report</span></span>
+        </label>
+        <FormActions>
+          <button type="submit" className="btn btn--primary">Save changes</button>
+        </FormActions>
+      </form>
+    </Dialog>
   );
 }
 

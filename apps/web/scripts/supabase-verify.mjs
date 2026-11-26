@@ -26,7 +26,7 @@ export const PUBLIC_TABLES = [
   "platform_settings", "profile_roles", "profiles", "resource_files", "resources", "role_changes", "safeguarding_concern_events",
   "safeguarding_concerns", "staff_meeting_invitees", "staff_meetings", "stripe_webhook_events", "students", "subscriptions", "supervised_contexts", "tuition_assignments",
   "tuition_billing_audit", "tuition_billing_settings", "tuition_charge_decisions", "tuition_family_profiles", "tuition_family_rates", "tuition_lesson_prices",
-  "tuition_payments", "tuition_refunds", "tuition_statements", "tuition_tutor_rates", "tutor_availability_blocks", "tutor_vetting_checks", "tutors",
+  "tuition_payments", "tuition_refunds", "tuition_repeating_prices", "tuition_statements", "tuition_tutor_rates", "tutor_availability_blocks", "tutor_vetting_checks", "tutors",
   "usage_counters",
 ];
 const NOT_EXPOSED_SCHEMAS = ["private", "auth", "storage", "extensions", "pg_catalog", "information_schema", "vault", "supabase_migrations", "graphql_public"];

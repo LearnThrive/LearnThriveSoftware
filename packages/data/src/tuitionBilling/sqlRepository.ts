@@ -1,9 +1,9 @@
 import type { SqlExecutor } from "../library/ports";
-import { planFamilyRate, validateDecision, validateFamilyRate, validateLessonPrice, validatePayment, validateRefundRequest, validateSettings, validateTutorRate } from "./validate";
+import { checkNoOverlap, planFamilyRate, validateDecision, validateFamilyRate, validateLessonPrice, validatePayment, validateRefundRequest, validateRepeatingPrice, validateSettings, validateTutorRate } from "./validate";
 import type { TuitionBillingRepository } from "./repository";
 import {
   BillingError, type AuditEntry, type BillingSettings, type ChargeDecision, type FamilyBillingProfile, type FamilyRate, type IssuedStatement, type LessonPrice, type Payment,
-  type RefundRequest, type TutorRate,
+  type RefundRequest, type RepeatingPrice, type TutorRate,
 } from "./types";
 
 /**
@@ -24,6 +24,7 @@ const toFamilyRate = (r: Row): FamilyRate => ({ id: r.id, clientId: r.client_id,
 const toTutorRate = (r: Row): TutorRate => ({ id: r.id, tutorId: r.tutor_id, hourlyPence: r.hourly_pence, effectiveFrom: ymd(r.effective_from), createdBy: r.created_by ?? "", createdAt: iso(r.created_at) });
 const toDecision = (r: Row): ChargeDecision => ({ lessonId: r.lesson_id, ...(r.party ? { party: r.party } : {}), waive: r.waive, note: r.note, decidedBy: r.decided_by ?? "", decidedAt: iso(r.decided_at) });
 const toLessonPrice = (r: Row): LessonPrice => ({ lessonId: r.lesson_id, clientPence: r.client_pence ?? null, tutorPence: r.tutor_pence ?? null, note: r.note, setBy: r.set_by ?? "", setAt: iso(r.set_at) });
+const toRepeating = (r: Row): RepeatingPrice => ({ id: r.id, assignmentId: r.assignment_id, clientPence: r.client_pence ?? null, tutorPence: r.tutor_pence ?? null, startDate: ymd(r.start_date), endDate: ymd(r.end_date), note: r.note, setBy: r.set_by ?? "", setAt: iso(r.set_at) });
 const toPayment = (r: Row): Payment => ({ id: r.id, clientId: r.client_id, amountPence: r.amount_pence, receivedOn: ymd(r.received_on), method: r.method, note: r.note, recordedBy: r.recorded_by ?? "", createdAt: iso(r.created_at) });
 const toRefund = (r: Row): RefundRequest => ({
   id: r.id, clientId: r.client_id, amountPence: r.amount_pence, reason: r.reason, statutory: r.statutory, status: r.status, requestedBy: r.requested_by ?? "", requestedAt: iso(r.requested_at),
@@ -140,6 +141,29 @@ export function createSqlTuitionBilling(db: SqlExecutor): TuitionBillingReposito
       },
       async clear(lessonId) {
         if (isId(lessonId)) await q("delete from public.tuition_lesson_prices where lesson_id = $1", [lessonId]);
+      },
+    },
+    repeatingPrices: {
+      async list(assignmentIds) {
+        if (assignmentIds && assignmentIds.length === 0) return [];
+        const ids = assignmentIds?.filter(isId);
+        const rows = ids ? await q("select * from public.tuition_repeating_prices where assignment_id = any($1::uuid[]) order by start_date, set_at", [ids]) : await q("select * from public.tuition_repeating_prices order by start_date, set_at");
+        return rows.map(toRepeating);
+      },
+      async create(input) {
+        validateRepeatingPrice(input);
+        if (!isId(input.assignmentId)) throw new BillingError("NOT_FOUND", "There is no such class.");
+        // ponytail: checked then inserted; two administrators saving the same class's dates in the same instant could both get through.
+        const existing = await q("select * from public.tuition_repeating_prices where assignment_id = $1", [input.assignmentId]);
+        checkNoOverlap(existing.map(toRepeating), input);
+        const [row] = await q(
+          "insert into public.tuition_repeating_prices (assignment_id, client_pence, tutor_pence, start_date, end_date, note, set_by) values ($1, $2, $3, $4, $5, $6, $7) returning *",
+          [input.assignmentId, input.clientPence, input.tutorPence, input.startDate, input.endDate, input.note.trim(), actorId(input.setBy)],
+        );
+        return toRepeating(row!);
+      },
+      async remove(id) {
+        if (isId(id)) await q("delete from public.tuition_repeating_prices where id = $1", [id]);
       },
     },
     decisions: {

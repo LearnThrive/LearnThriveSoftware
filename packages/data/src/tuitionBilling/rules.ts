@@ -7,7 +7,7 @@
 
 import { londonYmd, monthsBetween } from "./period";
 import { lessonAmount } from "./money";
-import type { BillingSettings, ChargeDecision, ChargeEvent, ChargeKind, FamilyRate, LineFlag, Pence } from "./types";
+import type { BillingSettings, ChargeDecision, ChargeEvent, ChargeKind, FamilyRate, LineFlag, Pence, LessonPrice, RepeatingPrice } from "./types";
 
 export interface BillingLesson {
   id: string;
@@ -111,6 +111,21 @@ export interface PricedEvent {
   flag?: LineFlag;
   /** false for an event that has no line on a statement (a free cancellation, a tutor cancellation, a lesson to come). */
   listed: boolean;
+}
+
+export type PriceSource = "lesson" | "repeating";
+
+/**
+ * The amount set for one side of a lesson in place of the hourly rate, if any: the lesson's own price first, then the class's repeating price
+ * for the lesson's date. Null on that side means the hourly rate applies.
+ */
+export function setPriceFor(
+  side: "clientPence" | "tutorPence", lesson: { id: string; assignmentId?: string }, ymd: string, own: readonly LessonPrice[], repeating: readonly RepeatingPrice[],
+): { pence: Pence; from: PriceSource } | null {
+  const mine = own.find((p) => p.lessonId === lesson.id)?.[side];
+  if (mine !== undefined && mine !== null) return { pence: mine, from: "lesson" };
+  const rule = repeating.find((r) => r.assignmentId === lesson.assignmentId && r.startDate <= ymd && ymd <= r.endDate && r[side] !== null);
+  return rule ? { pence: rule[side]!, from: "repeating" } : null;
 }
 
 /**

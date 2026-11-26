@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getDataProvider } from "@/lib/data/provider";
 import { requireRole } from "@/lib/auth/guard";
-import { cancelLesson, createLessonOrSeries, detectConflicts, rescheduleLesson, type RescheduleScope } from "@/lib/scheduling/schedulingService";
+import { cancelLesson, createLessonOrSeries, detectConflicts, editLesson, rescheduleLesson, type RescheduleScope } from "@/lib/scheduling/schedulingService";
 import { zonedTimeToUtc } from "@/lib/scheduling/timezone";
 import { notifyRole } from "@/lib/notifications/notificationService";
 import type { RecurrenceFrequency } from "@learnthrive/data/domain";
@@ -145,6 +145,39 @@ export async function rescheduleLessonAction(formData: FormData): Promise<void> 
   await rescheduleLesson(data, lessonId, newStartAtIso, scope, user.id, newDurationMinutes);
   revalidatePath("/dashboard/calendar");
   revalidatePath(`/dashboard/lessons/${lessonId}`);
+}
+
+/** The lesson page's "Edit details": allowed before, during and after a lesson, never on a cancelled one. Administrator only. */
+export async function editLessonAction(formData: FormData): Promise<void> {
+  const user = await requireRole(["ADMIN"]);
+  const lessonId = text(formData, "lessonId");
+  const data = getDataProvider();
+  const lesson = lessonId ? await data.lessons.get(lessonId) : null;
+  if (!lesson) redirect("/dashboard/calendar");
+  const back = (message: string): never => redirect(`/dashboard/lessons/${lesson.id}?toast=${encodeURIComponent(message)}`);
+  if (lesson.status === "CANCELLED") back("A cancelled lesson cannot be edited.");
+
+  const title = text(formData, "title");
+  const subject = text(formData, "subject");
+  const [year, month, day] = text(formData, "date").split("-").map(Number);
+  const [hour, minute] = text(formData, "time").split(":").map(Number);
+  if (!title || !subject) back("A lesson needs a title and a subject.");
+  if (![year, month, day, hour, minute].every(Number.isInteger)) back("A lesson needs a date and a time.");
+  const duration = parseDuration(text(formData, "durationHours"), text(formData, "durationExtra"));
+  if (!duration.ok) back(duration.message);
+  const location = text(formData, "location");
+  if (lesson.locationType === "IN_PERSON" && !location) back("An in-person lesson needs a location.");
+
+  await editLesson(data, lesson.id, {
+    title, subject, notes: text(formData, "notes"), reportRequired: formData.get("reportRequired") === "on",
+    startAt: zonedTimeToUtc({ year, month, day, hour, minute }, "Europe/London").toISOString(),
+    durationMinutes: (duration as { minutes: number }).minutes,
+    ...(lesson.locationType === "IN_PERSON" ? { location } : {}),
+  }, user.id);
+  revalidatePath("/dashboard/calendar");
+  revalidatePath("/dashboard/lessons");
+  revalidatePath(`/dashboard/lessons/${lesson.id}`);
+  back("Lesson updated");
 }
 
 export async function cancelLessonAction(formData: FormData): Promise<void> {

@@ -140,6 +140,48 @@ export async function rescheduleLesson(
   return updated;
 }
 
+export interface LessonEdit {
+  title: string;
+  subject: string;
+  startAt: string;
+  durationMinutes: number;
+  reportRequired: boolean;
+  notes: string;
+  /** Only for an in-person lesson. */
+  location?: string;
+}
+
+/**
+ * Changes one lesson's details, at any point before it is cancelled, including while it is on: things change during a lesson. The classroom room
+ * stays the same, so nobody in it is moved; the join and chat windows follow the new time and length. Time and length are recorded (and the
+ * family told) as for a reschedule; other changes are listed in the lesson's history.
+ */
+export async function editLesson(data: DataProvider, lessonId: string, changes: LessonEdit, actorId?: string): Promise<Lesson> {
+  const lesson = await data.lessons.get(lessonId);
+  if (!lesson) throw new Error(`Lesson ${lessonId} not found`);
+  if (lesson.status === "CANCELLED") throw new Error("A cancelled lesson cannot be edited.");
+
+  const minute = (iso: string) => Math.floor(new Date(iso).getTime() / 60_000);
+  if (minute(changes.startAt) !== minute(lesson.startAt) || changes.durationMinutes !== lesson.durationMinutes) {
+    await rescheduleLesson(data, lessonId, changes.startAt, "THIS_ONLY", actorId, changes.durationMinutes);
+  }
+
+  const changed: string[] = [];
+  if (changes.title !== lesson.title) changed.push("title");
+  if (changes.subject !== lesson.subject) changed.push("subject");
+  if (changes.location !== undefined && changes.location !== (lesson.location ?? "")) changed.push("location");
+  if (changes.notes !== (lesson.notes ?? "")) changed.push("notes");
+  if (changes.reportRequired !== lesson.reportRequired) changed.push("report requirement");
+  if (changed.length > 0) {
+    await data.lessons.update(lessonId, {
+      title: changes.title, subject: changes.subject, notes: changes.notes, reportRequired: changes.reportRequired,
+      ...(changes.location !== undefined ? { location: changes.location } : {}),
+    });
+    await logActivity(data, lessonId, "RESCHEDULED", `Details changed: ${changed.join(", ")}`, actorId);
+  }
+  return (await data.lessons.get(lessonId))!;
+}
+
 /** Plan section 64: cancelling records who/when/why and never deletes the row. */
 export async function cancelLesson(
   data: DataProvider,

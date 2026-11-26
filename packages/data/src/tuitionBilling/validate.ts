@@ -3,8 +3,8 @@
 
 import { dayBefore, YMD } from "./period";
 import {
-  BillingError, LESSON_PRICE_MAX_PENCE, TUTOR_RATE_MAX_PENCE, TUTOR_RATE_MIN_PENCE, type BillingSettings, type FamilyRate, type LessonPrice, type Payment, type RefundRequest,
-  type TutorRate,
+  BillingError, LESSON_PRICE_MAX_PENCE, REPEATING_PRICE_MAX_DAYS, TUTOR_RATE_MAX_PENCE, TUTOR_RATE_MIN_PENCE, type BillingSettings, type FamilyRate, type LessonPrice, type Payment, type RefundRequest,
+  type RepeatingPrice, type TutorRate,
 } from "./types";
 
 const isInt = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n);
@@ -58,11 +58,31 @@ export function validateTutorRate(input: Omit<TutorRate, "id" | "createdAt">): v
 
 export function validateLessonPrice(input: Pick<LessonPrice, "lessonId" | "clientPence" | "tutorPence" | "note">): void {
   text(input.lessonId, 1, 80, "The lesson");
+  validateAmounts(input);
+}
+
+/** The two sides of a set price, and its note. */
+function validateAmounts(input: Pick<LessonPrice, "clientPence" | "tutorPence" | "note">): void {
   for (const [amount, what] of [[input.clientPence, "The family's price"], [input.tutorPence, "The tutor's pay"]] as const) {
     if (amount !== null && (!isInt(amount) || amount < 0 || amount > LESSON_PRICE_MAX_PENCE)) bad(`${what} for a lesson is whole pence, from nothing up to 1,000 pounds.`);
   }
   if (input.clientPence === null && input.tutorPence === null) bad("Set the family's price, the tutor's pay, or both.");
   text(input.note, 0, 500, "The note");
+}
+
+export function validateRepeatingPrice(input: Omit<RepeatingPrice, "id" | "setAt">): void {
+  text(input.assignmentId, 1, 80, "The class");
+  validateAmounts(input);
+  const real = (d: string) => YMD.test(d) && !Number.isNaN(Date.parse(`${d}T00:00:00Z`)) && new Date(`${d}T00:00:00Z`).toISOString().startsWith(d);
+  if (!real(input.startDate) || !real(input.endDate)) bad("A repeating price needs a start date and an end date.");
+  if (input.endDate < input.startDate) bad("The end date is before the start date.");
+  if ((Date.parse(input.endDate) - Date.parse(input.startDate)) / 86_400_000 >= REPEATING_PRICE_MAX_DAYS) bad("A repeating price can run for up to two years.");
+}
+
+/** Refuses a repeating price that shares a day with one the class already has: which of the two applied would be a guess. */
+export function checkNoOverlap(existing: Array<Pick<RepeatingPrice, "startDate" | "endDate">>, input: Pick<RepeatingPrice, "startDate" | "endDate">): void {
+  const clash = existing.find((r) => rangesOverlap(r.startDate, r.endDate, input.startDate, input.endDate));
+  if (clash) throw new BillingError("RATE_LOCKED", `This class already has a repeating price from ${clash.startDate} to ${clash.endDate}. Remove it first, or choose dates outside it.`);
 }
 
 export function validatePayment(input: Omit<Payment, "id" | "createdAt">): void {

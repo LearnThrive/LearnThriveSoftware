@@ -3,7 +3,7 @@ import test from "node:test";
 import { loadTsFrom } from "./_tsLoader.mjs";
 
 const { getDataProvider } = loadTsFrom(import.meta.url, "../../../packages/data/src/inMemoryProvider.ts");
-const { detectConflicts, createLessonOrSeries, rescheduleLesson, cancelLesson } = loadTsFrom(import.meta.url, "../src/lib/scheduling/schedulingService.ts");
+const { detectConflicts, createLessonOrSeries, rescheduleLesson, cancelLesson, editLesson } = loadTsFrom(import.meta.url, "../src/lib/scheduling/schedulingService.ts");
 
 async function freshAssignment(data) {
   const tutor = await data.tutors.create({ name: "Test Tutor", email: `tutor-${crypto.randomUUID()}@example.test`, subjects: ["Physics"], active: true });
@@ -219,4 +219,27 @@ test("rescheduleLesson: saving only a new length is logged as a length change, n
   const message = log.map((entry) => entry.message).find((m) => /Length changed/.test(m));
   assert.ok(message, "a length change is recorded");
   assert.ok(!/Rescheduled/.test(message), "and it is not described as a reschedule");
+});
+
+test("editLesson: a lesson that is on now can have its details and length changed, and each change is written to its history", async () => {
+  const data = getDataProvider();
+  const assignment = await freshAssignment(data);
+  const startAt = new Date(Date.now() - 20 * 60_000).toISOString();
+  const [lesson] = await createLessonOrSeries(data, { assignment, title: "Algebra", subject: "Maths", startAt, durationMinutes: 120, locationType: "ONLINE", reportRequired: true });
+  const same = { title: "Algebra", subject: "Maths", startAt, durationMinutes: 120, reportRequired: true, notes: "" };
+
+  const updated = await editLesson(data, lesson.id, { ...same, durationMinutes: 60, title: "Fractions", reportRequired: false, notes: "Bring a ruler" }, "admin");
+  assert.deepEqual([updated.title, updated.durationMinutes, updated.reportRequired, updated.notes, updated.status], ["Fractions", 60, false, "Bring a ruler", "PLANNED"]);
+  assert.equal(updated.classroomRoomId, lesson.classroomRoomId, "the room people are in does not change");
+  assert.equal(Math.floor(Date.parse(updated.startAt) / 60_000), Math.floor(Date.parse(startAt) / 60_000), "it was not moved");
+  const messages = (await data.activity.forLesson(lesson.id)).map((a) => a.message);
+  assert.ok(messages.some((m) => /^Length changed from /.test(m)));
+  assert.ok(messages.includes("Details changed: title, notes, report requirement"));
+
+  const before = (await data.activity.forLesson(lesson.id)).length;
+  await editLesson(data, lesson.id, { title: "Fractions", subject: "Maths", startAt: updated.startAt, durationMinutes: 60, reportRequired: false, notes: "Bring a ruler" }, "admin");
+  assert.equal((await data.activity.forLesson(lesson.id)).length, before, "saving with nothing changed records nothing");
+
+  await cancelLesson(data, lesson.id, "admin");
+  await assert.rejects(editLesson(data, lesson.id, same, "admin"), /cancelled/i);
 });

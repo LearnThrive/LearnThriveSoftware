@@ -8,7 +8,7 @@ import { describe, test } from "node:test";
 import type { DataProvider } from "../repositories";
 import {
   BillingError, clearLessonPrice, decideRefundRequest, familyBalances, issueStatement, lessonMoneyFor, parseApprovers, previewStatement, recordPayment, requestRefund,
-  setLessonPrice, tutorPayFor, voidPayment,
+  removeRepeatingPrice, repeatEnd, repeatingPriceList, setLessonPrice, setRepeatingPrice, tutorPayFor, voidPayment,
   type BillingContext, type TuitionBillingRepository,
 } from "../tuitionBilling";
 
@@ -349,7 +349,7 @@ export function tuitionBillingContract(name: string, make: () => Promise<{ harne
       assert.deepEqual(draft?.lines.map((x) => x.ratePence), [null, 3000], "a lesson with its own price is not shown as priced by the hour");
 
       const pay = (await tutorPayFor(ctx(), "2026-10")).find((s) => s.tutorId === t.id);
-      assert.deepEqual(pay?.lines.map((x) => [x.amountPence, x.setForLesson]), [[500, true], [1500, false]]);
+      assert.deepEqual(pay?.lines.map((x) => [x.amountPence, x.priceFrom]), [[500, "lesson"], [1500, null]]);
       assert.equal(pay?.unpricedLessons, 0);
 
       const rows = (await lessonMoneyFor(ctx(), "2026-10")).filter((r) => r.lessonId === own.id || r.lessonId === hourly.id);
@@ -366,6 +366,68 @@ export function tuitionBillingContract(name: string, make: () => Promise<{ harne
       assert.deepEqual([entry?.action, entry?.subject, entry?.detail.previousTutorPence, entry?.detail.tutorPence], ["lesson_price.set", own.id, 500, 600]);
       assert.equal((await lessonMoneyFor(ctx(), "2026-10")).find((r) => r.lessonId === own.id)?.invoiced, true);
       await rejects(setLessonPrice(ctx(), { lessonId: "00000000-0000-4000-8000-000000000999", clientPence: 1, tutorPence: null, note: "" }, actor), "NOT_FOUND");
+    });
+
+    test("a repeating price: dates are checked, one class cannot have two for the same day, and it can be removed", async () => {
+      assert.equal(repeatEnd("2026-11-26", "4w"), "2026-12-23");
+      assert.equal(repeatEnd("2026-11-26", "3m"), "2027-02-25");
+      assert.equal(repeatEnd("2026-01-31", "1m" as never), null, "only the offered spans");
+      const { clientId } = await h.family("Repeat Checks");
+      const kid = await child(clientId);
+      const a = await assignment((await tutor()).id, [kid.id]);
+      const other = await assignment((await tutor()).id, [kid.id]);
+      const base = { assignmentId: a.id, clientPence: 1000, tutorPence: 500, startDate: "2026-10-01", endDate: "2026-10-31", note: "", setBy: admin };
+      await rejects(repo.repeatingPrices.create({ ...base, clientPence: null, tutorPence: null }), "INVALID");
+      await rejects(repo.repeatingPrices.create({ ...base, clientPence: -1 }), "INVALID");
+      await rejects(repo.repeatingPrices.create({ ...base, endDate: "2026-09-30" }), "INVALID");
+      await rejects(repo.repeatingPrices.create({ ...base, endDate: "2028-11-01" }), "INVALID");
+      await rejects(repo.repeatingPrices.create({ ...base, startDate: "soon" }), "INVALID");
+      const first = await repo.repeatingPrices.create(base);
+      assert.deepEqual([first.startDate, first.endDate, first.clientPence, first.tutorPence], ["2026-10-01", "2026-10-31", 1000, 500]);
+      await rejects(repo.repeatingPrices.create({ ...base, startDate: "2026-10-31", endDate: "2026-11-30" }), "RATE_LOCKED");
+      const next = await repo.repeatingPrices.create({ ...base, startDate: "2026-11-01", endDate: "2026-11-30", tutorPence: null });
+      await repo.repeatingPrices.create({ ...base, assignmentId: other.id });
+      assert.deepEqual((await repo.repeatingPrices.list([a.id])).map((r) => r.id), [first.id, next.id]);
+      assert.deepEqual(await repo.repeatingPrices.list([]), []);
+      await repo.repeatingPrices.remove(first.id);
+      await repo.repeatingPrices.remove(first.id);
+      assert.deepEqual((await repo.repeatingPrices.list([a.id])).map((r) => r.id), [next.id]);
+    });
+
+    test("a repeating price covers every lesson of the class in its dates, ones booked later too; a lesson's own price wins; issued statements stay", async () => {
+      const actor = { id: admin, email: "a@example.test" };
+      const { clientId } = await h.family("Repeat Money");
+      const kid = await child(clientId, "Noor");
+      const t = await tutor();
+      const a = await assignment(t.id, [kid.id]);
+      await repo.familyRates.create({ clientId, assignmentId: a.id, hourlyPence: 3000, contractStart: "2026-09-01", contractEnd: null, createdBy: admin });
+      await repo.tutorRates.create({ tutorId: t.id, hourlyPence: 1500, effectiveFrom: "2026-09-01", createdBy: admin });
+      const first = await lesson(a, "2026-10-05T16:00:00Z");
+      const special = await lesson(a, "2026-10-12T16:00:00Z");
+      await lesson(a, "2026-10-26T16:00:00Z");
+      // The lesson the admin sets it from had a price of its own: the repeating one takes its place there.
+      await setLessonPrice(ctx(), { lessonId: first.id, clientPence: 900, tutorPence: 400, note: "" }, actor);
+      await setLessonPrice(ctx(), { lessonId: special.id, clientPence: 2000, tutorPence: null, note: "Mock exam" }, actor);
+      const rule = await setRepeatingPrice(ctx(), { assignmentId: a.id, clientPence: 1000, tutorPence: 500, startDate: "2026-10-05", endDate: "2026-10-19", note: "" }, actor, first.id);
+      assert.deepEqual((await repo.lessonPrices.list([first.id])), []);
+      const bookedLater = await lesson(a, "2026-10-19T16:00:00Z");
+
+      const draft = await previewStatement(ctx(), clientId, "2026-10");
+      assert.deepEqual(draft?.lines.map((x) => x.amountPence), [1000, 2000, 1000, 3000], "repeating, own, repeating (booked later), after the end date");
+      const pay = (await tutorPayFor(ctx(), "2026-10")).find((s) => s.tutorId === t.id);
+      assert.deepEqual(pay?.lines.map((x) => [x.amountPence, x.priceFrom]), [[500, "repeating"], [500, "repeating"], [500, "repeating"], [1500, null]], "its own price set no tutor pay, so the repeating pay applies");
+      const rows = (await lessonMoneyFor(ctx(), "2026-10")).filter((r) => [first.id, bookedLater.id].includes(r.lessonId));
+      assert.deepEqual(rows.map((r) => r.repeating?.id), [rule.id, rule.id]);
+      const listed = (await repeatingPriceList(ctx())).find((r) => r.id === rule.id);
+      assert.deepEqual([listed?.classTitle, listed?.lessonsBooked], ["GCSE Maths", 3]);
+
+      await issueStatement(ctx(), clientId, "2026-10", actor);
+      await removeRepeatingPrice(ctx(), rule.id, actor);
+      assert.deepEqual((await repo.statements.get(clientId, "2026-10"))?.lines.map((x) => x.amountPence), [1000, 2000, 1000, 3000], "what was billed stays billed");
+      assert.equal((await lessonMoneyFor(ctx(), "2026-10")).find((r) => r.lessonId === bookedLater.id)?.clientOwedPence, 1000);
+      assert.equal((await repo.audit.recent(1))[0]?.action, "repeating_price.removed");
+      await rejects(removeRepeatingPrice(ctx(), rule.id, actor), "NOT_FOUND");
+      await rejects(setRepeatingPrice(ctx(), { assignmentId: "00000000-0000-4000-8000-000000000999", clientPence: 1, tutorPence: null, startDate: "2026-10-01", endDate: "2026-10-02", note: "" }, actor), "NOT_FOUND");
     });
 
     test("teardown", async () => {

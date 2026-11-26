@@ -63,6 +63,7 @@ const EXPECTED_TABLES = [
   "tuition_lesson_prices",
   "tuition_payments",
   "tuition_refunds",
+  "tuition_repeating_prices",
   "tuition_statements",
   "tuition_tutor_rates",
   "tutor_availability_blocks",
@@ -122,6 +123,7 @@ const FORCED_TABLES = [
   "tuition_lesson_prices",
   "tuition_payments",
   "tuition_refunds",
+  "tuition_repeating_prices",
   "tuition_statements",
   "tuition_tutor_rates",
   "tutor_availability_blocks",
@@ -213,6 +215,7 @@ describe("migrations", () => {
       "0031_server_role_grants.sql",
       "0032_admin_lesson_chat.sql",
       "0033_tuition_lesson_prices.sql",
+      "0034_tuition_repeating_prices.sql",
     ]);
     assert.deepEqual(
       applied.map((f) => Number(f.slice(0, 4))),

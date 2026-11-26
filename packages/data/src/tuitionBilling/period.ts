@@ -56,6 +56,23 @@ export function dayBefore(ymd: string): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** How long a repeating price can be asked to run, by name. */
+export const REPEAT_SPANS = {
+  "4w": { weeks: 4, label: "4 weeks" }, "8w": { weeks: 8, label: "8 weeks" },
+  "3m": { months: 3, label: "3 months" }, "6m": { months: 6, label: "6 months" }, "12m": { months: 12, label: "12 months" },
+} as const;
+export type RepeatSpan = keyof typeof REPEAT_SPANS;
+
+/** The last day (included) of a span that starts on a date, or null if the span is not one of those offered. */
+export function repeatEnd(start: string, span: string): string | null {
+  if (!Object.hasOwn(REPEAT_SPANS, span)) return null;
+  const length: { weeks?: number; months?: number } = REPEAT_SPANS[span as RepeatSpan];
+  if (length.months) return dayBefore(addMonths(start, length.months));
+  const end = new Date(`${start}T00:00:00Z`);
+  end.setUTCDate(end.getUTCDate() + length.weeks! * 7 - 1);
+  return end.toISOString().slice(0, 10);
+}
+
 /** A year from a start date, to the day before the same date. No longer used for rates (there is no fixed contract year), kept for the terms drafts. */
 export function contractEndFor(start: string): string {
   const next = addMonths(start, 12);

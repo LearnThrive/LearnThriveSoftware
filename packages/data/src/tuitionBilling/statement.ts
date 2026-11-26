@@ -1,11 +1,11 @@
 // The monthly statement (B1, B14, B16): what a family owes for the lessons delivered in a calendar month, plus any chargeable missed lessons,
 // less the sibling discount, with the payments received and the balance. Pure: the caller passes in everything it reads.
 
-import { applyAllowances, deriveChargeEvents, priceEvent, rateFor, type BillingAttendance, type BillingLesson } from "./rules";
+import { applyAllowances, deriveChargeEvents, priceEvent, rateFor, setPriceFor, type BillingAttendance, type BillingLesson } from "./rules";
 import { percentOf } from "./money";
 import { addMonths, londonYmd, periodBounds, periodOf } from "./period";
 import type {
-  BillingSettings, ChargeDecision, CompanyDetails, FamilyBillingProfile, FamilyRate, IssuedStatement, LessonPrice, Pence, Payment, StatementBlocker, StatementDraft, StatementLine,
+  BillingSettings, ChargeDecision, CompanyDetails, FamilyBillingProfile, FamilyRate, IssuedStatement, LessonPrice, Pence, RepeatingPrice, Payment, StatementBlocker, StatementDraft, StatementLine,
 } from "./types";
 
 export interface StatementInput {
@@ -19,6 +19,7 @@ export interface StatementInput {
   rates: FamilyRate[];
   /** Prices set for single lessons, in place of the hourly rate (only `clientPence` matters here). */
   lessonPrices?: LessonPrice[];
+  repeatingPrices?: RepeatingPrice[];
   payments: Payment[];
   profile: FamilyBillingProfile;
   settings: BillingSettings;
@@ -48,11 +49,11 @@ function linesByPeriod(input: StatementInput): Map<string, StatementLine[]> {
   const titles = new Map(input.lessons.map((l) => [l.id, l.title]));
   const events = deriveChargeEvents({ lessons: input.lessons, attendance: input.attendance, decisions: input.decisions, settings: input.settings, asOf: input.asOf }).filter((e) => mine.has(e.studentId));
   const verdicts = applyAllowances(events, input.settings);
-  const fixed = new Map((input.lessonPrices ?? []).filter((p) => p.clientPence !== null).map((p) => [p.lessonId, p.clientPence]));
   const out = new Map<string, StatementLine[]>();
   for (const e of events) {
     const date = londonYmd(e.startAt);
-    const priced = priceEvent(e, rateFor(input.rates, input.client.id, e.assignmentId, date), verdicts.get(`${e.lessonId}|${e.studentId}`), input.settings, fixed.get(e.lessonId) ?? null);
+    const set = setPriceFor("clientPence", { id: e.lessonId, assignmentId: e.assignmentId }, date, input.lessonPrices ?? [], input.repeatingPrices ?? []);
+    const priced = priceEvent(e, rateFor(input.rates, input.client.id, e.assignmentId, date), verdicts.get(`${e.lessonId}|${e.studentId}`), input.settings, set?.pence ?? null);
     if (!priced.listed) continue;
     const line: StatementLine = {
       lessonId: e.lessonId, studentId: e.studentId, studentName: names.get(e.studentId) ?? "", date, title: titles.get(e.lessonId) ?? "Lesson",

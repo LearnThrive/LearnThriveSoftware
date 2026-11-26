@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
-  BillingError, clearLessonPrice, decideRefundRequest, issueStatement, londonYmd, parsePounds, recordPayment, requestRefund, setLessonPrice, voidPayment, PERIOD, YMD,
+  BillingError, clearLessonPrice, decideRefundRequest, issueStatement, londonYmd, parsePounds, recordPayment, removeRepeatingPrice, repeatEnd, requestRefund, setLessonPrice, setRepeatingPrice, voidPayment, PERIOD, YMD,
   type Actor, type CancelParty,
 } from "@learnthrive/data/tuitionBilling";
 import { requireRole } from "@/lib/auth/guard";
@@ -109,16 +109,36 @@ const lessonPricesPath = (formData: FormData) => {
   return `${BASE}/lessons${PERIOD.test(period) ? `?period=${period}` : ""}`;
 };
 
-/** One lesson's own price: what each child's family pays and/or what its tutor gets, kept apart. Blank on a side means the hourly rate. */
+/**
+ * A price from a lesson's form: what each child's family pays and/or what its tutor gets, kept apart. Blank on a side means the hourly rate.
+ * "Repeat" off, it is that one lesson's own price. On, it covers every lesson of the lesson's class from the start date, for a chosen length
+ * of time or up to a chosen end date, including lessons booked later.
+ */
 export async function setLessonPriceAction(formData: FormData): Promise<void> {
   const actor = await admin();
-  await attempt(lessonPricesPath(formData), "Lesson price saved", async () => {
-    await setLessonPrice(billingContext(), {
-      lessonId: text(formData, "lessonId"),
-      clientPence: optionalPence(formData, "client", "The family's price"),
-      tutorPence: optionalPence(formData, "tutor", "The tutor's pay"),
-      note: text(formData, "note"),
-    }, actor);
+  const repeat = text(formData, "repeat");
+  await attempt(lessonPricesPath(formData), repeat ? "Repeating price saved" : "Lesson price saved", async () => {
+    const lessonId = text(formData, "lessonId");
+    const amounts = { clientPence: optionalPence(formData, "client", "The family's price"), tutorPence: optionalPence(formData, "tutor", "The tutor's pay"), note: text(formData, "note") };
+    const ctx = billingContext();
+    if (!repeat) {
+      await setLessonPrice(ctx, { lessonId, ...amounts }, actor);
+      return;
+    }
+    const lesson = await ctx.data.lessons.get(lessonId);
+    if (!lesson) throw new BillingError("NOT_FOUND", "There is no such lesson.");
+    const startDate = ymd(formData, "from", "The date it starts");
+    const endDate = repeat === "until" ? ymd(formData, "until", "The date it ends") : repeatEnd(startDate, repeat);
+    if (!endDate) throw new BillingError("INVALID", "Choose how long the price repeats for.");
+    await setRepeatingPrice(ctx, { assignmentId: lesson.assignmentId, startDate, endDate, ...amounts }, actor, lesson.id);
+  });
+}
+
+/** Stops a repeating price. Lessons not yet billed go back to their own price or the hourly rates; issued statements do not change. */
+export async function removeRepeatingPriceAction(formData: FormData): Promise<void> {
+  const actor = await admin();
+  await attempt(lessonPricesPath(formData), "Repeating price removed", async () => {
+    await removeRepeatingPrice(billingContext(), text(formData, "id"), actor);
   });
 }
 

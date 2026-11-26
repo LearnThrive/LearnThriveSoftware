@@ -8,8 +8,8 @@ import { londonYmd } from "./period";
 import { decideRefund, isRefundApprover, type Actor, type RefundApprovers } from "./refunds";
 import { deriveChargeEvents, type BillingAttendance, type BillingLesson } from "./rules";
 import type { TuitionBillingRepository } from "./repository";
-import { validateLessonPrice } from "./validate";
-import { BillingError, type CompanyDetails, type IssuedStatement, type LessonPrice, type LineFlag, type Pence, type Payment, type RefundRequest, type StatementDraft } from "./types";
+import { validateLessonPrice, validateRepeatingPrice } from "./validate";
+import { BillingError, type CompanyDetails, type IssuedStatement, type LessonPrice, type LineFlag, type Pence, type Payment, type RefundRequest, type RepeatingPrice, type StatementDraft } from "./types";
 
 export interface BillingContext {
   data: DataProvider;
@@ -44,14 +44,16 @@ async function gather(ctx: BillingContext, clientId: string, period: string): Pr
   const attendance: BillingAttendance[] = [];
   for (const lesson of lessons) for (const a of await ctx.data.attendance.forLesson(lesson.id)) attendance.push({ lessonId: a.lessonId, studentId: a.studentId, status: a.status });
   const lessonIds = lessons.map((l) => l.id);
-  const [settings, rates, decisions, payments, statements, profile, lessonPrices] = await Promise.all([
+  const [settings, rates, decisions, payments, statements, profile, lessonPrices, repeatingPrices] = await Promise.all([
+    
     ctx.billing.settings.get(), ctx.billing.familyRates.list(clientId), ctx.billing.decisions.list(lessonIds), ctx.billing.payments.list(clientId),
     ctx.billing.statements.list(clientId), ctx.billing.profiles.get(clientId), ctx.billing.lessonPrices.list(lessonIds),
+    ctx.billing.repeatingPrices.list([...new Set(lessons.map((l) => l.assignmentId))]),
   ]);
   const before = statements.filter((s) => s.period < period);
   const previous = before[before.length - 1] ?? null;
   const input: StatementInput = {
-    client: { id: client.id, name: client.name }, students: children, period, lessons: billingLessons, attendance, decisions, rates, lessonPrices, payments, profile, settings, company: ctx.company,
+    client: { id: client.id, name: client.name }, students: children, period, lessons: billingLessons, attendance, decisions, rates, lessonPrices, repeatingPrices, payments, profile, settings, company: ctx.company,
     asOf: nowOf(ctx), previous, countedPaymentIds: new Set(statements.flatMap((s) => s.paymentIds)),
   };
   const issued = new Set(statements.map((s) => s.period));
@@ -204,8 +206,8 @@ export async function tutorPayFor(ctx: BillingContext, period: string): Promise<
     paid.push(l.id);
     for (const a of await ctx.data.attendance.forLesson(l.id)) attendance.push({ lessonId: a.lessonId, studentId: a.studentId, status: a.status });
   }
-  const lessonPrices = await ctx.billing.lessonPrices.list(paid);
-  return tutorPay({ period, tutors: tutors.filter((t) => t.id !== ARCHIVED_TUTOR_ID).map((t) => ({ id: t.id, name: t.name })), lessons, attendance, rates, lessonPrices });
+  const [lessonPrices, repeatingPrices] = await Promise.all([ctx.billing.lessonPrices.list(paid), ctx.billing.repeatingPrices.list()]);
+  return tutorPay({ period, tutors: tutors.filter((t) => t.id !== ARCHIVED_TUTOR_ID).map((t) => ({ id: t.id, name: t.name })), lessons, attendance, rates, lessonPrices, repeatingPrices });
 }
 
 /**
@@ -236,6 +238,70 @@ export async function clearLessonPrice(ctx: BillingContext, lessonId: string, ac
   await ctx.billing.audit.append({ actorId: actor.id, action: "lesson_price.cleared", subject: lessonId, detail: { clientPence: before.clientPence, tutorPence: before.tutorPence } });
 }
 
+/**
+ * Sets the same price on every lesson of a class between two dates, including lessons booked afterwards. Statements already issued are frozen
+ * copies and do not change. When it is set from a lesson inside those dates, that lesson's own price gives way on the sides the new one sets
+ * (unless its family price is already invoiced); other lessons with their own price keep it. Audited.
+ */
+export async function setRepeatingPrice(
+  ctx: BillingContext, input: Omit<RepeatingPrice, "id" | "setAt" | "setBy">, actor: Actor, fromLessonId?: string,
+): Promise<RepeatingPrice> {
+  validateRepeatingPrice({ ...input, setBy: actor.id });
+  if (!(await ctx.data.assignments.get(input.assignmentId))) throw new BillingError("NOT_FOUND", "There is no such class.");
+  const price = await ctx.billing.repeatingPrices.create({ ...input, setBy: actor.id });
+  await ctx.billing.audit.append({
+    actorId: actor.id, action: "repeating_price.set", subject: price.assignmentId,
+    detail: { id: price.id, clientPence: price.clientPence, tutorPence: price.tutorPence, startDate: price.startDate, endDate: price.endDate, note: price.note },
+  });
+  if (fromLessonId) await giveWay(ctx, fromLessonId, price, actor);
+  return price;
+}
+
+async function giveWay(ctx: BillingContext, lessonId: string, price: RepeatingPrice, actor: Actor): Promise<void> {
+  const lesson = await ctx.data.lessons.get(lessonId);
+  const date = lesson ? londonYmd(lesson.startAt) : "";
+  if (!lesson || lesson.assignmentId !== price.assignmentId || date < price.startDate || date > price.endDate) return;
+  const [own] = await ctx.billing.lessonPrices.list([lessonId]);
+  if (!own) return;
+  const clientPence = price.clientPence === null ? own.clientPence : null;
+  const tutorPence = price.tutorPence === null ? own.tutorPence : null;
+  try {
+    if (clientPence === null && tutorPence === null) await clearLessonPrice(ctx, lessonId, actor);
+    else await setLessonPrice(ctx, { lessonId, clientPence, tutorPence, note: own.note }, actor);
+  } catch (error) {
+    // An invoiced family price stays on the lesson; the repeating price is saved all the same.
+    if (!(error instanceof BillingError)) throw error;
+  }
+}
+
+/** Takes a repeating price away: lessons not yet billed go back to the hourly rates (or their own price). Issued statements do not change. Audited. */
+export async function removeRepeatingPrice(ctx: BillingContext, id: string, actor: Actor): Promise<void> {
+  const price = (await ctx.billing.repeatingPrices.list()).find((r) => r.id === id);
+  if (!price) throw new BillingError("NOT_FOUND", "That repeating price has already been removed.");
+  await ctx.billing.repeatingPrices.remove(id);
+  await ctx.billing.audit.append({
+    actorId: actor.id, action: "repeating_price.removed", subject: price.assignmentId,
+    detail: { id, clientPence: price.clientPence, tutorPence: price.tutorPence, startDate: price.startDate, endDate: price.endDate },
+  });
+}
+
+export interface RepeatingPriceListing extends RepeatingPrice {
+  classTitle: string;
+  /** Lessons of the class booked so far within the dates, cancelled ones aside. */
+  lessonsBooked: number;
+}
+
+export async function repeatingPriceList(ctx: BillingContext): Promise<RepeatingPriceListing[]> {
+  const prices = await ctx.billing.repeatingPrices.list();
+  if (prices.length === 0) return [];
+  const [assignments, lessons] = await Promise.all([ctx.data.assignments.list(), ctx.data.lessons.list()]);
+  const titles = new Map(assignments.map((a) => [a.id, a.title]));
+  return prices.map((p): RepeatingPriceListing => ({
+    ...p, classTitle: titles.get(p.assignmentId) ?? "A class that has ended",
+    lessonsBooked: lessons.filter((l) => l.assignmentId === p.assignmentId && l.status !== "CANCELLED" && londonYmd(l.startAt) >= p.startDate && londonYmd(l.startAt) <= p.endDate).length,
+  }));
+}
+
 async function refuseIfInvoiced(ctx: BillingContext, lessonId: string): Promise<void> {
   const on = (await ctx.billing.statements.list()).find((s) => s.lines.some((l) => l.lessonId === lessonId));
   if (on) throw new BillingError("INVALID", `This lesson is already on statement ${on.invoiceNumber}, which has been issued, so what the family pays for it can no longer change.`);
@@ -258,6 +324,9 @@ export interface LessonMoney {
   marginPence: Pence | null;
   /** The lesson's own price, if an administrator set one. */
   price: LessonPrice | null;
+  /** The class's repeating price covering this lesson's date, if any (the lesson's own price wins over it). */
+  repeating: RepeatingPrice | null;
+  assignmentId: string;
   /** On an issued (frozen) statement: the family price can no longer change. */
   invoiced: boolean;
   flags: LineFlag[];
@@ -283,12 +352,14 @@ export async function lessonMoneyFor(ctx: BillingContext, period: string): Promi
   const paidFor = new Map(pay.flatMap((s) => s.lines).map((l) => [l.lessonId, l.amountPence]));
   const prices = new Map((await ctx.billing.lessonPrices.list(inMonth.map((l) => l.id))).map((p) => [p.lessonId, p]));
   const tutorName = new Map(tutors.map((t) => [t.id, t.name]));
+  const repeating = await ctx.billing.repeatingPrices.list([...new Set(inMonth.map((l) => l.assignmentId))]);
   return inMonth.map((l): LessonMoney => {
     const clientOwedPence = owed.get(l.id) ?? 0;
     const tutorPayPence = paidFor.get(l.id) ?? null;
     return {
       lessonId: l.id, startAt: l.startAt, date: londonYmd(l.startAt), title: l.title, tutorName: tutorName.get(l.tutorId) ?? "", status: l.status, minutes: l.durationMinutes,
-      clientOwedPence, tutorPayPence, marginPence: tutorPayPence === null ? null : clientOwedPence - tutorPayPence, price: prices.get(l.id) ?? null,
+      clientOwedPence, tutorPayPence, marginPence: tutorPayPence === null ? null : clientOwedPence - tutorPayPence, price: prices.get(l.id) ?? null, assignmentId: l.assignmentId,
+      repeating: repeating.find((r) => r.assignmentId === l.assignmentId && r.startDate <= londonYmd(l.startAt) && londonYmd(l.startAt) <= r.endDate) ?? null,
       invoiced: invoiced.has(l.id), flags: [...(flags.get(l.id) ?? [])],
     };
   }).sort((a, b) => a.startAt.localeCompare(b.startAt) || a.lessonId.localeCompare(b.lessonId));

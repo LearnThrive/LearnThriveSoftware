@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { planFamilyRate, validateDecision, validateFamilyRate, validateLessonPrice, validatePayment, validateRefundRequest, validateSettings, validateTutorRate } from "./validate";
+import { checkNoOverlap, planFamilyRate, validateDecision, validateFamilyRate, validateLessonPrice, validatePayment, validateRefundRequest, validateRepeatingPrice, validateSettings, validateTutorRate } from "./validate";
 import type { TuitionBillingRepository } from "./repository";
 import {
   BillingError, DEFAULT_BILLING_SETTINGS, type AuditEntry, type BillingSettings, type ChargeDecision, type FamilyBillingProfile, type FamilyRate, type IssuedStatement,
-  type LessonPrice, type Payment, type RefundRequest, type TutorRate,
+  type LessonPrice, type Payment, type RefundRequest, type RepeatingPrice, type TutorRate,
 } from "./types";
 
 interface StoredPayment extends Payment {
@@ -18,6 +18,7 @@ export function createMemoryTuitionBilling(): TuitionBillingRepository {
   const profiles = new Map<string, FamilyBillingProfile>();
   const decisions = new Map<string, ChargeDecision>();
   const lessonPrices = new Map<string, LessonPrice>();
+  const repeatingPrices: RepeatingPrice[] = [];
   const statements: IssuedStatement[] = [];
   const payments: StoredPayment[] = [];
   const refunds: RefundRequest[] = [];
@@ -75,6 +76,20 @@ export function createMemoryTuitionBilling(): TuitionBillingRepository {
         return stored;
       },
       async clear(lessonId) { lessonPrices.delete(lessonId); },
+    },
+    repeatingPrices: {
+      async list(assignmentIds) { return repeatingPrices.filter((r) => !assignmentIds || assignmentIds.includes(r.assignmentId)).sort((a, b) => a.startDate.localeCompare(b.startDate)); },
+      async create(input) {
+        validateRepeatingPrice(input);
+        checkNoOverlap(repeatingPrices.filter((r) => r.assignmentId === input.assignmentId), input);
+        const stored: RepeatingPrice = { ...input, note: input.note.trim(), id: randomUUID(), setAt: now() };
+        repeatingPrices.push(stored);
+        return stored;
+      },
+      async remove(id) {
+        const at = repeatingPrices.findIndex((r) => r.id === id);
+        if (at >= 0) repeatingPrices.splice(at, 1);
+      },
     },
     decisions: {
       async list(lessonIds) { return [...decisions.values()].filter((d) => !lessonIds || lessonIds.includes(d.lessonId)); },

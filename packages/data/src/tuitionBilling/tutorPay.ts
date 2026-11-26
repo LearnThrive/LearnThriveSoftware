@@ -9,14 +9,18 @@
 //   * a lesson where every child was absent is NOT counted: whether a tutor is paid for waiting is undecided, so it is listed apart for a
 //     person to decide, not guessed;
 //   * a lesson with no pay rate for that tutor yet is listed as unpriced, at nothing, never guessed;
-//   * a lesson an administrator has set the tutor's pay for (a LessonPrice) is paid that amount, whatever the hourly rate.
+//   * a lesson an administrator has set the tutor's pay for is paid that amount, whatever the hourly rate: the lesson's own price first, then
+//     the class's repeating price for that date.
 
 import { lessonAmount } from "./money";
 import { londonYmd, PERIOD, periodOf } from "./period";
-import type { LessonPrice, Pence, TutorRate } from "./types";
+import { setPriceFor, type PriceSource } from "./rules";
+import type { LessonPrice, Pence, RepeatingPrice, TutorRate } from "./types";
 
 export interface TutorPayLesson {
   id: string;
+  /** The class, for its repeating price. */
+  assignmentId?: string;
   tutorId: string;
   title: string;
   startAt: string;
@@ -39,8 +43,8 @@ export interface TutorPayLine {
   /** The hourly pay used, or null when there was none or the lesson had its own price. */
   ratePence: Pence | null;
   amountPence: Pence;
-  /** True when an administrator set this lesson's pay rather than it coming from the hourly rate. */
-  setForLesson: boolean;
+  /** Where a set amount came from, or null when it is the hourly rate. */
+  priceFrom: PriceSource | null;
 }
 
 export interface TutorPaySummary {
@@ -70,8 +74,8 @@ export function tutorPay(input: {
   attendance: TutorPayAttendance[];
   rates: TutorRate[];
   lessonPrices?: LessonPrice[];
+  repeatingPrices?: RepeatingPrice[];
 }): TutorPaySummary[] {
-  const fixed = new Map((input.lessonPrices ?? []).filter((p) => p.tutorPence !== null).map((p) => [p.lessonId, p.tutorPence as Pence]));
   if (!PERIOD.test(input.period)) throw new Error("A pay period is a month, yyyy-mm.");
   const absentOnly = (lessonId: string, studentIds: string[]): boolean => {
     if (studentIds.length === 0) return false;
@@ -93,14 +97,14 @@ export function tutorPay(input: {
         allAbsentLessons.push({ lessonId: l.id, date, title: l.title });
         continue;
       }
-      const own = fixed.get(l.id);
-      if (own !== undefined) {
-        lines.push({ lessonId: l.id, date, title: l.title, minutes: l.durationMinutes, ratePence: null, amountPence: own, setForLesson: true });
+      const set = setPriceFor("tutorPence", l, date, input.lessonPrices ?? [], input.repeatingPrices ?? []);
+      if (set) {
+        lines.push({ lessonId: l.id, date, title: l.title, minutes: l.durationMinutes, ratePence: null, amountPence: set.pence, priceFrom: set.from });
         continue;
       }
       const rate = tutorRateOn(input.rates, tutor.id, date);
       if (!rate) unpricedLessons += 1;
-      lines.push({ lessonId: l.id, date, title: l.title, minutes: l.durationMinutes, ratePence: rate?.hourlyPence ?? null, amountPence: rate ? lessonAmount(rate.hourlyPence, l.durationMinutes) : 0, setForLesson: false });
+      lines.push({ lessonId: l.id, date, title: l.title, minutes: l.durationMinutes, ratePence: rate?.hourlyPence ?? null, amountPence: rate ? lessonAmount(rate.hourlyPence, l.durationMinutes) : 0, priceFrom: null });
     }
     return {
       tutorId: tutor.id, tutorName: tutor.name, period: input.period, lines, unpricedLessons, allAbsentLessons,

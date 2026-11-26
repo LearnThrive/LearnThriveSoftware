@@ -82,6 +82,25 @@ export interface LessonPrice {
 
 export const LESSON_PRICE_MAX_PENCE = 100_000; // 1,000 pounds for one lesson: a guard against a mistyped amount, not a price
 
+/**
+ * The same price for every lesson of one class (assignment) between two dates, whenever each lesson was booked. The amounts mean what they do
+ * in a LessonPrice; a lesson with a price of its own keeps it. One class cannot have two of these for the same day.
+ */
+export interface RepeatingPrice {
+  id: string;
+  assignmentId: string;
+  clientPence: Pence | null;
+  tutorPence: Pence | null;
+  /** yyyy-mm-dd, London, both days included. */
+  startDate: string;
+  endDate: string;
+  note: string;
+  setBy: string;
+  setAt: string;
+}
+
+export const REPEATING_PRICE_MAX_DAYS = 731; // two years
+
 /** B4: the family is recorded as eligible for the sibling discount. */
 export interface FamilyBillingProfile {
   clientId: string;
