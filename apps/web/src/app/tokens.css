@@ -169,7 +169,8 @@
 /* The product scope: the same names, the product's own (cooler) values. app-shell.css still defines
    the --app-* tokens it always did; these just point the shared names at them. */
 .app-shell,
-.auth-route {
+.auth-route,
+.close-out {
   --surface-canvas: var(--app-canvas);
   --surface-1: var(--app-surface);
   --surface-2: var(--app-surface-sunken);

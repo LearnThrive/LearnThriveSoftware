@@ -3,6 +3,7 @@ import type { Lesson, LessonReport, Student } from "@learnthrive/data/domain";
 import { unionOver } from "@/lib/auth/scope";
 import type { AuthenticatedUser } from "@/lib/auth/types";
 import { visibleLessonsFor } from "@/lib/scheduling/visibleLessons";
+import { isOpen, lessonEndsAt } from "@/lib/lessons/timing";
 
 /**
  * Shared, role-aware reads used by more than one page (dashboards, the Lessons list, the Reports
@@ -14,7 +15,9 @@ export interface LessonBuckets {
   all: Lesson[];
   upcoming: Lesson[];
   past: Lesson[];
-  /** Started but never closed out: still PLANNED/IN_PROGRESS after its scheduled time. */
+  /** On now: started, not yet over, not finished or cancelled. */
+  ongoing: Lesson[];
+  /** Over but never closed out: still PLANNED/IN_PROGRESS after its scheduled end. */
   needsAttention: Lesson[];
   todays: Lesson[];
   next: Lesson | null;
@@ -27,8 +30,10 @@ export async function lessonBucketsFor(data: DataProvider, user: AuthenticatedUs
 
   const live = all.filter((lesson) => lesson.status !== "CANCELLED");
   const upcoming = live.filter((lesson) => lesson.startAt >= nowIso).sort(byStart);
-  const past = live.filter((lesson) => lesson.startAt < nowIso).sort((a, b) => b.startAt.localeCompare(a.startAt));
-  const needsAttention = past.filter((lesson) => lesson.status === "PLANNED" || lesson.status === "IN_PROGRESS").sort(byStart);
+  const started = live.filter((lesson) => lesson.startAt < nowIso);
+  const ongoing = started.filter((lesson) => isOpen(lesson) && lessonEndsAt(lesson) > now.getTime()).sort(byStart);
+  const past = started.filter((lesson) => !ongoing.includes(lesson)).sort((a, b) => b.startAt.localeCompare(a.startAt));
+  const needsAttention = past.filter(isOpen).sort(byStart);
 
   const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
   const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
@@ -36,7 +41,7 @@ export async function lessonBucketsFor(data: DataProvider, user: AuthenticatedUs
     .filter((lesson) => lesson.startAt >= dayStart.toISOString() && lesson.startAt < dayEnd.toISOString())
     .sort(byStart);
 
-  return { all, upcoming, past, needsAttention, todays, next: upcoming[0] ?? null };
+  return { all, upcoming, past, ongoing, needsAttention, todays, next: upcoming[0] ?? null };
 }
 
 /** Reports this person may see, newest first, already filtered to their visible lessons. */

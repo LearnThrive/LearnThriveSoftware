@@ -17,6 +17,23 @@ export interface ReportFieldInput {
   internalTutorNotes?: string;
 }
 
+const level = (value: string): ReportAssessmentLevel | undefined =>
+  value === "LOW" || value === "MEDIUM" || value === "HIGH" ? value : undefined;
+
+/** The report fields as a submitted form holds them, for every form that writes a report. */
+export function reportFieldsFrom(formData: FormData): ReportFieldInput {
+  const text = (key: string) => String(formData.get(key) ?? "").trim();
+  return {
+    publicSummary: text("publicSummary"),
+    progress: text("progress") || undefined,
+    areasForImprovement: text("areasForImprovement") || undefined,
+    nextSteps: text("nextSteps") || undefined,
+    engagement: level(text("engagement")),
+    confidence: level(text("confidence")),
+    internalTutorNotes: text("internalTutorNotes") || undefined,
+  };
+}
+
 /** Plan section 45: a global default (PlatformSettings.requireReportApproval), overridable per
  * Tuition Assignment. */
 export async function effectiveRequireApproval(data: DataProvider, assignmentId: string): Promise<boolean> {

@@ -13,6 +13,8 @@ import { cancelLessonAction, editLessonAction } from "@/lib/actions/lessons";
 import { LEARNTHRIVE_DEFAULT_TIMEZONE, utcToZonedWallClock } from "@/lib/scheduling/timezone";
 import { splitDuration } from "@/lib/scheduling/duration";
 import { markAttendanceAction, completeLessonAction } from "@/lib/actions/attendance";
+import { mayCloseOut } from "@/lib/lessons/closeOut";
+import { CLOSE_OUT_PATH } from "@/lib/lessons/closeOutGate";
 import { approveReportAction, returnReportAction, saveReportDraftAction, submitReportAction } from "@/lib/actions/reports";
 import { visibleReportFor } from "@/lib/reports/reportService";
 import { isWithinJoinWindow } from "@/lib/scheduling/joinWindow";
@@ -68,6 +70,8 @@ export default async function LessonDetailPage({
   const lesson = await data.lessons.get(id);
   if (!lesson) notFound();
   if (!canView(user, lesson)) redirect("/403");
+  // The tutor has just ended the class: straight to closing it out, even if the scheduled time is not quite up.
+  if (postClass === "1" && mayCloseOut(user, lesson)) redirect(`${CLOSE_OUT_PATH}?lesson=${encodeURIComponent(lesson.id)}`);
 
   const [tutor, students, attendanceRecords, activityEvents, report] = await Promise.all([
     data.tutors.get(lesson.tutorId),

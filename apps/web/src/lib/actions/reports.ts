@@ -5,17 +5,11 @@ import { getDataProvider } from "@/lib/data/provider";
 import type { Permission } from "@learnthrive/data/roles";
 import { requirePermission, requireRole } from "@/lib/auth/guard";
 import { mayActOnLesson } from "@/lib/auth/teaching";
-import { approveReport, getOrCreateDraft, ReportError, returnReport, saveDraft, submitReport } from "@/lib/reports/reportService";
-import type { ReportAssessmentLevel } from "@learnthrive/data/domain";
+import { approveReport, getOrCreateDraft, ReportError, reportFieldsFrom, returnReport, saveDraft, submitReport } from "@/lib/reports/reportService";
 
 function text(formData: FormData, key: string): string {
   const value = formData.get(key);
   return typeof value === "string" ? value.trim() : "";
-}
-
-function level(formData: FormData, key: string): ReportAssessmentLevel | undefined {
-  const value = text(formData, key);
-  return value === "LOW" || value === "MEDIUM" || value === "HIGH" ? value : undefined;
 }
 
 async function requireOwningTutorOrAdmin(lessonId: string, permission: Permission) {
@@ -34,15 +28,7 @@ export async function saveReportDraftAction(formData: FormData): Promise<void> {
 
   const draft = await getOrCreateDraft(data, lessonId, lesson.tutorId);
   try {
-    await saveDraft(data, draft.id, {
-      publicSummary: text(formData, "publicSummary"),
-      progress: text(formData, "progress") || undefined,
-      areasForImprovement: text(formData, "areasForImprovement") || undefined,
-      nextSteps: text(formData, "nextSteps") || undefined,
-      engagement: level(formData, "engagement"),
-      confidence: level(formData, "confidence"),
-      internalTutorNotes: text(formData, "internalTutorNotes") || undefined,
-    });
+    await saveDraft(data, draft.id, reportFieldsFrom(formData));
   } catch (error) {
     if (error instanceof ReportError) throw new Error(error.message);
     throw error;
@@ -59,6 +45,8 @@ export async function submitReportAction(formData: FormData): Promise<void> {
   const report = await data.reports.forLesson(lessonId);
   if (!report) throw new Error("No draft report exists to submit.");
   try {
+    // What is on screen is what gets submitted: "Submit report" must not need "Save draft" to have been pressed first.
+    if (report.status === "DRAFT" && formData.has("publicSummary")) await saveDraft(data, report.id, reportFieldsFrom(formData));
     await submitReport(data, report.id, user.id);
   } catch (error) {
     if (error instanceof ReportError) throw new Error(error.message);

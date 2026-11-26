@@ -50,6 +50,20 @@ A `SUBMITTED` report is sufficient to complete the lesson — the plan's wording
 required report exists,"* not *"until approved"*, and requiring full Admin sign-off before a
 Tutor can even close out the lesson would block on someone else's timing for no stated reason.
 
+## Closing a lesson out (required)
+
+Once a lesson's scheduled end has passed and it is still open, its tutor is sent to `/dashboard/close-out` from every dashboard page
+(`lib/lessons/closeOutGate.ts`, called by `requireSession`). One form (`lib/lessons/closeOut.ts`) marks every student, saves and submits the
+report and completes the lesson. "End class" in the classroom leads there too.
+
+- A required report needs the summary, progress, areas to improve, next steps, engagement and confidence; private notes are optional. If
+  nobody attended, only the summary is needed. Where an administrator has set the report as not required, only attendance is.
+- What was typed is saved as a draft even when the form is refused.
+- Still open while a lesson waits: any classroom (the next student is not kept waiting), raising a safeguarding concern, and logging out.
+- A junior tutor cannot submit: they are released once attendance and the draft are written, and an administrator submits it.
+- A lesson that did not happen is cancelled by an administrator, which releases the tutor.
+- "Needs attention" lists lessons that are over, not ones that are on now.
+
 ## Progress and demo data
 
 Plan section 46 ("Student progress timeline" — chronological approved reports on a Student's

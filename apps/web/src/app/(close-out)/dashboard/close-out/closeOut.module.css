@@ -1,0 +1,9 @@
+/* The close-out screen: one centred column on the product's own canvas, with no app frame around it. */
+.screen { min-height: 100vh; background: var(--app-canvas); color: var(--app-text); }
+.column { max-width: 46rem; margin: 0 auto; width: 100%; padding: 32px 16px 48px; }
+.header { display: grid; gap: 6px; }
+.header h1 { margin: 0; color: var(--app-ink); }
+.header p { margin: 0; }
+.join { display: block; font-weight: 600; text-decoration: underline; }
+.footer { color: var(--app-muted); font-size: 13px; }
+.links { display: flex; flex-wrap: wrap; gap: 8px; }

@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { accountSessionExpired } from "@/lib/access/current";
 import { safeNextPath } from "@/lib/account/session";
+import { enforceCloseOut } from "@/lib/lessons/closeOutGate";
 import { getSession } from "./session";
 import type { Permission } from "@learnthrive/data/roles";
 import { can, holdsAnyOf } from "./scope";
@@ -23,11 +24,15 @@ async function requestedPath(): Promise<string> {
  * asked for so signing in returns there (the sign-in sends a person who may not open it to their own home instead). A signed-in account
  * whose short-lived access token has lapsed goes through the renewing route first, which comes straight back.
  * Always call this server-side — role/identity here comes from the server-validated session,
- * never from a client-supplied value (see plan section 10). */
+ * never from a client-supplied value (see plan section 10).
+ * A tutor with a lesson that is over but not closed out is sent to the close-out screen (lib/lessons/closeOutGate.ts). */
 export async function requireSession(): Promise<AuthenticatedUser> {
   const user = await getSession();
-  if (user) return user;
   const path = await requestedPath();
+  if (user) {
+    await enforceCloseOut(user, path);
+    return user;
+  }
   if (await accountSessionExpired()) redirect(`/api/account/refresh?next=${encodeURIComponent(path || "/dashboard")}`);
   redirect(path ? `/login?next=${encodeURIComponent(path)}` : "/login");
 }
