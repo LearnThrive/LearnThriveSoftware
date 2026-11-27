@@ -210,7 +210,7 @@ export interface PlatformSettings {
 // named in section 54's own examples.
 export type NotificationType =
   | "LESSON_REMINDER" | "LESSON_RESCHEDULED" | "REPORT_AVAILABLE"
-  | "REPORT_REQUIRED" | "REPORT_AWAITING_APPROVAL" | "SCHEDULING_CONFLICT";
+  | "REPORT_REQUIRED" | "REPORT_AWAITING_APPROVAL" | "SCHEDULING_CONFLICT" | "LESSON_MESSAGE";
 
 export interface Notification {
   id: string;

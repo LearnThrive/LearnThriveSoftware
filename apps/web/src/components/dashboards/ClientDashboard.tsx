@@ -46,7 +46,7 @@ export async function ClientDashboard({ user }: { user: AuthenticatedUser }) {
         eyebrow={formatLongDate(now)}
         title={`${greeting(now)}, ${user.name.split(" ")[0]}.`}
         description={buckets.next
-          ? new Date(buckets.next.startAt) <= now ? "A lesson is on now." : `The next lesson is ${formatRelative(buckets.next.startAt)}.`
+          ? new Date(buckets.next.startAt) <= now ? "A lesson is on now or has just finished." : `The next lesson is ${formatRelative(buckets.next.startAt)}.`
           : "No lessons scheduled at the moment."}
       />
 

@@ -1,4 +1,4 @@
-import type { LessonChatService, Refusal } from "@learnthrive/data/lessonChat";
+import type { LessonChatService, MessageView, Refusal } from "@learnthrive/data/lessonChat";
 import { SERVICE_SIGNATURE_HEADER, SERVICE_TIMESTAMP_HEADER, verifyServiceRequest } from "@learnthrive/shared/classroomToken";
 import type { AuthenticatedUser } from "@/lib/auth/types";
 import { jsonResponse, originAllowed, parseMultipart, readBodyLimited } from "@/lib/request-guards";
@@ -13,6 +13,8 @@ import type { ChatClosed, ChatOpen } from "./runtime";
 export interface ChatHttpDeps {
   chat: ChatOpen | ChatClosed;
   leads: ChatLeads;
+  /** Told after a message or a file is sent from a lesson page, to let the others know (lib/lessonChat/announce.ts). */
+  sent?: (lessonId: string, message: MessageView) => Promise<void>;
 }
 
 const JSON_LIMIT = 16 * 1024;
@@ -29,6 +31,13 @@ export async function listMessages(user: AuthenticatedUser | null, lessonId: str
   const { service } = deps.chat as ChatOpen;
   const result = await service.list(chatActorFor(user, deps.leads), lessonId);
   return result.ok ? jsonResponse(200, result) : refusal(result);
+}
+
+/** The answer to a send. The message is already saved, so a failed announcement is logged and does not turn the send into an error. */
+async function delivered(result: { ok: true; message: MessageView } | Refusal, lessonId: string, deps: ChatHttpDeps): Promise<Response> {
+  if (!result.ok) return refusal(result);
+  await deps.sent?.(lessonId, result.message).catch((error: unknown) => console.error("Lesson chat announcement failed", error instanceof Error ? error.name : "unknown"));
+  return jsonResponse(201, result);
 }
 
 /** A text message (JSON `{ text }`) or a file (multipart `file` and optional `caption`). */
@@ -56,8 +65,7 @@ export async function sendMessage(user: AuthenticatedUser | null, lessonId: stri
     }
     // Only `text` is read. Who sent it, which lesson and when are never taken from the body.
     const text = typeof body === "object" && body !== null && !Array.isArray(body) ? (body as Record<string, unknown>).text : undefined;
-    const result = await service.sendText(actor, lessonId, text);
-    return result.ok ? jsonResponse(201, result) : refusal(result);
+    return delivered(await service.sendText(actor, lessonId, text), lessonId, deps);
   }
 
   if (type.startsWith("multipart/form-data")) {
@@ -72,7 +80,7 @@ export async function sendMessage(user: AuthenticatedUser | null, lessonId: stri
       bytes: new Uint8Array(await file.arrayBuffer()),
       caption: form.get("caption") ?? undefined,
     });
-    return result.ok ? jsonResponse(201, result) : refusal(result);
+    return delivered(result, lessonId, deps);
   }
   return jsonResponse(415, { ok: false, code: "BAD_REQUEST", error: "Send JSON for a message or a form for a file." });
 }

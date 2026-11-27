@@ -7,15 +7,14 @@ const { isWithinJoinWindow, JOIN_WINDOW_MINUTES } = loadTsFrom(import.meta.url, 
 const lesson = { startAt: "2026-03-10T16:00:00.000Z", durationMinutes: 60 };
 const start = new Date(lesson.startAt).getTime();
 
-test("joinWindow: a Tutor can join well before a Student can, for the same lesson", () => {
-  const twentyMinutesBefore = new Date(start - 20 * 60_000);
-  assert.equal(isWithinJoinWindow(lesson, "TUTOR", twentyMinutesBefore), true);
-  assert.equal(isWithinJoinWindow(lesson, "STUDENT", twentyMinutesBefore), false);
-});
-
-test("joinWindow: a Student can join within their own (shorter) window before start", () => {
-  const fiveMinutesBefore = new Date(start - 5 * 60_000);
-  assert.equal(isWithinJoinWindow(lesson, "STUDENT", fiveMinutesBefore), true);
+test("joinWindow: a lesson's Tutor and Students can join from 30 minutes before the start; a meeting guest from 10", () => {
+  const at = (minutes) => new Date(start - minutes * 60_000);
+  for (const role of ["TUTOR", "STUDENT"]) {
+    assert.equal(isWithinJoinWindow(lesson, role, at(30)), true, role);
+    assert.equal(isWithinJoinWindow(lesson, role, at(31)), false, role);
+  }
+  assert.equal(isWithinJoinWindow(lesson, "GUEST", at(20)), false);
+  assert.equal(isWithinJoinWindow(lesson, "GUEST", at(10)), true);
 });
 
 test("joinWindow: neither role can join far too early", () => {

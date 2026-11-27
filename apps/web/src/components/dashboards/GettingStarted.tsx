@@ -37,7 +37,7 @@ const TIPS: Record<Role, string[]> = {
     "A report appears here once it has been approved. You will see a notification when one arrives.",
   ],
   STUDENT: [
-    "Open a lesson and choose Join classroom: it opens 10 minutes before the start.",
+    "Open a lesson and choose Join classroom: it opens 30 minutes before the start and stays open until 30 minutes after the end.",
     "Your tutor's feedback is under Feedback, and See my progress shows every lesson in order.",
     "Press ? anywhere for the keyboard shortcuts, or Ctrl K (⌘K) to search.",
   ],

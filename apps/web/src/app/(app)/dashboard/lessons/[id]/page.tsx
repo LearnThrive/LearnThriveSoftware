@@ -17,7 +17,7 @@ import { mayCloseOut } from "@/lib/lessons/closeOut";
 import { CLOSE_OUT_PATH } from "@/lib/lessons/closeOutGate";
 import { approveReportAction, returnReportAction, saveReportDraftAction, submitReportAction } from "@/lib/actions/reports";
 import { visibleReportFor } from "@/lib/reports/reportService";
-import { isWithinJoinWindow } from "@/lib/scheduling/joinWindow";
+import { isWithinJoinWindow, joinOpensAt } from "@/lib/scheduling/joinWindow";
 import { formatLongDate, formatRelative, formatTime, formatTimeRange } from "@/lib/format";
 import { noShowAllowedFrom } from "@/lib/attendance/attendanceService";
 import { LessonChatPanel } from "@/components/lessons/LessonChatPanel";
@@ -105,8 +105,7 @@ export default async function LessonDetailPage({
 
   // When the join window hasn't opened yet, say how long the wait is rather than just hiding the
   // button (plan6 section 59).
-  const minutesBefore = joinRole === "TUTOR" ? 30 : 10;
-  const opensAt = new Date(new Date(lesson.startAt).getTime() - minutesBefore * 60_000);
+  const opensAt = joinOpensAt(lesson, joinRole);
 
   return (
     <>
@@ -159,7 +158,7 @@ export default async function LessonDetailPage({
                 <Video size={16} aria-hidden="true" />{entryRole === "supervisor" ? "Join to supervise" : "Join classroom"}
               </Link>
             )}
-            {canJoin && !joinWindowOpen && lesson.status === "PLANNED" && (
+            {canJoin && !joinWindowOpen && lesson.status === "PLANNED" && new Date() < opensAt && (
               <span className="btn btn--secondary" aria-disabled="true">
                 <Lock size={15} aria-hidden="true" />Classroom opens {formatRelative(opensAt)}
               </span>
@@ -214,10 +213,14 @@ export default async function LessonDetailPage({
 
       <div className="profile-grid">
         <div className="stack">
-          {/* The ONLY place a tutor and a student exchange messages and files: here, during the lesson (docs/LESSON_CHAT.md). Who may do what is the server's. */}
+          {/* The ONLY place a tutor and a student exchange messages and files: the lesson's own chat (docs/LESSON_CHAT.md). Who may do what is the server's. */}
           {lesson.status !== "CANCELLED" && (
             <Card>
-              <CardHeader title="Lesson chat" description={isAdmin && !isOwningTutor ? "You can read this chat and message the tutor and students at any time, without joining the classroom. Your messages show as from an administrator." : "Messages and photos or PDFs for this lesson, during the lesson only. Parents can read them afterwards."} />
+              <CardHeader title="Lesson chat" description={isAdmin && !isOwningTutor
+                ? "Message the tutor and students at any time, without joining the classroom. Your messages show as from an administrator."
+                : canManage || entryRole === "student"
+                  ? "Running late, can't make it, or something to share? Message about this lesson at any time. Parents and administrators can read it."
+                  : "Messages about this lesson, which you can read once it has finished."} />
               <CardBody><LessonChatPanel lessonId={lesson.id} isAdmin={isAdmin} sendsAsAdmin={isAdmin && !isOwningTutor} /></CardBody>
             </Card>
           )}

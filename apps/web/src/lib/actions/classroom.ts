@@ -18,12 +18,11 @@ export async function joinClassroomAction(formData: FormData): Promise<void> {
   if (!lesson) redirect("/dashboard/calendar");
   const entry = lessonEntryFor(user, lesson);
   if (!entry.ok) redirect(`/dashboard/lessons/${lessonId}?joinError=${encodeURIComponent(entry.message)}`);
-  // Supervision is written into the lesson's history, which its tutor sees.
-  if (entry.role === "supervisor") await recordSupervision(user, lesson.id);
-
   const externalClassroomUrl = process.env.NEXT_PUBLIC_CLASSROOM_URL;
   if (externalClassroomUrl && !externalClassroomUrl.includes("localhost:5173") && !externalClassroomUrl.includes("127.0.0.1:5173")) {
+    // Supervision is written into the lesson's history, which its tutor sees (the in-site classroom page writes it itself).
+    if (entry.role === "supervisor") await recordSupervision(user, lesson.id);
     redirect(`${externalClassroomUrl}/?token=${encodeURIComponent(entry.token)}`);
   }
-  redirect(`/dashboard/lessons/${lesson.id}/classroom?token=${encodeURIComponent(entry.token)}`);
+  redirect(`/dashboard/lessons/${lesson.id}/classroom`);
 }

@@ -1,7 +1,7 @@
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import type { LessonChatConfig } from "./config";
 import { checkUpload, newStorageKey } from "./files";
-import { canRead, canRemove, canSend, chatWindow, threadOf, type ChatActor, type ChatLesson } from "./policy";
+import { canRead, canRemove, canSend, lessonWindow, threadOf, type ChatActor, type ChatLesson } from "./policy";
 import type { FileScanner, FileStore, LessonChatRepository } from "./repository";
 import type { AccessorKind, ChatParty, LessonFileType, LessonMessage } from "./types";
 
@@ -44,7 +44,7 @@ export interface ChatServiceDeps {
   now?: () => Date;
 }
 
-const STATUS_FOR_SEND: Record<string, ChatStatus> = { LESSON_NOT_FOUND: 404, NOT_PARTICIPANT: 403, JUNIOR_TUTOR_CANNOT_SEND: 403, LESSON_CANCELLED: 403, LESSON_NOT_SCHEDULED: 403, TOO_EARLY: 403, TOO_LATE: 403 };
+const STATUS_FOR_SEND: Record<string, ChatStatus> = { LESSON_NOT_FOUND: 404, NOT_PARTICIPANT: 403, JUNIOR_TUTOR_CANNOT_SEND: 403, LESSON_CANCELLED: 403, LESSON_NOT_SCHEDULED: 403 };
 const STATUS_FOR_UPLOAD: Record<string, ChatStatus> = { FILE_EMPTY: 400, FILE_TOO_LARGE: 413, FILE_TYPE_NOT_ALLOWED: 415, FILE_NAME_NOT_ALLOWED: 400, FILE_CORRUPT: 400, FILE_UNSAFE: 415 };
 
 const CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g;
@@ -101,7 +101,7 @@ export function createLessonChatService(deps: ChatServiceDeps) {
 
   async function checkSend(actor: ChatActor, lessonId: string) {
     const lesson = await deps.lessons.get(lessonId);
-    const decision = canSend(lesson, actor, now(), config);
+    const decision = canSend(lesson, actor);
     if (!decision.ok) return refuse(STATUS_FOR_SEND[decision.code] ?? 403, decision.code, decision.message);
     return { ok: true as const, lesson: lesson!, party: decision.party };
   }
@@ -152,12 +152,12 @@ export function createLessonChatService(deps: ChatServiceDeps) {
     /** The lesson's messages for this reader, oldest first, with what they may do next. Audited when the reader is not a participant. */
     async list(actor: ChatActor, lessonId: string): Promise<{ ok: true; messages: MessageView[]; canSend: boolean; sendBlockedReason: string | null; window: { start: string; end: string } | null; readerKind: string } | Refusal> {
       const lesson = await deps.lessons.get(lessonId);
-      const read = canRead(lesson, actor, now(), config);
+      const read = canRead(lesson, actor, now());
       if (!read.ok) return refuse(read.code === "LESSON_NOT_FOUND" ? 404 : 403, read.code, read.message);
       if (read.audited) await repo.logAccess({ lessonId, actorAccountId: actor.accountId, actorKind: read.kind as AccessorKind, action: "read_messages", targetId: null }, now());
       const messages = await Promise.all((await repo.listMessages(threadOf(lesson!))).map((m) => view(m, lessonId, actor.accountId, read.seesRemoved)));
-      const sendDecision = canSend(lesson, actor, now(), config);
-      const window = chatWindow(lesson!, config);
+      const sendDecision = canSend(lesson, actor);
+      const window = lessonWindow(lesson!);
       return {
         ok: true,
         messages,
@@ -185,7 +185,7 @@ export function createLessonChatService(deps: ChatServiceDeps) {
       const lesson = await deps.lessons.get(lessonId);
       // The file must belong to this lesson's conversation: its own thread, never another assignment's.
       if (!file || !lesson || file.threadId !== threadOf(lesson)) return refuse(404, "NOT_FOUND", "There is no such file.");
-      const read = canRead(lesson, actor, now(), config);
+      const read = canRead(lesson, actor, now());
       if (!read.ok) return refuse(read.code === "LESSON_NOT_FOUND" ? 404 : 403, read.code, read.message);
       const message = await repo.getMessage(file.messageId);
       if (message?.removed && !read.seesRemoved) return refuse(404, "NOT_FOUND", "There is no such file.");

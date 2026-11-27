@@ -111,6 +111,8 @@ interface SocketData {
   roomId?: string;
   // Who this socket is on the platform, from the VERIFIED join token (never from the browser): the lesson and the account. Absent for a manual join.
   chat?: { lessonId: string; userId: string };
+  /** A student of this lesson, by a verified join link. A locked class, or an earlier removal, never keeps them out of the waiting room. */
+  enrolled?: boolean;
   // True when the VERIFIED join token is for a staff meeting (kind "meeting"), not a lesson. Its chat is an unsaved relay: there is no lesson to check.
   meeting?: true;
   // A staff meeting only: "Admin" or "Tutor", from the VERIFIED join token. Shown beside the person's name and used for who may delete a message.
@@ -666,12 +668,13 @@ export function createSignallingServer(options?: {
       return;
     }
 
-    if (room.settings.locked) {
+    // A student enrolled in this lesson always reaches the waiting room during the join window; the tutor still decides who comes in.
+    if (room.settings.locked && !socket.data.enrolled) {
       socket.emit('room:full', { message: 'This class is currently locked. Please try again shortly.' });
       return;
     }
 
-    if (room.removedNames.has(name.toLowerCase())) {
+    if (room.removedNames.has(name.toLowerCase()) && !socket.data.enrolled) {
       socket.emit('room:full', { message: 'You were removed from this class by the tutor.' });
       return;
     }
@@ -842,6 +845,7 @@ export function createSignallingServer(options?: {
         if (!media) return fail(socket, 'Invalid microphone or camera status.');
         if (verified.kind === 'meeting') { socket.data.meeting = true; if (verified.title) socket.data.title = verified.title; }
         else if (verified.uid) socket.data.chat = { lessonId: verified.lessonId, userId: verified.uid };
+        socket.data.enrolled = verified.kind !== 'meeting' && verified.role === 'student';
         proceedWithJoin(socket, verified.roomId, verified.name.trim().slice(0, MAX_NAME_LENGTH) || 'Participant', verified.role, media, verified.kind === 'meeting');
         return;
       }
@@ -860,6 +864,7 @@ export function createSignallingServer(options?: {
       if (!role) return fail(socket, 'Invalid role.');
       // A staff meeting is for the people the web app let in with a signed link. The room code alone (the "invite link") never opens one.
       if (rooms.get(payload.roomId)?.meeting) return fail(socket, 'This is a staff meeting. Open it from Meetings in your dashboard.');
+      socket.data.enrolled = false;
       proceedWithJoin(socket, payload.roomId, payload.name.trim(), role, media);
     });
 

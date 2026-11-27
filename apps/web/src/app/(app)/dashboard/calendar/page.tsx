@@ -7,7 +7,7 @@ import { joinRoleFor } from "@/lib/auth/teaching";
 import { createMetadata } from "@/lib/metadata";
 import { getDataProvider } from "@/lib/data/provider";
 import { visibleLessonsFor } from "@/lib/scheduling/visibleLessons";
-import { isWithinJoinWindow, JOIN_WINDOW_MINUTES } from "@/lib/scheduling/joinWindow";
+import { isWithinJoinWindow, joinOpensAt } from "@/lib/scheduling/joinWindow";
 import { getMeetings } from "@/lib/meetings/runtime";
 import { meetingOpenFor } from "@/lib/meetings/rules";
 import { meetingRoleFor } from "@learnthrive/data/meetings";
@@ -60,7 +60,6 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const calendarLessons: CalendarLesson[] = lessons.map((lesson) => {
     const joinRole = joinRoleFor(user, lesson);
     const canJoin = joinRole !== null && lesson.locationType === "ONLINE" && lesson.status !== "CANCELLED";
-    const minutesBefore = joinRole === "TUTOR" ? JOIN_WINDOW_MINUTES.TUTOR_BEFORE : JOIN_WINDOW_MINUTES.STUDENT_BEFORE;
     return {
       id: lesson.id,
       title: lesson.title,
@@ -75,7 +74,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       studentNames: lesson.studentIds.map((id) => studentNames.get(id)).filter((n): n is string => Boolean(n)),
       canJoin,
       joinWindowOpen: canJoin && isWithinJoinWindow(lesson, joinRole),
-      joinOpensAt: new Date(new Date(lesson.startAt).getTime() - minutesBefore * 60_000).toISOString(),
+      joinOpensAt: joinOpensAt(lesson, joinRole ?? "STUDENT").toISOString(),
     };
   });
 

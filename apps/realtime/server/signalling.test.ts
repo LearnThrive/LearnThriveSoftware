@@ -578,6 +578,19 @@ describe('signalling through real Socket.IO clients', () => {
     await joinStudent(outsider, 'Mallory again');
   });
 
+  it('never keeps a student of the lesson, with a verified join link, out of the waiting room of a locked class', async () => {
+    const tutor = await connect();
+    await joinTutor(tutor, 'Alice');
+    const locked = new Promise((resolve) => tutor.once('room:settings-update', resolve));
+    tutor.emit('room:settings', { locked: true });
+    await locked;
+
+    const enrolled = await connect();
+    const waiting = new Promise<{ roomId: string }>((resolve) => enrolled.once('room:waiting', resolve));
+    enrolled.emit('room:join', { roomId: 'ignored', name: 'x', role: 'student', media: { audio: false, video: false }, token: signClassroomJoinToken({ roomId: 'room-one', lessonId: 'lesson-1', name: 'Enrolled Student', role: 'student', exp: Date.now() + 60_000 }) });
+    expect((await waiting).roomId).toBe('room-one');
+  });
+
   it('denies a waiting student, who is notified and removed from the queue', async () => {
     const tutor = await connect();
     await joinTutor(tutor, 'Alice');

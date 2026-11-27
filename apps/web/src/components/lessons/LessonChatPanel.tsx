@@ -1,13 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { Paperclip, Send } from "lucide-react";
+import { Fragment, useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { MessageCircle, Paperclip, Send, X } from "lucide-react";
 import styles from "./LessonChatPanel.module.css";
 
 interface MessageView {
   id: string;
   senderParty: "tutor" | "student" | "admin";
   senderName: string;
+  own: boolean;
   text: string;
   file: { id: string; displayName: string; contentType: string; size: number; url: string } | null;
   createdAt: string;
@@ -21,11 +22,15 @@ interface Listing {
 }
 
 const POLL_MS = 5000;
-const time = (iso: string) => new Date(iso).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", hour: "2-digit", minute: "2-digit" });
+const time = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" });
+const day = (date: Date) => date.toLocaleDateString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short" });
+const ROLE = { admin: "Admin", tutor: "Tutor", student: "Student" } as const;
+/** Ready-made starts for the two things people most need to say before a lesson. They fill the box; nothing is sent until Send is pressed. */
+const QUICK = [["Running late", "I'm running about 10 minutes late."], ["Can't make it", "Sorry, I can't make this lesson."]] as const;
 const size = (bytes: number) => (bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`);
 
 /**
- * Chat and file sharing for ONE lesson (docs/LESSON_CHAT.md). It only asks and shows: who may send, and when, is decided by the server on every
+ * Chat and file sharing for ONE lesson (docs/LESSON_CHAT.md). It only asks and shows: who may send is decided by the server on every
  * message, and the box below is offered only when the server says this person may send right now. Parents see it read-only, afterwards. Text is shown as
  * text (React escapes it); a file is a short-lived link the server makes for this person.
  */
@@ -34,8 +39,9 @@ export function LessonChatPanel({ lessonId, isAdmin = false, sendsAsAdmin = fals
   const [problem, setProblem] = useState("");
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [fileName, setFileName] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
-  const endRef = useRef<HTMLLIElement>(null);
+  const logRef = useRef<HTMLUListElement>(null);
 
   /** Asks the server for the lesson's messages. Sets no state itself: the caller applies the answer. */
   const fetchListing = useCallback(async (): Promise<{ ok: true; listing: Listing } | { ok: false; error: string }> => {
@@ -73,7 +79,8 @@ export function LessonChatPanel({ lessonId, isAdmin = false, sendsAsAdmin = fals
   }, [apply, fetchListing]);
 
   const count = data?.messages.length ?? 0;
-  useEffect(() => { endRef.current?.scrollIntoView({ block: "nearest" }); }, [count]);
+  // Only the log scrolls to the newest message: scrollIntoView would drag the whole page down to the chat as well.
+  useEffect(() => { const log = logRef.current; if (log) log.scrollTop = log.scrollHeight; }, [count]);
 
   async function post(init: RequestInit): Promise<boolean> {
     setBusy(true);
@@ -92,6 +99,11 @@ export function LessonChatPanel({ lessonId, isAdmin = false, sendsAsAdmin = fals
     }
   }
 
+  function clearFile() {
+    if (fileInput.current) fileInput.current.value = "";
+    setFileName("");
+  }
+
   async function send(event: FormEvent) {
     event.preventDefault();
     const file = fileInput.current?.files?.[0];
@@ -101,7 +113,7 @@ export function LessonChatPanel({ lessonId, isAdmin = false, sendsAsAdmin = fals
       if (text.trim()) form.set("caption", text.trim());
       if (await post({ body: form })) {
         setText("");
-        if (fileInput.current) fileInput.current.value = "";
+        clearFile();
       }
     } else if (text.trim()) {
       if (await post({ headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: text.trim() }) })) setText("");
@@ -123,43 +135,61 @@ export function LessonChatPanel({ lessonId, isAdmin = false, sendsAsAdmin = fals
       {problem && !data ? <p className={styles.notice} role="status">{problem}</p> : null}
       {!problem && !data ? <p className={styles.notice} role="status">Loading messages…</p> : null}
       {data ? (
-        <ul className={styles.log} aria-label="Lesson messages" aria-live="polite">
-          {data.messages.length === 0 ? <li className={styles.notice}>No messages yet.</li> : null}
-          {data.messages.map((m) => (
-            <li key={m.id} className={`${styles.message} ${m.senderParty === "tutor" ? "" : styles.mine}`}>
-              {m.removed && !m.text && !m.file ? (
-                <span className={styles.removed}>Removed by an administrator.</span>
-              ) : (
-                <>
-                  <span className={styles.meta}>{m.senderName} · {m.senderParty === "admin" ? <strong>administrator</strong> : m.senderParty === "tutor" ? "tutor" : "student"} · {time(m.createdAt)}</span>
-                  {m.text ? <p className={styles.text}>{m.text}</p> : null}
-                  {m.file ? (
-                    <a className={styles.file} href={m.file.url} target="_blank" rel="noopener noreferrer">
-                      <Paperclip size={14} aria-hidden="true" />{m.file.displayName} <span className={styles.meta}>({size(m.file.size)})</span>
-                    </a>
-                  ) : null}
-                  {m.removed ? <span className={styles.removed}>Removed{m.removed.reason ? `: ${m.removed.reason}` : ""}</span> : null}
-                </>
-              )}
-              {isAdmin && !m.removed ? <button type="button" className="btn btn--secondary btn--sm" onClick={() => void remove(m)}>Remove</button> : null}
-            </li>
-          ))}
-          <li ref={endRef} aria-hidden="true" />
+        <ul ref={logRef} className={styles.log} aria-label="Lesson messages" aria-live="polite" tabIndex={0}>
+          {data.messages.length === 0 ? (
+            <li className={styles.empty}><MessageCircle size={22} aria-hidden="true" />No messages yet.</li>
+          ) : null}
+          {data.messages.map((m, index) => {
+            const on = day(new Date(m.createdAt));
+            const newDay = index === 0 || on !== day(new Date(data.messages[index - 1].createdAt));
+            const hidden = Boolean(m.removed) && !m.text && !m.file;
+            return (
+              <Fragment key={m.id}>
+                {newDay ? <li className={styles.day}>{on === day(new Date()) ? "Today" : on}</li> : null}
+                <li className={`${styles.item} ${m.own ? styles.own : ""}`}>
+                  <span className={styles.meta}>
+                    {hidden ? null : <span className={styles.name}>{m.own ? "You" : m.senderName}</span>}
+                    {hidden ? null : <span className={`${styles.role} ${m.senderParty === "admin" ? styles.roleAdmin : ""}`}>{ROLE[m.senderParty]}</span>}
+                    <time dateTime={m.createdAt}>{time(m.createdAt)}</time>
+                  </span>
+                  <div className={styles.bubble}>
+                    {hidden ? <span className={styles.removed}>Removed by an administrator.</span> : null}
+                    {m.text ? <p className={styles.text}>{m.text}</p> : null}
+                    {m.file ? (
+                      <a className={styles.file} href={m.file.url} target="_blank" rel="noopener noreferrer">
+                        <Paperclip size={14} aria-hidden="true" />{m.file.displayName} <span className={styles.fileSize}>{size(m.file.size)}</span>
+                      </a>
+                    ) : null}
+                    {m.removed && !hidden ? <span className={styles.removed}>Removed{m.removed.reason ? `: ${m.removed.reason}` : ""}</span> : null}
+                  </div>
+                  {isAdmin && !m.removed ? <button type="button" className={styles.remove} aria-label={`Remove the message from ${m.senderName} at ${time(m.createdAt)}`} onClick={() => void remove(m)}>Remove</button> : null}
+                </li>
+              </Fragment>
+            );
+          })}
         </ul>
       ) : null}
 
       {data?.canSend ? (
-        <form className={styles.composer} onSubmit={(e) => void send(e)}>
-          <label className="sr-only" htmlFor={`chat-${lessonId}`}>Message</label>
-          <textarea id={`chat-${lessonId}`} value={text} onChange={(e) => setText(e.target.value)} rows={2} maxLength={2000} placeholder={sendsAsAdmin ? "Write a message (it will show as from an administrator)" : "Write a message"} />
-          <div className={styles.row}>
-            <label className="btn btn--secondary btn--sm">
-              <Paperclip size={14} aria-hidden="true" /> Attach a photo or PDF
-              <input ref={fileInput} type="file" accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf" hidden />
-            </label>
-            <button type="submit" className="btn btn--primary btn--sm" disabled={busy}><Send size={14} aria-hidden="true" /> Send</button>
-          </div>
-        </form>
+        <>
+          {!sendsAsAdmin ? (
+            <div className={styles.quick}>
+              {QUICK.map(([label, message]) => <button key={label} type="button" className={styles.chip} onClick={() => { setText(message); document.getElementById(`chat-${lessonId}`)?.focus(); }}>{label}</button>)}
+            </div>
+          ) : null}
+          <form className={styles.composer} onSubmit={(e) => void send(e)}>
+            <label className="sr-only" htmlFor={`chat-${lessonId}`}>Message</label>
+            <textarea id={`chat-${lessonId}`} value={text} onChange={(e) => setText(e.target.value)} rows={2} maxLength={2000} placeholder={sendsAsAdmin ? "Write a message as an administrator" : "Write a message"} />
+            <div className={styles.row}>
+              <div className={styles.attach}>
+                <button type="button" className="btn btn--ghost btn--sm" onClick={() => fileInput.current?.click()}><Paperclip size={14} aria-hidden="true" /> Photo or PDF</button>
+                <input ref={fileInput} type="file" accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf" hidden onChange={(e) => setFileName(e.target.files?.[0]?.name ?? "")} />
+                {fileName ? <span className={styles.chosen}>{fileName}<button type="button" className={styles.clear} aria-label="Remove the chosen file" onClick={clearFile}><X size={14} aria-hidden="true" /></button></span> : null}
+              </div>
+              <button type="submit" className="btn btn--primary btn--sm" disabled={busy || (!text.trim() && !fileName)}><Send size={14} aria-hidden="true" /> Send</button>
+            </div>
+          </form>
+        </>
       ) : data ? (
         <p className={styles.notice}>{data.sendBlockedReason ?? "You can read this chat."}</p>
       ) : null}

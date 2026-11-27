@@ -83,8 +83,8 @@ describe("lesson chat carries over between the occurrences of one assignment (Po
     const wrong = await service.openFile(studentActor, english.id, next.messages[1]!.file!.id, { u: studentActor.accountId, exp: String(Date.now() + 60_000), sig: "bad" });
     assert.equal(wrong.ok, false);
 
-    // Sending is still only during that week's own lesson.
-    const early = await service.sendText(tutorActor, week2.id, "too early");
-    assert.equal(early.ok, false);
+    // Next week's lesson can be messaged before it starts, into the same conversation.
+    const early = await service.sendText(tutorActor, week2.id, "See you next week");
+    assert.ok(early.ok, JSON.stringify(early));
   });
 });

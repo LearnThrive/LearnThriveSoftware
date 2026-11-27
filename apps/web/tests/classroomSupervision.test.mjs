@@ -42,9 +42,10 @@ test("a supervisor has the tutor's window: from 30 minutes before the start to 3
   assert.equal(entry.lessonEntryFor(admin, lesson(), at(-30)).ok, true);
   assert.equal(entry.lessonEntryFor(admin, lesson(), at(90)).ok, true);
   assert.equal(entry.lessonEntryFor(admin, lesson(), at(91)).ok, false);
-  // A student's window is still the narrower one.
-  assert.equal(entry.lessonEntryFor(student, lesson(), at(-11)).ok, false);
-  assert.equal(entry.lessonEntryFor(student, lesson(), at(-10)).ok, true);
+  // A student has the same window.
+  assert.equal(entry.lessonEntryFor(student, lesson(), at(-31)).ok, false);
+  assert.equal(entry.lessonEntryFor(student, lesson(), at(-30)).ok, true);
+  assert.equal(entry.lessonEntryFor(student, lesson(), at(90)).ok, true);
 });
 
 test("nobody enters a cancelled lesson, an in-person lesson or one with no room, a supervisor included", () => {

@@ -100,10 +100,6 @@ test("rejected over HTTP: before the start, after the end, a cancelled lesson, a
     assert.equal(response.status, httpStatus, code);
     assert.equal((await body(response)).code, code);
   };
-  await expectRefused(await send(tutorU, w.tomorrow), "TOO_EARLY");
-  await expectRefused(await send(studentU, w.tomorrow), "TOO_EARLY");
-  await expectRefused(await send(tutorU, w.past), "TOO_LATE");
-  await expectRefused(await send(studentU, w.past), "TOO_LATE");
   await expectRefused(await send(tutorU, w.cancelled), "LESSON_CANCELLED");
   await expectRefused(await send(studentU, w.cancelled), "LESSON_CANCELLED");
   await expectRefused(await send(otherTutorU, w.now), "NOT_PARTICIPANT");
@@ -113,6 +109,16 @@ test("rejected over HTTP: before the start, after the end, a cancelled lesson, a
   await expectRefused(await send(juniorU, w.now), "JUNIOR_TUTOR_CANNOT_SEND");
   await expectRefused(await handlers.sendMessage(tutorU, "no-such-lesson", json({ text: "hi" }), w.deps), "LESSON_NOT_FOUND", 404);
   for (const lesson of [w.now, w.tomorrow, w.past, w.cancelled]) assert.equal((await w.repo.listMessages(lesson.id)).length, 0);
+});
+
+test("the tutor and a student can message before and after the lesson over HTTP, without joining the classroom", async () => {
+  const w = await world();
+  const told = [];
+  const deps = { ...w.deps, sent: async (lessonId, message) => { told.push([lessonId, message.senderParty]); throw new Error("a failed announcement must not fail the send"); } };
+  for (const lesson of [w.tomorrow, w.past]) {
+    for (const user of [tutorU, studentU]) assert.equal((await handlers.sendMessage(user, lesson.id, json({ text: "Running late" }), deps)).status, 201, `${user.role} ${lesson.id}`);
+  }
+  assert.deepEqual(told.map((t) => t[1]), ["tutor", "student", "tutor", "student"]);
 });
 
 test("an administrator can message in any lesson's chat over HTTP, without joining the classroom, as an administrator, and not on a cancelled lesson", async () => {
@@ -128,18 +134,6 @@ test("an administrator can message in any lesson's chat over HTTP, without joini
   // The tutor and student see it, marked as an administrator's.
   const listed = await body(await handlers.listMessages(tutorU, w.now.id, w.deps));
   assert.deepEqual(listed.messages.map((m) => m.senderParty), ["admin"]);
-});
-
-test("the grace window comes from config over HTTP: 0 by default, and wider when set", async () => {
-  const strict = await world();
-  const justOver = await (async () => {
-    const lesson = await strict.data.lessons.create({ assignmentId: strict.now.assignmentId, tutorId: "T1", studentIds: ["S1"], clientIds: ["C1"], title: "Ended 2 minutes ago", subject: "Maths", startAt: new Date(Date.now() - 62 * MIN).toISOString(), durationMinutes: 60, locationType: "ONLINE", reportRequired: true, status: "PLANNED" });
-    return lesson;
-  })();
-  assert.equal((await handlers.sendMessage(tutorU, justOver.id, json({ text: "late" }), strict.deps)).status, 403, "default grace is 0");
-  const roomy = await world({ graceAfterMinutes: 5 });
-  const lesson = await roomy.data.lessons.create({ assignmentId: roomy.now.assignmentId, tutorId: "T1", studentIds: ["S1"], clientIds: ["C1"], title: "Ended 2 minutes ago", subject: "Maths", startAt: new Date(Date.now() - 62 * MIN).toISOString(), durationMinutes: 60, locationType: "ONLINE", reportRequired: true, status: "PLANNED" });
-  assert.equal((await handlers.sendMessage(tutorU, lesson.id, json({ text: "within the grace" }), roomy.deps)).status, 201);
 });
 
 test("a bad body is a 400/415, not a message, and an unrecognised content type is refused", async () => {
@@ -190,7 +184,7 @@ test("files: people who may not send are refused BEFORE their upload is read or 
     const response = await handlers.sendMessage(user, w.now.id, upload("a.png", "image/png"), w.deps);
     assert.equal(response.status, 403, user.id);
   }
-  for (const lesson of [w.tomorrow, w.past, w.cancelled]) assert.equal((await handlers.sendMessage(studentU, lesson.id, upload("a.png", "image/png"), w.deps)).status, 403);
+  assert.equal((await handlers.sendMessage(studentU, w.cancelled.id, upload("a.png", "image/png"), w.deps)).status, 403);
   assert.equal(w.files.size, 0);
 });
 
@@ -299,7 +293,7 @@ test("relay: a signed request from the classroom goes through the SAME service a
   assert.equal((await send("acct-student", w.now.id, "reply")).status, 200);
 
   // The same refusals as HTTP, for the same reasons.
-  for (const [userId, lesson, code] of [["acct-tutor", w.tomorrow, "TOO_EARLY"], ["acct-student", w.past, "TOO_LATE"], ["acct-tutor", w.cancelled, "LESSON_CANCELLED"], ["acct-tutor-2", w.now, "NOT_PARTICIPANT"], ["acct-parent", w.now, "NOT_PARTICIPANT"], ["acct-junior", w.now, "JUNIOR_TUTOR_CANNOT_SEND"]]) {
+  for (const [userId, lesson, code] of [["acct-tutor", w.cancelled, "LESSON_CANCELLED"], ["acct-tutor-2", w.now, "NOT_PARTICIPANT"], ["acct-parent", w.now, "NOT_PARTICIPANT"], ["acct-junior", w.now, "JUNIOR_TUTOR_CANNOT_SEND"]]) {
     const response = await send(userId, lesson.id);
     assert.equal(response.status, 403, `${userId} ${code}`);
     assert.equal((await body(response)).code, code);
@@ -337,10 +331,10 @@ test("relay: unsigned, wrongly signed, tampered, stale and malformed requests ar
 
 test("relay: roles and records are looked up fresh by account id, never taken from the request (a forged role or lesson in the body changes nothing)", async () => {
   const w = await world();
-  const forged = { lessonId: w.tomorrow.id, userId: "acct-student", text: "hi", role: "tutor", senderParty: "tutor", tutorId: "T1", lessonOverride: w.now.id };
+  const forged = { lessonId: w.cancelled.id, userId: "acct-student", text: "hi", role: "tutor", senderParty: "tutor", tutorId: "T1", lessonOverride: w.now.id };
   const response = await handlers.relayedSend(relay(w, forged), w.deps, resolve);
   assert.equal(response.status, 403, "judged on the lesson it names, as the person it names");
-  assert.equal((await body(response)).code, "TOO_EARLY");
+  assert.equal((await body(response)).code, "LESSON_CANCELLED");
 });
 
 test("the join token carries the account (uid) and an old token without one still verifies", () => {

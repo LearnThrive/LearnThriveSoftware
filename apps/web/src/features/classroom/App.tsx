@@ -22,6 +22,7 @@ import { WaitingRoomPanel } from './components/WaitingRoomPanel';
 import { ReactionPicker } from './components/ReactionPicker';
 import { ReactionsLayer } from './components/ReactionsLayer';
 import { LeaveConfirm } from './components/LeaveConfirm';
+import { freshJoinToken } from './rejoinLink';
 import { MeetingTimer } from './components/Timer';
 import { MicLevelMeter } from './components/MicLevelMeter';
 import { ClassControlsMenu } from './components/ClassControlsMenu';
@@ -182,13 +183,8 @@ export function App({ lessonId, meetingId, initialToken, isDevRoute, returnHref 
     if (!autoJoinToken) return;
     // A join link only lasts five minutes, so whenever the room has to be rejoined (a dropped connection, the server restarting) a fresh one is asked
     // for here. The website re-checks that this person is still allowed in (app/api/classroom/token).
-    const target = meetingId ? { kind: 'meeting', id: meetingId } : lessonId ? { kind: 'lesson', id: lessonId } : null;
-    const freshLink = target ? async () => {
-      const response = await fetch('/api/classroom/token', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(target) });
-      const data = await response.json().catch(() => ({})) as { token?: unknown; message?: unknown };
-      if (!response.ok || typeof data.token !== 'string') throw new Error(typeof data.message === 'string' ? data.message : 'We could not rejoin. Open the meeting again from your dashboard.');
-      return data.token;
-    } : undefined;
+    const target = meetingId ? { kind: 'meeting' as const, id: meetingId } : lessonId ? { kind: 'lesson' as const, id: lessonId } : null;
+    const freshLink = target ? () => freshJoinToken(target) : undefined;
     void join('', '', 'student', autoJoinToken, freshLink);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoJoinToken]);

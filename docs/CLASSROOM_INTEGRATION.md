@@ -76,12 +76,21 @@ Configurable, not hardcoded into the authorization check itself —
 
 | | Tutor | Student |
 |---|---|---|
-| Opens before start | 30 minutes | 10 minutes |
+| Opens before start | 30 minutes | 30 minutes |
 | Closes after scheduled end | 30 minutes (both) | |
 
-A Tutor gets in early to set up; a Student's window opens closer to the actual start; both stay
-open a little past the scheduled end time in case a lesson overruns. Covered by
+Both open 30 minutes early and stay open past the scheduled end in case a lesson overruns (owner
+decision, 27 November 2026; a staff meeting guest still gets 10 minutes). Covered by
 `apps/web/tests/joinWindow.test.mjs`.
+
+**A student of the lesson is not to be locked out inside that window:**
+
+- the classroom page makes a fresh join link every time it is opened (an old one in the address is ignored);
+- rejoining renews a sign-in that lapsed during a long lesson, and retries while the site restarts (`features/classroom/rejoinLink.ts`);
+- a locked class, or an earlier removal by the tutor, does not keep them out of the waiting room (the tutor still decides who comes in);
+- a tutor who is also a student can join from the close-out screen.
+
+The window follows the lesson's current time, so moving a lesson more than 30 minutes later closes it until the new window opens.
 
 ## Room identity
 

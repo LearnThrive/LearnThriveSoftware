@@ -68,11 +68,9 @@ describe("lesson chat in Postgres (migration 0027, on PGlite)", () => {
     assert.ok(stored[0]!.created_at.getFullYear() >= 2025, "created_at cannot be back-dated");
   });
 
-  test("refused by the database: a cancelled lesson, outside the hour either side of the schedule, an unassigned tutor, another family's student, a junior tutor", async () => {
+  test("refused by the database: a cancelled lesson, an unassigned tutor, another family's student, a junior tutor", async () => {
     const w = await world();
     await assert.rejects(() => send(w.cancelled.id, w.tutorUser, "tutor", w.tutor.id), /cancelled lesson has no chat/);
-    await assert.rejects(() => send(w.future.id, w.tutorUser, "tutor", w.tutor.id), /during the lesson/, "before");
-    await assert.rejects(() => send(w.past.id, w.tutorUser, "tutor", w.tutor.id), /during the lesson/, "after");
     // The lesson's tutor is the record AND the person: a different tutor's login, or a different record, is refused.
     const otherTutorUser = await db.createUser({ displayName: "Other", adult: true, role: "TUTOR" });
     await assert.rejects(() => send(w.now.id, otherTutorUser, "tutor", w.tutor.id), /Only the lesson's tutor/);
@@ -97,9 +95,16 @@ describe("lesson chat in Postgres (migration 0027, on PGlite)", () => {
     await assert.rejects(() => send(w.now.id, w.tutorUser, "admin", w.tutorUser), /Only an administrator/);
     await assert.rejects(() => send(w.now.id, w.a.learner, "admin", w.a.learner), /Only an administrator/);
     await assert.rejects(() => send(w.now.id, w.adminUser, "admin", w.tutorUser), /Only an administrator/);
-    // The tutor and student rules are unchanged: the lesson's tutor still cannot send outside the hour either side.
-    await assert.rejects(() => send(w.past.id, w.tutorUser, "tutor", w.tutor.id), /during the lesson/);
     await assert.rejects(() => owner(`insert into public.lesson_messages (lesson_id, sender_profile_id, sender_party, sender_record_id, sender_name) values ($1, $2, 'parent', $2, 'X')`, [w.now.id, w.adminUser]), /./, "no other party exists");
+  });
+
+  test("migration 0035: the lesson's tutor and an enrolled student may send before and after the lesson, and a notification may say so", async () => {
+    const w = await world();
+    for (const lesson of [w.future, w.past]) {
+      assert.equal((await send(lesson.id, w.tutorUser, "tutor", w.tutor.id)).length, 1);
+      assert.equal((await send(lesson.id, w.a.learner, "student", w.a.studentId)).length, 1);
+    }
+    await w.p.notifications.create({ userId: w.tutorUser, type: "LESSON_MESSAGE", message: "A message", link: "/dashboard/lessons" });
   });
 
   test("a message is never edited or deleted: only an administrator's removal may mark it, once", async () => {

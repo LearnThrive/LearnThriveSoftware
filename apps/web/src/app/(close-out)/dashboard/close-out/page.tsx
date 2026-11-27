@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { AlertCircle, CheckCircle2, ShieldAlert, Video } from "lucide-react";
 import type { AttendanceStatus, ReportAssessmentLevel } from "@learnthrive/data/domain";
 import { requirePermission } from "@/lib/auth/guard";
-import { can } from "@/lib/auth/scope";
+import { can, holds, recordFor } from "@/lib/auth/scope";
 import { teachingTutorId } from "@/lib/auth/teaching";
 import { createMetadata } from "@/lib/metadata";
 import { getDataProvider } from "@/lib/data/provider";
@@ -55,7 +55,13 @@ export default async function CloseOutPage({ searchParams }: { searchParams: Pro
   const required = lesson.reportRequired;
   const absentFrom = noShowAllowedFrom(lesson.startAt);
   const sends = can(user, "report.submit");
-  const joinable = mine.filter((l) => l.locationType === "ONLINE" && isOpen(l) && isWithinJoinWindow(l, "TUTOR", now));
+  // A tutor may also be somebody's student: a lesson they attend must never be shut off by one they still have to close out.
+  const learnerId = holds(user, "STUDENT") ? recordFor(user, "STUDENT") : null;
+  const attending = learnerId ? await data.lessons.forStudent(learnerId) : [];
+  const joinable = [
+    ...mine.filter((l) => isOpen(l) && isWithinJoinWindow(l, "TUTOR", now)),
+    ...attending.filter((l) => l.status !== "CANCELLED" && isWithinJoinWindow(l, "STUDENT", now)),
+  ].filter((l) => l.locationType === "ONLINE");
   const select = (name: string, label: string, hint: string, value: string | undefined) => (
     <Field label={label} htmlFor={name} required={required} hint={hint}>
       <select id={name} name={name} defaultValue={value ?? ""}>

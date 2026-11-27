@@ -8,7 +8,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { LessonList, LessonRow } from "@/components/lessons/LessonRow";
 import { formatLongDate, formatRelative, formatTimeRange } from "@/lib/format";
 import { isStartingSoon } from "@/lib/notifications/derivedReminders";
-import { isWithinJoinWindow } from "@/lib/scheduling/joinWindow";
+import { isWithinJoinWindow, joinOpensAt } from "@/lib/scheduling/joinWindow";
+import { lessonEndsAt } from "@/lib/lessons/timing";
 
 /** A greeting that reflects the actual time of day — small, but it's the first thing every
  * person reads and it makes the product feel present rather than static. */
@@ -54,7 +55,7 @@ export function NextLessonCard({ lesson, subtitle, role, canJoin }: {
     <Card className="next-lesson">
       <CardBody>
         <p className="next-lesson__eyebrow">
-          {new Date(lesson.startAt) <= new Date() ? "Lesson on now · started" : "Next lesson ·"} {formatRelative(lesson.startAt)}
+          {lessonEndsAt(lesson) <= new Date().getTime() ? "Lesson just finished · classroom still open" : `${new Date(lesson.startAt) <= new Date() ? "Lesson on now · started" : "Next lesson ·"} ${formatRelative(lesson.startAt)}`}
           {isStartingSoon(lesson, new Date()) && <Badge tone="warning">Starting soon</Badge>}
         </p>
         <h2 className="next-lesson__title">
@@ -80,12 +81,6 @@ export function NextLessonCard({ lesson, subtitle, role, canJoin }: {
       </CardBody>
     </Card>
   );
-}
-
-/** When this person's join window starts — mirrors joinWindow.ts's own thresholds. */
-function joinOpensAt(lesson: Lesson, role: "TUTOR" | "STUDENT"): Date {
-  const minutesBefore = role === "TUTOR" ? 30 : 10;
-  return new Date(new Date(lesson.startAt).getTime() - minutesBefore * 60_000);
 }
 
 /** A titled card wrapping a list of lessons, used on every dashboard. */

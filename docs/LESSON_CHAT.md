@@ -1,12 +1,12 @@
 # Lesson chat and file sharing
 
-Tutors and students exchange messages and files **only inside a lesson, and only during that lesson's scheduled time.** There is no other tutor-to-student messaging channel anywhere in the product.
+Tutors and students exchange messages and files **only in a lesson's own chat, at any time before, during or after it** (owner decision, 27 November 2026), so that somebody running late or unable to come can say so. There is no other tutor-to-student messaging channel anywhere in the product.
 
 Every rule below is enforced on the server, on every send, from the HTTP routes and from the classroom's Socket.IO path alike. The browser never decides who may send, which lesson a message belongs to, or when.
 
 ## What belongs to what
 
-A message and a file belong to one **lesson instance**: one row in `lessons`. Each occurrence of a recurring lesson is its own row, so it has its own conversation and its own window.
+A message and a file are sent from one **lesson instance** (a row in `lessons`) and belong to its assignment's conversation (see "One conversation per assignment" below).
 
 ## Who may send (`packages/data/src/lessonChat/policy.ts`, `canSend`)
 
@@ -16,9 +16,11 @@ Decided by the person's **relationship to this lesson**, never by role alone, an
 2. **Junior tutors cannot send at all, for now** (`JUNIOR_TUTOR_CANNOT_SEND`), not messages and not files, even in a lesson they are assigned to. *TODO(supervision):* when the supervision rules exist (a tutor overseeing a junior's messages), decide in `canSend` what a junior may send and who sees it. They can read their assigned lesson's chat.
 3. **Parents and the safeguarding lead only read.** An **administrator** may also send (see "Administrators" below).
 4. **Not on a cancelled or no-show lesson,** and not on a lesson with no usable schedule.
-5. **Only inside the scheduled window:** from the scheduled start up to, not including, the scheduled end, in Europe/London. The schedule is stored as an instant, so daylight saving cannot move it (a 17:00 summer lesson is 16:00Z). Students may reply anywhere inside the same window.
+5. **At any time**: before, during and after the lesson (migration 0035; until then only during the scheduled time).
 
-The grace window is configuration, default **0 minutes either side** (`LESSON_CHAT_GRACE_BEFORE_MINUTES`, `LESSON_CHAT_GRACE_AFTER_MINUTES`, each 0 to 60). A wrong value is an error, never a silent default.
+A message sent outside the lesson's scheduled time is announced with an in-app notification (`LESSON_MESSAGE`): from the tutor to its students, from a
+student to the tutor, from an administrator to both. The notification names the sender and the lesson and carries no message text. Messages typed in the
+classroom are not announced.
 
 ## Administrators (migration 0032)
 
@@ -27,11 +29,11 @@ them the message box. They can also message from inside the classroom while supe
 
 - They send **as an administrator** (`sender_party = 'admin'`, the record is their own account). The lesson page labels the message "administrator"
   and the classroom shows "Name (administrator)", so the tutor and the students always know who is speaking.
-- **At any time**, not only during the lesson (a problem does not keep to the timetable), on any lesson that is **not cancelled**. The thread is the
-  assignment's, so the message is there for the tutor and students at their next lesson too.
-- An administrator who is also the lesson's tutor sends as its tutor while the lesson is on, and as an administrator otherwise.
+- At any time, like the tutor and students, on any lesson that is **not cancelled**. The thread is the assignment's, so the message is there for the
+  tutor and students at their next lesson too.
+- An administrator who is also the lesson's tutor sends as its tutor.
 - The database checks it by itself (`private.lesson_messages_guard`): only someone holding `ADMIN` can send as an administrator, and only as
-  themself. The tutor and student rules are unchanged.
+  themself.
 
 ## Who may read (`canRead`)
 
@@ -72,10 +74,10 @@ The lesson page has a "Lesson chat" card for everyone connected to the lesson (t
 ## Storage today, and what is not applied
 
 - **In Postgres (migrations 0027 and 0029).** Messages, file records and the stored file bytes (`lesson_file_objects`, private, no API grants) survive a restart. In production the chat is open whenever the database is set up; `LESSON_CHAT_ENABLED=false` switches it off. File links are signed with `LESSON_FILE_URL_SECRET` (at least 32 characters) when set, otherwise with a key derived from `CLASSROOM_JOIN_SECRET`; with neither, text chat works and uploads are refused. Any document, spreadsheet, slide, image, audio, video, text or zip type the meetings chat allows can be shared (migration 0030): PNG, JPEG and PDF are judged by their bytes and cleaned; every other type is judged by its extension, kept as sent and served only as a download, and a file that starts like a program is refused. Development and tests use memory and are always open.
-- **One conversation per assignment.** A weekly lesson is one assignment with a lesson row per week. Its chat and files are one thread (`thread_id` = the assignment), so everything sent in the first lesson is there in every later one. Sending is still allowed only in that occurrence's own scheduled time and only to its tutor and students; anyone on a later occurrence reads the whole thread. Purging a lesson removes its messages (migration 0018 behaviour).
+- **One conversation per assignment.** A weekly lesson is one assignment with a lesson row per week. Its chat and files are one thread (`thread_id` = the assignment), so everything sent in the first lesson is there in every later one. Sending is allowed only to that occurrence's tutor, students and administrators; anyone on a later occurrence reads the whole thread. Purging a lesson removes its messages (migration 0018 behaviour).
 - **Written as files, applied nowhere:** `supabase/migrations/0027_lesson_chat.sql` creates `lesson_messages`, `lesson_files` and `lesson_chat_access_log`, with guards the database enforces by itself (who may send, the outer time limit, no edit or delete, removal by an administrator only, append-only log) and row-level security (participants read; a parent only after the lesson; **no policy for administrators**, who read through the server so every read is audited; no API role writes). It is tested on PGlite in `packages/data/src/lessonChatSql.test.ts` and has not been applied to any live project.
 - **Not built yet:** the Postgres `LessonChatRepository`, a `FileStore` over a private Supabase Storage bucket (`lesson-files`), a real malware scanner, and supervision rules for junior tutors.
 
 ## Tests
 
-`packages/data/src/lessonChat.test.ts` (rules, files, signed links, audit), `lessonChatSql.test.ts` (the migration), `apps/web/tests/lessonChat.test.mjs` (HTTP and the relay), `apps/realtime/server/chatGate.test.ts` (the Socket.IO gate). The negative cases: a message before the start, after the end and on a cancelled lesson; an unassigned tutor; a student from another lesson; a parent sending; a parent of another child reading; a junior tutor sending; disallowed and oversized files; path-traversal names; a file fetched through another lesson; and the grace window following config.
+`packages/data/src/lessonChat.test.ts` (rules, files, signed links, audit), `lessonChatSql.test.ts` (the migration), `apps/web/tests/lessonChat.test.mjs` (HTTP and the relay), `apps/realtime/server/chatGate.test.ts` (the Socket.IO gate). The negative cases: a message on a cancelled lesson; an unassigned tutor; a student from another lesson; a parent sending; a parent of another child reading; a junior tutor sending; disallowed and oversized files; path-traversal names; and a file fetched through another lesson.

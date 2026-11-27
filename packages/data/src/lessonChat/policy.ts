@@ -1,5 +1,4 @@
 import type { Role } from "../roles";
-import type { LessonChatConfig } from "./config";
 import type { AccessorKind, ChatParty } from "./types";
 
 /**
@@ -59,9 +58,7 @@ export type SendRefusal =
   | "NOT_PARTICIPANT"
   | "JUNIOR_TUTOR_CANNOT_SEND"
   | "LESSON_CANCELLED"
-  | "LESSON_NOT_SCHEDULED"
-  | "TOO_EARLY"
-  | "TOO_LATE";
+  | "LESSON_NOT_SCHEDULED";
 
 export type SendDecision = { ok: true; party: ChatParty } | { ok: false; code: SendRefusal; message: string };
 
@@ -71,51 +68,34 @@ const REFUSAL_TEXT: Record<SendRefusal, string> = {
   JUNIOR_TUTOR_CANNOT_SEND: "Junior tutors cannot send messages or files yet.",
   LESSON_CANCELLED: "This lesson was cancelled, so there is no chat.",
   LESSON_NOT_SCHEDULED: "This lesson has no scheduled time, so there is no chat.",
-  TOO_EARLY: "Messages can only be sent once the lesson has started.",
-  TOO_LATE: "The lesson has ended, so messages can no longer be sent.",
 };
 
 const refuse = (code: SendRefusal): SendDecision => ({ ok: false, code, message: REFUSAL_TEXT[code] });
 
-/** The scheduled window, widened by the configured grace on each side (0 and 0 by default): [from, until). Null if the lesson has no usable schedule. */
-export function chatWindow(lesson: Pick<ChatLesson, "startAt" | "durationMinutes">, config: Pick<LessonChatConfig, "graceBeforeMinutes" | "graceAfterMinutes">): { from: number; until: number; start: number; end: number } | null {
+/** The lesson's scheduled time. Null if the lesson has no usable schedule. */
+export function lessonWindow(lesson: Pick<ChatLesson, "startAt" | "durationMinutes">): { start: number; end: number } | null {
   const start = Date.parse(lesson.startAt);
   if (!Number.isFinite(start) || !Number.isFinite(lesson.durationMinutes) || lesson.durationMinutes <= 0) return null;
-  const end = start + lesson.durationMinutes * 60_000;
-  return { start, end, from: start - config.graceBeforeMinutes * 60_000, until: end + config.graceAfterMinutes * 60_000 };
+  return { start, end: start + lesson.durationMinutes * 60_000 };
 }
 
 /**
- * May this person send a message or a file in this lesson right now? In this order, so a refusal never reveals more than the person may know:
- * their relationship to the lesson first, then whether it can have a chat at all (cancelled, unscheduled), then the time.
+ * May this person send a message or a file in this lesson? In this order, so a refusal never reveals more than the person may know: their
+ * relationship to the lesson first, then whether it can have a chat at all (cancelled, unscheduled).
  *
- * Only the lesson's own tutor and a student enrolled in it may send. Students may reply anywhere inside the same window. A junior tutor cannot
- * send at all for now: TODO(supervision) when the supervision rules exist (a tutor overseeing a junior's messages), decide here what a junior may
- * send and who sees it. Parents and the safeguarding lead only read. An administrator may send, as an administrator, on any lesson that is not
- * cancelled, at any time.
+ * The lesson's own tutor, a student enrolled in it and any administrator may send AT ANY TIME, before, during or after the lesson, so that somebody
+ * running late or unable to come can say so. A cancelled or no-show lesson has no chat. A junior tutor cannot send at all for now:
+ * TODO(supervision) when the supervision rules exist (a tutor overseeing a junior's messages), decide here what a junior may send and who sees it.
+ * Parents and the safeguarding lead only read. An administrator who is not the lesson's tutor or student sends AS AN ADMINISTRATOR, so the tutor
+ * and the students always know who is speaking.
  */
-export function canSend(lesson: ChatLesson | null, actor: ChatActor, now: Date, config: LessonChatConfig): SendDecision {
+export function canSend(lesson: ChatLesson | null, actor: ChatActor): SendDecision {
   if (!lesson) return refuse("LESSON_NOT_FOUND");
   const relations = relationshipsOf(lesson, actor);
-  const decision = asParticipant(lesson, relations, now, config);
-  // An administrator may step into any lesson's chat to sort out a problem, at any time (a problem does not keep to the timetable), on any lesson that
-  // is not cancelled. They send AS AN ADMINISTRATOR, so the tutor and the students always know who is speaking. An administrator who is also this
-  // lesson's tutor sends as its tutor while the lesson is on, and as an administrator otherwise.
-  const cancelled = lesson.status === "CANCELLED" || lesson.status === "NO_SHOW";
-  if (!decision.ok && relations.has("admin") && !cancelled) return { ok: true, party: "admin" };
-  return decision;
-}
-
-/** The lesson's own tutor or a student on it, inside the lesson's window: the rule for everybody but an administrator. */
-function asParticipant(lesson: ChatLesson, relations: Set<Relationship>, now: Date, config: LessonChatConfig): SendDecision {
-  const party: ChatParty | null = relations.has("tutor") ? "tutor" : relations.has("student") ? "student" : null;
-  if (party === null) return relations.has("junior_tutor") ? refuse("JUNIOR_TUTOR_CANNOT_SEND") : refuse(relations.has("admin") && (lesson.status === "CANCELLED" || lesson.status === "NO_SHOW") ? "LESSON_CANCELLED" : "NOT_PARTICIPANT");
+  const party: ChatParty | null = relations.has("tutor") ? "tutor" : relations.has("student") ? "student" : relations.has("admin") ? "admin" : null;
+  if (party === null) return refuse(relations.has("junior_tutor") ? "JUNIOR_TUTOR_CANNOT_SEND" : "NOT_PARTICIPANT");
   if (lesson.status === "CANCELLED" || lesson.status === "NO_SHOW") return refuse("LESSON_CANCELLED");
-  const window = chatWindow(lesson, config);
-  if (window === null) return refuse("LESSON_NOT_SCHEDULED");
-  const t = now.getTime();
-  if (t < window.from) return refuse("TOO_EARLY");
-  if (t >= window.until) return refuse("TOO_LATE");
+  if (lessonWindow(lesson) === null) return refuse("LESSON_NOT_SCHEDULED");
   return { ok: true, party };
 }
 
@@ -137,14 +117,14 @@ export type ReadDecision =
  * child's lessons, read-only and only AFTERWARDS (once the scheduled end has passed). Administrators and the safeguarding lead may read, and
  * every one of those reads is audited. Nobody else.
  */
-export function canRead(lesson: ChatLesson | null, actor: ChatActor, now: Date, config: LessonChatConfig): ReadDecision {
+export function canRead(lesson: ChatLesson | null, actor: ChatActor, now: Date): ReadDecision {
   if (!lesson) return { ok: false, code: "LESSON_NOT_FOUND", message: REFUSAL_TEXT.LESSON_NOT_FOUND };
   const relations = relationshipsOf(lesson, actor);
   if (relations.has("tutor") || relations.has("junior_tutor") || relations.has("student")) return { ok: true, kind: "participant", audited: false, seesRemoved: relations.has("admin") || relations.has("safeguarding_lead") };
   if (relations.has("admin")) return { ok: true, kind: "admin", audited: true, seesRemoved: true };
   if (relations.has("safeguarding_lead")) return { ok: true, kind: "safeguarding_lead", audited: true, seesRemoved: true };
   if (relations.has("parent")) {
-    const window = chatWindow(lesson, config);
+    const window = lessonWindow(lesson);
     if (window === null || now.getTime() < window.end) return { ok: false, code: "NOT_YET", message: "You can read your child's lesson messages once the lesson has finished." };
     return { ok: true, kind: "parent", audited: true, seesRemoved: false };
   }

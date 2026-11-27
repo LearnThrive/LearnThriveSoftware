@@ -67,77 +67,33 @@ function world(over: { lessons?: ChatLesson[]; config?: Partial<LessonChatConfig
   return { service, repo, files, setNow: (d: Date) => { clock = d; }, now: () => clock };
 }
 
-describe("when a message may be sent: the scheduled window, in Europe/London", () => {
-  test("allowed from the scheduled start up to (not including) the scheduled end, and only then", async () => {
-    const w = world();
-    for (const [minute, ok] of [[-1, false], [0, true], [30, true], [59, true], [60, false], [61, false]] as const) {
-      w.setNow(at(minute));
-      const result = await w.service.sendText(tutor, "lesson-1", "hello");
-      assert.equal(result.ok, ok, `minute ${minute}`);
-      if (!result.ok) assert.equal(result.code, minute < 0 ? "TOO_EARLY" : "TOO_LATE");
-    }
-  });
-
-  test("before the start, after the end and on a cancelled lesson are rejected, for tutor and student alike", async () => {
-    for (const [name, who] of [["tutor", tutor], ["student", student]] as const) {
+describe("when a message may be sent: any time, on a lesson that is not cancelled", () => {
+  test("the lesson's tutor and its student may send before, during and after the lesson", async () => {
+    for (const who of [tutor, student]) {
       const w = world();
-      w.setNow(at(-30));
-      assert.deepEqual(await w.service.sendText(who, "lesson-1", "early"), { ok: false, status: 403, code: "TOO_EARLY", message: "Messages can only be sent once the lesson has started." }, `${name} before`);
-      w.setNow(at(120));
-      assert.equal((await w.service.sendText(who, "lesson-1", "late")) .ok, false, `${name} after`);
-      const cancelled = world({ lessons: [lesson({ status: "CANCELLED" })] });
-      cancelled.setNow(at(30));
-      const result = await cancelled.service.sendText(who, "lesson-1", "hi");
-      assert.equal(result.ok, false);
-      assert.equal((result as { code: string }).code, "LESSON_CANCELLED", `${name} cancelled`);
-      assert.equal((await cancelled.repo.listMessages("lesson-1")).length, 0, "nothing stored");
+      for (const minute of [-3 * 24 * 60, -1, 0, 30, 60, 3 * 24 * 60]) {
+        w.setNow(at(minute));
+        assert.equal((await w.service.sendText(who, "lesson-1", "running late")).ok, true, `${who.name} at minute ${minute}`);
+      }
     }
   });
 
-  test("a no-show and a lesson with no usable schedule are not chat-able either", async () => {
-    const noShow = world({ lessons: [lesson({ status: "NO_SHOW" })] });
-    noShow.setNow(at(30));
-    assert.equal((await noShow.service.sendText(tutor, "lesson-1", "hi") as { code: string }).code, "LESSON_CANCELLED");
+  test("a cancelled lesson, a no-show and a lesson with no usable schedule have no chat", async () => {
+    for (const status of ["CANCELLED", "NO_SHOW"]) {
+      for (const who of [tutor, student, admin]) {
+        const w = world({ lessons: [lesson({ status })] });
+        assert.equal((await w.service.sendText(who, "lesson-1", "hi") as { code: string }).code, "LESSON_CANCELLED", `${status} ${who.accountId}`);
+        assert.equal((await w.repo.listMessages("lesson-1")).length, 0, "nothing stored");
+      }
+    }
     for (const bad of [{ startAt: "not a date" }, { startAt: "" }, { durationMinutes: 0 }, { durationMinutes: -30 }, { durationMinutes: Number.NaN }]) {
       const w = world({ lessons: [lesson(bad)] });
-      w.setNow(at(30));
       assert.equal((await w.service.sendText(tutor, "lesson-1", "hi") as { code: string }).code, "LESSON_NOT_SCHEDULED", JSON.stringify(bad));
     }
     assert.equal((await world().service.sendText(tutor, "no-such-lesson", "hi") as { status: number }).status, 404);
   });
 
-  test("the window is the scheduled instant, so Europe/London daylight saving cannot shift it (a 17:00 summer lesson is 16:00Z)", () => {
-    const summer = lesson({ startAt: "2026-07-14T16:00:00.000Z", durationMinutes: 60 }); // 17:00 to 18:00 in London (BST)
-    const cfg = config();
-    const t = (iso: string) => new Date(iso);
-    assert.equal(canSend(summer, tutor, t("2026-07-14T15:59:59Z"), cfg).ok, false, "16:59 London");
-    assert.equal(canSend(summer, tutor, t("2026-07-14T16:00:00Z"), cfg).ok, true, "17:00 London");
-    assert.equal(canSend(summer, tutor, t("2026-07-14T16:59:59Z"), cfg).ok, true, "17:59 London");
-    assert.equal(canSend(summer, tutor, t("2026-07-14T17:00:00Z"), cfg).ok, false, "18:00 London");
-    const winter = lesson({ startAt: "2026-11-16T17:00:00.000Z", durationMinutes: 60 }); // 17:00 in London (GMT)
-    assert.equal(canSend(winter, tutor, t("2026-11-16T16:59:59Z"), cfg).ok, false);
-    assert.equal(canSend(winter, tutor, t("2026-11-16T17:00:00Z"), cfg).ok, true);
-  });
-
-  test("the grace window comes from config: default 0 and 0, and each side widens only its own side", async () => {
-    assert.equal(DEFAULT_LESSON_CHAT_CONFIG.graceBeforeMinutes, 0);
-    assert.equal(DEFAULT_LESSON_CHAT_CONFIG.graceAfterMinutes, 0);
-    assert.equal(readLessonChatConfig({}).graceBeforeMinutes, 0);
-    assert.equal(readLessonChatConfig({}).graceAfterMinutes, 0);
-    const wide = readLessonChatConfig({ LESSON_CHAT_GRACE_BEFORE_MINUTES: "5", LESSON_CHAT_GRACE_AFTER_MINUTES: "10" });
-    assert.deepEqual([wide.graceBeforeMinutes, wide.graceAfterMinutes], [5, 10]);
-    for (const [minute, ok] of [[-6, false], [-5, true], [-1, true], [69, true], [70, false], [71, false]] as const) {
-      const w = world({ config: { graceBeforeMinutes: 5, graceAfterMinutes: 10 } });
-      w.setNow(at(minute));
-      assert.equal((await w.service.sendText(student, "lesson-1", "hi")).ok, ok, `with grace 5/10, minute ${minute}`);
-    }
-    const onlyAfter = world({ config: { graceAfterMinutes: 3 } });
-    onlyAfter.setNow(at(-1));
-    assert.equal((await onlyAfter.service.sendText(tutor, "lesson-1", "hi")).ok, false, "after-grace does not open the start");
-    onlyAfter.setNow(at(62));
-    assert.equal((await onlyAfter.service.sendText(tutor, "lesson-1", "hi")).ok, true, "but it does extend the end");
-    for (const bad of ["-1", "61", "1.5", "abc"]) assert.throws(() => readLessonChatConfig({ LESSON_CHAT_GRACE_AFTER_MINUTES: bad }), /LESSON_CHAT_GRACE_AFTER_MINUTES/, bad);
-    for (const bad of ["-1", "61", "x"]) assert.throws(() => readLessonChatConfig({ LESSON_CHAT_GRACE_BEFORE_MINUTES: bad }), /LESSON_CHAT_GRACE_BEFORE_MINUTES/, bad);
+  test("the file size cap comes from config, and a wrong value is an error", () => {
     assert.equal(readLessonChatConfig({ LESSON_CHAT_MAX_FILE_MB: "2" }).maxFileBytes, 2 * 1024 * 1024);
     assert.throws(() => readLessonChatConfig({ LESSON_CHAT_MAX_FILE_MB: "0" }));
   });
@@ -241,27 +197,24 @@ describe("who may send: the lesson's own tutor and a student enrolled in it, by 
     const w = world();
     const asTutor = await w.service.sendText(teachingAdmin, "lesson-1", "hi");
     assert.equal(asTutor.ok, true);
-    assert.equal((await w.repo.listMessages("lesson-1"))[0]!.senderParty, "tutor", "inside the lesson they speak as its tutor");
+    assert.equal((await w.repo.listMessages("lesson-1"))[0]!.senderParty, "tutor", "they speak as its tutor");
     // Without the TUTOR role they are not its tutor: they may still send, but as an administrator.
     await w.service.sendText({ ...teachingAdmin, roles: ["ADMIN"] }, "lesson-1", "hi");
     const parties = async () => (await w.repo.listMessages("lesson-1")).map((m) => m.senderParty).sort();
     assert.deepEqual(await parties(), ["admin", "tutor"]);
-    // Outside the lesson the tutor cannot send; an administrator who teaches it still can, as an administrator.
+    // Outside the lesson too: they are still its tutor.
     w.setNow(at(200));
     await w.service.sendText(teachingAdmin, "lesson-1", "afterwards");
-    assert.deepEqual(await parties(), ["admin", "admin", "tutor"]);
+    assert.deepEqual(await parties(), ["admin", "tutor", "tutor"]);
   });
 
-  test("each occurrence of a recurring lesson has its own conversation and its own window", async () => {
+  test("each occurrence of a recurring lesson has its own conversation", async () => {
     const week1 = lesson({ id: "occ-1", recurrenceId: "series" } as Partial<ChatLesson>);
     const week2 = lesson({ id: "occ-2", startAt: new Date(START + 7 * 24 * 60 * MIN).toISOString(), recurrenceId: "series" } as Partial<ChatLesson>);
     const w = world({ lessons: [week1, week2] });
     w.setNow(at(10));
     assert.equal((await w.service.sendText(tutor, "occ-1", "this week")).ok, true);
-    assert.equal((await w.service.sendText(tutor, "occ-2", "next week")).ok, false, "next week's lesson has not started");
-    w.setNow(at(7 * 24 * 60 + 10));
     assert.equal((await w.service.sendText(tutor, "occ-2", "next week")).ok, true);
-    assert.equal((await w.service.sendText(tutor, "occ-1", "back again")).ok, false, "this week's has ended");
     assert.deepEqual((await w.repo.listMessages("occ-1")).map((m) => m.text), ["this week"]);
     assert.deepEqual((await w.repo.listMessages("occ-2")).map((m) => m.text), ["next week"]);
   });
@@ -592,24 +545,22 @@ describe("files: allowlist, size, names, metadata, private storage and signed li
 
 describe("the policy functions on their own", () => {
   test("read decisions name how the access is recorded", () => {
-    const cfg = config();
     const l = lesson();
-    assert.deepEqual(canRead(l, tutor, at(10), cfg), { ok: true, kind: "participant", audited: false, seesRemoved: false });
-    assert.deepEqual(canRead(l, admin, at(10), cfg), { ok: true, kind: "admin", audited: true, seesRemoved: true });
-    assert.deepEqual(canRead(l, lead, at(10), cfg), { ok: true, kind: "safeguarding_lead", audited: true, seesRemoved: true });
-    assert.equal(canRead(l, parent, at(60), cfg).ok, true);
-    assert.equal(canRead(l, parent, at(59), cfg).ok, false);
-    assert.equal(canRead(null, admin, at(10), cfg).ok, false);
+    assert.deepEqual(canRead(l, tutor, at(10)), { ok: true, kind: "participant", audited: false, seesRemoved: false });
+    assert.deepEqual(canRead(l, admin, at(10)), { ok: true, kind: "admin", audited: true, seesRemoved: true });
+    assert.deepEqual(canRead(l, lead, at(10)), { ok: true, kind: "safeguarding_lead", audited: true, seesRemoved: true });
+    assert.equal(canRead(l, parent, at(60)).ok, true);
+    assert.equal(canRead(l, parent, at(59)).ok, false);
+    assert.equal(canRead(null, admin, at(10)).ok, false);
   });
 
   test("a person with several roles is checked against this lesson with each role's own record", () => {
-    const cfg = config();
     // A tutor who is also a parent of ANOTHER family: tutor here, not a parent of this lesson's family.
     const tutorAndParent = actor({ roles: ["TUTOR", "CLIENT"], tutorId: "tutor-2", clientId: "client-2" });
-    assert.equal(canSend(lesson(), tutorAndParent, at(10), cfg).ok, false);
-    assert.equal(canRead(lesson(), tutorAndParent, at(120), cfg).ok, false);
+    assert.equal(canSend(lesson(), tutorAndParent).ok, false);
+    assert.equal(canRead(lesson(), tutorAndParent, at(120)).ok, false);
     // A student who is also a tutor's junior: reads as the student here.
     const studentAndJunior = actor({ roles: ["STUDENT", "JUNIOR_TUTOR"], studentId: "student-1", tutorId: "tutor-2" });
-    assert.equal(canSend(lesson(), studentAndJunior, at(10), cfg).ok, true, "a student on this lesson");
+    assert.equal(canSend(lesson(), studentAndJunior).ok, true, "a student on this lesson");
   });
 });

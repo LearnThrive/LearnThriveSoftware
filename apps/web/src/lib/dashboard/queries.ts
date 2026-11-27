@@ -4,6 +4,7 @@ import { unionOver } from "@/lib/auth/scope";
 import type { AuthenticatedUser } from "@/lib/auth/types";
 import { visibleLessonsFor } from "@/lib/scheduling/visibleLessons";
 import { isOpen, lessonEndsAt } from "@/lib/lessons/timing";
+import { isWithinJoinWindow, joinOpensAt } from "@/lib/scheduling/joinWindow";
 
 /**
  * Shared, role-aware reads used by more than one page (dashboards, the Lessons list, the Reports
@@ -31,10 +32,14 @@ export async function lessonBucketsFor(data: DataProvider, user: AuthenticatedUs
   const live = all.filter((lesson) => lesson.status !== "CANCELLED");
   const started = live.filter((lesson) => lesson.startAt < nowIso);
   const ongoing = started.filter((lesson) => isOpen(lesson) && lessonEndsAt(lesson) > now.getTime()).sort(byStart);
-  // A lesson that is on now comes first among the upcoming ones: hiding it once it started left a late student with "No lessons scheduled".
-  const upcoming = [...ongoing, ...live.filter((lesson) => lesson.startAt >= nowIso).sort(byStart)];
+  const future = live.filter((lesson) => lesson.startAt >= nowIso).sort(byStart);
   const past = started.filter((lesson) => !ongoing.includes(lesson)).sort((a, b) => b.startAt.localeCompare(a.startAt));
   const needsAttention = past.filter(isOpen).sort(byStart);
+  // Whatever can be joined comes first among the upcoming ones: the lesson on now, then one whose classroom has opened, then one that has just
+  // finished. Hiding a lesson once it started left a late student with "No lessons scheduled".
+  const opening = future.filter((lesson) => joinOpensAt(lesson, "STUDENT") <= now);
+  const justFinished = needsAttention.filter((lesson) => isWithinJoinWindow(lesson, "STUDENT", now));
+  const upcoming = [...ongoing, ...opening, ...justFinished, ...future.filter((lesson) => !opening.includes(lesson))];
 
   const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
   const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);

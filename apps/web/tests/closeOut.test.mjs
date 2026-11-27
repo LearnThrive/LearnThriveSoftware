@@ -6,6 +6,7 @@ const { getDataProvider } = loadTsFrom(import.meta.url, "../../../packages/data/
 const { lessonsToCloseOut, closeOutLesson, CloseOutError } = loadTsFrom(import.meta.url, "../src/lib/lessons/closeOut.ts");
 const { staysOpen } = loadTsFrom(import.meta.url, "../src/lib/lessons/closeOutGate.ts");
 const { lessonBucketsFor, nextLessonForStudent } = loadTsFrom(import.meta.url, "../src/lib/dashboard/queries.ts");
+const { announceMessage } = loadTsFrom(import.meta.url, "../src/lib/lessonChat/announce.ts");
 
 const NOW = new Date("2026-03-10T20:00:00.000Z");
 const FULL = { publicSummary: "Fractions.", progress: "Good.", areasForImprovement: "Decimals.", nextSteps: "Sheet 3.", engagement: "HIGH", confidence: "MEDIUM" };
@@ -96,4 +97,24 @@ test("a lesson that is on now is still the next one on the dashboard, so a late 
   const buckets = await lessonBucketsFor(data, user, NOW);
   assert.equal(buckets.next.id, running.id);
   assert.equal(nextLessonForStudent(buckets.all, student.id, NOW).id, running.id);
+});
+
+test("a message sent outside the lesson tells the other side; during the lesson nobody is notified", async () => {
+  const { data, lesson, user } = await world();
+  const l = await lesson("2026-03-10T18:00:00.000Z");
+  const told = [];
+  const spy = { ...data, notifications: { ...data.notifications, recipientFor: async (id) => `login-${id}`, create: async (n) => told.push(n) } };
+  const before = new Date("2026-03-10T17:00:00.000Z");
+  await announceMessage(spy, l.id, { senderParty: "student", senderName: "Close Student" }, before);
+  assert.deepEqual(told.map((n) => [n.userId, n.type, n.link]), [[`login-${user.tutorId}`, "LESSON_MESSAGE", `/dashboard/lessons/${l.id}`]]);
+  await announceMessage(spy, l.id, { senderParty: "tutor", senderName: "Close Tutor" }, new Date("2026-03-10T18:30:00.000Z"));
+  assert.equal(told.length, 1);
+});
+
+test("a lesson that has just finished stays first among the upcoming ones while its classroom is open", async () => {
+  const { data, lesson, user } = await world();
+  const finished = await lesson("2026-03-10T18:45:00.000Z"); // ended 15 minutes ago
+  await lesson("2026-03-11T18:00:00.000Z");
+  assert.equal((await lessonBucketsFor(data, user, NOW)).next.id, finished.id);
+  assert.notEqual((await lessonBucketsFor(data, user, new Date("2026-03-10T20:20:00.000Z"))).next.id, finished.id, "after the window it goes");
 });

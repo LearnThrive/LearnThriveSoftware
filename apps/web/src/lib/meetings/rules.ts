@@ -13,7 +13,7 @@ export const isStaff = (user: AuthenticatedUser): boolean => (holds(user, "ADMIN
 
 /** The same window as a lesson: the host 30 minutes early, everyone else 10, and both until 30 minutes after it should have ended. */
 export const meetingOpenFor = (meeting: StaffMeeting, role: "HOST" | "INVITEE", now: Date = new Date()): boolean =>
-  isWithinJoinWindow({ startAt: meeting.startsAt, durationMinutes: meeting.durationMinutes }, role === "HOST" ? "TUTOR" : "STUDENT", now);
+  isWithinJoinWindow({ startAt: meeting.startsAt, durationMinutes: meeting.durationMinutes }, role === "HOST" ? "TUTOR" : "GUEST", now);
 
 export type EntryDecision = { ok: true; role: "HOST" | "INVITEE" } | { ok: false; message: string };
 
