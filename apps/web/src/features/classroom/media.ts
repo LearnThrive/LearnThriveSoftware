@@ -42,6 +42,9 @@ export async function listDevices(): Promise<{ cameras: DeviceOption[]; micropho
   };
 }
 
+/** A choice that means "whatever the browser or the computer is set to", rather than one particular device. */
+export const followsBrowser = (deviceId: string | undefined) => !deviceId || deviceId === 'default' || deviceId === 'communications';
+
 /** Owns local camera/microphone tracks independently of room membership. */
 export class LocalMedia {
   stream: MediaStream | null = null;
@@ -77,6 +80,26 @@ export class LocalMedia {
     return this.stream?.getTracks().find((track) => track.kind === kind && track.readyState === 'live');
   }
 
+  /** The device the current track really comes from, as the browser reports it. */
+  activeDevice(kind: 'audio' | 'video'): string | undefined {
+    return this.track(kind)?.getSettings?.().deviceId || undefined;
+  }
+
+  private drop(kind: 'audio' | 'video') {
+    for (const old of this.stream?.getTracks().filter((track) => track.kind === kind) ?? []) {
+      old.onended = null;
+      old.stop();
+      this.stream!.removeTrack(old);
+    }
+  }
+
+  private constraintsFor(kind: 'audio' | 'video'): MediaTrackConstraints {
+    const preferred = this.selectedDevice[kind];
+    return kind === 'audio'
+      ? { ...(preferred ? { deviceId: { exact: preferred } } : {}), echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+      : { ...(preferred ? { deviceId: { exact: preferred } } : { facingMode: this.facing }), width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: this.videoFrameRateIdeal() } };
+  }
+
   private async acquire(kind: 'audio' | 'video', constraint: MediaTrackConstraints) {
     const generation = this.generation;
     const acquired = await navigator.mediaDevices.getUserMedia({
@@ -110,21 +133,26 @@ export class LocalMedia {
     }
     const support = browserSupportError();
     if (support) throw new Error(support);
-    const preferred = this.selectedDevice[kind];
-    await this.acquire(kind, kind === 'audio'
-      ? { ...(preferred ? { deviceId: { exact: preferred } } : {}), echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-      : { ...(preferred ? { deviceId: { exact: preferred } } : { facingMode: this.facing }), width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: this.videoFrameRateIdeal() } });
+    await this.acquire(kind, this.constraintsFor(kind));
   }
 
-  /** Switches to a specific device. Only touches hardware if that kind is currently on. */
+  /**
+   * After the browser's devices change: moves a microphone or camera that follows the browser onto its current choice. One that is on is
+   * reopened at once; one that is off is let go, so the next time it is turned on it opens the new device.
+   */
+  async restart(kind: 'audio' | 'video'): Promise<void> {
+    if (!this.stream?.getTracks().some((track) => track.kind === kind)) return;
+    if (!this.desiredEnabled[kind]) { this.drop(kind); this.changed(); return; }
+    await this.acquire(kind, this.constraintsFor(kind));
+  }
+
+  /** Switches to a specific device. Only touches hardware if that kind is currently on; if it is off, turning it on opens the new one. */
   async switchDevice(kind: 'audio' | 'video', deviceId: string): Promise<void> {
     this.selectedDevice[kind] = deviceId;
-    if (!this.track(kind)?.enabled) return;
+    if (!this.track(kind)?.enabled) { this.drop(kind); this.changed(); return; }
     const support = browserSupportError();
     if (support) throw new Error(support);
-    await this.acquire(kind, kind === 'audio'
-      ? { deviceId: { exact: deviceId }, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-      : { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: this.videoFrameRateIdeal() } });
+    await this.acquire(kind, this.constraintsFor(kind));
   }
 
   /** Flips between front/rear camera by facingMode. Only touches hardware if video is currently on. */

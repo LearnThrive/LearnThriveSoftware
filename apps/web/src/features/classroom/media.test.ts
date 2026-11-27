@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LocalMedia, mediaErrorMessage } from './media';
+import { MeetingController } from './meeting';
 
 describe('device errors', () => {
   it('gives permission recovery instructions without leaking internal text', () => {
@@ -84,5 +85,71 @@ describe('LocalMedia device switching (regression coverage for a race an adversa
     const live = [firstTrack, trackA, trackB].filter((track) => track.readyState === 'live');
     expect(live.length).toBe(1);
     expect(media.track('audio')?.enabled).toBe(true);
+  });
+});
+
+describe('staying in step with the browser camera and microphone', () => {
+  let list: Array<{ kind: string; deviceId: string; label: string }>;
+  let asked: Array<string | undefined>;
+
+  const mic = (deviceId: string, label: string) => ({ kind: 'audioinput', deviceId, label });
+
+  beforeEach(() => {
+    list = [mic('default', 'Default - Laptop microphone'), mic('laptop', 'Laptop microphone')];
+    asked = [];
+    vi.stubGlobal('window', { isSecureContext: true, RTCPeerConnection: class {} });
+    vi.stubGlobal('MediaStream', FakeMediaStream);
+    vi.stubGlobal('navigator', {
+      mediaDevices: {
+        enumerateDevices: vi.fn(async () => list),
+        getUserMedia: vi.fn(async (constraints: { audio: { deviceId?: { exact: string } } }) => {
+          const wanted = constraints.audio.deviceId?.exact;
+          asked.push(wanted);
+          const track = new FakeTrack('audio');
+          return new FakeMediaStream([Object.assign(track, { getSettings: () => ({ deviceId: wanted ?? list[0].deviceId }) })]);
+        }),
+      },
+    });
+  });
+
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('opens the device picked while muted, not the one that was in use before', async () => {
+    const media = new LocalMedia(() => {});
+    await media.enable('audio');
+    media.disable('audio');
+    await media.switchDevice('audio', 'laptop');
+    expect(asked).toHaveLength(1); // nothing is switched on while muted
+    await media.enable('audio');
+    expect(asked[1]).toBe('laptop');
+  });
+
+  it('names the browser device without anyone picking one, and moves a live microphone when the browser choice changes', async () => {
+    const meeting = new MeetingController();
+    await meeting.refreshDevices();
+    expect(meeting.getSnapshot().selectedMicrophone).toBe('default');
+
+    await meeting.toggleAudio();
+    list = [mic('default', 'Default - Headset'), mic('laptop', 'Laptop microphone'), mic('headset', 'Headset')];
+    await meeting.refreshDevices();
+    expect(asked).toHaveLength(2);
+    expect(meeting.getSnapshot().audio).toBe(true);
+  });
+
+  it('keeps a device picked by hand until it is unplugged, then goes back to the browser choice', async () => {
+    const meeting = new MeetingController();
+    list.push(mic('headset', 'Headset'));
+    await meeting.refreshDevices();
+    await meeting.toggleAudio();
+    await meeting.switchMicrophone('headset');
+
+    list = [mic('default', 'Default - Other'), mic('laptop', 'Laptop microphone'), mic('headset', 'Headset')];
+    await meeting.refreshDevices();
+    expect(meeting.getSnapshot().selectedMicrophone).toBe('headset');
+
+    list = [mic('default', 'Default - Laptop microphone'), mic('laptop', 'Laptop microphone')];
+    await meeting.refreshDevices();
+    expect(meeting.getSnapshot().selectedMicrophone).toBe('default');
+    expect(meeting.getSnapshot().mediaError).toContain('disconnected');
   });
 });

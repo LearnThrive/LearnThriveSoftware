@@ -54,7 +54,7 @@ export function NextLessonCard({ lesson, subtitle, role, canJoin }: {
     <Card className="next-lesson">
       <CardBody>
         <p className="next-lesson__eyebrow">
-          Next lesson · {formatRelative(lesson.startAt)}
+          {new Date(lesson.startAt) <= new Date() ? "Lesson on now · started" : "Next lesson ·"} {formatRelative(lesson.startAt)}
           {isStartingSoon(lesson, new Date()) && <Badge tone="warning">Starting soon</Badge>}
         </p>
         <h2 className="next-lesson__title">

@@ -46,7 +46,7 @@ export default async function LessonsPage({ searchParams }: { searchParams: Prom
   const buckets = await lessonBucketsFor(data, user);
 
   const byFilter: Record<Filter, Lesson[]> = {
-    upcoming: [...buckets.ongoing, ...buckets.upcoming],
+    upcoming: buckets.upcoming,
     "needs-attention": buckets.needsAttention,
     completed: buckets.all.filter((lesson) => lesson.status === "COMPLETED").sort((a, b) => b.startAt.localeCompare(a.startAt)),
     cancelled: buckets.all.filter((lesson) => lesson.status === "CANCELLED").sort((a, b) => b.startAt.localeCompare(a.startAt)),

@@ -29,9 +29,10 @@ export async function lessonBucketsFor(data: DataProvider, user: AuthenticatedUs
   const byStart = (a: Lesson, b: Lesson) => a.startAt.localeCompare(b.startAt);
 
   const live = all.filter((lesson) => lesson.status !== "CANCELLED");
-  const upcoming = live.filter((lesson) => lesson.startAt >= nowIso).sort(byStart);
   const started = live.filter((lesson) => lesson.startAt < nowIso);
   const ongoing = started.filter((lesson) => isOpen(lesson) && lessonEndsAt(lesson) > now.getTime()).sort(byStart);
+  // A lesson that is on now comes first among the upcoming ones: hiding it once it started left a late student with "No lessons scheduled".
+  const upcoming = [...ongoing, ...live.filter((lesson) => lesson.startAt >= nowIso).sort(byStart)];
   const past = started.filter((lesson) => !ongoing.includes(lesson)).sort((a, b) => b.startAt.localeCompare(a.startAt));
   const needsAttention = past.filter(isOpen).sort(byStart);
 
@@ -80,10 +81,10 @@ async function visibleStudentsForRole(data: DataProvider, user: AuthenticatedUse
   return students.filter((student): student is Student => student !== null);
 }
 
-/** Next upcoming lesson for one specific student, within what `user` may see. */
+/** The lesson that is on now, else the next one, for one specific student, within what `user` may see. */
 export function nextLessonForStudent(lessons: Lesson[], studentId: string, now = new Date()): Lesson | null {
   const nowIso = now.toISOString();
   return lessons
-    .filter((lesson) => lesson.status !== "CANCELLED" && lesson.studentIds.includes(studentId) && lesson.startAt >= nowIso)
+    .filter((lesson) => lesson.status !== "CANCELLED" && lesson.studentIds.includes(studentId) && (lesson.startAt >= nowIso || (isOpen(lesson) && lessonEndsAt(lesson) > now.getTime())))
     .sort((a, b) => a.startAt.localeCompare(b.startAt))[0] ?? null;
 }

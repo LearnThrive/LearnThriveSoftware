@@ -12,7 +12,7 @@ import { reconcileBoardElements } from './board';
 import { savedChatMessages, type SavedLessonMessage } from './lessonChat';
 import { ensureFreshTurnCredentials, getIceConfiguration } from './ice';
 import { createLogger } from './log';
-import { browserSupportError, listDevices, LocalMedia, mediaErrorMessage, type DeviceOption } from './media';
+import { browserSupportError, listDevices, LocalMedia, mediaErrorMessage, followsBrowser, type DeviceOption } from './media';
 import { PeerSession, type DirectionDiagnostics } from './peer';
 import { SfuMedia, type SfuConnection, type SfuTransport } from './sfu';
 import { canShareScreen, screenShareErrorMessage, ScreenShare } from './screenShare';
@@ -186,7 +186,9 @@ export class MeetingController {
   // (a drop, a server restart, the Reconnect button) needs a new one; see join() and the 'connect' handler.
   private refreshToken: (() => Promise<string>) | undefined;
   private connectedBefore = false;
-  private readonly handleDeviceChange = () => { void this.refreshDevices(true); };
+  private readonly handleDeviceChange = () => { void this.refreshDevices(); };
+  /** What the browser listed first for each kind (its own choice of device) the last time it was asked. */
+  private browserChoice: { audio?: string; video?: string } = {};
 
   constructor() {
     navigator.mediaDevices?.addEventListener?.('devicechange', this.handleDeviceChange);
@@ -268,12 +270,49 @@ export class MeetingController {
   private mediaChanged() {
     const state = this.media.state();
     this.update({
-      ...state, localStream: this.media.stream,
-      selectedCamera: this.media.selectedDevice.video, selectedMicrophone: this.media.selectedDevice.audio,
+      ...state, localStream: this.media.stream, ...this.devicesShown(this.snapshot.cameras, this.snapshot.microphones),
     });
     for (const session of this.peers.values()) session.syncTracks();
     this.sfu?.syncTracks();
     if (this.active && this.socket?.connected) this.socket.emit('participant:media', state);
+  }
+
+  /** The camera and microphone the Settings menu names: the one in use, else the one picked, else the browser's own choice. */
+  private devicesShown(cameras: DeviceOption[], microphones: DeviceOption[]) {
+    const shown = (kind: 'audio' | 'video', list: DeviceOption[]) =>
+      [this.media.activeDevice(kind), this.media.selectedDevice[kind], list[0]?.deviceId].find((id) => id && list.some((device) => device.deviceId === id));
+    return { selectedCamera: shown('video', cameras), selectedMicrophone: shown('audio', microphones) };
+  }
+
+  /**
+   * Keeps this meeting in step with the browser: lists its devices, shows the one in use, and moves a microphone or camera onto the browser's
+   * new choice when that changes (a headset plugged in or pulled out, a different default picked). A device picked by hand in Settings stays
+   * until it is disconnected.
+   */
+  private async syncDevices(cameras: DeviceOption[], microphones: DeviceOption[]) {
+    this.update({ cameras, microphones, ...this.devicesShown(cameras, microphones) });
+    const missing: string[] = [];
+    for (const [kind, list, word] of [['video', cameras, 'camera'], ['audio', microphones, 'microphone']] as const) {
+      const first = list[0];
+      if (!first?.deviceId) continue; // nothing listed, or not yet shared with this page
+      const choice = `${first.deviceId} ${first.label}`;
+      const moved = this.browserChoice[kind] !== undefined && this.browserChoice[kind] !== choice;
+      this.browserChoice[kind] = choice;
+      const picked = this.media.selectedDevice[kind];
+      const gone = Boolean(picked) && !list.some((device) => device.deviceId === picked);
+      if (gone) {
+        delete this.media.selectedDevice[kind];
+        missing.push(word);
+      }
+      if (!gone && !(moved && followsBrowser(picked))) continue;
+      try { await this.media.restart(kind); }
+      catch (error) {
+        devicesLog.warn(`Could not move to the new ${word}`, error);
+        this.update({ mediaError: mediaErrorMessage(error, word) });
+      }
+    }
+    this.update(this.devicesShown(cameras, microphones));
+    if (missing.length) this.update({ mediaError: `Your ${missing.join(' and ')} was disconnected. Using your browser's default instead.` });
   }
 
   /**
@@ -295,23 +334,12 @@ export class MeetingController {
       }
       found = await listDevices();
     }
-    this.update({ cameras: found.cameras, microphones: found.microphones });
+    await this.syncDevices(found.cameras, found.microphones);
   };
 
-  refreshDevices = async (checkSelection = false) => {
+  refreshDevices = async () => {
     const { cameras, microphones } = await listDevices();
-    this.update({ cameras, microphones });
-    if (!checkSelection) return;
-    const missing: string[] = [];
-    if (this.media.selectedDevice.video && !cameras.some((camera) => camera.deviceId === this.media.selectedDevice.video)) {
-      delete this.media.selectedDevice.video;
-      missing.push('camera');
-    }
-    if (this.media.selectedDevice.audio && !microphones.some((mic) => mic.deviceId === this.media.selectedDevice.audio)) {
-      delete this.media.selectedDevice.audio;
-      missing.push('microphone');
-    }
-    if (missing.length) this.update({ mediaError: `Your ${missing.join(' and ')} was disconnected. Using the default device instead.` });
+    await this.syncDevices(cameras, microphones);
   };
 
   switchCamera = async (deviceId: string) => {
@@ -373,7 +401,10 @@ export class MeetingController {
       mediaLog.warn(`${kind} acquisition failed`, error);
       if (version === this.actionVersion) this.update({ mediaError: mediaErrorMessage(error, kind === 'audio' ? 'microphone' : 'camera') });
     } finally {
-      if (version === this.actionVersion) this.update({ preparing: false });
+      if (version === this.actionVersion) {
+        this.update({ preparing: false });
+        void this.refreshDevices(); // turning something on may be the first time the browser names its devices to this page
+      }
     }
   }
 

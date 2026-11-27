@@ -5,7 +5,7 @@ import { loadTsFrom } from "./_tsLoader.mjs";
 const { getDataProvider } = loadTsFrom(import.meta.url, "../../../packages/data/src/inMemoryProvider.ts");
 const { lessonsToCloseOut, closeOutLesson, CloseOutError } = loadTsFrom(import.meta.url, "../src/lib/lessons/closeOut.ts");
 const { staysOpen } = loadTsFrom(import.meta.url, "../src/lib/lessons/closeOutGate.ts");
-const { lessonBucketsFor } = loadTsFrom(import.meta.url, "../src/lib/dashboard/queries.ts");
+const { lessonBucketsFor, nextLessonForStudent } = loadTsFrom(import.meta.url, "../src/lib/dashboard/queries.ts");
 
 const NOW = new Date("2026-03-10T20:00:00.000Z");
 const FULL = { publicSummary: "Fractions.", progress: "Good.", areasForImprovement: "Decimals.", nextSteps: "Sheet 3.", engagement: "HIGH", confidence: "MEDIUM" };
@@ -87,4 +87,13 @@ test("only the lesson's own tutor, once it has started", async () => {
 test("the classroom, the close-out screen and safeguarding concerns stay open; the rest of the dashboard does not", () => {
   for (const path of ["/dashboard/close-out", "/dashboard/close-out?lesson=1", "/dashboard/concerns?raised=SC", "/dashboard/lessons/abc/classroom?token=t"]) assert.ok(staysOpen(path), path);
   for (const path of ["/dashboard", "/dashboard/lessons", "/dashboard/lessons/abc", "/dashboard/calendar", "/dashboard/concerns-other", ""]) assert.ok(!staysOpen(path), path);
+});
+
+test("a lesson that is on now is still the next one on the dashboard, so a late student can find it", async () => {
+  const { data, student, lesson, user } = await world();
+  const running = await lesson("2026-03-10T19:30:00.000Z");
+  await lesson("2026-03-11T18:00:00.000Z");
+  const buckets = await lessonBucketsFor(data, user, NOW);
+  assert.equal(buckets.next.id, running.id);
+  assert.equal(nextLessonForStudent(buckets.all, student.id, NOW).id, running.id);
 });
