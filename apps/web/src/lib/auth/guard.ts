@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { accountSessionExpired } from "@/lib/access/current";
+import { accountSessionExpired, renewAccountSession } from "@/lib/access/current";
 import { safeNextPath } from "@/lib/account/session";
 import { enforceCloseOut } from "@/lib/lessons/closeOutGate";
 import { getSession } from "./session";
@@ -27,13 +27,17 @@ async function requestedPath(): Promise<string> {
  * never from a client-supplied value (see plan section 10).
  * A tutor with a lesson that is over but not closed out is sent to the close-out screen (lib/lessons/closeOutGate.ts). */
 export async function requireSession(): Promise<AuthenticatedUser> {
-  const user = await getSession();
+  let user = await getSession();
+  const expired = !user && (await accountSessionExpired());
+  // A form sent after the sign-in lapsed (a report that took over an hour to write) is renewed here and goes through. A page render cannot
+  // set cookies, so it carries on to the renewing route below.
+  if (expired && (await renewAccountSession())) user = await getSession();
   const path = await requestedPath();
   if (user) {
     await enforceCloseOut(user, path);
     return user;
   }
-  if (await accountSessionExpired()) redirect(`/api/account/refresh?next=${encodeURIComponent(path || "/dashboard")}`);
+  if (expired) redirect(`/api/account/refresh?next=${encodeURIComponent(path || "/dashboard")}`);
   redirect(path ? `/login?next=${encodeURIComponent(path)}` : "/login");
 }
 

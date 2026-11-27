@@ -131,6 +131,22 @@ export async function renewSession(jar: CookieJar, rt: AccountRuntime, now: numb
   return found ? stateOf(found) : { status: "none" };
 }
 
+/**
+ * For a Server Action, which arrives carrying whatever the person typed: sending it through the renewing route would throw that away, so the
+ * session is renewed where it is. A page render asks too and cannot set cookies, so the refresh cookie is first written back unchanged: a
+ * read-only jar refuses there, before the single-use refresh token is spent. True once the person is signed in again.
+ */
+export async function renewInPlace(jar: CookieJar, rt: AccountRuntime, env: Record<string, string | undefined> = process.env): Promise<boolean> {
+  const refreshToken = jar.get(REFRESH_COOKIE);
+  if (!refreshToken) return false;
+  try {
+    jar.set(REFRESH_COOKIE, refreshToken, options(env));
+  } catch {
+    return false;
+  }
+  return (await renewSession(jar, rt)).status === "ok";
+}
+
 /** Only a path on this site: starts with one slash, not two, no backslash, no scheme. Used for `next`. */
 export function safeNextPath(raw: string | null | undefined, fallback = "/account"): string {
   if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.includes("\\") || /[\u0000-\u001f]/.test(raw)) return fallback;

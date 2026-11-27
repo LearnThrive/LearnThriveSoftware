@@ -419,6 +419,32 @@ test("an expired access token is renewed from the refresh token, and a dead sess
   assert.deepEqual(await session.readSession(jar(), rt), { status: "none" });
 });
 
+test("a form sent after the sign-in lapsed is renewed where it is, and a page that cannot set cookies spends nothing", async () => {
+  const rt = runtime();
+  const first = jar();
+  await verified(rt, first);
+  const refresh = first.values.get(session.REFRESH_COOKIE);
+  const lapsed = () => {
+    const j = jar();
+    j.set(session.ACCESS_COOKIE, "at_expired", {});
+    j.set(session.REFRESH_COOKIE, refresh, {});
+    return j;
+  };
+
+  // A page render: Next refuses to set a cookie there, so the single-use refresh token must be left alone.
+  const render = lapsed();
+  render.set = () => { throw new Error("Cookies can only be modified in a Server Action or Route Handler."); };
+  assert.equal(await session.renewInPlace(render, rt), false);
+
+  // A Server Action: renewed on the spot, so what was typed goes through.
+  const action = lapsed();
+  assert.equal(await session.renewInPlace(action, rt), true);
+  assert.equal((await session.readSession(action, rt)).status, "ok");
+  assert.notEqual(action.values.get(session.REFRESH_COOKIE), refresh);
+
+  assert.equal(await session.renewInPlace(jar(), rt), false, "nobody to renew");
+});
+
 test("sign-in route: one answer for unknown address and wrong password, and a lockout that holds even for the right password", async (t) => {
   environment(t, {});
   h.resetAccountLimiters();

@@ -63,6 +63,9 @@ report and completes the lesson. "End class" in the classroom leads there too.
 - A junior tutor cannot submit: they are released once attendance and the draft are written, and an administrator submits it.
 - A lesson that did not happen is cancelled by an administrator, which releases the tutor.
 - "Needs attention" lists lessons that are over, not ones that are on now.
+- An administrator can finish any lesson that is not cancelled with **Auto-complete** on its page (`completeLessonAsAdmin()`): a student
+  nobody marked is recorded as attended, no report is asked for, and the tutor is released.
+- The form has no time limit: a sign-in that lapsed while writing is renewed as the form is sent (`docs/AUTHENTICATION.md`).
 
 ## Progress and demo data
 

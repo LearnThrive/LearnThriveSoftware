@@ -52,7 +52,7 @@ Every subsequent request that needs to know who's signed in reads the cookie, lo
 
 Three helpers in `apps/web/src/lib/auth/guard.ts`, used from Server Components and Route Handlers (never from the client — role/identity is always resolved server-side):
 
-- `requireSession()` — redirects to `/login?next=<the page asked for>` if there's no valid session (through `/api/account/refresh` first if an account session has merely lapsed). Used by the dashboard layout, so every route under `/dashboard/**` is automatically protected.
+- `requireSession()` — redirects to `/login?next=<the page asked for>` if there's no valid session (through `/api/account/refresh` first if an account session has merely lapsed; a Server Action renews it where it is instead, because redirecting would throw the typed form away, so no form has a time limit). Used by the dashboard layout, so every route under `/dashboard/**` is automatically protected.
 - `requireRole(allowed: Role[])` — as above, plus redirects to `/403` (not back to `/login`) if the signed-in user's role isn't in the allowed list. A logged-in Student hitting an Admin-only page should see "you don't have access", not be bounced back to a sign-in form they already used successfully.
 - `requireRoleForApi(allowed: Role[])` — the same check for a Route Handler, where `redirect()` doesn't apply; returns `null` so the caller shapes its own JSON error response.
 

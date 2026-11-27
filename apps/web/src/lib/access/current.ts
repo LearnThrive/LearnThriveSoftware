@@ -1,7 +1,8 @@
 import { cache } from "react";
 import { accessFactsFor, platformAccess, type Account, type AccessFacts, type PlatformAccess } from "@learnthrive/data/library";
 import { currentSession } from "@/lib/account/pages";
-import type { AccountRuntime } from "@/lib/account/runtime";
+import { accountRuntime, type AccountRuntime } from "@/lib/account/runtime";
+import { renewInPlace } from "@/lib/account/session";
 import type { AuthUser } from "@/lib/account/types";
 import type { AuthenticatedUser } from "@/lib/auth/types";
 import { PORTAL_ENABLED } from "@/lib/portal";
@@ -43,6 +44,12 @@ export const currentAccess = cache(async (): Promise<SignedInAccess | null> => {
 export async function accountSessionExpired(): Promise<boolean> {
   const { state } = await currentSession();
   return state.status === "refresh_needed";
+}
+
+/** Renews a lapsed sign-in inside a Server Action, so the submitted form is not lost (lib/account/session.ts). False during a page render. */
+export async function renewAccountSession(): Promise<boolean> {
+  const rt = await accountRuntime();
+  return rt ? renewInPlace(await nextJar(), rt) : false;
 }
 
 /**

@@ -7,6 +7,7 @@ const { lessonsToCloseOut, closeOutLesson, CloseOutError } = loadTsFrom(import.m
 const { staysOpen } = loadTsFrom(import.meta.url, "../src/lib/lessons/closeOutGate.ts");
 const { lessonBucketsFor, nextLessonForStudent } = loadTsFrom(import.meta.url, "../src/lib/dashboard/queries.ts");
 const { announceMessage } = loadTsFrom(import.meta.url, "../src/lib/lessonChat/announce.ts");
+const { completeLessonAsAdmin, LessonCompletionError } = loadTsFrom(import.meta.url, "../src/lib/attendance/attendanceService.ts");
 
 const NOW = new Date("2026-03-10T20:00:00.000Z");
 const FULL = { publicSummary: "Fractions.", progress: "Good.", areasForImprovement: "Decimals.", nextSteps: "Sheet 3.", engagement: "HIGH", confidence: "MEDIUM" };
@@ -117,4 +118,23 @@ test("a lesson that has just finished stays first among the upcoming ones while 
   await lesson("2026-03-11T18:00:00.000Z");
   assert.equal((await lessonBucketsFor(data, user, NOW)).next.id, finished.id);
   assert.notEqual((await lessonBucketsFor(data, user, new Date("2026-03-10T20:20:00.000Z"))).next.id, finished.id, "after the window it goes");
+});
+
+test("an administrator completes a lesson in one press: the unmarked are recorded as attended and no report is asked for", async () => {
+  const { data, student, lesson, user } = await world();
+  const stuck = await lesson("2026-03-10T18:00:00.000Z");
+  await completeLessonAsAdmin(data, stuck.id, "admin-1", NOW);
+  assert.equal((await data.lessons.get(stuck.id)).status, "COMPLETED");
+  assert.deepEqual((await data.attendance.forLesson(stuck.id)).map((r) => [r.studentId, r.status, r.markedBy]), [[student.id, "ATTENDED", "admin-1"]]);
+  assert.equal(await data.reports.forLesson(stuck.id), null);
+  assert.deepEqual(await lessonsToCloseOut(data, user, NOW), [], "the tutor is let back into the dashboard");
+  assert.ok((await data.activity.forLesson(stuck.id)).some((e) => e.type === "COMPLETED" && /administrator/.test(e.message)));
+
+  const marked = await lesson("2026-03-10T16:00:00.000Z");
+  await data.attendance.upsert({ lessonId: marked.id, studentId: student.id, status: "ABSENT", markedBy: user.id, markedAt: NOW.toISOString() });
+  await completeLessonAsAdmin(data, marked.id, "admin-1", NOW);
+  assert.equal((await data.attendance.forLesson(marked.id))[0].status, "ABSENT", "what the tutor marked stays");
+
+  const cancelled = await lesson("2026-03-10T15:00:00.000Z", { status: "CANCELLED" });
+  await assert.rejects(completeLessonAsAdmin(data, cancelled.id, "admin-1", NOW), LessonCompletionError);
 });

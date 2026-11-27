@@ -12,7 +12,7 @@ import { getDataProvider } from "@/lib/data/provider";
 import { cancelLessonAction, editLessonAction } from "@/lib/actions/lessons";
 import { LEARNTHRIVE_DEFAULT_TIMEZONE, utcToZonedWallClock } from "@/lib/scheduling/timezone";
 import { splitDuration } from "@/lib/scheduling/duration";
-import { markAttendanceAction, completeLessonAction } from "@/lib/actions/attendance";
+import { markAttendanceAction, completeLessonAction, completeLessonAsAdminAction } from "@/lib/actions/attendance";
 import { mayCloseOut } from "@/lib/lessons/closeOut";
 import { CLOSE_OUT_PATH } from "@/lib/lessons/closeOutGate";
 import { approveReportAction, returnReportAction, saveReportDraftAction, submitReportAction } from "@/lib/actions/reports";
@@ -164,6 +164,21 @@ export default async function LessonDetailPage({
               </span>
             )}
             {isAdmin && lesson.status !== "CANCELLED" && <EditLessonDialog lesson={lesson} />}
+            {isAdmin && lesson.status !== "CANCELLED" && lesson.status !== "COMPLETED" && (
+              <Dialog
+                trigger="Auto-complete"
+                tone="secondary"
+                title="Complete this lesson now?"
+                description={`${new Date(lesson.startAt) > new Date() ? "This lesson has not started yet. " : ""}Any student without attendance is recorded as attended, no report is asked for, and the lesson counts as completed for billing and tutor pay.`}
+              >
+                <form action={completeLessonAsAdminAction}>
+                  <input type="hidden" name="lessonId" value={lesson.id} />
+                  <FormActions>
+                    <button type="submit" className="btn btn--primary"><CheckCircle2 size={16} aria-hidden="true" />Complete now</button>
+                  </FormActions>
+                </form>
+              </Dialog>
+            )}
             {canCancel && (
               <Dialog
                 trigger="Cancel lesson"

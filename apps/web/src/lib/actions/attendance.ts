@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { getDataProvider } from "@/lib/data/provider";
 import { requirePermission } from "@/lib/auth/guard";
 import { mayActOnLesson } from "@/lib/auth/teaching";
-import { AttendanceError, completeLesson, LessonCompletionError, markAttendance } from "@/lib/attendance/attendanceService";
+import { AttendanceError, completeLesson, completeLessonAsAdmin, LessonCompletionError, markAttendance } from "@/lib/attendance/attendanceService";
+import { holds } from "@/lib/auth/scope";
 import type { AttendanceStatus } from "@learnthrive/data/domain";
 
 function text(formData: FormData, key: string): string {
@@ -68,4 +69,15 @@ export async function completeLessonAction(formData: FormData): Promise<void> {
   }
   revalidatePath(`/dashboard/lessons/${lessonId}`);
   revalidatePath("/dashboard/calendar");
+}
+
+export async function completeLessonAsAdminAction(formData: FormData): Promise<void> {
+  const user = await requirePermission("lesson.complete");
+  if (!holds(user, "ADMIN")) throw new Error("Only an administrator can do this.");
+  const lessonId = text(formData, "lessonId");
+  if (!lessonId) throw new Error("Lesson is required.");
+
+  await completeLessonAsAdmin(getDataProvider(), lessonId, user.id);
+  // The layout too: this may be the lesson the tutor's close-out screen was waiting for.
+  revalidatePath("/dashboard", "layout");
 }

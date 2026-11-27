@@ -72,3 +72,19 @@ export async function completeLesson(data: DataProvider, lessonId: string, actor
   await logActivity(data, lessonId, "COMPLETED", "Lesson marked complete", actorId);
   return completed;
 }
+
+/** An administrator finishing a lesson in one press, whatever is missing: a student nobody marked is recorded as attended, no report is asked for. */
+export async function completeLessonAsAdmin(data: DataProvider, lessonId: string, actorId: string, now: Date = new Date()): Promise<Lesson> {
+  const lesson = await data.lessons.get(lessonId);
+  if (!lesson) throw new LessonCompletionError(`Lesson ${lessonId} not found`);
+  if (lesson.status === "CANCELLED") throw new LessonCompletionError("A cancelled lesson cannot be marked complete.");
+  if (lesson.status === "COMPLETED") return lesson;
+
+  const records = await data.attendance.forLesson(lessonId);
+  for (const studentId of lesson.studentIds) {
+    if (!records.some((r) => r.studentId === studentId)) await markAttendance(data, lessonId, studentId, { status: "ATTENDED" }, actorId, now);
+  }
+  const completed = await data.lessons.update(lessonId, { status: "COMPLETED" });
+  await logActivity(data, lessonId, "COMPLETED", "Lesson marked complete by an administrator", actorId);
+  return completed;
+}
